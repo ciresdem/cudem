@@ -2071,7 +2071,7 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
-    def _stacks(
+    def _stacks_gdal(
             self,
             out_name = None,
             ndv = -9999,
@@ -2330,7 +2330,7 @@ class ElevationDataset:
                         m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                         
                     m_all_array[arrs['count'] != 0] = 1
-                    m_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
+                    m_band_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
                     m_ds.FlushCache()
                     m_array = m_all_array = None
                     # if mask_only:
@@ -2552,12 +2552,12 @@ class ElevationDataset:
         sds = None
     
     ## test stack using h5py instead of gdal
-    def _stacks_h5(
+    def _stacks(
             self,
             out_name = None,
             ndv = -9999,
             fmt = 'GTiff',
-            mask_only = False,
+            #mask_only = False,
             mask_level = 0,
             export_as_geotiff = False,
     ):
@@ -2568,8 +2568,8 @@ class ElevationDataset:
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
         fmt (str): the output GDAL file format
-        mask_only (bool): only generate a mask, don't stack...
         mask_level (int): the granularity of the mask, 0 is every file
+        export_as_geotiff (bool): generate a multi-band geotiff of the stack and mask 
 
         --------
         Returns:
@@ -2670,7 +2670,7 @@ class ElevationDataset:
             stack_dset = stack_grp.create_dataset(
                 key, data=np.full((ycount, xcount), np.nan),
                 compression='lzf', maxshape=(ycount, xcount),
-                chunks=(100, xcount), rdcc_nbytes=1024*xcount*4,
+                chunks=(1, xcount), rdcc_nbytes=1024*xcount*4,
                 dtype=np.float32
             )
             stack_dset.dims[0].attach_scale(lat_dset)
@@ -2744,8 +2744,8 @@ class ElevationDataset:
                 if mask_dset is not None:
                     mask_dset[srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][arrs['count'] != 0] = 1
 
-                if mask_only:
-                    continue
+                # if mask_only:
+                #     continue
                 
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 for key in stack_grp.keys():
@@ -2846,39 +2846,39 @@ class ElevationDataset:
             if np.all(key_dset == 0):
                 del key_dset
                 
-        if not mask_only:
-            ## by scan-line
-            # srcwin = (0, 0, xcount, ycount)
-            # for y in range(
-            #         srcwin[1], srcwin[1] + srcwin[3], 1
-            # ):
-            #     utils.echo_msg(y)
-            for key in stack_grp.keys():
-                stacked_data[key] = stack_grp[key][...]
-                stacked_data[key][stacked_data[key] == ndv] = np.nan
+        #if not mask_only:
+        ## by scan-line
+        # srcwin = (0, 0, xcount, ycount)
+        # for y in range(
+        #         srcwin[1], srcwin[1] + srcwin[3], 1
+        # ):
+        #     utils.echo_msg(y)
+        for key in stack_grp.keys():
+            stacked_data[key] = stack_grp[key][...]
+            stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-            #utils.echo_msg(stacked_data['count'])
-            if mode == 'mean' or mode == 'min' or mode == 'max':
-                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                if mode == 'mean':
-                    ## average the accumulated arrays for finalization
-                    ## x, y, z and u are weighted sums, so divide by weights
-                    stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
-                    stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
-                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
+        #utils.echo_msg(stacked_data['count'])
+        if mode == 'mean' or mode == 'min' or mode == 'max':
+            stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+            if mode == 'mean':
+                ## average the accumulated arrays for finalization
+                ## x, y, z and u are weighted sums, so divide by weights
+                stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
+                stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
+                stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
 
-                ## apply the source uncertainty with the sub-cell variance uncertainty
-                ## caclulate the standard error (sqrt( uncertainty / count))
-                stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
-                stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
+            ## apply the source uncertainty with the sub-cell variance uncertainty
+            ## caclulate the standard error (sqrt( uncertainty / count))
+            stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
+            stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
 
-            ## write out final rasters
-            for key in stack_grp.keys():
-                stacked_data[key][np.isnan(stacked_data[key])] = np.nan#ndv
-                stack_grp[key][:] = stacked_data[key]
-                #[y:y+1, srcwin[0]:srcwin[0]+srcwin[2]] = stacked_data[key]
-                
-            ## set the final output nodatavalue
+        ## write out final rasters
+        for key in stack_grp.keys():
+            stacked_data[key][np.isnan(stacked_data[key])] = np.nan#ndv
+            stack_grp[key][:] = stacked_data[key]
+            #[y:y+1, srcwin[0]:srcwin[0]+srcwin[2]] = stacked_data[key]
+
+        ## set the final output nodatavalue
 
         ## create the stack geotiff
         if export_as_geotiff:
@@ -2957,29 +2957,29 @@ class ElevationDataset:
 
         stack_ds.close()
 
-        ## create a vector of the masks (spatial-metadata)
-        if self.want_sm:
-            # polygonize_mask_multibands(
-            #     mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
-            # )
-            ogr_mask_footprints(                
-                mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
-            )
+        # ## create a vector of the masks (spatial-metadata)
+        # if self.want_sm:
+        #     # polygonize_mask_multibands(
+        #     #     mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
+        #     # )
+        #     ogr_mask_footprints(                
+        #         mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
+        #     )
                         
         mask_dataset = None
         
-        ## apply any grits filters to the stack
-        for f in self.stack_fltrs:
-            utils.echo_msg('filtering stacks module with {}'.format(f))
-            grits_filter = grits.GritsFactory(
-                mod=f, src_dem=stack_fn, uncertainty_mask=4, weight_mask=3, count_mask=2
-            )._acquire_module()
-            if grits_filter is not None:
-                grits_filter()
-                os.replace(grits_filter.dst_dem, out_file)
+        # ## apply any grits filters to the stack
+        # for f in self.stack_fltrs:
+        #     utils.echo_msg('filtering stacks module with {}'.format(f))
+        #     grits_filter = grits.GritsFactory(
+        #         mod=f, src_dem=stack_fn, uncertainty_mask=4, weight_mask=3, count_mask=2
+        #     )._acquire_module()
+        #     if grits_filter is not None:
+        #         grits_filter()
+        #         os.replace(grits_filter.dst_dem, out_file)
             
-        if self.want_mask:
-            os.replace(mask_fn, os.path.basename(mask_fn))
+        # if self.want_mask:
+        #     os.replace(mask_fn, os.path.basename(mask_fn))
 
         return(stack_fn)
 
