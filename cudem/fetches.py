@@ -3829,7 +3829,7 @@ class DAV(FetchModule):
                                 # if not os.path.exists(urllist):
                                 #     continue
 
-                                page = Fetch(link['link'], verbose=True).fetch_html()
+                                page = Fetch(link['link'], verbose=False).fetch_html()
                                 rows = page.xpath('//a[contains(@href, ".txt")]/@href')
                                 for l in rows:
                                     if 'urllist' in l:
