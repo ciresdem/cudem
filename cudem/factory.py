@@ -116,7 +116,9 @@ def dict2args(in_dict: dict):
     
     out_args = ''
     for i, key in enumerate(in_dict.keys()):
-        out_args += '{}={}{}'.format(key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else '')
+        out_args += '{}={}{}'.format(
+            key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else ''
+        )
         
     return(out_args)
 
@@ -180,13 +182,31 @@ def _factory_module_check(mf: any, mc: any):
 _cudem_module_short_desc = lambda m: ', '.join(
     ['{}'.format(key) for key in m])
 _cudem_module_name_short_desc = lambda m: ',  '.join(
-    ['{} ({})'.format(m[key]['name'] if 'name' in m[key].keys() else None, key) for key in m])
-_cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n  '.format(cmd=os.path.basename(sys.argv[0])) + '\n  '.join(
-    ['\033[1m{:20}\033[0m{}\n'.format('{} ({})'.format(str(key), str(m[key]['name']) if 'name' in m[key].keys() else key), m[key]['call'].__doc__) for key in m]) + '\n'
-_cudem_module_md = lambda m: '# {cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n'.format(cmd=os.path.basename(sys.argv[0])) + '\n'.join(
-    ['## {} ({})\n {}'.format(str(m[key]['name']), str(key), m[key]['description']) for key in m])
-_cudem_module_md_table = lambda m: '| **Name** | **Module-Key** | **Description** |\n|---|---|---|\n'.format(cmd=os.path.basename(sys.argv[0])) + '\n'.join(
-    ['| {} | {} | {} |'.format(str(m[key]['name']) if 'name' in m[key].keys() else key, str(key), m[key]['description']) for key in m])
+    ['{} ({})'.format(
+        m[key]['name'] if 'name' in m[key].keys() else None, key
+    ) for key in m]
+)
+_cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n  '.format(
+    cmd=os.path.basename(sys.argv[0])
+) + '\n  '.join(
+    ['\033[1m{:20}\033[0m{}\n'.format(
+        '{} ({})'.format(str(key), str(m[key]['name']) if 'name' in m[key].keys() else key), m[key]['call'].__doc__
+    ) for key in m]
+) + '\n'
+_cudem_module_md = lambda m: '# {cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n'.format(
+    cmd=os.path.basename(sys.argv[0])
+) + '\n'.join(
+    ['## {} ({})\n {}'.format(
+        str(m[key]['name']), str(key), m[key]['description']
+    ) for key in m]
+)
+_cudem_module_md_table = lambda m: '| **Name** | **Module-Key** | **Description** |\n|---|---|---|\n'.format(
+    cmd=os.path.basename(sys.argv[0])
+) + '\n'.join(
+    ['| {} | {} | {} |'.format(
+        str(m[key]['name']) if 'name' in m[key].keys() else key, str(key), m[key]['description']
+    ) for key in m]
+)
 
 def echo_modules(module_dict: dict, key: any, md: bool = False):
     """print out the existing modules from module_dict and their descriptions."""
@@ -266,14 +286,24 @@ class CUDEMFactory:
     the function/class to call should have at least a 'params={}' paramter.
     """
     
-    _factory_module = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'fmts': [], 'call': CUDEMModule}}
-    _modules = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'call': CUDEMModule}}    
+    _factory_module = {
+        '_factory': {'name': 'factory',
+                     'description': 'default factory setting',
+                     'fmts': [],
+                     'call': CUDEMModule}
+    }
+    _modules = {
+        '_factory': {'name': 'factory',
+                     'description': 'default factory setting',
+                     'call': CUDEMModule}
+    }
     def __init__(self, mod: str = None, **kwargs: any):
         """
         Initialize the factory default settings
         
         Parameters:
-          mod - A string of a module name and optional module arguments in the format: 'mod_name:mod_arg0=mod_val0:mod_arg1=mod_val1'
+          mod - A string of a module name and optional module arguments in the format: 
+                'mod_name:mod_arg0=mod_val0:mod_arg1=mod_val1'
           kwargs - module arguments can be passed as key-word arguments here instead of in the mod string if wanted;
                    however argumets from the mod string will over-ride arguments from the key-word arguments.
         """
@@ -332,7 +362,11 @@ class CUDEMFactory:
         self.kwargs['params'] = self.__dict__
         for k in self.kwargs.keys():
             if k in self.mod_args.keys():
-                utils.echo_warning_msg('duplicate options! {}: {} --> {}'.format(k, self.kwargs[k], self.mod_args[k]))
+                utils.echo_warning_msg(
+                    'duplicate options! {}: {} --> {}'.format(
+                        k, self.kwargs[k], self.mod_args[k]
+                    )
+                )
                 self.kwargs[k] = self.mod_args[k]
                 del self.mod_args[k]
                 
@@ -341,7 +375,9 @@ class CUDEMFactory:
                 m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
                 return(m(self.mod_args, self.kwargs))
             except Exception as e:
-                utils.echo_error_msg('could not acquire module, {}'.format(e))
+                utils.echo_error_msg(
+                    'could not acquire module, {}'.format(e)
+                )
                 
         #return(self._modules[self.mod_name]['call'](self.mod_args, self.kwargs))
 
@@ -359,9 +395,13 @@ class CUDEMFactory:
             valid_data = True
                     
         if valid_data:
-            utils.echo_msg('CUDEMFactory read successfully')
+            utils.echo_msg(
+                'CUDEMFactory read successfully'
+            )
         else:
-            utils.echo_warning_msg('Unable to find any valid data')
+            utils.echo_warning_msg(
+                'Unable to find any valid data'
+            )
             
         return(self)
         
@@ -371,10 +411,16 @@ class CUDEMFactory:
         try:
             with open(param_file, 'w') as outfile:
                 json.dump(self.__dict__, outfile, indent=4)
-                utils.echo_msg('New CUDEMFactory file written to {}'.format(param_file))
+                utils.echo_msg(
+                    'New CUDEMFactory file written to {}'.format(param_file)
+                )
                 
         except:
-            raise ValueError('CUDEMFactory: Unable to write new parameter file to {}'.format(param_file))
+            raise ValueError(
+                'CUDEMFactory: Unable to write new parameter file to {}'.format(
+                    param_file
+                )
+            )
         
     def open_parameter_file(self, param_file: str):
         """Open and read a saved parameter file"""
@@ -384,7 +430,9 @@ class CUDEMFactory:
             try:
                 data = json.load(infile)
             except:
-                raise ValueError('CUDEMFactory: Unable to read data from {} as json'.format(param_file))
+                raise ValueError(
+                    'CUDEMFactory: Unable to read data from {} as json'.format(param_file)
+                )
             
             for ky, val in data.items():
                 #if ky in self.__dict__:
@@ -392,9 +440,13 @@ class CUDEMFactory:
                 valid_data = True
                     
             if valid_data:
-                utils.echo_msg('CUDEMFactory read successfully from {}'.format(param_file))
+                utils.echo_msg(
+                    'CUDEMFactory read successfully from {}'.format(param_file)
+                )
             else:
-                utils.echo_warning_msg('Unable to find any valid data in {}'.format(param_file))
+                utils.echo_warning_msg(
+                    'Unable to find any valid data in {}'.format(param_file)
+                )
 
 if __name__ == 'main':
     f = CUDEMFactory()
