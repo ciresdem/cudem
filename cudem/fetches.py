@@ -3801,34 +3801,8 @@ class DAV(FetchModule):
                     else:
                         for link in links['links']:
                             if link['serviceID'] == 46 and (self.datatype == 'lidar' or self.datatype == 'dem' or self.datatype is None):
-                                # urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
-                                # #surv_name = '_'.join(link['link'].split('/')[-2].split('_')[:-1])
                                 surv_name = '_'.join(link['link'].split('/')[-2].split('_'))
                                 index_zipfile = os.path.join(self._outdir, 'tileindex_{}.zip'.format(surv_name))
-                                # index_zipurl = link['link'] + '/' + index_zipfile
-                                # urllist_url = link['link'] + '/' + urllist
-                                # urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                                # #status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
-                                # #/
-                                # while True:
-                                #     try:
-                                #         status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
-                                #     except:
-                                #         status = -1
-
-                                #     if status != 0:
-                                #         #if Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
-                                #         if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
-                                #             break
-
-                                #         urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                                #     else:
-                                #         break
-                                # #/
-                                # utils.echo_msg(urllist_url)
-                                # if not os.path.exists(urllist):
-                                #     continue
-
                                 page = Fetch(link['link'], verbose=False).fetch_html()
                                 rows = page.xpath('//a[contains(@href, ".txt")]/@href')
                                 for l in rows:
