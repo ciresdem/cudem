@@ -3766,7 +3766,7 @@ class DAV(FetchModule):
             'outFields': '*',
             'geometry': self.region.format('bbox'),
             'inSR':4326,
-            'outSR':4326,
+            #'outSR':4326,
             'f':'pjson',
             'returnGeometry':'False',
         }
@@ -3801,40 +3801,55 @@ class DAV(FetchModule):
                     else:
                         for link in links['links']:
                             if link['serviceID'] == 46 and (self.datatype == 'lidar' or self.datatype == 'dem' or self.datatype is None):
-                                urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
-                                #surv_name = '_'.join(link['link'].split('/')[-2].split('_')[:-1])
+                                # urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
+                                # #surv_name = '_'.join(link['link'].split('/')[-2].split('_')[:-1])
                                 surv_name = '_'.join(link['link'].split('/')[-2].split('_'))
                                 index_zipfile = os.path.join(self._outdir, 'tileindex_{}.zip'.format(surv_name))
-                                index_zipurl = link['link'] + '/' + index_zipfile
-                                urllist_url = link['link'] + '/' + urllist
-                                urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                                #status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
-                                #/
-                                while True:
-                                    try:
-                                        status = Fetch(urllist_url, verbose=False).fetch_file(urllist)
-                                    except:
-                                        status = -1
+                                # index_zipurl = link['link'] + '/' + index_zipfile
+                                # urllist_url = link['link'] + '/' + urllist
+                                # urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
+                                # #status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
+                                # #/
+                                # while True:
+                                #     try:
+                                #         status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
+                                #     except:
+                                #         status = -1
 
-                                    if status != 0:
-                                        #if Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
-                                        if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
-                                            break
+                                #     if status != 0:
+                                #         #if Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
+                                #         if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
+                                #             break
 
-                                        urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                                    else:
+                                #         urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
+                                #     else:
+                                #         break
+                                # #/
+                                # utils.echo_msg(urllist_url)
+                                # if not os.path.exists(urllist):
+                                #     continue
+
+                                page = Fetch(link['link'], verbose=True).fetch_html()
+                                rows = page.xpath('//a[contains(@href, ".txt")]/@href')
+                                for l in rows:
+                                    if 'urllist' in l:
+                                        urllist = l
                                         break
-                                #/
+
+                                if 'http' in urllist:
+                                    urllist_url = urllist
+                                else:
+                                    urllist_url = os.path.dirname(link['link']) + '/' + urllist
+                                    
+                                status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
                                 if not os.path.exists(urllist):
                                     continue
-
+                                
                                 with open(urllist, 'r') as ul:
                                     for line in ul:
-                                        if 'tileindex' in line:
+                                        if 'tileindex' in line and 'zip' in line:
                                             index_zipurl = line.strip()
                                             break
-
-                                utils.remove_glob(urllist)
                                 try:
                                     status = Fetch(
                                         index_zipurl, callback=self.callback, verbose=self.verbose
@@ -3854,19 +3869,48 @@ class DAV(FetchModule):
                                         if v.split('.')[-1] == 'shp':
                                             index_shp = v
 
+                                    warp_region = self.region.copy()
+                                    index_prj = None
+                                    for v in index_shps:
+                                        if v.split('.')[-1] == 'prj':
+                                            index_prj = v
+                                            
+                                    if index_prj is not None:
+                                        prj_ds = open(index_prj)
+                                        prj_wkt = prj_ds.read()
+                                        warp_region.warp(dst_crs = prj_wkt)
+                                        prj_ds.close()
+                                        
                                     index_ds = ogr.Open(index_shp)
                                     index_layer = index_ds.GetLayer(0)
                                     for index_feature in index_layer:
                                         index_geom = index_feature.GetGeometryRef()
-
-                                        if index_geom.Intersects(self.region.export_as_geom()):
+                                        known_name_fields = ['Name', 'location', 'filename']
+                                        known_url_fields = ['url', 'URL']
+                                        
+                                        if index_geom.Intersects(warp_region.export_as_geom()):
                                             tile_name = None
-                                            try:
-                                                tile_name = index_feature.GetField('Name').strip()
-                                            except:
-                                                tile_name = index_feature.GetField('location').strip()
+                                            tile_url = None
+                                            field_names = [field.name for field in index_layer.schema]
+                                            
+                                            for f in known_name_fields:
+                                                if f in field_names:
+                                                    tile_name = index_feature.GetField(f).strip()
+                                                    
+                                                if tile_name is not None:
+                                                    break
 
-                                            tile_url = index_feature.GetField('URL').strip()
+                                            for f in known_url_fields:
+                                                if f in field_names:
+                                                    tile_url = index_feature.GetField(f).strip()
+                                                    
+                                                if tile_url is not None:
+                                                    break
+
+                                            if tile_name is None or tile_url is None:
+                                                utils.echo_warning_msg('could not parse index fields')
+                                                continue
+                                            
                                             tile_url = '/'.join(tile_url.split('/')[:-1]) + '/' + tile_name.split('/')[-1]
                                             ## add vertical datum to output;
                                             ## field is NativeVdatum
@@ -3898,6 +3942,7 @@ class DAV(FetchModule):
 
                                     index_ds = index_layer = None
                                     utils.remove_glob(index_zipfile, *index_shps)
+                                    
                             elif link['serviceID'] == 166 and self.datatype == 'sm': # spatial_metadata
                                 self.add_entry_to_results(
                                     link['link'],
