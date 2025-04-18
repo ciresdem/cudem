@@ -5517,7 +5517,7 @@ def waffle_queue(q):
 ##
 ## waffles cli
 ## ==============================================
-waffles_cli_usage = """{cmd} ({wf_version}): Generate DEMs and derivatives.
+waffles_cli_usage = lambda: """{cmd} ({wf_version}): Generate DEMs and derivatives.
 
 usage: {cmd} [OPTIONS] DATALIST
 
@@ -5833,13 +5833,13 @@ def waffles_cli(argv = sys.argv):
             factory.echo_modules(WaffleFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
             sys.exit(0)
         elif arg == '--help' or arg == '-h':
-            sys.stderr.write(waffles_cli_usage)
+            sys.stderr.write(waffles_cli_usage())
             sys.exit(0)
         elif arg == '--version' or arg == '-v':
             sys.stdout.write('{}\n'.format(cudem.__version__))
             sys.exit(0)
         elif arg[0] == '-':
-            sys.stderr.write(waffles_cli_usage)
+            sys.stderr.write(waffles_cli_usage())
             utils.echo_error_msg('{} is not a valid waffles cli switch'.format(arg))
             sys.exit(0)
         else: dls.append(arg)
@@ -5887,7 +5887,7 @@ def waffles_cli(argv = sys.argv):
         
     if WaffleFactory()._modules[module.split(':')[0]]['stack']:
         if len(dls) == 0:
-            sys.stderr.write(waffles_cli_usage)
+            sys.stderr.write(waffles_cli_usage())
             utils.echo_error_msg('''must specify a datalist/entry, try `gmrt` or `srtm` for global data.''')
             sys.exit(-1)
     else:
@@ -5896,14 +5896,14 @@ def waffles_cli(argv = sys.argv):
     ## check the increment
     if 'xinc' in wg.keys():
         if wg['xinc'] is None:
-            sys.stderr.write(waffles_cli_usage)
+            sys.stderr.write(waffles_cli_usage())
             utils.echo_error_msg('''must specify a gridding increment.''')
             sys.exit(-1)
         else:
             if wg['yinc'] is None:
                 wg['yinc'] = wg['xinc']
     else:
-        sys.stderr.write(waffles_cli_usage)
+        sys.stderr.write(waffles_cli_usage())
         utils.echo_error_msg('''must specify a gridding increment.''')
         sys.exit(-1)      
 

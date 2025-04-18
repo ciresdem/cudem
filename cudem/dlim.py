@@ -3528,11 +3528,15 @@ class XYZFile(ElevationDataset):
             
         self.scoff = True if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
            or self.x_offset != 0 or self.y_offset != 0 else False
-        self.field_names  = [x for x in ['x' if self.xpos is not None else None, 'y' if self.ypos is not None else None,
-                                         'z' if self.zpos is not None else None, 'w' if self.wpos is not None else None,
+        self.field_names  = [x for x in ['x' if self.xpos is not None else None,
+                                         'y' if self.ypos is not None else None,
+                                         'z' if self.zpos is not None else None,
+                                         'w' if self.wpos is not None else None,
                                          'u' if self.upos is not None else None]
                              if x is not None]
-        self.field_formats = [float for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None]
+        self.field_formats = [float for x in [self.xpos, self.ypos,
+                                              self.zpos, self.wpos,
+                                              self.upos] if x is not None]
         #if self.use_numpy:
         try:
             if self.delim is None:
@@ -3547,7 +3551,9 @@ class XYZFile(ElevationDataset):
                         comments='#',
                         ndmin = 1,
                         skiprows=skip_,
-                        usecols=[x for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None],
+                        usecols=[x for x in [self.xpos, self.ypos,
+                                             self.zpos, self.wpos,
+                                             self.upos] if x is not None],
                         dtype={'names': self.field_names, 'formats': self.field_formats},
                         max_rows=self.iter_rows
                     )
@@ -3568,7 +3574,9 @@ class XYZFile(ElevationDataset):
 
         ## old processing function used as a fallback for when numpy.loadtxt fails
         except Exception as e:
-            utils.echo_warning_msg('could not load xyz data from {}, {}, falling back'.format(self.fn, e))
+            utils.echo_warning_msg(
+                'could not load xyz data from {}, {}, falling back'.format(self.fn, e)
+            )
             if self.fn is not None:
                 if os.path.exists(str(self.fn)):
                     self.src_data = open(self.fn, "r")
@@ -3613,7 +3621,9 @@ class XYZFile(ElevationDataset):
                     if self.data_region is not None and self.data_region.valid_p():
                         try:
                             this_xyz = xyzfun.XYZPoint(
-                                x=this_xyz[self.xpos], y=this_xyz[self.ypos], z=this_xyz[self.zpos]
+                                x=this_xyz[self.xpos],
+                                y=this_xyz[self.ypos],
+                                z=this_xyz[self.zpos]
                             )
                         except Exception as e:
                             utils.echo_error_msg('{} ; {}'.format(e, this_xyz))
@@ -3754,7 +3764,9 @@ class LASFile(ElevationDataset):
                     yield(points)
                     
             except Exception as e:
-                utils.echo_warning_msg('could not read points from lasfile {}, {}'.format(self.fn, e))
+                utils.echo_warning_msg(
+                    'could not read points from lasfile {}, {}'.format(self.fn, e)
+                )
                 
 class GDALFile(ElevationDataset):
     """providing a GDAL raster dataset parser.
@@ -3818,7 +3830,9 @@ class GDALFile(ElevationDataset):
         self.node = node # input is 'pixel' or 'grid' registered (force)
         self.resample_and_warp = resample_and_warp
 
-        if self.fn.startswith('http') or self.fn.startswith('/vsicurl/') or self.fn.startswith('BAG'):
+        if self.fn.startswith('http') \
+           or self.fn.startswith('/vsicurl/') \
+           or self.fn.startswith('BAG'):
             self.check_path = False
 
         if self.valid_p() and self.src_srs is None:
@@ -3876,7 +3890,8 @@ class GDALFile(ElevationDataset):
                 )
             else:
                 if self.transform['transformer'] is not None:
-                    if self.transform['trans_region'] is not None and self.transform['trans_region'].valid_p(
+                    if self.transform['trans_region'] is not None \
+                       and self.transform['trans_region'].valid_p(
                             check_xy = True
                     ):
                         srcwin = self.transform['trans_region'].srcwin(
@@ -8071,7 +8086,7 @@ class DatasetFactory(factory.CUDEMFactory):
 ##
 ## datalists cli
 ## ==============================================
-datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
+datalists_usage = lambda: """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
 dlim is the elevation data processing tool using various dataset modules. dlim's native dataset format is a "datalist". 
 A datalist is similar to an MBSystem datalist; it is a space-delineated file containing the following columns:
@@ -8288,7 +8303,7 @@ See `datalists_usage` for full cli options.
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
-            print(datalists_usage)
+            print(datalists_usage())
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
             print('{}, version {}'.format(
@@ -8296,7 +8311,7 @@ See `datalists_usage` for full cli options.
                   )
             sys.exit(1)
         elif arg[0] == '-':
-            print(datalists_usage)
+            print(datalists_usage())
             sys.exit(0)
         else: dls.append(arg)#'"{}"'.format(arg)) # FIX THIS!!!
         
@@ -8339,7 +8354,7 @@ See `datalists_usage` for full cli options.
             )
 
         if len(dls) == 0:
-            sys.stderr.write(datalists_usage)
+            sys.stderr.write(datalists_usage())
             utils.echo_error_msg('you must specify some type of data')
         else:
             ## intiialze the input data. Treat data from CLI as a datalist.
@@ -8390,30 +8405,9 @@ See `datalists_usage` for full cli options.
                             this_region.warp(dst_srs, include_z=False)
                     print(this_region.format('gmt'))
                 elif want_archive:
-                    #these_archives.append(this_datalist.archive_xyz()) # archive the datalist as xyz
                     this_archive = this_datalist.archive_xyz(dirname=archive_dirname) # archive the datalist as xyz
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
-
-                    # ## generate datalist inf/json
-                    # # srs_set = set(srs_all)
-                    # # if len(srs_set) == 1:
-                    # #     arch_srs = srs_set.pop()
-                    # # else:
-                    # #     arch_srs = None
-                    
-                    # this_archive = DatasetFactory(
-                    #     mod=this_archive,
-                    #     data_format=-1,
-                    #     parent=None,
-                    #     weight=1,
-                    #     uncertainty=0,
-                    #     src_srs=dst_srs,
-                    #     dst_srs=None,
-                    #     cache_dir=self.cache_dir,
-                    # )._acquire_module().initialize().inf()
-                    # #this_archive_inf = this_archive.inf()
-                        
                 else:
                     try:
                         if want_separate: # process and dump each dataset independently
@@ -8430,11 +8424,5 @@ See `datalists_usage` for full cli options.
                     except Exception as e:
                       utils.echo_error_msg(e)
                       print(traceback.format_exc())
-                      
-    # if want_archive:
-    #     combine_archive_datalists = 'test_archive'
-    #     with open('{}.datalist'.format(combine_archive_datalists), 'w') as dlf:
-    #         for this_archive in these_archives:
-    #             dlf.write('{} -1 1 0\n'.format(os.path.abspath(this_archive.name)))
-        
+                              
 ### End
