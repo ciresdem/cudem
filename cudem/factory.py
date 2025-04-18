@@ -309,9 +309,9 @@ class CUDEMFactory:
         else:
             utils.echo_error_msg(
                 'invalid module name `{}`'.format(opts[0])
-            )
+            )            
+            self.mod_args['modules'] = self._modules
             
-        self.mod_args['modules'] = self._modules
         return(self.mod_name, self.mod_args)
 
     def add_module(self, type_def: dict = {}):
