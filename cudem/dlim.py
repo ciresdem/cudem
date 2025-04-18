@@ -2050,7 +2050,7 @@ class ElevationDataset:
                         m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                         
                     m_all_array[arrs['count'] != 0] = 1
-                    m_band_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
+                    m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
                     m_ds.FlushCache()
                     m_array = m_all_array = None
                     # if mask_only:
@@ -8337,6 +8337,7 @@ See `datalists_usage` for full cli options.
                 x_bv=(utils.str2inc(xy_inc[0])*extend),
                 y_bv=(utils.str2inc(xy_inc[1])*extend)
             )
+
         if len(dls) == 0:
             sys.stderr.write(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
@@ -8414,21 +8415,21 @@ See `datalists_usage` for full cli options.
                     # #this_archive_inf = this_archive.inf()
                         
                 else:
-                    #try:
-                    if want_separate: # process and dump each dataset independently
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else: # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #   utils.echo_error_msg('Killed by user')
-                    #   break
-                    # except BrokenPipeError:
-                    #   utils.echo_error_msg('Pipe Broken')
-                    #   break
-                    # except Exception as e:
-                    #   utils.echo_error_msg(e)
-                    #   print(traceback.format_exc())
+                    try:
+                        if want_separate: # process and dump each dataset independently
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else: # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                      utils.echo_error_msg('Killed by user')
+                      break
+                    except BrokenPipeError:
+                      utils.echo_error_msg('Pipe Broken')
+                      break
+                    except Exception as e:
+                      utils.echo_error_msg(e)
+                      print(traceback.format_exc())
                       
     # if want_archive:
     #     combine_archive_datalists = 'test_archive'

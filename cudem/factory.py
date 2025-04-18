@@ -301,8 +301,8 @@ class CUDEMFactory:
         """
         
         opts = mod.split(':')
+        self.mod_args = {}
         if opts[0] in self._modules.keys():
-            self.mod_args = {}
             if len(opts) > 1:
                 self.mod_args = args2dict(list(opts[1:]), {})
             self.mod_name = opts[0]
@@ -310,8 +310,8 @@ class CUDEMFactory:
             utils.echo_error_msg(
                 'invalid module name `{}`'.format(opts[0])
             )
-            self.mod_args = {'modules': self._modules}
             
+        self.mod_args['modules'] = self._modules
         return(self.mod_name, self.mod_args)
 
     def add_module(self, type_def: dict = {}):
