@@ -4496,6 +4496,11 @@ class NED1(TheNationalMap):
     def __init__(self, **kwargs):
         super().__init__(where="NAME LIKE '%DEM%'", **kwargs)
         self.data_format = 200
+
+# class TNM_LAZ(TheNationalMap):
+#     def __init__(self, **kwargs):
+#         super().__init__(formats="LAZ", **kwargs)
+#         self.data_format = 300
         
 ## EMODNet - EU data
 class EMODNet(FetchModule):
@@ -6308,6 +6313,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'tnm': {'call': TheNationalMap},
         'ned': {'call': NED},
         'ned1': {'call': NED1},
+        #'tnm_laz': {'call': TNM_LAZ},
         'emodnet': {'call': EMODNet},
         'chs': {'call': CHS},
         'hrdem': {'call': HRDEM},
@@ -6331,9 +6337,9 @@ class FetchesFactory(factory.CUDEMFactory):
         'bing_bfp': {'call': BingBFP},
         'waterservices': {'call': WaterServices},
         'csb': {'call': CSB},
-        #'nsw_tb': {'call': NSW_TB},
         'cpt_city': {'call': CPTCity},
         'wa_dnr': {'call': waDNR},
+        #'nsw_tb': {'call': NSW_TB},
     }
 
     def __init__(self, **kwargs):
@@ -6345,7 +6351,7 @@ class FetchesFactory(factory.CUDEMFactory):
 ##
 ## fetches cli
 ## ==============================================
-fetches_usage = """{cmd} ({version}): Fetches; Fetch and process remote elevation data
+fetches_usage = lambda: """{cmd} ({version}): Fetches; Fetch and process remote elevation data
 
 usage: {cmd} [ -hlqzAHR [ args ] ] MODULE ...
 
@@ -6416,7 +6422,7 @@ See `fetches_cli_usage` for full cli options.
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
-            sys.stderr.write(fetches_usage)
+            sys.stderr.write(fetches_usage())
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
             print('{}, version {}'.format(
@@ -6430,7 +6436,7 @@ See `fetches_cli_usage` for full cli options.
             )
             sys.exit(0)
         elif arg[0] == '-':
-            sys.stderr.write(fetches_usage)
+            sys.stderr.write(fetches_usage())
             sys.exit(0)
         else:
             mods.append(arg)
@@ -6438,7 +6444,7 @@ See `fetches_cli_usage` for full cli options.
         i = i + 1
 
     if len(mods) == 0:
-        sys.stderr.write(fetches_usage)
+        sys.stderr.write(fetches_usage())
         utils.echo_error_msg('you must select at least one fetch module')
         sys.exit(-1)
 

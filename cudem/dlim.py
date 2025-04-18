@@ -147,7 +147,6 @@ def num_strings_to_range(*args):
         return(None)
 
 def scan_mask_bands(src_ds, skip_band = 'Full Data Mask', mask_level = 0, verbose = True):
-
     mask_level = utils.int_or(mask_level, 0)
     src_infos = gdalfun.gdal_infos(src_ds)
     band_infos = {}    
@@ -616,7 +615,25 @@ def init_data(data_list,
         utils.echo_error_msg('could not initialize data, {}: {}'.format(data_list, e))
         return(None)
 
-## TODO: move pointfilter/binz/etc to own file
+def h5_get_datasets_from_grp(grp, count = 0, out_keys = []):
+    if isinstance(grp, h5.Dataset):
+        count += 1
+        out_keys.append(grp.name)
+
+    elif isinstance(grp, h5.Group):
+        for key in grp.keys():
+            if isinstance(grp[key], h5.Dataset):
+                count += 1
+                out_keys.append(grp[key].name)
+            elif isinstance(grp[key], h5.Group):
+                for sub_key in grp[key].keys():
+                    count, out_keys = h5_get_datasets_from_grp(
+                        grp[key][sub_key], count, out_keys
+                    )
+
+    return(count, out_keys)
+    
+## TODO: move pointfilter/binz/etc to own module
 class PointFilter:
     def __init__(self, points = None, params = {}, verbose = True, **kwargs):
         self.points = points
@@ -1170,7 +1187,7 @@ class ElevationDataset:
         self.cache_dir = utils.cudem_cache() if self.cache_dir is None else self.cache_dir # cache directory
         if self.sample_alg not in self.gdal_sample_methods: # gdal_warp resmaple algorithm 
             utils.echo_warning_msg(
-                '{} is not a valid gdal warp resample algorithm, falling back to auto'.format(
+                '{} is not a valid gdal warp resample algorithm, falling back to `auto`'.format(
                     self.sample_alg
                 )
             )
@@ -1208,7 +1225,6 @@ class ElevationDataset:
                     
         if self.valid_p():
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
-            #utils.echo_msg(self.infos)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
@@ -1227,279 +1243,7 @@ class ElevationDataset:
             self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
             
         return(self)
-    
-    def generate_inf(self):
-        """generate an inf file for the data source. this is generic and
-        will parse through all the data via yield_xyz to get point count
-        and region. if the datasource has a better way to do this, such as
-        with las/gdal files, re-define this function in its respective
-        dataset sub-class.
-
-        todo: hull for wkt
-        ## todo: put qhull in a yield and perform while scanning for min/max
-        # try:
-        #     out_hull = [pts[i] for i in ConvexHull(
-        #         pts, qhull_options='Qt'
-        #     ).vertices]
-        #     out_hull.append(out_hull[0])
-        #     self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
-        # except:
-        #     ...
-        """
-
-        _region = None
-        if self.region is not None:
-            _region = self.region.copy()
-            self.region = None
-
-        _x_inc = None
-        if self.x_inc is not None:
-            _x_inc = self.x_inc
-            self.x_inc = None
-            
-        this_region = regions.Region()
-        point_count = 0
-
-        for points in self.transform_and_yield_points():
-            if point_count == 0:
-                this_region.from_list(
-                    [
-                        points['x'].min(), points['x'].max(),
-                        points['y'].min(), points['y'].max(),
-                        points['z'].min(), points['z'].max()
-                    ]
-                )
-            else:
-                if points['x'].min() < this_region.xmin:
-                    this_region.xmin = points['x'].min()
-                elif points['x'].max() > this_region.xmax:
-                    this_region.xmax = points['x'].max()
-                    
-                if points['y'].min() < this_region.ymin:
-                    this_region.ymin = points['y'].min()
-                elif points['y'].max() > this_region.ymax:
-                    this_region.ymax = points['y'].max()
-                    
-                if points['z'].min() < this_region.zmin:
-                    this_region.zmin = points['z'].min()
-                elif points['z'].min() > this_region.zmax:
-                    this_region.zmax = points['z'].min()
                 
-            point_count += len(points)
-
-        self.infos.numpts = point_count
-        if point_count > 0:
-            self.infos.minmax = this_region.export_as_list(include_z=True)
-            self.infos.wkt = this_region.export_as_wkt()
-            
-        self.infos.src_srs = self.src_srs
-        if _region is not None:
-            self.region = _region.copy()
-
-        if _x_inc is not None:
-            self.x_inc = _x_inc
-            
-        return(self.infos)
-
-    def yield_points(self):
-        """yield the numpy xyz rec array points from the dataset.
-
-        reset in dataset if needed.
-        """
-
-        for ds in self.parse():
-            for points in ds.yield_points():
-                yield(points)
-        
-    def yield_xyz_from_entries(self):
-        """yield from self.data_entries, list of datasets"""
-        
-        for this_entry in self.data_entries:
-            for xyz in this_entry.xyz_yield:
-                yield(xyz)
-                
-            if this_entry.remote:
-                utils.remove_glob('{}*'.format(this_entry.fn))
-
-    def yield_entries(self):
-        """yield from self.data_entries, list of datasets"""
-        
-        for this_entry in self.data_entries:
-            yield(this_entry)
-
-    def set_yield(self):
-        """set the yield strategy, either default (all points) or mask or stacks
-
-        This sets both `self.array_yeild` and `self.xyz_yield`.
-        
-        if region, x_inc and y_inc are set, data will yield through _stacks,
-        otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
-        """
-
-        self.array_yield = self.mask_and_yield_array()
-        self.xyz_yield = self.mask_and_yield_xyz()
-        #if self.want_archive: # archive only works when yielding xyz data.
-        #    self.xyz_yield = self.archive_xyz()
-        #if (self.region is None and self.transform['trans_region'] is None) and self.x_inc is not None:
-        if self.region is None and self.x_inc is not None:
-            utils.echo_msg(self.transform['trans_region'])
-            utils.echo_warning_msg('must enter a region to output in increment blocks...')
-
-        if self.region is not None and self.x_inc is not None:
-            self.x_inc = utils.str2inc(self.x_inc)
-            if self.y_inc is None:
-                self.y_inc = self.x_inc
-            else:
-                self.y_inc = utils.str2inc(self.y_inc)
-
-                #out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
-            out_name = utils.make_temp_fn(utils.append_fn('dlim_stacks', self.region, self.x_inc), temp_dir=self.cache_dir)
-            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff')#, mode=self.stack_mode)
-            
-    def mask_and_yield_array(self):
-        """mask the incoming array from `self.yield_array` and yield the results.
-        
-        the mask should be either an ogr supported vector or a gdal supported raster.
-        """
-        
-        mask_band = None
-        mask_infos = None
-
-        if self.mask is not None:
-            if os.path.exists(self.mask['mask']):            
-                utils.echo_msg('using mask dataset: {} to array'.format(self.mask['mask']))
-                if self.region is not None and self.x_inc is not None and self.y_inc is not None:
-                    src_mask = gdalfun.sample_warp(
-                        self.mask['mask'], None, self.x_inc, self.y_inc,
-                        src_region=self.region,
-                        sample_alg='nearest',
-                        dst_srs=self.transform['dst_horz_crs'] if self.transform['dst_horz_crs'] is not None else None,
-                        #dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None else None,
-                        #dst_srs=self.dst_srs.split('+')[0],
-                        ndv=gdalfun.gdal_get_ndv(self.mask['mask']),
-                        verbose=False,
-                        co=["COMPRESS=DEFLATE", "TILED=YES"]
-                    )[0]
-                else:
-                    src_mask = gdal.Open(self.mask['mask'])
-                    
-                mask_band = src_mask.GetRasterBand(1)
-                mask_infos = gdalfun.gdal_infos(src_mask)
-            else:
-                utils.echo_warning_msg('could not load mask {}'.format(self.mask['mask']))
-
-        for out_arrays, this_srcwin, this_gt in self.yield_array():
-            if mask_band is not None:
-                ycount, xcount = out_arrays['z'].shape
-                this_region = regions.Region().from_geo_transform(this_gt, xcount, ycount)
-                mask_data = mask_band.ReadAsArray(*this_srcwin)
-                if not np.isnan(mask_infos['ndv']):
-                    mask_data[mask_data==mask_infos['ndv']] = np.nan
-                        
-                for arr in out_arrays.keys():
-                    if out_arrays[arr] is not None:
-                        if self.mask['invert_mask']:
-                            if arr == 'count':
-                                out_arrays[arr][~np.isnan(mask_data)] = 0
-                            else:                            
-                                out_arrays[arr][~np.isnan(mask_data)] = np.nan                            
-                        else:
-                            if arr == 'count':
-                                out_arrays[arr][np.isnan(mask_data)] = 0
-                            else:
-                                out_arrays[arr][np.isnan(mask_data)] = np.nan
-
-            yield(out_arrays, this_srcwin, this_gt)
-
-    def mask_and_yield_xyz(self):
-        """mask the incoming xyz data from `self.yield_xyz` and yield the results.
-        
-        the mask should be either an ogr supported vector or a gdal supported raster.
-        """
-
-        for this_entry in self.parse():
-            if this_entry.mask is None:
-                for this_xyz in this_entry.yield_xyz():
-                    yield(this_xyz)
-            else:
-                utils.echo_msg('using mask dataset: {} to xyz'.format(this_entry.mask['mask']))
-                if this_entry.mask['ogr_or_gdal'] == 0:
-                    src_ds = gdal.Open(this_entry.mask['mask'])
-                    if src_ds is not None:
-                        ds_config = gdalfun.gdal_infos(src_ds)
-                        ds_band = src_ds.GetRasterBand(1)
-                        ds_gt = ds_config['geoT']
-                        ds_nd = ds_config['ndv']
-                    
-                        for this_xyz in this_entry.yield_xyz():
-                            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
-                            if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
-                                tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
-                                if tgrid is not None:
-                                    if tgrid[0][0] == ds_nd:
-                                        if this_entry.mask['invert_mask']:
-                                            yield(this_xyz)
-                                    else:
-                                        if not this_entry.mask['invert_mask']:
-                                            yield(this_xyz)                                            
-                else:
-                    ## this is very slow! find another way.
-                    src_ds = ogr.Open(this_entry.mask['mask'])
-                    layer = src_ds.GetLayer()
-                    #utils.echo_msg(len(layer))
-
-                    geomcol = gdalfun.ogr_union_geom(layer)
-                    if not geomcol.IsValid():
-                        geomcol = geomcol.Buffer(0)
-                    
-                    for this_xyz in this_entry.yield_xyz():
-                        this_wkt = this_xyz.export_as_wkt()
-                        this_point = ogr.CreateGeometryFromWkt(this_wkt)
-                        if this_point.Within(geomcol):
-                            if not this_entry.mask['invert_mask']:
-                                yield(this_xyz)
-                        else:
-                            if not this_entry.mask['invert_mask']:
-                                yield(this_xyz)
-            
-    def dump_xyz(self, dst_port=sys.stdout, encode=False):
-        """dump the XYZ data from the dataset.
-
-        data gets parsed through `self.xyz_yield`. See `set_yield` for more info.
-        """
-
-        for this_xyz in self.xyz_yield:
-            this_xyz.dump(
-                include_w=True if self.weight is not None else False,
-                include_u=True if self.uncertainty is not None else False,
-                dst_port=dst_port,
-                encode=encode,
-                precision=self.dump_precision
-            )
-
-    def dump_xyz_direct(self, dst_port=sys.stdout, encode=False):
-        """dump the XYZ data from the dataset
-
-        data get dumped directly from `self.yield_xyz`, by-passing `self.xyz_yield`.
-        """
-        
-        for this_xyz in self.yield_xyz():
-            this_xyz.dump(
-                include_w=True if self.weight is not None else False,
-                include_u=True if self.uncertainty is not None else False,
-                dst_port=dst_port,
-                encode=encode,
-                precision=self.dump_precision
-            )
-
-    def export_xyz_as_list(self, z_only = False):
-        """return the XYZ data from the dataset as python list
-
-        This may get very large, depending on the input data.
-        """
-
-        return([xyz.z if z_only else xyz.copy() for xyz in self.xyz_yield])
-            
     def fetch(self):
         """fetch remote data from self.data_entries"""
         
@@ -1545,21 +1289,7 @@ class ElevationDataset:
                                     return(False)
                         
         return(True)
-        
-    def format_entry(self, sep=' '):
-        """format the dataset information as a `sep` separated string."""
-        
-        dl_entry = sep.join(
-            [str(x) for x in [
-                self.fn,
-                '{}:{}'.format(self.data_format, factory.dict2args(self.params['mod_args'])),
-                self.weight,
-                self.uncertainty
-            ]]
-        )
-        metadata = self.echo_()
-        return(sep.join([dl_entry, metadata]))
-        
+                
     def echo_(self, sep=' ', **kwargs):
         """print self as a datalist entry string"""
 
@@ -1581,73 +1311,56 @@ class ElevationDataset:
                 
             print('{}'.format(" ".join([str(x) for x in l])))
 
+    def format_entry(self, sep = ' '):
+        """format the dataset information as a `sep` separated string."""
+        
+        dl_entry = sep.join(
+            [str(x) for x in [
+                self.fn,
+                '{}:{}'.format(self.data_format, factory.dict2args(self.params['mod_args'])),
+                self.weight,
+                self.uncertainty
+            ]]
+        )
+        metadata = self.echo_()
+        return(sep.join([dl_entry, metadata]))
+
+            
     def format_metadata(self, **kwargs):
         """format metadata from self, for use as a datalist entry."""
 
         return(self.echo_())
-    
-    def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
-        """read/write an inf file
 
-        If the inf file is not found, will attempt to generate one.
-        The function `generate_inf` should be defined for each specific
-        dataset sub-class.
+    def set_yield(self):
+        """set the yield strategy, either default (all points) or mask or stacks
+
+        This sets both `self.array_yeild` and `self.xyz_yield`.
+        
+        if region, x_inc and y_inc are set, data will yield through _stacks,
+        otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
         """
 
-        inf_path = '{}.inf'.format(self.fn)
-        generate_inf = False
+        self.array_yield = self.mask_and_yield_array()
+        self.xyz_yield = self.mask_and_yield_xyz()
+        #if self.want_archive: # archive only works when yielding xyz data.
+        #    self.xyz_yield = self.archive_xyz()
+        #if (self.region is None and self.transform['trans_region'] is None) and self.x_inc is not None:
+        if self.region is None and self.x_inc is not None:
+            utils.echo_msg(self.transform['trans_region'])
+            utils.echo_warning_msg('must enter a region to output in increment blocks...')
 
-        ## try to parse the existing inf file as either a native inf json file
-        if os.path.exists(inf_path):
-            try:
-                self.infos.load_inf_file(inf_path)
-                
-            except ValueError as e:
-                generate_inf = True
-                utils.remove_glob(inf_path)
-                if self.verbose:
-                    utils.echo_warning_msg(
-                        'failed to parse inf {}, {}'.format(inf_path, e)
-                    )
-        else:
-            generate_inf = True        
+        if self.region is not None and self.x_inc is not None:
+            self.x_inc = utils.str2inc(self.x_inc)
+            if self.y_inc is None:
+                self.y_inc = self.x_inc
+            else:
+                self.y_inc = utils.str2inc(self.y_inc)
 
-        ## check hash from inf file vs generated hash,
-        ## if hashes are different, then generate a new
-        ## inf file...only do this if check_hash is set
-        ## to True, as this can be time consuming and not
-        ## always necessary...
-        if check_hash:
-            generate_inf = self.infos.generate_hash() != self.infos.file_hash
+                #out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
+            out_name = utils.make_temp_fn(utils.append_fn('dlim_stacks', self.region, self.x_inc), temp_dir=self.cache_dir)
+            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name)#, fmt='GTiff')#, mode=self.stack_mode)
 
-        ## this being set can break some modules (bags esp)
-        # if self.remote:
-        #     generate_inf = False
-
-        if generate_inf:
-            self.infos = self.generate_inf()
-            
-            ## update this
-            if self.data_format >= -1 and write_inf:
-                self.infos.write_inf_file()
-
-            if recursive_check and self.parent is not None:
-                self.parent.inf(check_hash=True)
-
-        if self.infos.src_srs is None:
-            self.infos.src_srs = self.src_srs
-
-        else:
-            #if self.src_srs is None:
-            self.src_srs = self.infos.src_srs
-
-            if self.transform['transformer'] is not None and self.transform['trans_region'] is None:
-                self.transform['trans_region'] = regions.Region().from_list(self.infos.minmax)
-                self.transform['trans_region'].src_srs = self.infos.src_srs
-                self.transform['trans_region'].warp(self.dst_srs)
-
-        return(self.infos)
-
+    ## initialize transfom
     def parse_srs(self):
         if self.src_srs is not None and self.dst_srs is not None:
             want_vertical = True
@@ -1889,7 +1602,144 @@ class ElevationDataset:
         else:
             self.data_region = regions.Region().from_list(self.infos.minmax)
             self.data_region.src_srs = self.infos.src_srs
+
+    ## INF file reading/writing
+    def generate_inf(self):
+        """generate an inf file for the data source. this is generic and
+        will parse through all the data via yield_xyz to get point count
+        and region. if the datasource has a better way to do this, such as
+        with las/gdal files, re-define this function in its respective
+        dataset sub-class.
+
+        todo: hull for wkt
+        ## todo: put qhull in a yield and perform while scanning for min/max
+        # try:
+        #     out_hull = [pts[i] for i in ConvexHull(
+        #         pts, qhull_options='Qt'
+        #     ).vertices]
+        #     out_hull.append(out_hull[0])
+        #     self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
+        # except:
+        #     ...
+        """
+
+        _region = None
+        if self.region is not None:
+            _region = self.region.copy()
+            self.region = None
+
+        _x_inc = None
+        if self.x_inc is not None:
+            _x_inc = self.x_inc
+            self.x_inc = None
+            
+        this_region = regions.Region()
+        point_count = 0
+
+        for points in self.transform_and_yield_points():
+            if point_count == 0:
+                this_region.from_list(
+                    [
+                        points['x'].min(), points['x'].max(),
+                        points['y'].min(), points['y'].max(),
+                        points['z'].min(), points['z'].max()
+                    ]
+                )
+            else:
+                if points['x'].min() < this_region.xmin:
+                    this_region.xmin = points['x'].min()
+                elif points['x'].max() > this_region.xmax:
+                    this_region.xmax = points['x'].max()
                     
+                if points['y'].min() < this_region.ymin:
+                    this_region.ymin = points['y'].min()
+                elif points['y'].max() > this_region.ymax:
+                    this_region.ymax = points['y'].max()
+                    
+                if points['z'].min() < this_region.zmin:
+                    this_region.zmin = points['z'].min()
+                elif points['z'].min() > this_region.zmax:
+                    this_region.zmax = points['z'].min()
+                
+            point_count += len(points)
+
+        self.infos.numpts = point_count
+        if point_count > 0:
+            self.infos.minmax = this_region.export_as_list(include_z=True)
+            self.infos.wkt = this_region.export_as_wkt()
+            
+        self.infos.src_srs = self.src_srs
+        if _region is not None:
+            self.region = _region.copy()
+
+        if _x_inc is not None:
+            self.x_inc = _x_inc
+            
+        return(self.infos)
+    
+    def inf(self, check_hash = False, recursive_check = False, write_inf = True, **kwargs):
+        """read/write an inf file
+
+        If the inf file is not found, will attempt to generate one.
+        The function `generate_inf` should be defined for each specific
+        dataset sub-class.
+        """
+
+        inf_path = '{}.inf'.format(self.fn)
+        generate_inf = False
+
+        ## try to parse the existing inf file as either a native inf json file
+        if os.path.exists(inf_path):
+            try:
+                self.infos.load_inf_file(inf_path)
+                
+            except ValueError as e:
+                generate_inf = True
+                utils.remove_glob(inf_path)
+                if self.verbose:
+                    utils.echo_warning_msg(
+                        'failed to parse inf {}, {}'.format(inf_path, e)
+                    )
+        else:
+            generate_inf = True        
+
+        ## check hash from inf file vs generated hash,
+        ## if hashes are different, then generate a new
+        ## inf file...only do this if check_hash is set
+        ## to True, as this can be time consuming and not
+        ## always necessary...
+        if check_hash:
+            generate_inf = self.infos.generate_hash() != self.infos.file_hash
+
+        ## this being set can break some modules (bags esp)
+        # if self.remote:
+        #     generate_inf = False
+
+        if generate_inf:
+            self.infos = self.generate_inf()
+            
+            ## update this
+            if self.data_format >= -1 and write_inf:
+                self.infos.write_inf_file()
+
+            if recursive_check and self.parent is not None:
+                self.parent.inf(check_hash=True)
+
+        if self.infos.src_srs is None:
+            self.infos.src_srs = self.src_srs
+
+        else:
+            #if self.src_srs is None:
+            self.src_srs = self.infos.src_srs
+
+            if self.transform['transformer'] is not None and self.transform['trans_region'] is None:
+                self.transform['trans_region'] = regions.Region().from_list(self.infos.minmax)
+                self.transform['trans_region'].src_srs = self.infos.src_srs
+                self.transform['trans_region'].warp(self.dst_srs)
+
+        return(self.infos)
+
+    ## Datalist/Dataset parsing, reset in sub-dataset if needed
     def parse(self):
         """parse the datasets from the dataset.
         
@@ -1938,136 +1788,6 @@ class ElevationDataset:
                 self.data_lists[e.metadata['name']] = {'data': [e], 'parent': e}
                 
         return(self)
-
-    def archive_xyz(self, **kwargs):
-        """Archive data from the dataset to XYZ in the given dataset region.
-        
-        will convert all data to XYZ within the given region and will arrange
-        the data as a datalist based on inputs.
-
-        Data comes from `self.xyz_yield` set in `self.set_yield`. So will process data through
-        `_stacks` before archival if region, x_inc and y_inc are set.
-        """
-        
-        srs_all = []
-        a_name = None
-        if 'dirname' in kwargs.keys() and kwargs['dirname'] is not None:
-            a_name = kwargs['dirname']
-        #else:
-        aa_name = self.metadata['name'].split('/')[0]
-        if self.region is None:
-            aa_name = '{}_{}'.format(aa_name, utils.this_year())
-        else:
-            aa_name = '{}_{}_{}'.format(
-                aa_name, self.region.format('fn'), utils.this_year())
-
-        if a_name is None:
-            a_name = aa_name
-            self.archive_datalist = '{}.datalist'.format(a_name)
-        else:
-            self.archive_datalist = '{}.datalist'.format(a_name)
-            a_name = os.path.join(a_name, aa_name)
-
-        utils.echo_msg(self.archive_datalist)
-        if not os.path.exists(os.path.dirname(self.archive_datalist)):
-            try:
-                os.makedirs(os.path.dirname(self.archive_datalist))
-            except:
-                pass
-
-        archive_keys = []
-        for this_entry in self.parse():
-            srs_all.append(this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs)
-            datalist_dirname = os.path.join(a_name, os.path.dirname(this_entry.metadata['name']))
-            this_key = datalist_dirname.split('/')[-1]
-            if not os.path.exists(datalist_dirname):
-                os.makedirs(datalist_dirname)
-
-            sub_datalist = os.path.join(datalist_dirname, '{}.datalist'.format(this_key))
-            with open(sub_datalist, 'a') as sub_dlf:
-                if utils.fn_basename2(os.path.basename(this_entry.fn)) == '':
-                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.metadata['name'])), 'xyz'])
-                else:
-                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])                        
-                this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
-                if os.path.exists(this_xyz_path):
-                    utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
-                    continue
-
-                with open(this_xyz_path, 'w') as xp:
-                    for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
-                        this_xyz.dump(include_w=True if self.weight is not None else False,
-                                      include_u=True if self.uncertainty is not None else False,
-                                      dst_port=xp, encode=False, precision=self.dump_precision)
-
-                if os.stat(this_xyz_path).st_size > 0:
-                    sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
-                else:
-                    utils.remove_glob('{}*'.format(this_xyz_path))
-
-            if os.stat(sub_datalist).st_size == 0:
-                utils.remove_glob(sub_datalist)
-            else:
-                with open(self.archive_datalist, 'a') as dlf:
-                    if not this_key in archive_keys:
-                        archive_keys.append(this_key)                    
-                        dlf.write(
-                            '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
-                                name=os.path.join(datalist_dirname, this_key),
-                                weight = utils.float_or(this_entry.weight, 1),
-                                uncertainty = utils.float_or(this_entry.uncertainty, 0),
-                                metadata = this_entry.format_metadata()
-                            )
-                        )
-
-            if not os.listdir(datalist_dirname):
-                os.rmdir(datalist_dirname)
-                    
-        ## generate datalist inf/json
-        srs_set = set(srs_all)
-        if len(srs_set) == 1:
-            arch_srs = srs_set.pop()
-        else:
-            arch_srs = None
-
-        utils.remove_glob('{}.*'.format(self.archive_datalist))
-        this_archive = DatasetFactory(
-            mod=self.archive_datalist,
-            data_format=-1,
-            parent=None,
-            weight=1,
-            uncertainty=0,
-            src_srs=arch_srs,
-            dst_srs=None,
-            cache_dir=self.cache_dir,
-        )._acquire_module().initialize()
-        
-        return(this_archive.inf())
-            
-    def yield_block_array(self): #*depreciated*
-        """yield the xyz data as arrays, for use in `array_yield` or `yield_array`
-
-        Yields:
-          tuple: (list of arrays for [weighted]mean, weights mask, uncertainty mask, and count, srcwin, geotransform)
-        """
-
-        out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None}
-        xcount, ycount, dst_gt = self.region.geo_transform(
-            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-        )
-        for this_xyz in self.yield_xyz():
-            xpos, ypos = utils._geo2pixel(
-                this_xyz.x, this_xyz.y, dst_gt, 'pixel'
-            )
-            if xpos < xcount and ypos < ycount and xpos >= 0 and ypos >= 0:
-                w = this_xyz.w if self.weight is not None else 1
-                u = this_xyz.u if self.uncertainty is not None else 0
-                out_arrays['z'] = np.array([[this_xyz.z]])
-                out_arrays['count'] = np.array([[1]])
-                out_arrays['weight'] = np.array([[this_xyz.w]])
-                out_arrays['uncertainty'] = np.array([[this_xyz.u]])
-                this_srcwin = (xpos, ypos, 1, 1)
-                yield(out_arrays, this_srcwin, dst_gt)
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
@@ -2511,70 +2231,20 @@ class ElevationDataset:
             utils.echo_msg('generated stack: {} and mask: {} rasters'.format(os.path.basename(out_file), os.path.basename(mask_fn)))
                            
         return(out_file)
-
-    def stacks_yield_xyz(self, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
-        """yield the result of `_stacks` as an xyz object"""
-
-        stacked_fn = self._stacks(out_name=out_name, ndv=ndv, fmt=fmt)#, mode=mode)
-        sds = gdal.Open(stacked_fn)
-        sds_gt = sds.GetGeoTransform()
-        sds_z_band = sds.GetRasterBand(1) # the z band from stacks
-        sds_w_band = sds.GetRasterBand(3) # the weight band from stacks
-        sds_u_band = sds.GetRasterBand(4) # the uncertainty band from stacks
-        sds_x_band = sds.GetRasterBand(6) # the x band from stacks
-        sds_y_band = sds.GetRasterBand(7) # the y band from stacks
-        srcwin = (0, 0, sds.RasterXSize, sds.RasterYSize)
-        for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
-            sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            ## skip row if all values are ndv
-            if np.all(sz == ndv):
-                continue
-            
-            sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-
-            sx = sds_x_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            sy = sds_y_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            for x in range(0, sds.RasterXSize):
-                z = sz[0, x]
-                if z != ndv:
-                    if self.stack_node: # yield avg x/y data instead of center
-                        out_xyz = xyzfun.XYZPoint(
-                            x = sx[0, x], y = sy[0, x], z = z, w = sw[0, x], u = su[0, x]
-                        )
-                    else: # yield center of pixel as x/y
-                        geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
-                        out_xyz = xyzfun.XYZPoint(
-                            x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
-                        )
-                        
-                    yield(out_xyz)
-        sds = None
     
-    ## test stack using h5py instead of gdal
-    def _stacks_h5(
-            self,
-            out_name = None,
-            ndv = -9999,
-            fmt = 'GTiff',
-            #mask_only = False,
-            mask_level = 0,
-            export_as_geotiff = False,
-    ):
-        """stack and mask incoming arrays (from `array_yield`) together
+    def _stacks_h5(self, out_name = None, ndv = -9999, mask_level = 0):
+        """stack and mask incoming arrays (from `self.array_yield`) together
 
         -----------
         Parameters:
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
-        fmt (str): the output GDAL file format
         mask_level (int): the granularity of the mask, 0 is every file
-        export_as_geotiff (bool): generate a multi-band geotiff of the stack and mask 
 
         --------
         Returns:
-        output-file-name{_msk} of a multi-band raster with a band for each dataset.
-        output-file-name of a multi-band raster with the following bands:
+        out_name.csg - an hdf5 file containing the stack and mask, with datasets:
+        stack:
           x
           y
           z
@@ -2582,6 +2252,9 @@ class ElevationDataset:
           count
           uncertainty
           src uncertainty
+        mask:
+          full_data_mask
+          ...<dataset mask>...
         """
 
         utils.set_cache(self.cache_dir)
@@ -2670,7 +2343,7 @@ class ElevationDataset:
             stack_dset = stack_grp.create_dataset(
                 key, data=np.full((ycount, xcount), np.nan),
                 compression='lzf', maxshape=(ycount, xcount),
-                chunks=(1, xcount), rdcc_nbytes=1024*xcount*4,
+                chunks=(100, xcount), rdcc_nbytes=1024*xcount*400,
                 dtype=np.float32
             )
             stack_dset.dims[0].attach_scale(lat_dset)
@@ -2684,7 +2357,7 @@ class ElevationDataset:
         mask_all_dset = mask_grp.create_dataset(
             'full_data_mask', data=np.zeros((ycount,xcount)),
             compression='lzf', maxshape=(ycount, xcount),
-            chunks=(100, xcount), rdcc_nbytes=1024*xcount,
+            chunks=(100, xcount), rdcc_nbytes=1024*xcount*100,
             dtype=np.uint8
         )
         mask_all_dset.dims[0].attach_scale(lat_dset)
@@ -2738,7 +2411,6 @@ class ElevationDataset:
             ## srcwin is the srcwin of the waffle relative to the incoming arrays
             ## gt is the geotransform of the incoming arrays
             for arrs, srcwin, gt in this_entry.array_yield:
-                #utils.echo_msg(srcwin)
                 ## update the mask
                 mask_all_dset[srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][arrs['count'] != 0] = 1
                 if mask_dset is not None:
@@ -2811,7 +2483,8 @@ class ElevationDataset:
                     stacked_data['weights'][mask][stacked_data['weights'][mask] == 0] = np.nan
                     
                     ## accumulate variance * weight
-                    stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power((arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask])), 2)
+                    stacked_data['uncertainty'][mask] += arrs['weight'][mask] \
+                        * np.power((arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask])), 2)
                     stacked_data['z'][mask] = arrs['z'][mask]
                     
                 elif mode == 'mean':
@@ -2874,202 +2547,38 @@ class ElevationDataset:
 
         ## write out final rasters
         for key in stack_grp.keys():
-            stacked_data[key][np.isnan(stacked_data[key])] = np.nan#ndv
+            stacked_data[key][np.isnan(stacked_data[key])] = np.nan
             stack_grp[key][:] = stacked_data[key]
-            #[y:y+1, srcwin[0]:srcwin[0]+srcwin[2]] = stacked_data[key]
 
-        ## set the final output nodatavalue
-
-        ## create the stack geotiff
-        if export_as_geotiff:
-            num_bands = len(stack_grp)
-            driver = gdal.GetDriverByName(fmt)
-            stack_dataset = driver.Create(
-                stack_fn, xcount, ycount, num_bands, gdal.GDT_Float32,
-                options=['COMPRESS=LZW',
-                         'PREDICTOR=2',
-                         'TILED=YES',
-                         'BIGTIFF=YES']
-            )
-            stack_dataset.SetGeoTransform(dst_gt)
-            if self.dst_srs is not None:
-                stack_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
-
-            with tqdm(
-                    total=len(stack_grp.keys()),
-                    desc='converting CSG stack to GeoTIFF',
-                    leave=self.verbose
-            ) as pbar:
-                for i, key in enumerate(reversed(stack_grp.keys())):
-                    pbar.update()
-                    stack_grp[key][np.isnan(stack_grp[key])] = ndv
-                    stack_band = stack_dataset.GetRasterBand(i + 1)
-                    stack_band.WriteArray(stack_grp[key][...])
-                    stack_band.SetDescription(key)
-                    stack_band.SetNoDataValue(ndv)
-                    stack_band.FlushCache()
-
-            stack_dataset = None
-
-            ## create the mask geotiff
-
-            num_bands, mask_keys = self.h5_get_datasets_from_grp(mask_grp)
-            driver = gdal.GetDriverByName(fmt)
-            mask_dataset = driver.Create(
-                mask_fn, xcount, ycount, num_bands, gdal.GDT_Byte,
-                options=['COMPRESS=LZW', 'BIGTIFF=YES'] if fmt == 'GTiff' else ['COMPRESS=LZW']
-            )
-            mask_dataset.SetGeoTransform(dst_gt)
-            if self.dst_srs is not None:
-                mask_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
-
-            with tqdm(
-                    total=len(mask_keys),
-                    desc='converting CSG mask to GeoTiff',
-                    leave=self.verbose
-            ) as pbar:
-                ii = 0
-                for i, key in enumerate(mask_keys):
-                    pbar.update()
-                    srcwin = (0, 0, xcount, ycount)
-                    for y in range(
-                            srcwin[1], srcwin[1] + srcwin[3], 1
-                    ):
-                        mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][np.isnan(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])] = 0
-                        #if np.all(mask_grp[key][mask_grp[key] == 0]):
-                        #    continue
-
-                        #ii += 1
-                        mask_band = mask_dataset.GetRasterBand(i+1)
-                        mask_band.WriteArray(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])
-                        md = {}
-                        for attrs_key in mask_grp[key].attrs.keys():
-                            md[attrs_key] = mask_grp[key].attrs[attrs_key]
-
-                        if 'name' in md.keys():
-                            mask_band.SetDescription(md['name'])
-                        else:
-                            mask_band.SetDescription(mask_grp[key].name)
-
-                        mask_band.SetNoDataValue(0)
-                        mask_band.SetMetadata(md)
-                        mask_band.FlushCache()
-
-        stack_ds.close()
-
-        # ## create a vector of the masks (spatial-metadata)
-        # if self.want_sm:
-        #     # polygonize_mask_multibands(
-        #     #     mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
-        #     # )
-        #     ogr_mask_footprints(                
-        #         mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
-        #     )
-                        
-        mask_dataset = None
-        
-        # ## apply any grits filters to the stack
-        # for f in self.stack_fltrs:
-        #     utils.echo_msg('filtering stacks module with {}'.format(f))
-        #     grits_filter = grits.GritsFactory(
-        #         mod=f, src_dem=stack_fn, uncertainty_mask=4, weight_mask=3, count_mask=2
-        #     )._acquire_module()
-        #     if grits_filter is not None:
-        #         grits_filter()
-        #         os.replace(grits_filter.dst_dem, out_file)
-            
-        # if self.want_mask:
-        #     os.replace(mask_fn, os.path.basename(mask_fn))
-
+        stack_ds.close()                        
         return(stack_fn)
 
-    def h5_get_datasets_from_grp(self, grp, count = 0, out_keys = []):
-        if isinstance(grp, h5.Dataset):
-            count += 1
-            out_keys.append(grp.name)
-            
-        elif isinstance(grp, h5.Group):
-            for key in grp.keys():
-                if isinstance(grp[key], h5.Dataset):
-                    count += 1
-                    out_keys.append(grp[key].name)
-                elif isinstance(grp[key], h5.Group):
-                    for sub_key in grp[key].keys():
-                        count, out_keys = self.h5_get_datasets_from_grp(
-                            grp[key][sub_key], count, out_keys
-                        )
+    ## Data Yield
+    def yield_xyz_from_entries(self):
+        """yield from self.data_entries, list of datasets"""
+        
+        for this_entry in self.data_entries:
+            for xyz in this_entry.xyz_yield:
+                yield(xyz)
+                
+            if this_entry.remote:
+                utils.remove_glob('{}*'.format(this_entry.fn))
 
-        return(count, out_keys)
+    def yield_entries(self):
+        """yield from self.data_entries, list of datasets"""
+        
+        for this_entry in self.data_entries:
+            yield(this_entry)
     
-    def stacks_yield_xyz_h5(self, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
-        """yield the result of `_stacks` as an xyz object"""
+    def yield_points(self):
+        """yield the numpy xyz rec array points from the dataset.
 
-        stacked_fn = self._stacks(out_name=out_name, ndv=ndv, fmt=fmt)#, mode=mode)
-        sds = h5.File(stacked_fn, 'r')
-        sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
-        sds_stack = sds['stack']
-        stack_shape = sds['stack']['z'].shape
-        srcwin = (0, 0, stack_shape[1], stack_shape[0])
-        for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
-            sz = sds_stack['z'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
-            ## skip row if all values are ndv
-            if np.all(sz == ndv):
-                continue
-
-            sw = sds_stack['weights'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
-            su = sds_stack['uncertainty'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
-
-            sx = sds_stack['x'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
-            sy = sds_stack['y'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
-            for x in range(0, stack_shape[1]):
-                z = sz[0, x]
-                if z != ndv:
-                    if self.stack_node: # yield avg x/y data instead of center
-                        out_xyz = xyzfun.XYZPoint(
-                            x = sx[0, x], y = sy[0, x], z = z, w = sw[0, x], u = su[0, x]
-                        )
-                    else: # yield center of pixel as x/y
-                        geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
-                        out_xyz = xyzfun.XYZPoint(
-                            x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
-                        )
-                        
-                    yield(out_xyz)
-        sds.close()
-    
-    def vectorize_xyz(self):
-        """Make a point vector OGR DataSet Object from src_xyz
-
-        for use in gdal gridding functions
+        reset in dataset if needed.
         """
 
-        dst_ogr = '{}'.format(self.metadata['name'])
-        ogr_ds = gdal.GetDriverByName('Memory').Create(
-            '', 0, 0, 0, gdal.GDT_Unknown
-        )
-        layer = ogr_ds.CreateLayer(
-            dst_ogr,
-            geom_type=ogr.wkbPoint25D
-        )
-        for x in ['long', 'lat', 'elev', 'weight']:
-            fd = ogr.FieldDefn(x, ogr.OFTReal)
-            fd.SetWidth(12)
-            fd.SetPrecision(8)
-            layer.CreateField(fd)
-            
-        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        for this_xyz in self.xyz_yield:
-            f.SetField(0, this_xyz.x)
-            f.SetField(1, this_xyz.y)
-            f.SetField(2, this_xyz.z)
-            f.SetField(3, this_xyz.w)
-                
-            wkt = this_xyz.export_as_wkt(include_z=True)
-            g = ogr.CreateGeometryFromWkt(wkt)
-            f.SetGeometryDirectly(g)
-            layer.CreateFeature(f)
-            
-        return(ogr_ds)
+        for ds in self.parse():
+            for points in ds.yield_points():
+                yield(points)
 
     def transform_and_yield_points(self):
         """points are an array of `points['x']`, `points['y']`, `points['z']`, <`points['w']`, `points['u']`>`
@@ -3129,44 +2638,111 @@ class ElevationDataset:
                         yield(points)
         
         self.transform['transformer'] = self.transform['vert_transformer'] = None
-
-    def export_data_as_pandas(self):
-        """export the point data as a pandas dataframe.
+            
+    def mask_and_yield_array(self):
+        """mask the incoming array from `self.yield_array` and yield the results.
         
-        This may get very large, depending on the input data.
+        the mask should be either an ogr supported vector or a gdal supported raster.
         """
         
-        dataset = pd.DataFrame({}, columns=['x', 'y', 'z', 'weight', 'uncertainty'])
-        for points in self.transform_and_yield_points():
-            try:
-                points_w = points['w']
-            except:
-                points_w = np.ones(points['z'].shape)
+        mask_band = None
+        mask_infos = None
+        if self.mask is not None:
+            if os.path.exists(self.mask['mask']):            
+                utils.echo_msg('using mask dataset: {} to array'.format(self.mask['mask']))
+                if self.region is not None and self.x_inc is not None and self.y_inc is not None:
+                    src_mask = gdalfun.sample_warp(
+                        self.mask['mask'], None, self.x_inc, self.y_inc,
+                        src_region=self.region,
+                        sample_alg='nearest',
+                        dst_srs=self.transform['dst_horz_crs'] if self.transform['dst_horz_crs'] is not None else None,
+                        #dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None else None,
+                        #dst_srs=self.dst_srs.split('+')[0],
+                        ndv=gdalfun.gdal_get_ndv(self.mask['mask']),
+                        verbose=False,
+                        co=["COMPRESS=DEFLATE", "TILED=YES"]
+                    )[0]
+                else:
+                    src_mask = gdal.Open(self.mask['mask'])
+                    
+                mask_band = src_mask.GetRasterBand(1)
+                mask_infos = gdalfun.gdal_infos(src_mask)
+            else:
+                utils.echo_warning_msg('could not load mask {}'.format(self.mask['mask']))
 
-            points_w *= self.weight if self.weight is not None else 1
-            points_w[np.isnan(points_w)] = 1
-                
-            try:
-                points_u = points['u']
-            except:
-                points_u = np.zeros(points['z'].shape)
+        for out_arrays, this_srcwin, this_gt in self.yield_array():
+            if mask_band is not None:
+                ycount, xcount = out_arrays['z'].shape
+                this_region = regions.Region().from_geo_transform(this_gt, xcount, ycount)
+                mask_data = mask_band.ReadAsArray(*this_srcwin)
+                if not np.isnan(mask_infos['ndv']):
+                    mask_data[mask_data==mask_infos['ndv']] = np.nan
+                        
+                for arr in out_arrays.keys():
+                    if out_arrays[arr] is not None:
+                        if self.mask['invert_mask']:
+                            if arr == 'count':
+                                out_arrays[arr][~np.isnan(mask_data)] = 0
+                            else:                            
+                                out_arrays[arr][~np.isnan(mask_data)] = np.nan                            
+                        else:
+                            if arr == 'count':
+                                out_arrays[arr][np.isnan(mask_data)] = 0
+                            else:
+                                out_arrays[arr][np.isnan(mask_data)] = np.nan
 
-            points_u = np.sqrt(
-                points_u**2 + (self.uncertainty if self.uncertainty is not None else 0)**2
-            )
-            points_u[np.isnan(points_u)] = 0
-            points_dataset = pd.DataFrame(
-                {'x': points['x'],
-                 'y': points['y'],
-                 'z': points['z'],
-                 'weight': points_w,
-                 'uncertainty': points_u,
-                },
-                columns=['x', 'y', 'z', 'weight', 'uncertainty']
-            )
-            dataset = pd.concat([dataset, points_dataset], ignore_index=True)
+            yield(out_arrays, this_srcwin, this_gt)
 
-        return(dataset)
+    def mask_and_yield_xyz(self):
+        """mask the incoming xyz data from `self.yield_xyz` and yield the results.
+        
+        the mask should be either an ogr supported vector or a gdal supported raster.
+        """
+
+        for this_entry in self.parse():
+            if this_entry.mask is None:
+                for this_xyz in this_entry.yield_xyz():
+                    yield(this_xyz)
+            else:
+                utils.echo_msg('using mask dataset: {} to xyz'.format(this_entry.mask['mask']))
+                if this_entry.mask['ogr_or_gdal'] == 0:
+                    src_ds = gdal.Open(this_entry.mask['mask'])
+                    if src_ds is not None:
+                        ds_config = gdalfun.gdal_infos(src_ds)
+                        ds_band = src_ds.GetRasterBand(1)
+                        ds_gt = ds_config['geoT']
+                        ds_nd = ds_config['ndv']
+                    
+                        for this_xyz in this_entry.yield_xyz():
+                            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
+                            if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
+                                tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
+                                if tgrid is not None:
+                                    if tgrid[0][0] == ds_nd:
+                                        if this_entry.mask['invert_mask']:
+                                            yield(this_xyz)
+                                    else:
+                                        if not this_entry.mask['invert_mask']:
+                                            yield(this_xyz)                                            
+                else:
+                    ## this is very slow! find another way.
+                    src_ds = ogr.Open(this_entry.mask['mask'])
+                    layer = src_ds.GetLayer()
+                    #utils.echo_msg(len(layer))
+
+                    geomcol = gdalfun.ogr_union_geom(layer)
+                    if not geomcol.IsValid():
+                        geomcol = geomcol.Buffer(0)
+                    
+                    for this_xyz in this_entry.yield_xyz():
+                        this_wkt = this_xyz.export_as_wkt()
+                        this_point = ogr.CreateGeometryFromWkt(this_wkt)
+                        if this_point.Within(geomcol):
+                            if not this_entry.mask['invert_mask']:
+                                yield(this_xyz)
+                        else:
+                            if not this_entry.mask['invert_mask']:
+                                yield(this_xyz)
         
     def yield_xyz(self):
         """Yield the data as xyz points
@@ -3372,6 +2948,381 @@ class ElevationDataset:
                 )
             )    
 
+    def stacks_yield_xyz(self, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
+        """yield the result of `_stacks` as an xyz object"""
+
+        stacked_fn = self._stacks(out_name=out_name, ndv=ndv, fmt=fmt)#, mode=mode)
+        sds = gdal.Open(stacked_fn)
+        sds_gt = sds.GetGeoTransform()
+        sds_z_band = sds.GetRasterBand(1) # the z band from stacks
+        sds_w_band = sds.GetRasterBand(3) # the weight band from stacks
+        sds_u_band = sds.GetRasterBand(4) # the uncertainty band from stacks
+        sds_x_band = sds.GetRasterBand(6) # the x band from stacks
+        sds_y_band = sds.GetRasterBand(7) # the y band from stacks
+        srcwin = (0, 0, sds.RasterXSize, sds.RasterYSize)
+        for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+            sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            ## skip row if all values are ndv
+            if np.all(sz == ndv):
+                continue
+            
+            sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+
+            sx = sds_x_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            sy = sds_y_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            for x in range(0, sds.RasterXSize):
+                z = sz[0, x]
+                if z != ndv:
+                    if self.stack_node: # yield avg x/y data instead of center
+                        out_xyz = xyzfun.XYZPoint(
+                            x = sx[0, x], y = sy[0, x], z = z, w = sw[0, x], u = su[0, x]
+                        )
+                    else: # yield center of pixel as x/y
+                        geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
+                        out_xyz = xyzfun.XYZPoint(
+                            x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
+                        )
+                        
+                    yield(out_xyz)
+        sds = None
+
+    def stacks_yield_xyz_h5(self, out_name = None, ndv = -9999):#, mode = 'mean'):
+        """yield the result of `_stacks` as an xyz object"""
+
+        stacked_fn = self._stacks(out_name=out_name, ndv=ndv)#, mode=mode)
+        sds = h5.File(stacked_fn, 'r')
+        sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
+        sds_stack = sds['stack']
+        stack_shape = sds['stack']['z'].shape
+        srcwin = (0, 0, stack_shape[1], stack_shape[0])
+        for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+            sz = sds_stack['z'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            ## skip row if all values are ndv
+            if np.all(sz == ndv):
+                continue
+
+            sw = sds_stack['weights'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            su = sds_stack['uncertainty'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+
+            sx = sds_stack['x'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            sy = sds_stack['y'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            for x in range(0, stack_shape[1]):
+                z = sz[0, x]
+                if z != ndv:
+                    if self.stack_node: # yield avg x/y data instead of center
+                        out_xyz = xyzfun.XYZPoint(
+                            x=sx[0, x], y=sy[0, x], z=z, w=sw[0, x], u=su[0, x]
+                        )
+                    else: # yield center of pixel as x/y
+                        geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
+                        out_xyz = xyzfun.XYZPoint(
+                            x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
+                        )
+                        
+                    yield(out_xyz)
+        sds.close()
+            
+    ## Data Dump/Export/Archive
+    def dump_xyz(self, dst_port=sys.stdout, encode=False):
+        """dump the XYZ data from the dataset.
+
+        data gets parsed through `self.xyz_yield`. See `set_yield` for more info.
+        """
+
+        for this_xyz in self.xyz_yield:
+            this_xyz.dump(
+                include_w=True if self.weight is not None else False,
+                include_u=True if self.uncertainty is not None else False,
+                dst_port=dst_port,
+                encode=encode,
+                precision=self.dump_precision
+            )
+
+    def dump_xyz_direct(self, dst_port=sys.stdout, encode=False):
+        """dump the XYZ data from the dataset
+
+        data get dumped directly from `self.yield_xyz`, by-passing `self.xyz_yield`.
+        """
+        
+        for this_xyz in self.yield_xyz():
+            this_xyz.dump(
+                include_w=True if self.weight is not None else False,
+                include_u=True if self.uncertainty is not None else False,
+                dst_port=dst_port,
+                encode=encode,
+                precision=self.dump_precision
+            )
+            
+    def export_xyz_as_list(self, z_only = False):
+        """return the XYZ data from the dataset as python list
+
+        This may get very large, depending on the input data.
+        """
+
+        return([xyz.z if z_only else xyz.copy() for xyz in self.xyz_yield])
+    
+    def export_xyz_as_ogr(self):
+        """Make a point vector OGR DataSet Object from src_xyz
+
+        for use in gdal gridding functions
+        """
+
+        dst_ogr = '{}'.format(self.metadata['name'])
+        ogr_ds = gdal.GetDriverByName('Memory').Create(
+            '', 0, 0, 0, gdal.GDT_Unknown
+        )
+        layer = ogr_ds.CreateLayer(
+            dst_ogr,
+            geom_type=ogr.wkbPoint25D
+        )
+        for x in ['long', 'lat', 'elev', 'weight']:
+            fd = ogr.FieldDefn(x, ogr.OFTReal)
+            fd.SetWidth(12)
+            fd.SetPrecision(8)
+            layer.CreateField(fd)
+            
+        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
+        for this_xyz in self.xyz_yield:
+            f.SetField(0, this_xyz.x)
+            f.SetField(1, this_xyz.y)
+            f.SetField(2, this_xyz.z)
+            f.SetField(3, this_xyz.w)
+                
+            wkt = this_xyz.export_as_wkt(include_z=True)
+            g = ogr.CreateGeometryFromWkt(wkt)
+            f.SetGeometryDirectly(g)
+            layer.CreateFeature(f)
+            
+        return(ogr_ds)
+            
+    def export_xyz_as_pandas(self):
+        """export the point data as a pandas dataframe.
+        
+        This may get very large, depending on the input data.
+        """
+        
+        dataset = pd.DataFrame({}, columns=['x', 'y', 'z', 'weight', 'uncertainty'])
+        for points in self.transform_and_yield_points():
+            try:
+                points_w = points['w']
+            except:
+                points_w = np.ones(points['z'].shape)
+
+            points_w *= self.weight if self.weight is not None else 1
+            points_w[np.isnan(points_w)] = 1
+                
+            try:
+                points_u = points['u']
+            except:
+                points_u = np.zeros(points['z'].shape)
+
+            points_u = np.sqrt(
+                points_u**2 + (self.uncertainty if self.uncertainty is not None else 0)**2
+            )
+            points_u[np.isnan(points_u)] = 0
+            points_dataset = pd.DataFrame(
+                {'x': points['x'],
+                 'y': points['y'],
+                 'z': points['z'],
+                 'weight': points_w,
+                 'uncertainty': points_u,
+                },
+                columns=['x', 'y', 'z', 'weight', 'uncertainty']
+            )
+            dataset = pd.concat([dataset, points_dataset], ignore_index=True)
+
+        return(dataset)
+
+    ## TODO: fix/write these functions
+    def export_stack_as_pandas(self):
+        pass
+    
+    def export_stack_as_gdal(self, fmt='GTiff'):
+        """export the stack h5 to gdal multi-band or seperate file(s)
+        """
+        
+        num_bands = len(stack_grp)
+        driver = gdal.GetDriverByName(fmt)
+        stack_dataset = driver.Create(
+            stack_fn, xcount, ycount, num_bands, gdal.GDT_Float32,
+            options=['COMPRESS=LZW',
+                     'PREDICTOR=2',
+                     'TILED=YES',
+                     'BIGTIFF=YES']
+        )
+        stack_dataset.SetGeoTransform(dst_gt)
+        if self.dst_srs is not None:
+            stack_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+        with tqdm(
+                total=len(stack_grp.keys()),
+                desc='converting CSG stack to GeoTIFF',
+                leave=self.verbose
+        ) as pbar:
+            for i, key in enumerate(reversed(stack_grp.keys())):
+                pbar.update()
+                stack_grp[key][np.isnan(stack_grp[key])] = ndv
+                stack_band = stack_dataset.GetRasterBand(i + 1)
+                stack_band.WriteArray(stack_grp[key][...])
+                stack_band.SetDescription(key)
+                stack_band.SetNoDataValue(ndv)
+                stack_band.FlushCache()
+
+        stack_dataset = None
+
+        ## create the mask geotiff
+        num_bands, mask_keys = h5_get_datasets_from_grp(mask_grp)
+        driver = gdal.GetDriverByName(fmt)
+        mask_dataset = driver.Create(
+            mask_fn, xcount, ycount, num_bands, gdal.GDT_Byte,
+            options=['COMPRESS=LZW', 'BIGTIFF=YES'] if fmt == 'GTiff' else ['COMPRESS=LZW']
+        )
+        mask_dataset.SetGeoTransform(dst_gt)
+        if self.dst_srs is not None:
+            mask_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+        with tqdm(
+                total=len(mask_keys),
+                desc='converting CSG mask to GeoTiff',
+                leave=self.verbose
+        ) as pbar:
+            ii = 0
+            for i, key in enumerate(mask_keys):
+                pbar.update()
+                srcwin = (0, 0, xcount, ycount)
+                for y in range(
+                        srcwin[1], srcwin[1] + srcwin[3], 1
+                ):
+                    mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][np.isnan(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])] = 0
+                    #if np.all(mask_grp[key][mask_grp[key] == 0]):
+                    #    continue
+
+                    #ii += 1
+                    mask_band = mask_dataset.GetRasterBand(i+1)
+                    mask_band.WriteArray(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])
+                    md = {}
+                    for attrs_key in mask_grp[key].attrs.keys():
+                        md[attrs_key] = mask_grp[key].attrs[attrs_key]
+
+                    if 'name' in md.keys():
+                        mask_band.SetDescription(md['name'])
+                    else:
+                        mask_band.SetDescription(mask_grp[key].name)
+
+                    mask_band.SetNoDataValue(0)
+                    mask_band.SetMetadata(md)
+                    mask_band.FlushCache()
+
+        mask_dataset = None
+
+    def archive_xyz(self, **kwargs):
+        """Archive data from the dataset to XYZ in the given dataset region.
+        
+        will convert all data to XYZ within the given region and will arrange
+        the data as a datalist based on inputs.
+
+        Data comes from `self.xyz_yield` set in `self.set_yield`. So will process data through
+        `_stacks` before archival if region, x_inc and y_inc are set.
+        """
+        
+        srs_all = []
+        a_name = None
+        if 'dirname' in kwargs.keys() and kwargs['dirname'] is not None:
+            a_name = kwargs['dirname']
+        #else:
+        aa_name = self.metadata['name'].split('/')[0]
+        if self.region is None:
+            aa_name = '{}_{}'.format(aa_name, utils.this_year())
+        else:
+            aa_name = '{}_{}_{}'.format(
+                aa_name, self.region.format('fn'), utils.this_year())
+
+        if a_name is None:
+            a_name = aa_name
+            self.archive_datalist = '{}.datalist'.format(a_name)
+        else:
+            self.archive_datalist = '{}.datalist'.format(a_name)
+            a_name = os.path.join(a_name, aa_name)
+
+        utils.echo_msg(self.archive_datalist)
+        if not os.path.exists(os.path.dirname(self.archive_datalist)):
+            try:
+                os.makedirs(os.path.dirname(self.archive_datalist))
+            except:
+                pass
+
+        archive_keys = []
+        for this_entry in self.parse():
+            srs_all.append(this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs)
+            datalist_dirname = os.path.join(a_name, os.path.dirname(this_entry.metadata['name']))
+            this_key = datalist_dirname.split('/')[-1]
+            if not os.path.exists(datalist_dirname):
+                os.makedirs(datalist_dirname)
+
+            sub_datalist = os.path.join(datalist_dirname, '{}.datalist'.format(this_key))
+            with open(sub_datalist, 'a') as sub_dlf:
+                if utils.fn_basename2(os.path.basename(this_entry.fn)) == '':
+                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.metadata['name'])), 'xyz'])
+                else:
+                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])                        
+                this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
+                if os.path.exists(this_xyz_path):
+                    utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
+                    continue
+
+                with open(this_xyz_path, 'w') as xp:
+                    for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
+                        this_xyz.dump(include_w=True if self.weight is not None else False,
+                                      include_u=True if self.uncertainty is not None else False,
+                                      dst_port=xp, encode=False, precision=self.dump_precision)
+
+                if os.stat(this_xyz_path).st_size > 0:
+                    sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
+                else:
+                    utils.remove_glob('{}*'.format(this_xyz_path))
+
+            if os.stat(sub_datalist).st_size == 0:
+                utils.remove_glob(sub_datalist)
+            else:
+                with open(self.archive_datalist, 'a') as dlf:
+                    if not this_key in archive_keys:
+                        archive_keys.append(this_key)                    
+                        dlf.write(
+                            '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
+                                name=os.path.join(datalist_dirname, this_key),
+                                weight = utils.float_or(this_entry.weight, 1),
+                                uncertainty = utils.float_or(this_entry.uncertainty, 0),
+                                metadata = this_entry.format_metadata()
+                            )
+                        )
+
+            if not os.listdir(datalist_dirname):
+                os.rmdir(datalist_dirname)
+                    
+        ## generate datalist inf/json
+        srs_set = set(srs_all)
+        if len(srs_set) == 1:
+            arch_srs = srs_set.pop()
+        else:
+            arch_srs = None
+
+        utils.remove_glob('{}.*'.format(self.archive_datalist))
+        this_archive = DatasetFactory(
+            mod=self.archive_datalist,
+            data_format=-1,
+            parent=None,
+            weight=1,
+            uncertainty=0,
+            src_srs=arch_srs,
+            dst_srs=None,
+            cache_dir=self.cache_dir,
+        )._acquire_module().initialize()
+        
+        return(this_archive.inf())
+        
+    ## Fetching
+    ## TODO: move these out of this class
     def fetch_water_temp(self):
         """fetch and return the average water temperature over the region"""
         

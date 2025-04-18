@@ -61,8 +61,8 @@ pip install git+https://github.com/ciresdem/cudem.git#egg=cudem
 ```
 conda create -n cudem -c conda-forge gdal gmt pygmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile git netCDF4 h5netcdf libgdal-hdf5 libgdal-netcdf pyhdf
 conda activate cudem
-(cudem) pip install laspy[laszip]
-(cudem) pip install --no-deps git+https://github.com/ciresdem/cudem.git
+(cudem) pip install --user laspy[laszip]
+(cudem) pip install --user --upgrade --no-deps git+https://github.com/ciresdem/cudem.git
 ```
 
 ## Extras
