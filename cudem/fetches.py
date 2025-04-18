@@ -4516,10 +4516,10 @@ class NED1(TheNationalMap):
         super().__init__(where="NAME LIKE '%DEM%'", **kwargs)
         self.data_format = 200
 
-# class TNM_LAZ(TheNationalMap):
-#     def __init__(self, **kwargs):
-#         super().__init__(formats="LAZ", **kwargs)
-#         self.data_format = 300
+class TNM_LAZ(TheNationalMap):
+    def __init__(self, **kwargs):
+        super().__init__(formats="LAZ", **kwargs)
+        self.data_format = 300
         
 ## EMODNet - EU data
 class EMODNet(FetchModule):
@@ -6332,7 +6332,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'tnm': {'call': TheNationalMap},
         'ned': {'call': NED},
         'ned1': {'call': NED1},
-        #'tnm_laz': {'call': TNM_LAZ},
+        'tnm_laz': {'call': TNM_LAZ},
         'emodnet': {'call': EMODNet},
         'chs': {'call': CHS},
         'hrdem': {'call': HRDEM},
