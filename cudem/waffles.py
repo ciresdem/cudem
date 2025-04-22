@@ -575,19 +575,26 @@ class Waffle:
                         # self.output_files['mask'] = mask_dem.fn
                         if self.want_sm:
                             with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                                #sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
-                                sm_layer, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True)
-
-                            sm_files = glob.glob('{}.*'.format(sm_layer))
+                                sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
+                                #sm_layer, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True)
+                                #sm_files = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)
+                                
+                            #sm_files = glob.glob('{}.*'.format(sm_layer))
                             self.output_files['spatial-metadata'] = []
-                            for sm_file in sm_files:
-                                out_sm = '{}_sm.{}'.format(self.name, sm_file[-3:])
+                            
+                            sm_vector = sm_layer + '.{}'.format(gdalfun.ogr_fext(sm_fmt))
+                            sm_file = gdalfun.ogr_clip(sm_vector, dst_region=self.d_region, verbose=False)
+                            utils.remove_glob('{}.*'.format(sm_layer))
+                            sm_files = glob.glob('{}.*'.format(utils.fn_basename2(sm_file)))
+                            
+                            for f in sm_files:
+                                out_sm = '{}_sm.{}'.format(self.name, f[-3:])
                                 if os.path.exists(out_sm):
                                     utils.remove_glob(out_sm)
 
                                 ## clip spatial metadta to region
-                                sm_file = gdalfun.ogr_clip(sm_file, dst_region=self.d_region)
-                                os.rename(sm_file, out_sm)
+
+                                os.rename(f, out_sm)
                                 self.output_files['spatial-metadata'].append(out_sm)
                 else:
                     utils.echo_warning_msg('mask DEM is invalid...')

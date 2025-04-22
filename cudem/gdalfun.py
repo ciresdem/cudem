@@ -319,20 +319,26 @@ def ogr_get_srs(src_ogr):
     else:
         return(None)
     
-def ogr_clip(src_ogr_fn, dst_region = None, layer = None, overwrite = False, verbose = True):
+def ogr_clip(src_ogr_fn, dst_region = None, layer = None, fmt = 'ESRI Shapefile', overwrite = False, verbose = True):
     """clip an ogr file to `dst_region`"""
+
+    if dst_region is None:
+        return(src_ogr_fn)
     
     dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
-    dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
+    dst_ogr_fn = '{}_{}.{}'.format(dst_ogr_bn, dst_region.format('fn'), ogr_fext(fmt))
+    #dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
     
     if not os.path.exists(dst_ogr_fn) or overwrite:
         utils.run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(
             dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''
         ), verbose=verbose)
-                
+
+    ## fixme!
+    #dst_files = glob.glob('{}.*'.format(dst_ogr_bn))
     return(dst_ogr_fn)
 
-def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
+def ogr_clip2(src_ogr_fn, dst_region = None, layer = None, overwrite = False):
     """clip an ogr file to `dst_region`"""
     
     dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
@@ -362,7 +368,7 @@ def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
         
     return(dst_ogr_fn)
 
-def ogr_clip3(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
+def ogr_clip3(src_ogr, dst_ogr, clip_region = None, dn = "ESRI Shapefile"):
     """clip an ogr file to `dst_region`"""
     
     driver = ogr.GetDriverByName(dn)

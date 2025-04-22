@@ -79,6 +79,7 @@ import sys
 import re
 import copy
 import json
+import glob
 import math
 from tqdm import tqdm
 import warnings
@@ -189,7 +190,7 @@ def scan_mask_bands(src_ds, skip_band = 'Full Data Mask', mask_level = 0, verbos
     return(band_infos)
 
 def ogr_mask_footprints(
-        src_ds, ogr_format='ESRI Shapefile', dst_srs = 'epsg:4326', mask_level = 0, verbose = True
+        src_ds, ogr_format = 'ESRI Shapefile', dst_srs = 'epsg:4326', mask_level = 0, verbose = True
 ):
     
     src_infos = scan_mask_bands(src_ds, mask_level=mask_level, verbose=verbose)
@@ -221,12 +222,13 @@ def ogr_mask_footprints(
             leave=verbose
     ) as pbar:
         for i, key in enumerate(src_infos.keys()):
-            footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {} -no_location'.format(
+            footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {} -no_location -of {}'.format(
                 src_ds.GetDescription(),
                 dst_ogr_fn, dst_srs,
-                ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']])
+                ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']]),
+                ogr_format
             )
-            utils.run_cmd(footprint_cmd, verbose=False)
+            utils.run_cmd(footprint_cmd, verbose=True)
 
             ## update db using ogrinfo
             key_val = ', '.join(["'{}' = '{}'".format(x[:10], src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])            
@@ -236,11 +238,11 @@ def ogr_mask_footprints(
                 value=src_infos[key]['metadata'][md],
                 f=i
             )
-            utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose = False)
+            #utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose=True)
                 
             pbar.update()
 
-    ## set the metadata to the vector fields
+    # ## set the metadata to the vector fields
     # ds = ogr.Open(dst_ogr_fn, 1)
     # ds.StartTransaction
     # layer = ds.GetLayer()
@@ -263,6 +265,9 @@ def ogr_mask_footprints(
     # #layer.CommitTransaction()
     # ds.CommitTransaction()
     # layer = ds = None
+            
+    return(glob.glob('{}.*'.format(utils.fn_basename2(dst_ogr_fn))))
+            
     
 def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask', mask_level = 0):
     """merge data mask raster bands based on the top-level datalist name"""
@@ -276,6 +281,7 @@ def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask
     m_ds = driver.Create(utils.make_temp_fn('tmp'), src_infos['nx'], src_infos['ny'], 0, gdt)
     m_ds.SetGeoTransform(src_infos['geoT'])
     m_ds.SetProjection(gdalfun.osr_wkt(src_infos['proj']))
+    m_ds.SetDescription(src_ds.GetDescription())
 
     with tqdm(
             desc='merging mask bands.',
@@ -380,7 +386,7 @@ def polygonize_mask_multibands(
         layer = ds.CreateLayer(
             '{}'.format(dst_layer), None, ogr.wkbMultiPolygon
         )
-        [layer.SetFeature(feature) for feature in layer]
+        #[layer.SetFeature(feature) for feature in layer]
     else:
         layer = None
 
@@ -437,8 +443,8 @@ def polygonize_mask_multibands(
                         tmp_layer,
                         tmp_layer.GetLayerDefn().GetFieldIndex('DN'),
                         [],
-                        callback = gdal.TermProgress if verbose else None
-                        #callback = None
+                        #callback = gdal.TermProgress if verbose else None
+                        callback = None
                     )
 
                     if len(tmp_layer) > 0:
@@ -450,9 +456,9 @@ def polygonize_mask_multibands(
                                 desc='creating feature {}...'.format(this_band_name),
                                 total=len(this_band_md.keys()),
                                 leave=verbose
-                        ) as pbar: 
+                        ) as feat_pbar: 
                             for k in this_band_md.keys():
-                                pbar.update()
+                                feat_pbar.update()
                                 out_feat.SetField(k[:9], this_band_md[k])
 
                             if 'Title' not in this_band_md.keys():
@@ -462,8 +468,8 @@ def polygonize_mask_multibands(
                             layer.CreateFeature(out_feat)
                             #layer.SetFeature(out_feat)
 
-                if verbose:
-                    utils.echo_msg('polygonized {}'.format(this_band_name))
+                # if verbose:
+                #     utils.echo_msg('polygonized {}'.format(this_band_name))
 
                 tmp_ds = tmp_layer = None
                 
@@ -2228,7 +2234,9 @@ class ElevationDataset:
                 os.replace(grits_filter.dst_dem, out_file)
 
         if self.verbose:
-            utils.echo_msg('generated stack: {} and mask: {} rasters'.format(os.path.basename(out_file), os.path.basename(mask_fn)))
+            utils.echo_msg('generated stack: {}'.format(os.path.basename(out_file)))
+            if self.want_mask:
+                utils.echo_msg('generated mask: {}'.format(os.path.basename(mask_fn)))
                            
         return(out_file)
     
@@ -6494,7 +6502,6 @@ class Fetcher(ElevationDataset):
         self.want_single_metadata_name = want_single_metadata_name
         self.check_size = check_size # check the size of the fetched data
         self.keep_fetched_data = keep_fetched_data # retain fetched data after processing
-        #self.outdir = outdir if outdir is not None else self.fetch_module._outdir if self.fetch_module._outdir is not None else self.cache_dir
         self.outdir = self.fetch_module._outdir
         self.cache_dir = self.outdir                
         try:
@@ -7038,7 +7045,9 @@ class GEBCOFetcher(Fetcher):
                         wanted_gebco_fns.append(tid_fn)
 
                 for tid_fn in wanted_gebco_fns:
-                    tmp_tid = utils.make_temp_fn('tmp_tid.tif', temp_dir=self.fetch_module._outdir)
+                    tmp_tid = utils.make_temp_fn(
+                        'tmp_tid.tif', temp_dir=self.fetch_module._outdir
+                    )
                     with gdalfun.gdal_datasource(tid_fn) as tid_ds:
                         tid_config = gdalfun.gdal_infos(tid_ds)
                         tid_band = tid_ds.GetRasterBand(1)
@@ -7057,7 +7066,10 @@ class GEBCOFetcher(Fetcher):
                     #utils.echo_warning_msg('mask: {}'.format(self.mask))
                     if self.mask is not None:
                         new_mask = utils.make_temp_fn('test_tmp_mask')
-                        gdalfun.gdal_mask(tmp_tid, self.mask['mask'], new_mask, msk_value = 1, verbose = True)
+                        gdalfun.gdal_mask(
+                            tmp_tid, self.mask['mask'], new_mask,
+                            msk_value=1, verbose=True
+                        )
                         os.replace(new_mask, tmp_tid)
 
                     self.fetches_params['mod'] = tid_fn.replace('tid_', '')
@@ -7168,7 +7180,10 @@ class MarGravFetcher(Fetcher):
                 '{}.nc'.format(utils.fn_basename2(result['dst_fn'])),
                 temp_dir=self.fetch_module._outdir)
             img2grd_cmd = 'gmt img2grd {} {} -G{} -D -T1 -I1m -E'.format(
-                os.path.join(self.fetch_module._outdir, result['dst_fn']), self.region.format('gmt'), nc_fn
+                os.path.join(
+                    self.fetch_module._outdir,
+                    result['dst_fn']
+                ), self.region.format('gmt'), nc_fn
             )
             out, status = utils.run_cmd(img2grd_cmd, verbose=True)
             out, status = utils.run_cmd('gmt grdedit {} -T'.format(nc_fn))
