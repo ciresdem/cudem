@@ -231,7 +231,7 @@ def ogr_mask_footprints(
                 dst_ogr_fn, dst_srs,
                 ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']]),
             )
-            utils.run_cmd(footprint_cmd, verbose=True)
+            utils.run_cmd(footprint_cmd, verbose=False)
 
             ## update db using ogrinfo
             #key_val = ', '.join(["'{}' = '{}'".format(x[:10], src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])
@@ -243,8 +243,7 @@ def ogr_mask_footprints(
                 value=src_infos[key]['metadata'][md],
                 f=i+1
             )
-            utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose=True)
-                
+            utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose=False)                
             pbar.update()
 
     # ## set the metadata to the vector fields

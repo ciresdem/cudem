@@ -579,8 +579,8 @@ class Waffle:
                             ## gdal_footprint polygons end up slightly offset for some reason,
                             ## while it is much faster than the other method, we will hold off
                             ## until that bug is fixed...
-                            if False:
-                                #if has_gdal_footprint:
+                            #if False:
+                            if has_gdal_footprint:
                                 with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
                                     sm_files, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)                                
 
