@@ -574,25 +574,45 @@ class Waffle:
                         #                  dst_dir=os.path.dirname(self.fn))
                         # self.output_files['mask'] = mask_dem.fn
                         if self.want_sm:
-                            with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                                sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
-                                #sm_layer, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True)
-                                #sm_files = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)
-                                
-                            #sm_files = glob.glob('{}.*'.format(sm_layer))
-                            self.output_files['spatial-metadata'] = []
-                            
-                            sm_vector = sm_layer + '.{}'.format(gdalfun.ogr_fext(sm_fmt))
-                            sm_file = gdalfun.ogr_clip(sm_vector, dst_region=self.d_region, verbose=False)
-                            utils.remove_glob('{}.*'.format(sm_layer))
-                            sm_files = glob.glob('{}.*'.format(utils.fn_basename2(sm_file)))
+                            ## with gdal_footprint
+                            has_gdal_footprint = utils.cmd_exists('gdal_footprint')
+                            ## gdal_footprint polygons end up slightly offset for some reason,
+                            ## while it is much faster than the other method, we will hold off
+                            ## until that bug is fixed...
+                            if False:
+                                #if has_gdal_footprint:
+                                with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
+                                    sm_files, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)                                
+
+                                self.output_files['spatial-metadata'] = []
+                                ## clip spatial metadta to region
+                                sm_ext = gdalfun.ogr_fext(sm_fmt)
+                                sm_vector = None
+                                for x in sm_files:
+                                    if sm_ext in x:
+                                        sm_vector = x
+                                        break
+
+                                sm_file = gdalfun.ogr_clip(sm_vector, dst_region=self.d_region, fmt='GPKG', verbose=True)
+                                utils.remove_glob(*sm_files)
+                                sm_files = glob.glob('{}.*'.format(utils.fn_basename2(sm_file)))
+                            else:                                
+                                ## with dlim
+                                with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
+                                    sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
+
+                                sm_files = glob.glob('{}.*'.format(sm_layer))
+                                self.output_files['spatial-metadata'] = []
+
+                                sm_vector = sm_layer + '.{}'.format(gdalfun.ogr_fext(sm_fmt))
+                                sm_file = gdalfun.ogr_clip(sm_vector, dst_region=self.d_region, fmt='GPKG', verbose=True)
+                                utils.remove_glob(*sm_files)
+                                sm_files = glob.glob('{}.*'.format(utils.fn_basename2(sm_file)))
                             
                             for f in sm_files:
-                                out_sm = '{}_sm.{}'.format(self.name, f[-3:])
+                                out_sm = '{}_sm.{}'.format(self.name, f.split('.')[-1])#f[-3:])
                                 if os.path.exists(out_sm):
                                     utils.remove_glob(out_sm)
-
-                                ## clip spatial metadta to region
 
                                 os.rename(f, out_sm)
                                 self.output_files['spatial-metadata'].append(out_sm)

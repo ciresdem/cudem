@@ -319,7 +319,7 @@ def ogr_get_srs(src_ogr):
     else:
         return(None)
     
-def ogr_clip(src_ogr_fn, dst_region = None, layer = None, fmt = 'ESRI Shapefile', overwrite = False, verbose = True):
+def ogr_clip(src_ogr_fn, dst_region = None, layer = None, fmt = 'GPKG', overwrite = False, verbose = True):
     """clip an ogr file to `dst_region`"""
 
     if dst_region is None:
@@ -330,7 +330,7 @@ def ogr_clip(src_ogr_fn, dst_region = None, layer = None, fmt = 'ESRI Shapefile'
     #dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
     
     if not os.path.exists(dst_ogr_fn) or overwrite:
-        utils.run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(
+        utils.run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {}'.format(
             dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''
         ), verbose=verbose)
 
@@ -345,7 +345,6 @@ def ogr_clip2(src_ogr_fn, dst_region = None, layer = None, overwrite = False):
     dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
     
     if not os.path.exists(dst_ogr_fn) or overwrite:
-    
         src_ds = ogr.Open(src_ogr_fn)
         if layer is not None:
             src_layer = src_ds.GetLayer(layer)
@@ -486,7 +485,7 @@ def ogr_polygonize_line_to_region(
     line_ds = output_ds = None
     return(dst_ogr)
     
-def ogr_mask_union(src_layer, src_field=None, dst_defn=None):
+def ogr_mask_union(src_layer, src_field = None, dst_defn = None):
     """`union` a `src_layer`'s features based on `src_field` where
     `src_field` holds a value of 0 or 1. optionally, specify
     an output layer defn for the unioned feature.

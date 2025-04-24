@@ -101,6 +101,7 @@ import utm
 import laspy as lp
 from osgeo import gdal
 from osgeo import ogr
+#from osgeo import osr
 import h5py as h5
 import netCDF4 as nc
 
@@ -114,6 +115,7 @@ from cudem import vdatums
 from cudem import fetches
 from cudem import grits
 from cudem import vrbag
+from cudem import srsfun
 
 # cshelph
 import pandas as pd
@@ -157,6 +159,7 @@ def scan_mask_bands(src_ds, skip_band = 'Full Data Mask', mask_level = 0, verbos
             leave=verbose
     ) as pbar:         
         for b in range(1, src_ds.RasterCount+1):
+            pbar.update()
             this_band = src_ds.GetRasterBand(b)
             this_band_md = this_band.GetMetadata()
             this_band_name = this_band.GetDescription()
@@ -185,21 +188,22 @@ def scan_mask_bands(src_ds, skip_band = 'Full Data Mask', mask_level = 0, verbos
                     band_md[k] = ','.join([band_md[k], this_band_md[k]])
                     
             band_infos[this_band_name]['metadata'] = band_md
-            pbar.update()
             
     return(band_infos)
 
 def ogr_mask_footprints(
-        src_ds, ogr_format = 'ESRI Shapefile', dst_srs = 'epsg:4326', mask_level = 0, verbose = True
+        src_ds, ogr_format = 'GPKG', dst_srs = 'epsg:4326', mask_level = 0, verbose = True
 ):
     
     src_infos = scan_mask_bands(src_ds, mask_level=mask_level, verbose=verbose)
+    #utils.echo_msg(src_infos)
     ## initialize output vector
     dst_ogr_fn = '{}_sm.{}'.format(utils.fn_basename2(src_ds.GetDescription()), gdalfun.ogr_fext(ogr_format))
     driver = ogr.GetDriverByName(ogr_format)
     ds = driver.CreateDataSource(dst_ogr_fn)
+    srs = srsfun.osr_srs(src_ds.GetProjectionRef())
     if ds is not None: 
-        layer = ds.CreateLayer('footprint', None, ogr.wkbMultiPolygon)
+        layer = ds.CreateLayer('footprint', srs, ogr.wkbMultiPolygon)
     else:
         layer = None
 
@@ -207,14 +211,14 @@ def ogr_mask_footprints(
     field_names = [field.name for field in layer.schema]
     for key in src_infos.keys():
         for md in src_infos[key]['metadata'].keys():
-            if md[:10] not in field_names and md not in field_names:
+            #if md[:10] not in field_names and md not in field_names:
+            if md not in field_names:
                 layer.CreateField(ogr.FieldDefn(md, ogr.OFTString))
                 field_names = [field.name for field in layer.schema]
-                
+
     #field_names = [field.name for field in layer.schema]
     [layer.SetFeature(feature) for feature in layer]
     ds = layer = None
-    
     ## generate a footprint of each group of bands from src_infos
     with tqdm(
             desc='generating mask footprints',
@@ -222,23 +226,24 @@ def ogr_mask_footprints(
             leave=verbose
     ) as pbar:
         for i, key in enumerate(src_infos.keys()):
-            footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {} -no_location -of {}'.format(
+            footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {} -no_location'.format(
                 src_ds.GetDescription(),
                 dst_ogr_fn, dst_srs,
                 ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']]),
-                ogr_format
             )
             utils.run_cmd(footprint_cmd, verbose=True)
 
             ## update db using ogrinfo
-            key_val = ', '.join(["'{}' = '{}'".format(x[:10], src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])            
+            #key_val = ', '.join(["'{}' = '{}'".format(x[:10], src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])
+            key_val = ', '.join(["'{}' = '{}'".format(x, src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])            
             sql = "UPDATE {name} SET {key_val} WHERE rowid = {f}".format(
-                name=utils.fn_basename2(dst_ogr_fn),
+                #name=utils.fn_basename2(dst_ogr_fn),
+                name='footprint',
                 key_val=key_val,
                 value=src_infos[key]['metadata'][md],
-                f=i
+                f=i+1
             )
-            #utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose=True)
+            utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose=True)
                 
             pbar.update()
 
@@ -266,7 +271,7 @@ def ogr_mask_footprints(
     # ds.CommitTransaction()
     # layer = ds = None
             
-    return(glob.glob('{}.*'.format(utils.fn_basename2(dst_ogr_fn))))
+    return(glob.glob('{}.*'.format(utils.fn_basename2(dst_ogr_fn))), ogr_format)
             
     
 def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask', mask_level = 0):
@@ -274,7 +279,7 @@ def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask
 
     mask_level = utils.int_or(mask_level, 0)
     src_infos = gdalfun.gdal_infos(src_ds)
-    utils.echo_msg(src_infos)
+    #utils.echo_msg(src_infos)
     ## create new mem gdal ds to hold new raster
     gdt = gdal.GDT_Int32
     driver = gdal.GetDriverByName('MEM')
@@ -354,8 +359,9 @@ def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask
 def polygonize_mask_multibands(
         src_ds,
         output = None,
-        dst_srs = 'epsg:4326',
-        ogr_format = 'ESRI Shapefile',
+        #dst_srs = 'epsg:4326',
+        #ogr_format = 'ESRI Shapefile',
+        ogr_format = 'GPKG',
         mask_level = 0,
         verbose = True
 ):
@@ -379,19 +385,26 @@ def polygonize_mask_multibands(
     dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()) if output is None else output)
     dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
     utils.remove_glob('{}.*'.format(dst_layer))
-    gdalfun.osr_prj_file('{}.prj'.format(dst_layer), gdalfun.gdal_infos(src_ds)['proj'])
+    #srs = osr.SpatialReference()
+    #srs.SetFromUserInput(src_ds.GetProjectionRef())
+    srs = srsfun.osr_srs(src_ds.GetProjectionRef())
+    #utils.echo_msg(srs)
+    #gdalfun.osr_prj_file('{}.prj'.format(dst_layer), gdalfun.gdal_infos(src_ds)['proj'])
     driver = ogr.GetDriverByName(ogr_format)
     ds = driver.CreateDataSource(dst_vector)
     if ds is not None: 
+        # layer = ds.CreateLayer(
+        #     '{}'.format(dst_layer), None, ogr.wkbMultiPolygon
+        # )
         layer = ds.CreateLayer(
-            '{}'.format(dst_layer), None, ogr.wkbMultiPolygon
+            'footprints', srs, ogr.wkbMultiPolygon
         )
-        #[layer.SetFeature(feature) for feature in layer]
+        [layer.SetFeature(feature) for feature in layer]
     else:
         layer = None
 
     layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-    layer.StartTransaction()
+    #layer.StartTransaction()
     defn = None
 
     with tqdm(
@@ -424,7 +437,7 @@ def polygonize_mask_multibands(
                 )
                 if tmp_ds is not None:
                     tmp_layer = tmp_ds.CreateLayer(
-                        '{}_poly'.format(this_band_name), None, ogr.wkbMultiPolygon
+                        '{}_poly'.format(this_band_name), srs, ogr.wkbMultiPolygon
                     )
                     tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
                     tmp_name = str(this_band_name)                                    
@@ -449,14 +462,14 @@ def polygonize_mask_multibands(
 
                     if len(tmp_layer) > 0:
                         if defn is None:
-                            defn = tmp_layer.GetLayerDefn()
+                            defn = layer.GetLayerDefn()
 
                         out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
                         with tqdm(
                                 desc='creating feature {}...'.format(this_band_name),
                                 total=len(this_band_md.keys()),
                                 leave=verbose
-                        ) as feat_pbar: 
+                        ) as feat_pbar:
                             for k in this_band_md.keys():
                                 feat_pbar.update()
                                 out_feat.SetField(k[:9], this_band_md[k])
@@ -464,16 +477,16 @@ def polygonize_mask_multibands(
                             if 'Title' not in this_band_md.keys():
                                 out_feat.SetField('Title', tmp_name)
 
-                            out_feat.SetField('DN', b)                           
-                            layer.CreateFeature(out_feat)
-                            #layer.SetFeature(out_feat)
+                            out_feat.SetField('DN', b)
+                            status = layer.CreateFeature(out_feat)
+                            layer.SetFeature(out_feat)
 
                 # if verbose:
                 #     utils.echo_msg('polygonized {}'.format(this_band_name))
 
                 tmp_ds = tmp_layer = None
                 
-    layer.CommitTransaction()            
+    #layer.CommitTransaction()            
     ds = src_ds = None
     return(dst_layer, ogr_format)
     
