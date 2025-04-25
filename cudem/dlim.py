@@ -226,9 +226,14 @@ def ogr_mask_footprints(
             leave=verbose
     ) as pbar:
         for i, key in enumerate(src_infos.keys()):
-            footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {} -no_location'.format(
+            # footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {} -no_location'.format(
+            #     src_ds.GetDescription(),
+            #     dst_ogr_fn, dst_srs,
+            #     ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']]),
+            # )
+            footprint_cmd = 'gdal_footprint {} {} -combine_bands union -max_points unlimited {} -no_location'.format(
                 src_ds.GetDescription(),
-                dst_ogr_fn, dst_srs,
+                dst_ogr_fn,
                 ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']]),
             )
             utils.run_cmd(footprint_cmd, verbose=False)

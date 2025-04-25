@@ -966,7 +966,12 @@ def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None, co = ['COMPR
     """Create temporary gdal mem dataset"""
         
     mem_driver = gdal.GetDriverByName('MEM')
-    mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], bands, ds_config['dt'], options=co)
+    utils.echo_msg(bands)
+    utils.echo_msg(ds_config)
+    mem_ds = mem_driver.Create(
+        name, ds_config['nx'], ds_config['ny'], bands, ds_config['dt'], options=co
+    )
+    utils.echo_msg('mem_ds: {}'.format(mem_ds))
     if mem_ds is not None:
         mem_ds.SetGeoTransform(ds_config['geoT'])
         if src_srs is None:
@@ -1091,6 +1096,7 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["CO
     
     status = -1
     with gdal_datasource(src_gdal) as src_ds:
+        utils.echo_msg(src_ds)
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
             gt = ds_config['geoT']
@@ -1102,6 +1108,7 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["CO
 
             in_bands = src_ds.RasterCount
             mem_ds = gdal_mem_ds(out_ds_config, bands=in_bands)
+            utils.echo_msg(mem_ds)
             if mem_ds is not None:
                 for band in range(1, in_bands+1):
                     this_band = mem_ds.GetRasterBand(band)
@@ -1115,6 +1122,81 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["CO
                 status = 0
 
     return(dst_gdal, status)
+
+def gdal_cut2(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["COMPRESS=DEFLATE", "TILED=YES"]):
+    """cut src_ds datasource to src_region and output dst_gdal file
+
+    -----------
+    Returns:    
+    list: [output-dem, status-code]
+    """
+    
+    status = -1
+    with gdal_datasource(src_gdal) as src_ds:
+        if src_ds is not None:
+            ds_config = gdal_infos(src_ds)
+            gt = ds_config['geoT']
+            srcwin = src_region.srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize, node=node)
+            dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+            out_ds_config = gdal_set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
+                                           ds_config['proj'], ds_config['dt'], ds_config['ndv'],
+                                           ds_config['fmt'], ds_config['metadata'], ds_config['raster_count'])
+
+            in_bands = src_ds.RasterCount
+            #mem_ds = gdal_mem_ds(out_ds_config, bands=in_bands)
+            #mem_ds = gdal_mem_ds(out_ds_config, bands=0)
+            clip_driver = gdal.GetDriverByName(out_ds_config['fmt'])
+            clip_ds = clip_driver.Create(
+                dst_gdal, out_ds_config['nx'], out_ds_config['ny'], in_bands, out_ds_config['dt'], options=co
+            )
+            if clip_ds is not None:
+                clip_ds.SetGeoTransform(out_ds_config['geoT'])
+                if out_ds_config['proj'] is not None:
+                    clip_ds.SetProjection(out_ds_config['proj'])
+
+                with tqdm(
+                        desc='clipping raster bands',
+                        total=src_ds.RasterCount,
+                        leave=verbose
+                ) as pbar:         
+                    for band in range(1, in_bands+1):
+                        pbar.update()
+                        clip_band = clip_ds.GetRasterBand(band)
+                        src_band = src_ds.GetRasterBand(band)
+                        clip_band.SetDescription(src_band.GetDescription())
+                        clip_band.SetMetadata(src_band.GetMetadata())
+                        src_array = src_band.ReadAsArray(*srcwin)
+                        #utils.echo_msg('read array')
+                        clip_band.WriteArray(src_array)
+                        #utils.echo_msg('wrote clipped array')
+                        #clip_ds.FlushCache()
+
+                #dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0, options=co)
+                clip_ds = None
+                status = 0
+
+    return(dst_gdal, status)
+
+def gdal_cut_trans(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["COMPRESS=DEFLATE", "TILED=YES"]):
+    status = -1
+    with gdal_datasource(src_gdal) as src_ds:
+        ds_config = gdal_infos(src_ds)                
+        region_srcwin = src_region.srcwin(ds_config['geoT'], src_ds.RasterXSize, src_ds.RasterYSize, node=node)
+                
+    gdal_translate_cmd = (
+        'gdal_translate {} {} -srcwin {} {} {} {} {}'.format(
+            src_gdal, dst_gdal,
+            region_srcwin[0], region_srcwin[1],
+            region_srcwin[2], region_srcwin[3],
+            '-co {} '.format(' -co '.join(co)) if len(co) > 0 else ''
+        )
+    )
+    out, status = utils.run_cmd(gdal_translate_cmd, verbose=verbose)
+    if status == 0:
+        return(dst_gdal, status)
+    else:
+        #utils.echo_error_msg('failed to cut data to {}...'.format(src_region))
+        return(src_gdal, status)
 
 ## doesn't work with multipolygons and -i
 def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True, cache_dir = None):

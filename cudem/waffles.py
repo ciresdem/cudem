@@ -567,7 +567,7 @@ class Waffle:
             ## post-process the mask, etc.
             if self.want_sm:
                 if mask_fn is not None:
-                    mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=False, want_scan=True, co=self.co).initialize()
+                    mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True, co=self.co).initialize()
                     if mask_dem.valid_p():
                         mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                          node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
@@ -4989,7 +4989,7 @@ class WaffleDEM:
                 
     def cut(self, region = None, node = 'grid'):
         if region is not None:
-            _tmp_cut, cut_status = gdalfun.gdal_cut(
+            _tmp_cut, cut_status = gdalfun.gdal_cut_trans(
                 self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node=node, co=self.co
             )
             if cut_status == 0:
@@ -4998,6 +4998,41 @@ class WaffleDEM:
 
                 if self.verbose:
                     utils.echo_msg('cut data to {}...'.format(region))
+            else:
+                utils.echo_error_msg('failed to cut data to {}...'.format(region))
+
+            # with gdalfun.gdal_datasource(self.fn) as src_ds:
+            #     ds_config = gdalfun.gdal_infos(src_ds)                
+            #     region_srcwin = region.srcwin(ds_config['geoT'], src_ds.RasterXSize, src_ds.RasterYSize, node=node)
+                
+            # _tmp_cut = utils.make_temp_fn('__tmp__cut.tif', temp_dir=self.cache_dir)
+            # gdal_translate_cmd = (
+            #     'gdal_translate {} {} -srcwin {} {} {} {} -f {} {}'.format(
+            #         self.fn, _tmp_cut, dst_fmt, srcwin[0], srcwin[1], srcwin[2], srcwin[3],
+            #         '-co {} '.format(' -co '.join(self.co)) if len(self.co) > 0 else ''
+            #     )
+            # )
+            # status = utils.run_cmd(gdal_translate_cmd, verbose=True)
+            # if status == 0:
+            #     os.replace(_tmp_cut, self.fn)
+            #     self.initialize()
+
+            #     if self.verbose:
+            #         utils.echo_msg('cut data to {}...'.format(region))
+            # else:
+            #     utils.echo_error_msg('failed to cut data to {}...'.format(region))
+                                
+            # _tmp_cut, cut_status = gdalfun.gdal_cut(
+            #     self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node=node, co=self.co
+            # )
+            # if cut_status == 0:
+            #     os.replace(_tmp_cut, self.fn)
+            #     self.initialize()
+
+            #     if self.verbose:
+            #         utils.echo_msg('cut data to {}...'.format(region))
+            # else:
+            #     utils.echo_error_msg('failed to cut data to {}...'.format(region))
 
     def set_interpolation_limits(self, stack_fn = None,  size_limit = None, proximity_limit = None, percentile_limit = None):
         """set interpolation limits"""
@@ -5112,11 +5147,11 @@ class WaffleDEM:
     def move(self, out_fn = None, out_dir = None):
         if out_fn is not None:
             _out_fn = os.path.join(os.path.dirname(self.fn), out_fn)
-            os.replace(self.fn, _out_fn)
+            os.replace(self.fn, _out_fn)                
+            self.fn = _out_fn
+            self.initialize()
             if self.verbose:
                 utils.echo_msg('moved output DEM from {} to {}.'.format(os.path.basename(self.fn), os.path.abspath(out_fn)))
-                
-            self.fn = _out_fn
             
         if out_dir is not None:
             _out_fn = os.path.join(out_dir, os.path.basename(self.fn))
