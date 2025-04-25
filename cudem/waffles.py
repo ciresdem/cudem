@@ -483,7 +483,6 @@ class Waffle:
                 ## generate the stack
                 stack_fn = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
                 stack_bn = utils.fn_basename2(stack_fn)
-
                 if not self.clobber and os.path.exists(stack_fn):
                     self.stack = stack_fn
                     if not WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
@@ -496,9 +495,11 @@ class Waffle:
                                               y_inc=self.yinc, src_region=self.p_region, weight=1,
                                               verbose=self.verbose).initialize()
 
+                ## rename the mask_fn outside of cachedir
                 if self.want_mask:
                     mask_fn = '{}.{}'.format(mask_name, gdalfun.gdal_fext(self.fmt))
-                
+
+                ## apply the count limit to the stack grid
                 if self.count_limit is not None:
                     with gdalfun.gdal_datasource(self.stack, update=True) as stack_ds:
                         stack_infos = gdalfun.gdal_infos(stack_ds)
@@ -568,46 +569,22 @@ class Waffle:
                 if mask_fn is not None:
                     mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=False, want_scan=True, co=self.co).initialize()
                     if mask_dem.valid_p():
-                        # mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
-                        #                  node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
-                        #                  dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
-                        #                  dst_dir=os.path.dirname(self.fn))
-                        # self.output_files['mask'] = mask_dem.fn
+                        mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                                         node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
+                                         dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
+                                         dst_dir=os.path.dirname(self.fn))
+                        self.output_files['mask'] = mask_dem.fn
                         if self.want_sm:
+                            self.output_files['spatial-metadata'] = []
                             ## with gdal_footprint
+                            ## gdal_footprint polygons end up slightly offset for some reason
                             has_gdal_footprint = utils.cmd_exists('gdal_footprint')
-                            ## gdal_footprint polygons end up slightly offset for some reason,
-                            ## while it is much faster than the other method, we will hold off
-                            ## until that bug is fixed...
-                            #if False:
-                            if has_gdal_footprint:
-                                with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                                    sm_files, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)                                
-
-                                self.output_files['spatial-metadata'] = []
-                                ## clip spatial metadta to region
-                                sm_ext = gdalfun.ogr_fext(sm_fmt)
-                                sm_vector = None
-                                for x in sm_files:
-                                    if sm_ext in x:
-                                        sm_vector = x
-                                        break
-
-                                sm_file = gdalfun.ogr_clip(sm_vector, dst_region=self.d_region, fmt='GPKG', verbose=True)
-                                utils.remove_glob(*sm_files)
-                                sm_files = glob.glob('{}.*'.format(utils.fn_basename2(sm_file)))
-                            else:                                
-                                ## with dlim
-                                with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
+                            with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
+                                if has_gdal_footprint:
+                                    sm_files, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)
+                                else:
                                     sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
-
-                                sm_files = glob.glob('{}.*'.format(sm_layer))
-                                self.output_files['spatial-metadata'] = []
-
-                                sm_vector = sm_layer + '.{}'.format(gdalfun.ogr_fext(sm_fmt))
-                                sm_file = gdalfun.ogr_clip(sm_vector, dst_region=self.d_region, fmt='GPKG', verbose=True)
-                                utils.remove_glob(*sm_files)
-                                sm_files = glob.glob('{}.*'.format(utils.fn_basename2(sm_file)))
+                                    sm_files = glob.glob('{}.*'.format(sm_layer))
                             
                             for f in sm_files:
                                 out_sm = '{}_sm.{}'.format(self.name, f.split('.')[-1])#f[-3:])
