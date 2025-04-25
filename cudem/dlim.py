@@ -185,7 +185,8 @@ def scan_mask_bands(src_ds, skip_band = 'Full Data Mask', mask_level = 0, verbos
                 elif k == 'date' or k == 'weight' or k == 'uncertainty':
                     band_md[k] = num_strings_to_range(band_md[k], this_band_md[k])
                 elif band_md[k] not in this_band_md[k].split('/') and band_md[k] != this_band_md[k]:
-                    band_md[k] = ','.join([band_md[k], this_band_md[k]])
+                    if str(this_band_md[k]) != 'None':
+                        band_md[k] = ','.join([band_md[k], this_band_md[k]])
                     
             band_infos[this_band_name]['metadata'] = band_md
             
