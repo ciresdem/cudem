@@ -173,7 +173,7 @@ def scan_mask_bands(src_ds, skip_band = 'Full Data Mask', mask_level = 0, verbos
                 band_infos[this_band_name] = {'bands': [b], 'metadata': this_band_md}
             else:
                 band_infos[this_band_name]['bands'].append(b)
-                #band_infos[this_band_name]['metadata'] = this_band_md
+                band_infos[this_band_name]['metadata'] = this_band_md
                 
             band_md = band_infos[this_band_name]['metadata']
             for k in this_band_md.keys():

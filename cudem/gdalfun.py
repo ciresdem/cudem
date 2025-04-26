@@ -1143,8 +1143,6 @@ def gdal_cut2(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["C
                                            ds_config['fmt'], ds_config['metadata'], ds_config['raster_count'])
 
             in_bands = src_ds.RasterCount
-            #mem_ds = gdal_mem_ds(out_ds_config, bands=in_bands)
-            #mem_ds = gdal_mem_ds(out_ds_config, bands=0)
             clip_driver = gdal.GetDriverByName(out_ds_config['fmt'])
             clip_ds = clip_driver.Create(
                 dst_gdal, out_ds_config['nx'], out_ds_config['ny'], in_bands, out_ds_config['dt'], options=co
@@ -1166,12 +1164,9 @@ def gdal_cut2(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["C
                         clip_band.SetDescription(src_band.GetDescription())
                         clip_band.SetMetadata(src_band.GetMetadata())
                         src_array = src_band.ReadAsArray(*srcwin)
-                        #utils.echo_msg('read array')
                         clip_band.WriteArray(src_array)
-                        #utils.echo_msg('wrote clipped array')
                         #clip_ds.FlushCache()
 
-                #dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0, options=co)
                 clip_ds = None
                 status = 0
 
@@ -1195,7 +1190,6 @@ def gdal_cut_trans(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, c
     if status == 0:
         return(dst_gdal, status)
     else:
-        #utils.echo_error_msg('failed to cut data to {}...'.format(src_region))
         return(src_gdal, status)
 
 ## doesn't work with multipolygons and -i
