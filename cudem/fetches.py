@@ -748,7 +748,7 @@ def fetch_queue(q, c = True):
                 fetch_args[3].callback(fetch_results)
         else:
             try:
-                utils.echo_msg(fetch_args[3].name)
+                #utils.echo_msg(fetch_args[3].name)
                 status = Fetch(
                     url=fetch_args[0],
                     callback=fetch_args[3].callback,
@@ -4928,6 +4928,9 @@ def polygonize_osm_coastline(
 
     # Open the input line layer
     line_ds = ogr.Open(src_ogr)
+    if line_ds is None:
+        return(None)
+    
     line_layer = line_ds.GetLayer()
     line_region = regions.Region().from_list(line_layer.GetExtent())
     region_geom = line_region.export_as_geom()

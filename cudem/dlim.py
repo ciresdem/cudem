@@ -2762,22 +2762,25 @@ class ElevationDataset:
                 else:
                     ## this is very slow! find another way.
                     src_ds = ogr.Open(this_entry.mask['mask'])
-                    layer = src_ds.GetLayer()
-                    #utils.echo_msg(len(layer))
+                    if src_ds is not None:
+                        layer = src_ds.GetLayer()
+                        #utils.echo_msg(len(layer))
 
-                    geomcol = gdalfun.ogr_union_geom(layer)
-                    if not geomcol.IsValid():
-                        geomcol = geomcol.Buffer(0)
-                    
-                    for this_xyz in this_entry.yield_xyz():
-                        this_wkt = this_xyz.export_as_wkt()
-                        this_point = ogr.CreateGeometryFromWkt(this_wkt)
-                        if this_point.Within(geomcol):
-                            if not this_entry.mask['invert_mask']:
-                                yield(this_xyz)
-                        else:
-                            if not this_entry.mask['invert_mask']:
-                                yield(this_xyz)
+                        geomcol = gdalfun.ogr_union_geom(layer)
+                        if not geomcol.IsValid():
+                            geomcol = geomcol.Buffer(0)
+
+                        for this_xyz in this_entry.yield_xyz():
+                            this_wkt = this_xyz.export_as_wkt()
+                            this_point = ogr.CreateGeometryFromWkt(this_wkt)
+                            if this_point.Within(geomcol):
+                                if not this_entry.mask['invert_mask']:
+                                    yield(this_xyz)
+                            else:
+                                if not this_entry.mask['invert_mask']:
+                                    yield(this_xyz)
+                    else:
+                        yield(this_xyz)
         
     def yield_xyz(self):
         """Yield the data as xyz points
@@ -3480,7 +3483,8 @@ class ElevationDataset:
                         pbar.update()
                         cst_osm = cst_result[1]
                         out = fetches.polygonize_osm_coastline(
-                            cst_osm, utils.make_temp_fn(
+                            cst_osm,
+                            utils.make_temp_fn(
                                 utils.fn_basename2(cst_osm) + '_coast.shp',
                                 temp_dir=self.cache_dir
                             ),
@@ -6658,6 +6662,7 @@ class NEDFetcher(Fetcher):
         
         ## todo: merge the coast mask with user input self.mask
         coast_mask = None
+        ned_mask = self.mask
         if self.mask is None:
             coast_mask = self.process_coastline(
                 self.fetch_coastline(
@@ -6669,9 +6674,8 @@ class NEDFetcher(Fetcher):
                 line_buffer=self.coast_buffer,
                 verbose=False
             )
-            ned_mask = {'mask': coast_mask, 'invert_mask': True}
-        else:
-            ned_mask = self.mask
+            if coast_mask is not None:
+                ned_mask = {'mask': coast_mask, 'invert_mask': True}
         
         src_dem = os.path.join(self.fetch_module._outdir, result['dst_fn'])
         #ned_metadata = copy.deepcopy(self.metadata)
@@ -8451,20 +8455,20 @@ See `datalists_usage` for full cli options.
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
                 else:
-                    try:
-                        if want_separate: # process and dump each dataset independently
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else: # process and dump the datalist as a whole
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                      utils.echo_error_msg('Killed by user')
-                      break
-                    except BrokenPipeError:
-                      utils.echo_error_msg('Pipe Broken')
-                      break
-                    except Exception as e:
-                      utils.echo_error_msg(e)
-                      print(traceback.format_exc())
+                    #try:
+                    if want_separate: # process and dump each dataset independently
+                        for this_entry in this_datalist.parse():
+                            this_entry.dump_xyz()
+                    else: # process and dump the datalist as a whole
+                        this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #   utils.echo_error_msg('Killed by user')
+                    #   break
+                    # except BrokenPipeError:
+                    #   utils.echo_error_msg('Pipe Broken')
+                    #   break
+                    # except Exception as e:
+                    #   utils.echo_error_msg(e)
+                    #   print(traceback.format_exc())
                               
 ### End
