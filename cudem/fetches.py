@@ -1723,7 +1723,7 @@ class FABDEM(FetchModule):
                 if geom.Intersects(self.region.export_as_geom()):
                     zipfile_name = feature.GetField('zipfile_name')
                     zipfile_url = '/'.join([self._fabdem_data_url, zipfile_name])
-                    if zipfile_url not in [x[0] for x in self.results]:
+                    if zipfile_url not in [x['url'] for x in self.results]:
                         self.add_entry_to_results(zipfile_url, zipfile_name, 'raster')
                         
             v_ds = None

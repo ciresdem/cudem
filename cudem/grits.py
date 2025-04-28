@@ -124,7 +124,7 @@ class Grits:
         ) as src_ds:
             src_infos = gdalfun.gdal_infos(src_ds)
             driver = gdal.GetDriverByName(src_infos['fmt'])
-            copy_ds = driver.CreateCopy(self.dst_dem, src_ds, 1)
+            copy_ds = driver.CreateCopy(self.dst_dem, src_ds, 1, options=['COMPRESS=DEFLATE'])
             
         return(copy_ds)
     
