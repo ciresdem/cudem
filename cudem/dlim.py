@@ -238,7 +238,14 @@ def ogr_mask_footprints(
                 ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']]),
             )
             utils.run_cmd(footprint_cmd, verbose=False)
-
+            pbar.update()
+            
+    with tqdm(
+            desc='setting mask metadata',
+            total=len(src_infos.keys()),
+            leave=verbose
+    ) as pbar:
+        for i, key in enumerate(src_infos.keys()):
             ## update db using ogrinfo
             #key_val = ', '.join(["'{}' = '{}'".format(x[:10], src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])
             key_val = ', '.join(["'{}' = '{}'".format(x, src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])            
@@ -249,7 +256,7 @@ def ogr_mask_footprints(
                 value=src_infos[key]['metadata'][md],
                 f=i+1
             )
-            utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose=False)                
+            utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose=False)
             pbar.update()
 
     # ## set the metadata to the vector fields
@@ -1868,9 +1875,11 @@ class ElevationDataset:
                 band_md = m_band.GetMetadata()
                 for k in this_entry.metadata.keys():
                     if k not in band_md.keys() or band_md[k] is None:
+                        #utils.echo_msg(this_entry.metadata[k])
                         band_md[k] = this_entry.metadata[k]
-                    else:
-                        band_md[k] = None
+                    ## mrl commented out for no_wa.datalist
+                    #else:
+                    #    band_md[k] = None
 
                 band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
                 band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0

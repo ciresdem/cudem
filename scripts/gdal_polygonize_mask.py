@@ -6,8 +6,10 @@
 
 import sys
 from cudem import gdalfun
+from cudem import dlim
+from cudem import utils
 
-gfr_version = 0.1
+gfr_version = 0.2
 
 def Usage():
     print('Usage: gdal_polygonize_mask.py src_mask')
@@ -36,7 +38,11 @@ if __name__ == "__main__":
         Usage()
         sys.exit(0)
 
+    has_gdal_footprint = utils.cmd_exists('gdal_footprint')
     with gdalfun.gdal_datasource(ingrd) as msk_ds:
-        sm_layer, sm_fmt = gdalfun.ogr_polygonize_multibands(msk_ds)
+        if has_gdal_footprint:
+            sm_files, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)
+        else:
+            sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
 
 #--END

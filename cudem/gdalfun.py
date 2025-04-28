@@ -966,12 +966,12 @@ def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None, co = ['COMPR
     """Create temporary gdal mem dataset"""
         
     mem_driver = gdal.GetDriverByName('MEM')
-    utils.echo_msg(bands)
-    utils.echo_msg(ds_config)
+    #utils.echo_msg(bands)
+    #utils.echo_msg(ds_config)
     mem_ds = mem_driver.Create(
         name, ds_config['nx'], ds_config['ny'], bands, ds_config['dt'], options=co
     )
-    utils.echo_msg('mem_ds: {}'.format(mem_ds))
+    #utils.echo_msg('mem_ds: {}'.format(mem_ds))
     if mem_ds is not None:
         mem_ds.SetGeoTransform(ds_config['geoT'])
         if src_srs is None:
