@@ -104,6 +104,7 @@ setuptools.setup(
         'scripts/gdal_minmax.py',
         'scripts/gdal_mask.py',
         'scripts/gdal_polygonize_mask.py',
+        'scripts/cudem_polygonize_mask.py',
         'scripts/gdal_hydro_flatten.py',
         'scripts/gdal_remove_flats.py',
         'scripts/gdal_findrivers.py',

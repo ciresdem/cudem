@@ -6361,7 +6361,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'csb': {'call': CSB},
         'cpt_city': {'call': CPTCity},
         'wa_dnr': {'call': waDNR},
-        #'nsw_tb': {'call': NSW_TB},
+        'nsw_tb': {'call': NSW_TB},
     }
 
     def __init__(self, **kwargs):

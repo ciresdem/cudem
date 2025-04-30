@@ -33,7 +33,7 @@ from cudem import regions
 from cudem import gdalfun
 from cudem import srsfun
 
-_version = '0.0.1'
+_version = '0.0.2'
 _usage = '''gdal_zeros.py ({}): generate a zero grid
 usage: gdal_null.py [-region xmin xmax ymin ymax] [-cell_size value]
                     [-t_nodata value] [-d_format grid-format] [-overwrite]

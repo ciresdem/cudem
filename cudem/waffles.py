@@ -577,14 +577,14 @@ class Waffle:
                         if self.want_sm:
                             self.output_files['spatial-metadata'] = []
                             ## with gdal_footprint
-                            ## gdal_footprint polygons end up slightly offset for some reason
-                            has_gdal_footprint = utils.cmd_exists('gdal_footprint')
+                            ## gdal_footprint can stall on a large number of mask bands
+                            ## has_gdal_footprint = utils.cmd_exists('gdal_footprint')
                             with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                                if has_gdal_footprint:
-                                    sm_files, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)
-                                else:
-                                    sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
-                                    sm_files = glob.glob('{}.*'.format(sm_layer))
+                                #if has_gdal_footprint:
+                                #    sm_files, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=0)
+                                #else:
+                                sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
+                                sm_files = glob.glob('{}.*'.format(sm_layer))
                             
                             for f in sm_files:
                                 out_sm = '{}_sm.{}'.format(self.name, f.split('.')[-1])#f[-3:])

@@ -506,10 +506,10 @@ def ogr_mask_union(src_layer, src_field = None, dst_defn = None):
     if feats > 0:
         with tqdm(total=len(src_layer), desc='unioning {} features...'.format(feats)) as pbar:
             for n, f in enumerate(src_layer):
-                pbar.update()
                 f_geom = f.geometry()
                 f_geom_valid = f_geom.Buffer(0)
                 multi.AddGeometry(f_geom_valid)
+                pbar.update()
             
     utils.echo_msg('setting geometry to unioned feature...')
     out_feat = ogr.Feature(dst_defn)
@@ -1461,7 +1461,8 @@ def sample_warp(
     
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
-            os.makedirs(os.path.dirname(dst_dem))
+            if os.path.dirname(dst_dem) != '':
+                os.makedirs(os.path.dirname(dst_dem))
 
     if verbose:
         desc = 'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
