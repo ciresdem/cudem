@@ -64,7 +64,7 @@ if __name__ == "__main__":
         src_mask = gdalfun.sample_warp(
             src_mask, None, utils.str2inc(xy_inc[0]), utils.str2inc(xy_inc[1]),
             src_region=None,
-            sample_alg='nearest',
+            sample_alg='average',
             dst_srs=None,
             ndv=gdalfun.gdal_get_ndv(src_mask),
             verbose=True,
