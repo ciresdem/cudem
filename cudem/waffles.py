@@ -115,7 +115,7 @@ class Waffle:
                  keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
                  cache_dir: str = waffles_cache, stack_mode: str = 'mean', upper_limit: float = None, lower_limit: float = None,
                  proximity_limit: int = None, size_limit: int = None, percentile_limit: float = None, count_limit: int = None,
-                 flatten_nodata_values: bool = False, want_stack: bool = True, co: list = [], params: dict = {}):
+                 uncertainty_limit: int = None, flatten_nodata_values: bool = False, want_stack: bool = True, co: list = [], params: dict = {}):
         self.params = params # the factory parameters
         self.data = data # list of data paths/fetches modules to grid
         self.datalist = None # the datalist which holds the processed datasets
@@ -149,6 +149,7 @@ class Waffle:
         self.size_limit = utils.int_or(size_limit) # size limit of interpolation
         self.percentile_limit = utils.float_or(percentile_limit) # percentile limit of interpolation
         self.count_limit = utils.int_or(count_limit) # limit by stack count per cell
+        self.uncertainty_limit = utils.int_or(uncertainty_limit) # limit by stack upper uncertainty
         self.keep_auxiliary = keep_auxiliary # keep auxiliary outputs
         self.clobber = clobber # clobber the output dem file
         self.verbose = verbose # increase verbosity
@@ -499,18 +500,30 @@ class Waffle:
                 if self.want_mask:
                     mask_fn = '{}.{}'.format(mask_name, gdalfun.gdal_fext(self.fmt))
 
-                ## apply the count limit to the stack grid
-                if self.count_limit is not None:
+                ## apply the count or uncertainty limit to the stack grid
+                if self.count_limit is not None or self.uncertainty_limit is not None:
                     with gdalfun.gdal_datasource(self.stack, update=True) as stack_ds:
                         stack_infos = gdalfun.gdal_infos(stack_ds)
-                        count_band = stack_ds.GetRasterBand(2)
-                        count_arr = count_band.ReadAsArray()
-                        count_mask = count_arr <= self.count_limit
+
+                        if self.count_limit:
+                            count_band = stack_ds.GetRasterBand(2)
+                            count_arr = count_band.ReadAsArray()
+                            count_mask = count_arr <= self.count_limit
+                            
+                        if self.uncertainty_limit:
+                            uncertainty_band = stack_ds.GetRasterBand(4)
+                            uncertainty_arr = uncertainty_band.ReadAsArray()
+                            uncertainty_mask = uncertainty_arr <= self.uncertainty_limit
 
                         for band in range(1, stack_ds.RasterCount+1):
                             this_band = stack_ds.GetRasterBand(band)
                             this_arr = this_band.ReadAsArray()
-                            this_arr[count_mask] = stack_infos['ndv']
+                            if self.count_limit:
+                                this_arr[count_mask] = stack_infos['ndv']
+                                
+                            if self.uncertainty_limit:
+                                this_arr[uncertainty_mask] = stack_infos['ndv']
+                                
                             this_band.WriteArray(this_arr)
                             
                 # if self.keep_auxiliary:
@@ -5590,7 +5603,8 @@ Options:
   -L, --limits\t\t\tLIMIT the output elevation or interpolation values, append 
 \t\t\t\t'u<value>' to set the upper elevation limit, 
 \t\t\t\t'l<value>' to set the lower elevation limit,
-\t\t\t\t'n<value>' to set the count per cell limit.
+\t\t\t\t'n<value>' to set the count per cell limit (pre-interpolation).
+\t\t\t\t'r<value>' to set an uncertainty upper limit (pre-interpolation).
 \t\t\t\t'p<value>' to set an interpolation limit by proximity, or 
 \t\t\t\t's<value>' to set an interpolation limit by size, or
 \t\t\t\t'c<value>' to set an interpolation limit by nodata-size percentile.
@@ -5792,6 +5806,8 @@ def waffles_cli(argv = sys.argv):
                 wg['percentile_limit'] = utils.float_or(this_limit[1:])
             elif this_limit.startswith('n'):
                 wg['count_limit'] = utils.float_or(this_limit[1:])
+            elif this_limit.startswith('r'):
+                wg['uncertainty_limit'] = utils.float_or(this_limit[1:])
                 
             i = i + 1
         elif arg[:2] == '-L':
@@ -5808,6 +5824,8 @@ def waffles_cli(argv = sys.argv):
                 wg['percentile_limit'] = utils.float_or(this_limit[1:])
             elif this_limit.startswith('n'):
                 wg['count_limit'] = utils.float_or(this_limit[1:])
+            elif this_limit.startswith('r'):
+                wg['uncertainty_limit'] = utils.float_or(this_limit[1:])
                 
         elif arg == '-threads' or arg == '--threads' or arg == '-H':
             n_threads = utils.int_or(argv[i + 1], 1)

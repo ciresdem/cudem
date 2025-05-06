@@ -317,7 +317,7 @@ def remove_glob(*args):
     Returns:
       int: 0
     """
-    
+
     for glob_str in args:
         try:
             globs = glob.glob(glob_str)

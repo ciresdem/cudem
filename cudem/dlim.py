@@ -1687,6 +1687,7 @@ class ElevationDataset:
                     verbose=False
                 ).run(outfile=self.transform['trans_fn'])
 
+        #utils.echo_msg('using transformation grid {} for {}'.format(self.transform['trans_fn'], self.fn))
         ## set the pyproj.Transformer for both horz+vert and vert only
         ## hack for navd88 datums in feet (6360 is us-feet, 8228 is international-feet
         if utils.str_or(self.transform['src_vert_epsg']) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
@@ -1881,7 +1882,7 @@ class ElevationDataset:
             self.infos = self.generate_inf()
             
             ## update this
-            if self.data_format >= -1 and write_inf:
+            if self.data_format >= -2 and write_inf:
                 self.infos.write_inf_file()
 
             if recursive_check and self.parent is not None:
@@ -3997,6 +3998,7 @@ class GDALFile(ElevationDataset):
         self.tmp_weight_band = None # temporary weight band
         self.src_ds = None # the GDAL dataset object
         self.remove_flat = remove_flat # remove flattened data from input
+        self.flat_removed = False
         self.x_band = x_band # band holding x values
         self.y_band = y_band # band holding y values
         self.node = node # input is 'pixel' or 'grid' registered (force)
@@ -4154,7 +4156,8 @@ class GDALFile(ElevationDataset):
             )._acquire_module()
             grits_filter()
             self.fn = grits_filter.dst_dem
-        
+            self.flat_removed = True
+            
         ## resample/warp src gdal file to specified x/y inc/transformer respectively
         if self.resample_and_warp:
             if self.transform['transformer'] is not None:
@@ -4502,6 +4505,9 @@ class GDALFile(ElevationDataset):
             yield(points)
             
         src_uncertainty = src_weight = trans_uncertainty = self.src_ds = None
+        # delete the filtered dem...
+        if self.remove_flat and self.flat_removed:
+            utils.remove_glob(self.fn)
 
 ## todo: update to h5py
 class BAGFile(ElevationDataset):
@@ -6569,18 +6575,29 @@ class ZIPlist(ElevationDataset):
         exts = [x for y in exts for x in y]
         datalist = []
         if self.fn.split('.')[-1].lower() == 'zip':
-            with zipfile.ZipFile(self.fn) as z:
-                zfs = z.namelist()
-                for ext in exts:
-                    for zf in zfs:
-                        if ext == zf.split('.')[-1]:
-                            datalist.append(os.path.basename(zf))
+            try:
+                with zipfile.ZipFile(self.fn) as z:
+                    zfs = z.namelist()
+                    for ext in exts:
+                        for zf in zfs:
+                            if ext == zf.split('.')[-1]:
+                                datalist.append(os.path.basename(zf))
+            except Exception as e:
+                utils.echo_error_msg('could not unzip {}, {}'.format(self.fn, e))
                             
         for this_data in datalist:
-            this_line = utils.p_f_unzip(self.fn, [this_data])[0]
+            this_line = utils.p_f_unzip(self.fn, fns=[this_data], outdir=os.path.dirname(self.fn))[0]
+            #utils.echo_msg(this_line)
             data_set = DatasetFactory(
-                **self._set_params(mod=this_line, data_format=None)
+                **self._set_params(
+                    mod=os.path.basename(this_line),
+                    data_format=None,
+                    src_srs=self.src_srs,
+                    parent=self
+                )
             )._acquire_module()
+            #utils.echo_msg(data_set)
+            #sys.exit()
             if data_set is not None and data_set.valid_p(
                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
             ):
@@ -6603,7 +6620,10 @@ class ZIPlist(ElevationDataset):
                     inf_region.umin = data_set.uncertainty
                     inf_region.umax = data_set.uncertainty
                     if inf_region.valid_p(check_xy=True):
-                        if regions.regions_intersect_p(inf_region, self.region):
+                        if regions.regions_intersect_p(
+                                inf_region,
+                                self.region if data_set.transform['transformer'] is None else data_set.transform['trans_region']
+                        ):
                             for ds in data_set.parse():
                                 self.data_entries.append(ds)
                                 yield(ds)
@@ -6614,13 +6634,14 @@ class ZIPlist(ElevationDataset):
                                     data_set.fn
                                 )
                             )
+                            utils.remove_glob('{}*'.format(data_set.fn))
                             
                 else:
                     for ds in data_set.parse():
                         self.data_entries.append(ds)
                         yield(ds)
-            #print(this_data)
-            #utils.remove_glob('{}*'.format(this_data))
+                        
+            utils.remove_glob('{}*'.format(data_set.fn))
         
 class Fetcher(ElevationDataset):
     """The default fetches dataset type; dlim Fetcher dataset class
