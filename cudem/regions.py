@@ -431,8 +431,14 @@ class Region:
         if os.path.exists(dst_ogr):
             driver.DeleteDataSource(dst_ogr)
 
+        if self.src_srs is not None:
+            srs = srsfun.osr_srs(srsfun.osr_wkt(self.src_srs))
+        else:
+            srs = None
+            
         dst_ds = driver.CreateDataSource(dst_ogr)
-        dst_lyr = dst_ds.CreateLayer(dst_ogr, geom_type = ogr.wkbPolygon)
+
+        dst_lyr = dst_ds.CreateLayer(dst_ogr, srs, geom_type = ogr.wkbPolygon)
         dst_lyr.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
         dst_feat = ogr.Feature(dst_lyr.GetLayerDefn())
         dst_feat.SetGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
