@@ -2914,7 +2914,7 @@ class NSW_TB(FetchModule):
     < nsw_tb:where=None:layer=0:index=False >
     """
     
-    def __init__(self, where = '1=1', layer = 2, index = False, **kwargs):
+    def __init__(self, where = '1=1', layer = 0, index = False, **kwargs):
         super().__init__(name='csb', **kwargs)
         self.where = where
         self.index = index
@@ -2936,24 +2936,28 @@ class NSW_TB(FetchModule):
             'geometry': self.region.format('bbox'),
             'inSR':4326,
             'outSR':4326,
-            'f':'pjson',
-            'returnGeometry':'False'
+            'f':'geojson',
+            'returnGeometry':'True',
+            'geometryType':'esriGeometryEnvelope',
+            'spatialRel':'esriSpatialRelIntersects'
         }
         _req = Fetch(self._nsw_query_url, verbose=self.verbose).fetch_req(params=_data)
+        _geojson_fn = 'nsw_{}_contours.geojson'.format(self.region.format('fn'))
         if _req is not None:
-            print(_req.url)
+            #print(_req.url)
             features = _req.json()
-            print(features)
+            #print(features)
             if 'features' in features.keys():
-                for feature in features['features']:
-                    if self.index:
-                        print(json.dumps(feature['attributes'], indent=4))
-                    else:
-                        print(feature['attributes'])
-                        #link = '{0}/csb/csv/{1}/{2}/{3}/{4}'.format(self._csb_data_url, _year, _dir_a, _dir_b, _csv_fn)
-                        link = None
-                        if link is None:
-                            continue
+                self.add_entry_to_results(_req.url, _geojson_fn, 'nsw_contours')
+                # for feature in features['features']:
+                #     if self.index:
+                #         print(json.dumps(feature['attributes'], indent=4))
+                #     else:
+                #         print(feature['attributes'])
+                #         #link = '{0}/csb/csv/{1}/{2}/{3}/{4}'.format(self._csb_data_url, _year, _dir_a, _dir_b, _csv_fn)
+                #         link = None
+                #         if link is None:
+                #             continue
                                                                         
 ## NOAA DEMs
 ## doesn't really work well, use ncei_thredds or digital_coast instead...

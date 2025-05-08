@@ -6586,7 +6586,7 @@ class ZIPlist(ElevationDataset):
                 utils.echo_error_msg('could not unzip {}, {}'.format(self.fn, e))
                             
         for this_data in datalist:
-            this_line = utils.p_f_unzip(self.fn, fns=[this_data], outdir=os.path.dirname(self.fn))[0]
+            this_line = utils.p_f_unzip(self.fn, fns=[this_data], outdir=os.path.dirname(self.fn), tmp_fn=True)[0]
             #utils.echo_msg(this_line)
             data_set = DatasetFactory(
                 **self._set_params(
@@ -6642,6 +6642,7 @@ class ZIPlist(ElevationDataset):
                         yield(ds)
                         
             utils.remove_glob('{}*'.format(data_set.fn))
+            #utils.remove_glob('{}*'.format(this_line))
         
 class Fetcher(ElevationDataset):
     """The default fetches dataset type; dlim Fetcher dataset class
@@ -8304,48 +8305,49 @@ datasets (datalist, zip, fetches, etc) are negative format numbers, e.g. -1 for 
 usage: {cmd} [ -acdghijnquwEJPRT [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
 
 Options:
-  -R, --region\t\tRestrict processing to the desired REGION 
-\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
-\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
-\t\t\tOR an OGR-compatible vector file with regional polygons. 
-\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
-\t\t\tIf a vector file is supplied, will use each region found therein.
-\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
-  -E, --increment\tBlock data to INCREMENT in native units.
-\t\t\tWhere INCREMENT is x-inc[/y-inc]
-  -X, --extend\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
-\t\t\tpercentage to extend the processing REGION.
-\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
-\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
-\t\t\tpercent of the input REGION.
-  -J, --s_srs\t\tSet the SOURCE projection.
-  -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
-  -D, --cache-dir\tCACHE Directory for storing temp and output data.
-  -Z, --z-precision\tSet the target precision of dumped z values. (default is 4)
-  -A, --stack-mode\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
-  -T, --stack_filter\tFILTER the data stack using one or multiple filters. 
-\t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
-\t\t\tThe -T switch may be set multiple times to perform multiple filters.
-\t\t\tAvailable FILTERS: {grits_modules}
-  -F, --point_filter\tFILTER the POINT data using one or multiple filters. 
-\t\t\tWhere FILTER is fltr_name[:opts] 
-\t\t\tThe -F switch may be set multiple times to perform multiple filters.
-\t\t\tAvailable FILTERS: {point_filter_modules}
-  -V, --archive\t\tArchive the DATALIST to the given REGION[/INCREMENTs].
-\t\t\tSpecify the name of the archive, if not specified an auto-generated name will be used.
+  -R, --region\t\t\tRestrict processing to the desired REGION 
+\t\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
+\t\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
+\t\t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
+\t\t\t\tIf a vector file is supplied, will use each region found therein.
+\t\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
+  -E, --increment\t\tBlock data to INCREMENT in native units.
+\t\t\t\tWhere INCREMENT is x-inc[/y-inc]
+  -X, --extend\t\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
+\t\t\t\tpercentage to extend the processing REGION.
+\t\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
+\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
+\t\t\t\tpercent of the input REGION.
+  -J, --s_srs\t\t\tSet the SOURCE projection.
+  -P, --t_srs\t\t\tSet the TARGET projection. (REGION should be in target projection) 
+  -D, --cache-dir\t\tCACHE Directory for storing temp and output data.
+  -Z, --z-precision\t\tSet the target precision of dumped z values. (default is 4)
+  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
+  -T, --stack_filter\t\tFILTER the data stack using one or multiple filters. 
+\t\t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
+\t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
+\t\t\t\tAvailable FILTERS: {grits_modules}
+  -F, --point_filter\t\tFILTER the POINT data using one or multiple filters. 
+\t\t\t\tWhere FILTER is fltr_name[:opts] 
+\t\t\t\tThe -F switch may be set multiple times to perform multiple filters.
+\t\t\t\tAvailable FILTERS: {point_filter_modules}
+  -V, --archive\t\t\tArchive the DATALIST to the given REGION[/INCREMENTs].
+\t\t\t\tSpecify the name of the archive, if not specified an auto-generated name will be used.
 
-  --mask\t\tMASK the datalist to the given REGION/INCREMENTs
-  --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
-  --glob\t\tGLOB the datasets in the current directory to stdout
-  --info\t\tGenerate and return an INFO dictionary of the dataset
-  --weights\t\tOutput WEIGHT values along with xyz
-  --uncertainties\tOutput UNCERTAINTY values along with xyz
-  --stack-node\t\tOutput stacked x/y data rather than pixel
-  --quiet\t\tLower the verbosity to a quiet
+  -m, --mask\t\t\tMASK the datalist to the given REGION/INCREMENTs
+  -s, --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
+  -g, --glob\t\t\tGLOB the datasets in the current directory to stdout
+  -i, --info\t\t\tGenerate and return an INFO dictionary of the dataset
+  -l, --list\t\t\tList the assocated datasets from the datalist
+  -w, --weights\t\t\tOutput WEIGHT values along with xyz
+  -u, --uncertainties\t\tOutput UNCERTAINTY values along with xyz
+  -n, --stack-node\t\tOutput stacked x/y data rather than pixel
+  -q, --quiet\t\t\tLower the verbosity to a quiet
 
-  --modules\t\tDisplay the datatype descriptions and usage
-  --help\t\tPrint the usage text
-  --version\t\tPrint the version information
+  --modules\t\t\tDisplay the datatype descriptions and usage
+  --help\t\t\tPrint the usage text
+  --version\t\t\tPrint the version information
 
 Supported datalist formats (see {cmd} --modules <dataset-key> for more info): 
   {dl_formats}

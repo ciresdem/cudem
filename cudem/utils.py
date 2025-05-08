@@ -831,7 +831,7 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
             
     return(src_procs)
 
-def p_f_unzip(src_file, fns = None, outdir = './', verbose = True):
+def p_f_unzip(src_file, fns = None, outdir = './', tmp_fn = False, verbose = True):
     """unzip/gunzip src_file based on `fn`
     
     Args:
@@ -849,10 +849,17 @@ def p_f_unzip(src_file, fns = None, outdir = './', verbose = True):
             for fn in fns:
                 for zf in zfs:
                     if fn in os.path.basename(zf):
-                        src_procs.append(os.path.join(outdir, os.path.basename(zf)))
+                        #src_procs.append(os.path.join(outdir, os.path.basename(zf)))
+                        out_fn = os.path.join(outdir, os.path.basename(zf))
                         if not zf.endswith('/'):
-                            with open(os.path.join(outdir, os.path.basename(zf)), 'wb') as f:
+                            if tmp_fn:
+                                out_fn = make_temp_fn(zf, temp_dir = outdir)
+                                
+                            with open(out_fn, 'wb') as f:
                                 f.write(z.read(zf))
+                                
+                        src_procs.append(out_fn)
+
     elif src_file.split('.')[-1] == 'gz':
         try:
             tmp_proc = gunzip(src_file)

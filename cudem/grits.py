@@ -62,7 +62,7 @@ class Grits:
     ):
         self.src_dem = src_dem
         self.dst_dem = dst_dem
-        self.band = band
+        self.band = utils.int_or(band, 1)
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
         self.min_weight = utils.float_or(min_weight)
@@ -77,9 +77,9 @@ class Grits:
 
         if self.dst_dem is None:
             if self.src_dem is not None:
-                self.dst_dem = '{}_filtered.{}'.format(
+                self.dst_dem = utils.make_temp_fn('{}_filtered.{}'.format(
                     utils.fn_basename2(self.src_dem), utils.fn_ext(self.src_dem)
-                )
+                ), self.cache_dir)
             else:
                 self.dst_dem = 'grits_filtered.tif'
         
@@ -1363,7 +1363,9 @@ def grits_cli(argv = sys.argv):
         sys.exit(-1)
 
     if dst_dem is None:
-        dst_dem = '{}_filtered.{}'.format(utils.fn_basename2(src_dem), utils.fn_ext(src_dem))
+        dst_dem = utils.make_temp_fn('{}_filtered.{}'.format(
+            utils.fn_basename2(src_dem), utils.fn_ext(src_dem)
+        ))
         
     # with gdalfun.gdal_datasource(
     #         src_dem, update=False
