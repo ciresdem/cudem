@@ -875,7 +875,7 @@ class LSPOutliers(Grits):
         except:
             return(np.nan, np.nan, np.nan)
     
-    def apply_mask(self, perc=75):
+    def apply_mask(self, perc=75, src_ds=None):
         """apply the generated outlier mask to the source DEM data.
 
         This will calculate the outliers in the outlier mask and remove the corresponding data
@@ -950,9 +950,22 @@ class LSPOutliers(Grits):
             src_data[np.isnan(src_data)] = self.ds_config['ndv']
         else:
             src_data[outlier_mask] = self.ds_config['ndv']
+
+            # for b in range(1, src_ds.RasterCount+1):
+            #     this_band = src_ds.GetRasterBand(b)
+            #     this_arr = this_band.ReadAsArray()
+            #     m_band.WriteArray(this_arr)
+
             
         self.ds_band.WriteArray(src_data)
         self.ds_band.FlushCache()
+        
+        # for b in range(1, src_ds.RasterCount+1):
+        #     this_band = src_ds.GetRasterBand(b)
+        #     this_arr = this_band.ReadAsArray()
+        #     this_arr[outlier_mask] = self.ds_config['ndv']
+        #     this_band.WriteArray(this_arr)
+        
         if self.verbose:
             utils.echo_msg_bold('removed {} outliers @ <{}:{}>{}:{}.'.format(
                 np.count_nonzero(outlier_mask), perc, self.k, mask_upper_limit, count_upper_limit
@@ -1090,7 +1103,7 @@ class LSPOutliers(Grits):
                     self.mask_mask_ds = None
                     
             if self.accumulate:
-                outliers = self.apply_mask(self.percentile)
+                outliers = self.apply_mask(self.percentile, src_ds)
                 self.mask_mask_ds = None
                 
             unc_ds = src_ds = None

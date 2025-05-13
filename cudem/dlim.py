@@ -1392,7 +1392,7 @@ class ElevationDataset:
                 try:
                     self.set_transform()
                 except Exception as e:
-                    utils.echo_error_msg('could not set transformation, {}'.format(e))
+                    utils.echo_error_msg('could not set transformation on {}, {}'.format(self.fn, e))
 
             self.set_yield()
 
@@ -4123,7 +4123,14 @@ class GDALFile(ElevationDataset):
             inf_trans_region.src_srs = self.src_srs
 
             if self.dst_srs is not None:
-                inf_trans_region.warp(self.dst_srs)
+                try:
+                    inf_trans_region.warp(self.dst_srs)
+                except Exception as e:
+                    utils.echo_error_msg(
+                        'could not perform transformation of region {} from {} to {}, {}'.format(
+                            inf_trans_region, self.src_srs, self.dst_srs, e
+                        )
+                    )
 
             raster_is_higher_res = np.prod(
                 inf_region.geo_transform(x_inc=self.dem_infos['geoT'][1])[:2]
