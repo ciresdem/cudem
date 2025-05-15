@@ -338,7 +338,7 @@ def ogr_clip(src_ogr_fn, dst_region = None, layer = None, fmt = 'GPKG', overwrit
     #dst_files = glob.glob('{}.*'.format(dst_ogr_bn))
     return(dst_ogr_fn)
 
-def ogr_clip2(src_ogr_fn, dst_region = None, layer = None, overwrite = False):
+def ogr_clip2(src_ogr_fn, dst_region = None, layer = None, overwrite = False, verbose = True):
     """clip an ogr file to `dst_region`"""
     
     dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
@@ -649,11 +649,10 @@ def ogr2gdal_mask(
             ds_config = gdal_set_infos(xcount, ycount, xcount * ycount, dst_gt, dst_srs, gdal.GDT_Float32, 0, 'GTiff', {}, 1)
             gdal_nan(ds_config, dst_fn, nodata=0)
             clip_layer = utils.fn_basename2(os.path.basename(mask_fn))
-            mask_fn = ogr_clip(mask_fn, dst_region=region, layer=clip_layer, verbose=verbose)
+            #mask_fn = ogr_clip2(mask_fn, dst_region=region, layer=clip_layer, verbose=verbose)
             
             gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
                 .format(1, clip_layer, mask_fn, dst_fn, ' -i' if invert else '')
-            #utils.echo_msg(gr_cmd)
             out, status = utils.run_cmd(gr_cmd, verbose=verbose)
             return(dst_fn)
 

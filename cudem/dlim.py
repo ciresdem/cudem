@@ -708,6 +708,8 @@ def init_data(data_list,
               stack_fltrs=None,
               stack_node=True,
               stack_mode='mean',
+              upper_limit=None,
+              lower_limit=None,
               mask=None):
     """initialize a datalist object from a list of supported dataset entries"""
 
@@ -736,6 +738,8 @@ def init_data(data_list,
             stack_fltrs=stack_fltrs,
             stack_node=stack_node,
             stack_mode=stack_mode,
+            upper_limit=None,
+            lower_limit=None,
             mask=mask
         )._acquire_module() for dl in data_list]
 
@@ -764,6 +768,8 @@ def init_data(data_list,
                 stack_fltrs=stack_fltrs,
                 stack_node=stack_node,
                 stack_mode=stack_mode,
+                upper_limit=None,
+                lower_limit=None,
                 mask=mask
             )
         elif len(xdls) > 0:
@@ -1240,6 +1246,8 @@ class ElevationDataset:
                  verbose = False,
                  remote = False,
                  dump_precision = 6,
+                 upper_limit = None,
+                 lower_limit = None,
                  params = {},
                  metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                              'data_type':None, 'resolution':None, 'hdatum':None,
@@ -1290,8 +1298,12 @@ class ElevationDataset:
             for key in self.mask_keys:
                 if key not in self.mask.keys():
                     self.mask[key] = None
-            
-        self.infos = INF(name=self.fn, file_hash='0', numpts=0, fmt=self.data_format) # infos blob            
+
+        self.upper_limit = utils.float_or(upper_limit)
+        self.lower_limit = utils.float_or(lower_limit)
+
+        self.infos = INF(name=self.fn, file_hash='0', numpts=0, fmt=self.data_format) # infos blob
+
         self.params = params # the factory parameters
         if not self.params:
             self.params['kwargs'] = self.__dict__.copy()
@@ -1325,6 +1337,8 @@ class ElevationDataset:
             'stack_fltrs': self.stack_fltrs,
             'pnt_fltrs': self.pnt_fltrs,
             'cache_dir': self.cache_dir,
+            'upper_limit': self.upper_limit,
+            'lower_limit': self.lower_limit,
             'verbose': self.verbose,
             'metadata': metadata
         }
@@ -1765,6 +1779,10 @@ class ElevationDataset:
         else:
             self.data_region = regions.Region().from_list(self.infos.minmax)
             self.data_region.src_srs = self.infos.src_srs
+        #     self.region = self.data_region.copy()
+
+        # self.region.zmax=self.upper_limit
+        # self.region.zmin=self.lower_limit
 
     ## INF file reading/writing
     def generate_inf(self):
@@ -2793,6 +2811,12 @@ class ElevationDataset:
                         if xyz_region.zmax is not None:
                             points =  points[(points['z'] < xyz_region.zmax)]
 
+                if self.upper_limit is not None:
+                    points =  points[(points['z'] < self.upper_limit)]
+                    
+                if self.lower_limit is not None:
+                    points =  points[(points['z'] > self.lower_limit)]
+                    
                 if len(points) > 0:
                     ## apply any dlim filters to the points
                     if self.pnt_fltrs is not None:
@@ -2828,7 +2852,7 @@ class ElevationDataset:
                         #dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None else None,
                         #dst_srs=self.dst_srs.split('+')[0],
                         ndv=gdalfun.gdal_get_ndv(self.mask['mask']),
-                        verbose=False,
+                        verbose=True,
                         co=["COMPRESS=DEFLATE", "TILED=YES"]
                     )[0]
                 else:
@@ -2840,13 +2864,14 @@ class ElevationDataset:
                 utils.echo_warning_msg('could not load mask {}'.format(self.mask['mask']))
 
         for out_arrays, this_srcwin, this_gt in self.yield_array():
+            #utils.echo_msg(mask_band)
             if mask_band is not None:
                 ycount, xcount = out_arrays['z'].shape
                 this_region = regions.Region().from_geo_transform(this_gt, xcount, ycount)
                 mask_data = mask_band.ReadAsArray(*this_srcwin)
                 if not np.isnan(mask_infos['ndv']):
                     mask_data[mask_data==mask_infos['ndv']] = np.nan
-                        
+
                 for arr in out_arrays.keys():
                     if out_arrays[arr] is not None:
                         if self.mask['invert_mask']:
