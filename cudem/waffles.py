@@ -706,46 +706,47 @@ class WafflesStacks(Waffle):
 def flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshold = 1, verbose = True):
     """Flatten nodata areas larger than `size_threshhold`"""
 
-    def expand_for(arr, shiftx=1, shifty=1):
-        arr_b = arr.copy().astype(bool)
-        for i in range(arr.shape[0]):
-            for j in range(arr.shape[1]):
-                if(arr[i,j]):
-                    i_min, i_max = max(i-shifty, 0), min(i+shifty+1, arr.shape[0])
-                    j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
-                    arr_b[i_min:i_max, j_min:j_max] = True
-        return arr_b
+    # def expand_for(arr, shiftx=1, shifty=1):
+    #     arr_b = arr.copy().astype(bool)
+    #     for i in range(arr.shape[0]):
+    #         for j in range(arr.shape[1]):
+    #             if(arr[i,j]):
+    #                 i_min, i_max = max(i-shifty, 0), min(i+shifty+1, arr.shape[0])
+    #                 j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
+    #                 arr_b[i_min:i_max, j_min:j_max] = True
+    #     return arr_b
     
     ## load src_dem array
     with gdalfun.gdal_datasource(src_dem, update=True if dst_dem is None else False) as src_ds:
         src_arr = src_ds.GetRasterBand(band).ReadAsArray()
         src_config = gdalfun.gdal_infos(src_ds)
-        src_arr[src_arr == src_config['ndv']] = np.nan
+        src_arr = gdalfun.flatten_no_data_zones(src_arr, src_config, size_threshold=size_threshold, verbose=verbose)
+        # src_arr[src_arr == src_config['ndv']] = np.nan
 
-        ## generate the mask array
-        msk_arr = np.zeros((src_config['ny'], src_config['nx']))
-        msk_arr[np.isnan(src_arr)] = 1
+        # ## generate the mask array
+        # msk_arr = np.zeros((src_config['ny'], src_config['nx']))
+        # msk_arr[np.isnan(src_arr)] = 1
         
-        ## group adjacent non-zero cells
-        l, n = scipy.ndimage.label(msk_arr)
+        # ## group adjacent non-zero cells
+        # l, n = scipy.ndimage.label(msk_arr)
         
-        ## get the total number of cells in each group
-        mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
-        #[src_arr[l==i] = np.nanpercentile(src_arr[expand_for(l==i)], 5) if mn[i] >= size_threshold for i in range(0, n)]
+        # ## get the total number of cells in each group
+        # mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
+        # #[src_arr[l==i] = np.nanpercentile(src_arr[expand_for(l==i)], 5) if mn[i] >= size_threshold for i in range(0, n)]
         
-        for i in trange(0,
-                        n,
-                        desc='{}: flattening data voids greater than {} cells'.format(
-                            os.path.basename(sys.argv[0]), size_threshold
-                        ),
-                        leave=verbose):
-            if mn[i] >= size_threshold:
-                i += 1
-                ll = expand_for(l==i)
-                flat_value = np.nanpercentile(src_arr[ll], 5)
-                src_arr[l==i] = flat_value
+        # for i in trange(0,
+        #                 n,
+        #                 desc='{}: flattening data voids greater than {} cells'.format(
+        #                     os.path.basename(sys.argv[0]), size_threshold
+        #                 ),
+        #                 leave=verbose):
+        #     if mn[i] >= size_threshold:
+        #         i += 1
+        #         ll = expand_for(l==i)
+        #         flat_value = np.nanpercentile(src_arr[ll], 5)
+        #         src_arr[l==i] = flat_value
 
-        src_arr[np.isnan(src_arr)] = src_config['ndv']
+        # src_arr[np.isnan(src_arr)] = src_config['ndv']
         
         if dst_dem is None:
             src_ds.GetRasterBand(band).WriteArray(src_arr)
@@ -2638,7 +2639,7 @@ class WafflesLakes(Waffle):
         fr.join()
 
         lakes_shp = None
-        lakes_zip = os.path.join(this_lakes._outdir, this_lakes.results[0][1])
+        lakes_zip = os.path.join(this_lakes._outdir, this_lakes.results[0]['dst_fn'])
         lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
         for i in lakes_shps:
             if i.split('.')[-1] == 'shp':
@@ -2693,7 +2694,7 @@ class WafflesLakes(Waffle):
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
         
-        gmrt_tif = os.path.join(this_gmrt._outdir, this_gmrt.results[1])
+        gmrt_tif = os.path.join(this_gmrt._outdir, this_gmrt.results[0]['dst_fn'])
         gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt', co=self.co)
         gdal.Warp(gmrt_ds, gmrt_tif, dstSRS=dst_srs, resampleAlg=self.sample)
         return(gmrt_ds)
@@ -2718,7 +2719,7 @@ class WafflesLakes(Waffle):
         dst_srs.SetFromUserInput(self.dst_srs)
         
         cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus', co=self.co)
-        [gdal.Warp(cop_ds, os.path.join(this_cop._outdir, cop_result[1]), dstSRS=dst_srs, resampleAlg=self.sample) for cop_result in this_cop.results]
+        [gdal.Warp(cop_ds, os.path.join(this_cop._outdir, cop_result['dst_fn']), dstSRS=dst_srs, resampleAlg=self.sample) for cop_result in this_cop.results]
         
         return(cop_ds)
     
@@ -2835,32 +2836,33 @@ class WafflesLakes(Waffle):
                 lk_regions = regions.regions_merge(lk_regions, this_region)
 
         while not regions.regions_within_ogr_p(self.p_region, lk_regions):
-            utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...')
+            utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...{}'.format(self.p_region))
             self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
-
-        ## fetch and initialize the copernicus data
+            
+        ## fetch and initialize the shoreline data
+        cop_band = None
+        cop_arr = None
         if self.elevations == 'copernicus':
             cop_ds = self._fetch_copernicus(cop_region=self.p_region)
             cop_band = cop_ds.GetRasterBand(1)
         elif self.elevations == 'gmrt':
             cop_ds = self._fetch_gmrt(gmrt_region=self.p_region)
             cop_band = cop_ds.GetRasterBand(1)
-        elif utils.float_or(self.elevations) is not None:
+        elif utils.float_or(self.elevations) is not None: # single value
             cop_band = None
             cop_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
             cop_arr[:] = self.elevations
-        elif self.elevations == 'self':
-            elev_ds = self.stacked_rasters['z']
-            if elev_ds is not None:
-                dst_srs = osr.SpatialReference()
-                dst_srs.SetFromUserInput(self.dst_srs)
-                cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='cop', co=self.co)
-                gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
-                cop_band = cop_ds.GetRasterBand(1)
-            else:
-                cop_band = None
-                cop_arr = None
-        elif os.path.exists(self.elevations):
+        elif self.elevations == 'self': # from stacks, interpolated
+            cop_band = None
+            tmp_arr = gdalfun.gdal_get_array(self.stack, band=1)[0]
+            cop_arr = gdalfun.generate_mem_ds(
+                self.ds_config,
+                band_data=tmp_arr,
+                srcwin=None,
+                return_array=True,
+                interpolation='flats'
+            )
+        elif os.path.exists(self.elevations): # from input raster
             elev_ds = gdal.Open(self.elevations)
             if elev_ds is not None:
                 dst_srs = osr.SpatialReference()
@@ -2868,12 +2870,6 @@ class WafflesLakes(Waffle):
                 cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='cop', co=self.co)
                 gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
                 cop_band = cop_ds.GetRasterBand(1)
-            else:
-                cop_band = None
-                cop_arr = None
-        else:
-            cop_band = None
-            cop_arr = None
 
         ## initialize the tmp datasources
         prox_ds = gdalfun.gdal_mem_ds(self.ds_config, name='prox', co=self.co)
@@ -2941,8 +2937,10 @@ class WafflesLakes(Waffle):
             msk_arr,
             shore_arr=cop_arr,
         )
-
-        bathy_arr[bathy_arr == 0] = self.ndv        
+        #if self.apply_elevations:
+        #    bathy_arr *= -1
+            
+        bathy_arr[bathy_arr == 0] = self.ndv            
         gdalfun.gdal_write(
             bathy_arr, '{}.tif'.format(self.name), self.ds_config,
         )            

@@ -38,6 +38,7 @@ from osgeo import ogr
 from pyproj import CRS
 
 import numpy as np
+import scipy
 
 from cudem import utils
 from cudem import regions
@@ -960,6 +961,99 @@ def gdal_has_ndv(src_gdal, band = 1):
                 return(True)
             
         return(False)
+
+def flatten_no_data_zones(src_arr, src_config, size_threshold = 1, verbose = True):
+    """Flatten nodata areas larger than `size_threshhold`"""
+
+    def expand_for(arr, shiftx=1, shifty=1):
+        arr_b = arr.copy().astype(bool)
+        for i in range(arr.shape[0]):
+            for j in range(arr.shape[1]):
+                if(arr[i,j]):
+                    i_min, i_max = max(i-shifty, 0), min(i+shifty+1, arr.shape[0])
+                    j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
+                    arr_b[i_min:i_max, j_min:j_max] = True
+        return arr_b
+    
+    src_arr[src_arr == src_config['ndv']] = np.nan
+    
+    ## generate the mask array
+    msk_arr = np.zeros((src_config['ny'], src_config['nx']))
+    msk_arr[np.isnan(src_arr)] = 1
+
+    ## group adjacent non-zero cells
+    l, n = scipy.ndimage.label(msk_arr)
+
+    ## get the total number of cells in each group
+    mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
+    #[src_arr[l==i] = np.nanpercentile(src_arr[expand_for(l==i)], 5) if mn[i] >= size_threshold for i in range(0, n)]
+    for i in trange(
+            0, n,
+            desc='{}: flattening data voids greater than {} cells'.format(
+                os.path.basename(sys.argv[0]), size_threshold
+            ),
+            leave=verbose
+    ):
+        if mn[i] >= size_threshold:
+            i += 1
+            ll = expand_for(l==i)
+            flat_value = np.nanpercentile(src_arr[ll], 5)
+            src_arr[l==i] = flat_value
+
+    src_arr[np.isnan(src_arr)] = src_config['ndv']
+
+    return(src_arr)
+
+def generate_mem_ds(ds_config, band_data = None, srcwin = None, return_array = False, interpolation = 'nearest'):
+    tmp_band_data = band_data
+    tmp_band_data[tmp_band_data == ds_config['ndv']] = np.nan
+    gt = ds_config['geoT']
+    if srcwin is None:
+        srcwin = (0,0,ds_config['nx'],ds_config['ny'])
+        
+    if np.all(np.isnan(tmp_band_data)):
+        return(None)
+
+    ## interpolate the srcwin for neighborhood calculations
+    if interpolation is not None and interpolation in ['nearest', 'linear', 'cubic', 'flats']:
+        if np.any(np.isnan(band_data)):
+            if interpolation == 'flats':
+                tmp_band_data = flatten_no_data_zones(
+                    tmp_band_data, ds_config, size_threshold=1, verbose=True
+                )
+            else:
+                point_indices = np.nonzero(~np.isnan(tmp_band_data))
+                if len(point_indices[0]):
+                    point_values = tmp_band_data[point_indices]
+                    xi, yi = np.mgrid[0:srcwin[3], 0:srcwin[2]]
+
+                    try:
+                        tmp_band_data = scipy.interpolate.griddata(
+                            np.transpose(point_indices), point_values,
+                            (xi, yi), method=interpolation
+                        )
+                    except:
+                        pass
+
+                    point_values = xi = yi = None
+                point_indices = None
+
+    if return_array:
+        return(tmp_band_data)
+    else:
+        ## generate a mem datasource to feed into gdal.DEMProcessing
+        dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+        srcwin_config = gdalfun.gdal_set_infos(srcwin[2], srcwin[3], srcwin[2]*srcwin[3], dst_gt, ds_config['proj'],
+                                                ds_config['dt'], ds_config['ndv'], 'GTiff', {}, 1)
+        srcwin_ds = gdal_mem_ds(srcwin_config, name='MEM', bands=1, src_srs=None)
+        srcwin_band = srcwin_ds.GetRasterBand(1)
+        srcwin_band.SetNoDataValue(ds_config['ndv'])
+        tmp_band_data[np.isnan(tmp_band_data)] = ds_config['ndv']
+        srcwin_band.WriteArray(tmp_band_data)
+        srcwin_ds.FlushCache()
+        tmp_band_data = None
+
+        return(srcwin_ds)
     
 def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None, co = ['COMPRESS=DEFLATE', 'TILED=YES']):
     """Create temporary gdal mem dataset"""

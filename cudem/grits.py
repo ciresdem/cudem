@@ -938,7 +938,8 @@ class LSPOutliers(Grits):
                 srcwin_outliers = outlier_mask[srcwin[1]:srcwin[1]+srcwin[3],
                                                srcwin[0]:srcwin[0]+srcwin[2]]
 
-                interp_data = self.generate_mem_ds(band_data=srcwin_src_data, srcwin=srcwin, return_array=True)
+                #interp_data = self.generate_mem_ds(band_data=srcwin_src_data, srcwin=srcwin, return_array=True)
+                interp_data = gdalfun.generate_mem_ds(self.ds_config, band_data=srcwin_src_data, srcwin=srcwin, return_array=True)
                 srcwin_src_data[srcwin_outliers] = interp_data[srcwin_outliers]
 
                 src_data[srcwin[1]:srcwin[1]+srcwin[3],
@@ -1031,7 +1032,8 @@ class LSPOutliers(Grits):
                     mask_count_data = self.mask_count_band.ReadAsArray(*srcwin) # read in the count data
                         
                     ## generate a mem datasource to feed into gdal.DEMProcessing
-                    srcwin_ds = self.generate_mem_ds(band_data=band_data, srcwin=srcwin) # possibly interpolated
+                    #srcwin_ds = self.generate_mem_ds(band_data=band_data, srcwin=srcwin) # possibly interpolated
+                    srcwin_ds = gdalfun.generate_mem_ds(self.ds_config, band_data=band_data, srcwin=srcwin, return_array=False)
                     if srcwin_ds is None:
                         band_data = None
                         continue
