@@ -4167,6 +4167,71 @@ class NCEIThreddsCatalog(FetchModule):
                             d, d.split('/')[-1], surv['DataType']
                         )
 
+class TheNationalMap2(FetchModule):
+    def __init__(self, datasets = None, formats = None, extents = None, q = None, **kwargs):
+        super().__init__(name='tnm', **kwargs)
+        self.q = q
+        self.f = formats
+        self.e = extents
+        self.datasets = datasets
+        
+        self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
+        self._tnm_api_products_url = 'http://tnmaccess.nationalmap.gov/api/v1/products?'
+        
+        ## The relevant TNM datasets
+        self._elev_ds = [
+            'National Elevation Dataset (NED) 1 arc-second',
+            'Digital Elevation Model (DEM) 1 meter',
+            'National Elevation Dataset (NED) 1/3 arc-second',
+            'National Elevation Dataset (NED) 1/9 arc-second',
+            'National Elevation Dataset (NED) Alaska 2 arc-second',
+            'Alaska IFSAR 5 meter DEM',
+            'Original Product Resolution (OPR) Digital Elevation Model (DEM)',
+            'Ifsar Digital Surface Model (DSM)',
+            'Ifsar Orthorectified Radar Image (ORI)',
+            'Lidar Point Cloud (LPC)',
+            'National Hydrography Dataset Plus High Resolution (NHDPlus HR)',
+            'National Hydrography Dataset (NHD) Best Resolution',
+            'National Watershed Boundary Dataset (WBD)',
+            'USDA National Agriculture Imagery Program (NAIP)',
+            'Topobathymetric Lidar DEM',
+            'Topobathymetric Lidar Point Cloud',
+            '3D Hydrography Program (3DHP)',
+        ]
+
+    def run(self):
+        offset = 0
+        total = 0
+        while True:
+            _data = {
+                'bbox': self.region.format('bbox'),
+                'max': 100,
+                'offset': offset
+            }
+
+            if self.datasets is None:
+                _data['datasets'] =  ','.join(self._elev_ds),
+            else:
+                if len(self.datasets.split('/')) > 1:
+                    self.data
+                _data['datasets'] =  ','.join(self.datasets)
+                
+            if self.q is not None: _data['q'] = str(self.q)
+            if self.f is not None: _data['prodFormats'] = ','.join(self.f)
+            if self.e is not None: _data['prodExtents'] = ','.join(self.e)            
+            _req = Fetch(self._tnm_api_products_url, verbose=self.verbose).fetch_req(params=_data)
+            if _req is not None:
+                features = _req.json()
+                total = features['total']
+                for feature in features['items']:
+                    #utils.echo_msg(feature.keys())
+                    utils.echo_msg(feature['downloadURL'])
+                    #break
+
+            offset += 100
+            if offset >= total:
+                break                
+        
 ## The National Map
 ## update is broken! fix this.
 class TheNationalMap(FetchModule):
@@ -4292,8 +4357,8 @@ class TheNationalMap(FetchModule):
                     Resolution = ','.join(ds['extents']),
                     DataType = datatype,
                     DataSource = 'tnm',
-                    HorizontalDatum = h_epsg,
-                    VerticalDatum = v_epsg,
+                    HorizontalDatum = None,#h_epsg,
+                    VerticalDatum = None,#v_epsg,
                     Etcetra = fmt,
                     Info = ds['refreshCycle'],
                     geom = geom
@@ -4325,17 +4390,58 @@ class TheNationalMap(FetchModule):
                 tags = ds['tags']
                 if len(tags) > 0:
                     for tag in tags:
-                        utils.echo_msg(tag)
-                        this_xml = iso_xml('{}?format=iso'.format(tag['infoUrl']))
-                        geom = this_xml.bounds(geom=True)
-                        h_epsg, v_epsg = this_xml.reference_system()
-                        self._update_dataset(tag, fmt, geom, h_epsg, v_epsg)
+                        #utils.echo_msg(tag)
+                        #this_xml = iso_xml('{}?format=iso'.format(tag['infoUrl']))
+                        info_url = tag['infoUrl']
+                        if info_url == '':
+                            continue
+                        #    info_url = tag['dataGovUrl']
+                        
+                        #utils.echo_msg(info_url)
+                        _req = Fetch(info_url+'?format=json').fetch_req()
+                        if _req is not None and _req.status_code == 200:
+                            try:
+                                _results = _req.json()
+                                utils.echo_msg(_results.keys())
+                                bbox = _results['spatial']['boundingBox']
+                                geom =  regions.Region().from_list(
+                                    [float(bbox['minX']), float(bbox['maxX']),
+                                     float(bbox['minY']), float(bbox['maxY'])]
+                                ).export_as_geom()
+                                h_epsg = None
+                                v_epsg = None
+                                #print(_results)
+                                #this_xml = iso_xml('{}?format=atom'.format(info_url))
+                                #geom = this_xml.bounds(geom=True)
+                                #h_epsg, v_epsg = this_xml.reference_system()                                
+                                self._update_dataset(tag, fmt, geom, h_epsg, v_epsg)
+                            except:
+                                utils.echo_warning_msg(tag)
                 else:
-                    this_xml = iso_xml('{}?format=iso'.format(ds['infoUrl']))
-                    geom = this_xml.bounds(geom = True)
-                    h_epsg, v_epsg = this_xml.reference_system()
-                    self._update_dataset(ds, fmt, geom, h_epsg, v_epsg)
-                    
+                    info_url = ds['infoUrl']
+                    if info_url == '':
+                        continue
+                    #if info_url == '':
+                    #    info_url = ds['dataGovUrl']
+
+                    _req = Fetch(info_url+'?format=json').fetch_req()
+                    if _req is not None and _req.status_code == 200:
+                        try:
+                            _results = _req.json()
+                            bbox = _results['spatial']['boundingBox']
+                            geom =  regions.Region().from_list(
+                                [float(bbox['minX']), float(bbox['maxX']),
+                                 float(bbox['minY']), float(bbox['maxY'])]
+                            ).export_as_geom()
+                            h_epsg = None
+                            v_epsg = None
+                            #this_xml = iso_xml('{}?format=iso'.format(ds['infoUrl']))
+                            #this_xml = iso_xml('{}?format=atom'.format(info_url))
+                            #geom = this_xml.bounds(geom = True)
+                            #h_epsg, v_epsg = this_xml.reference_system()
+                            self._update_dataset(ds, fmt, geom, h_epsg, v_epsg)
+                        except:
+                            utils.echo_warning_msg(tag)
         self.FRED._close_ds()
 
     def run(self):#, f = None, e = None, q = None):

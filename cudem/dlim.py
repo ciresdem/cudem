@@ -1103,7 +1103,7 @@ class INF:
 
         return(self.file_hash)
 
-    def generate_mini_grid(self):
+    def generate_mini_grid(self, x_size = 10, y_size = 10):
         """generate a 'mini-grid' of the data in about a 10x10 grid.
         this will help us determine the location of data before processing.
         """
@@ -6206,13 +6206,15 @@ class Datalist(ElevationDataset):
         self.dst_vector = self.dst_layer + '.json'
 
         utils.remove_glob('{}.json'.format(self.dst_layer))
-        if self.src_srs is not None:
-            gdalfun.osr_prj_file('{}.prj'.format(self.dst_layer), self.src_srs)
+        #if self.src_srs is not None:
+        #    gdalfun.osr_prj_file('{}.prj'.format(self.dst_layer), self.src_srs)
             
         self.ds = ogr.GetDriverByName('GeoJSON').CreateDataSource(self.dst_vector)
+        #srs = srsfun.osr_srs(self.src_srs)
+        
         if self.ds is not None: 
             self.layer = self.ds.CreateLayer(
-                '{}'.format(self.dst_layer), None, ogr.wkbMultiPolygon
+                '{}'.format(self.dst_layer), self.src_srs, ogr.wkbMultiPolygon
             )
             [self.layer.CreateField(
                 ogr.FieldDefn('{}'.format(f), ogr.OFTString)
