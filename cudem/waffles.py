@@ -203,7 +203,8 @@ class Waffle:
             self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
-
+        utils.echo_msg('output config: {}'.format(self.ds_config))
+        
         self.status = self._init()
         return(self)            
 
