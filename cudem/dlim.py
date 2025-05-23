@@ -6210,11 +6210,11 @@ class Datalist(ElevationDataset):
         #    gdalfun.osr_prj_file('{}.prj'.format(self.dst_layer), self.src_srs)
             
         self.ds = ogr.GetDriverByName('GeoJSON').CreateDataSource(self.dst_vector)
-        #srs = srsfun.osr_srs(self.src_srs)
+        srs = srsfun.osr_srs(self.src_srs)
         
         if self.ds is not None: 
             self.layer = self.ds.CreateLayer(
-                '{}'.format(self.dst_layer), self.src_srs, ogr.wkbMultiPolygon
+                '{}'.format(self.dst_layer), srs, ogr.wkbMultiPolygon
             )
             [self.layer.CreateField(
                 ogr.FieldDefn('{}'.format(f), ogr.OFTString)
