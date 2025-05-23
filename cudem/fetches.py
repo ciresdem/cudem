@@ -4167,38 +4167,109 @@ class NCEIThreddsCatalog(FetchModule):
                             d, d.split('/')[-1], surv['DataType']
                         )
 
-class TheNationalMap2(FetchModule):
-    def __init__(self, datasets = None, formats = None, extents = None, q = None, **kwargs):
+class TheNationalMap(FetchModule):
+    """The National Map:
+
+    Fetch elevation data from The National Map
+        
+    Various datasets from USGS's National Map. The National Map is a 
+    collaborative effort among the USGS and other Federal, State, and local partners to improve
+    and deliver topographic information for the Nation.
+    
+    http://tnmaccess.nationalmap.gov/
+
+    < tnm:datasets=None:formats=None:extents=None:q=None:date_type=None:date_start=None:date_end=None >
+    """
+   
+    dataset_codes = [
+        "National Boundary Dataset (NBD)",
+        "National Elevation Dataset (NED) 1 arc-second",
+        "Digital Elevation Model (DEM) 1 meter",
+        "National Elevation Dataset (NED) 1/3 arc-second",
+        "National Elevation Dataset (NED) 1/9 arc-second",
+        "National Elevation Dataset (NED) Alaska 2 arc-second",
+        "Alaska IFSAR 5 meter DEM",
+        "National Elevation Dataset (NED) 1/3 arc-second - Contours",
+        "Original Product Resolution (OPR) Digital Elevation Model (DEM)",
+        "Ifsar Digital Surface Model (DSM)",
+        "Ifsar Orthorectified Radar Image (ORI)",
+        "Lidar Point Cloud (LPC)",
+        "Historical Topographic Maps",
+        "National Hydrography Dataset Plus High Resolution (NHDPlus HR)",
+        "National Hydrography Dataset (NHD) Best Resolution",
+        "National Watershed Boundary Dataset (WBD)",
+        "Map Indices",
+        "National Geographic Names Information System (GNIS)",
+        "Small-scale Datasets - Boundaries",
+        "Small-scale Datasets - Contours",
+        "Small-scale Datasets - Hydrography",
+        "Small-scale Datasets - Transportation",
+        "National Structures Dataset (NSD)",
+        "Combined Vector",
+        "National Transportation Dataset (NTD)",
+        "US Topo Current",
+        "US Topo Historical",
+        "Land Cover - Woodland",
+        "3D Hydrography Program (3DHP)",
+    ]
+
+    format_keywords = [
+        "ArcExport", "ArcGrid", "BIL", "FileGDB", "FileGDB 10.1", "FileGDB 10.2",
+        "GeoPDF", "GeoTIFF", "GridFlow", "IMG", "JPEG2000", "LAS,LAZ", "NLAPS",
+        "PDF", "SDE Export", "Shapefile", "Text", "TIFF", "TXT (pipes)",
+    ]
+
+    dataset_keywords = [
+        "7.5", "Airports", "Bend", "Bridge", "Building", "Canal", "Cape", "Cave",
+        "Cemetery", "Census", "Channel", "Chamber", "Church", "Civil", "Cliff",
+        "Coast", "Coastline", "Conduit", "Contour", "Crossing", "Dam", "Dams",
+        "Ditch", "Elevation", "Falls", "Flat", "Flume", "Forest", "Gaging", "Gaging Station",
+        "Gap", "Gate", "Glacier", "Gut", "HUC", "Harbor", "Hospital", "Hydrography",
+        "Hydrologic", "Images", "Intake", "Island", "Isthmus", "Lake", "Lakes", "Lava",
+        "Levee", "Lidar", "Lock", "Map", "Maps", "Military", "Mine", "Oilfield", "Outflow",
+        "Park", "Pillar", "Pipeline", "Plain", "Populated Place", "Post Office", "Range",
+        "Rapids", "Reef", "Reserve", "Reservoir", "Ridge", "Rise", "River", "Rock",
+        "School", "Sea", "Seep", "Shore", "Sink", "Slope", "Spring", "Stream", "Summit",
+        "Swamp", "Tower", "Trail", "Tunnel", "Valley", "Water", "Waterfall", "Watershed",
+        "Weir", "Well", "Woods",
+    ]
+
+    dataset_extents = [
+        "10000 x 10000 meter", "1500 x 1500 meter", "15 x 15 minute", "1 x 1 degree",
+        "1 x 2 degree", "1 x 3 degree", "1 x 4 degree", "2 x 1 degree", "30 x 30 minute",
+        "30 x 60 minute", "3.75 minute x 3.75 minute", "3 x 3 degree", "7.5 x 15 minute",
+        "7.5 x 7.5 minute", "Contiguous US", "HU-2 Region", "HU-4 Subregion", "HU-8 Subbasin",
+        "National", "North America", "State", "Varies",
+    ]
+
+    date_types = ["dateCreated", "lastUpdated", "Publication"]
+
+    __doc__ = '''{}\n dataset codes (datasets): \n{}\
+    \n\n format keywords (formats): \n{}\
+    \n\n dataset keywords (q): \n{}\
+    \n\n dataset extents (extents): \n{}\
+    \n\n date types (date_types): \n{}'''.format(
+        __doc__,
+        '\n'.join(['{}: {}'.format(i, x) for i, x in enumerate(dataset_codes)]),
+        format_keywords, dataset_keywords, dataset_extents, date_types
+    )
+    
+    def __init__(
+            self, datasets = None, formats = None, extents = None, q = None,
+            date_type = None, date_start = None, date_end = None, **kwargs
+    ):
         super().__init__(name='tnm', **kwargs)
         self.q = q
         self.f = formats
         self.e = extents
         self.datasets = datasets
+        self.date_type = date_type
+        self.date_start = date_start
+        self.date_end = date_end
         
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
-        self._tnm_api_products_url = 'http://tnmaccess.nationalmap.gov/api/v1/products?'
+        self._tnm_api_products_url = 'http://tnmaccess.nationalmap.gov/api/v1/products?'        
         
-        ## The relevant TNM datasets
-        self._elev_ds = [
-            'National Elevation Dataset (NED) 1 arc-second',
-            'Digital Elevation Model (DEM) 1 meter',
-            'National Elevation Dataset (NED) 1/3 arc-second',
-            'National Elevation Dataset (NED) 1/9 arc-second',
-            'National Elevation Dataset (NED) Alaska 2 arc-second',
-            'Alaska IFSAR 5 meter DEM',
-            'Original Product Resolution (OPR) Digital Elevation Model (DEM)',
-            'Ifsar Digital Surface Model (DSM)',
-            'Ifsar Orthorectified Radar Image (ORI)',
-            'Lidar Point Cloud (LPC)',
-            'National Hydrography Dataset Plus High Resolution (NHDPlus HR)',
-            'National Hydrography Dataset (NHD) Best Resolution',
-            'National Watershed Boundary Dataset (WBD)',
-            'USDA National Agriculture Imagery Program (NAIP)',
-            'Topobathymetric Lidar DEM',
-            'Topobathymetric Lidar Point Cloud',
-            '3D Hydrography Program (3DHP)',
-        ]
-
     def run(self):
         offset = 0
         total = 0
@@ -4209,32 +4280,77 @@ class TheNationalMap2(FetchModule):
                 'offset': offset
             }
 
-            if self.datasets is None:
-                _data['datasets'] =  ','.join(self._elev_ds),
-            else:
-                if len(self.datasets.split('/')) > 1:
-                    self.data
-                _data['datasets'] =  ','.join(self.datasets)
+            if self.datasets is not None:
+                datasets = self.datasets.split('/')
+                try:
+                    datasets = [self.dataset_codes[i] for i in [int(x) for x in datasets]]
+                    _data['datasets'] =  ','.join(datasets)
+                except Exception as e:
+                    utils.echo_warning_msg('could not parse datasets: {}, {}'.format(datasets, e))
+                    _data['datasets'] = "National Elevation Dataset (NED) 1 arc-second"
                 
             if self.q is not None: _data['q'] = str(self.q)
-            if self.f is not None: _data['prodFormats'] = ','.join(self.f)
-            if self.e is not None: _data['prodExtents'] = ','.join(self.e)            
+            if self.f is not None: _data['prodFormats'] = ','.join(self.f.split('/'))
+            if self.e is not None: _data['prodExtents'] = ','.join(self.e.split('/'))
+            if self.date_start is not None:
+                _data['start'] = self.date_start
+
+                if self.date_end is not None:
+                    _data['end'] = self.date_end
+                else:
+                    _data['end'] = datetime.datetime.now().strftime('%Y-%m-%d')
+
+                if self.date_type is not None:
+                    _data['dateType'] = self.date_type
+                else:
+                    _data['dateType'] = 'dateCreated'
+
             _req = Fetch(self._tnm_api_products_url, verbose=self.verbose).fetch_req(params=_data)
+            #utils.echo_msg(_req.url)
             if _req is not None:
                 features = _req.json()
                 total = features['total']
                 for feature in features['items']:
-                    #utils.echo_msg(feature.keys())
-                    utils.echo_msg(feature['downloadURL'])
-                    #break
+                    self.add_entry_to_results(
+                        feature['downloadURL'],
+                        feature['downloadURL'].split('/')[-1],
+                        feature['format']
+                    )
 
             offset += 100
             if offset >= total:
                 break                
+
+## The National Map - NED (1 & 1/3) shortcut
+class NED(TheNationalMap):
+    """National Elevation Dataset (NED) via The National Map (TNM)
+
+    < NED >
+    """
+    
+    def __init__(self, **kwargs):
+        super().__init__(datasets='1/3/4/5', **kwargs)
+        self.data_format = 200
         
+## The National Map - NED (1m) shortcut
+class NED1(TheNationalMap):
+    """National Elevation Dataset (NED) (1 meter) via The National Map (TNM)
+
+    < NED1 >
+    """
+    
+    def __init__(self, **kwargs):
+        super().__init__(datasets='2', **kwargs)
+        self.data_format = 200
+
+class TNM_LAZ(TheNationalMap):
+    def __init__(self, **kwargs):
+        super().__init__(formats="LAZ", **kwargs)
+        self.data_format = 300
+            
 ## The National Map
 ## update is broken! fix this.
-class TheNationalMap(FetchModule):
+class TheNationalMapOLD(FetchModule):
     """USGS' The National Map
 
     Fetch elevation data from The National Map
@@ -4623,7 +4739,7 @@ class TheNationalMap(FetchModule):
                     )
 
 ## The National Map - NED (1 & 1/3) shortcut
-class NED(TheNationalMap):
+class NEDOLD(TheNationalMap):
     """National Elevation Dataset (NED) via The National Map (TNM)
 
     < NED >
@@ -4634,7 +4750,7 @@ class NED(TheNationalMap):
         self.data_format = 200
         
 ## The National Map - NED (1m) shortcut
-class NED1(TheNationalMap):
+class NED1OLD(TheNationalMap):
     """National Elevation Dataset (NED) (1 meter) via The National Map (TNM)
 
     < NED1 >
@@ -4644,7 +4760,7 @@ class NED1(TheNationalMap):
         super().__init__(where="NAME LIKE '%DEM%'", **kwargs)
         self.data_format = 200
 
-class TNM_LAZ(TheNationalMap):
+class TNM_LAZOLD(TheNationalMap):
     def __init__(self, **kwargs):
         super().__init__(formats="LAZ", **kwargs)
         self.data_format = 300

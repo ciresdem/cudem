@@ -2280,7 +2280,8 @@ class WafflesCoastline(Waffle):
         High resoultion data varies by location...
         """
 
-        this_tnm = self.fetch_data("tnm:where='Name LIKE %Hydro%':extents='HU-8 Subbasin,HU-4 Subregion'")        
+        #this_tnm = self.fetch_data("tnm:where='Name LIKE %Hydro%':extents='HU-8 Subbasin,HU-4 Subregion'")
+        this_tnm = self.fetch_data("tnm:datasets=13/14:extents='HU-8 Subbasin,HU-4 Subregion'")        
         if len(this_tnm.results) > 0:
             tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd', src_srs=self.wgs_srs, co=self.co)
             for i, tnm_result in enumerate(this_tnm.results):
