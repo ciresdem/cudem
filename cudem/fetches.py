@@ -3818,7 +3818,8 @@ class DAV(FetchModule):
                                     urllist_url = urllist
                                 else:
                                     urllist_url = os.path.dirname(link['link']) + '/' + urllist
-                                    
+
+                                urllist = os.path.join(self._outdir, os.path.basename(urllist))
                                 status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
                                 if not os.path.exists(urllist):
                                     continue
@@ -3828,6 +3829,8 @@ class DAV(FetchModule):
                                         if 'tileindex' in line and 'zip' in line:
                                             index_zipurl = line.strip()
                                             break
+                                        
+                                utils.remove_glob(urllist)
                                 try:
                                     status = Fetch(
                                         index_zipurl, callback=self.callback, verbose=self.verbose

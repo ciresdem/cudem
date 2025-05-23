@@ -237,12 +237,16 @@ class Grits:
 
         if verbose:
             utils.echo_msg('percentiles: {}>>{}'.format(min_percentile, max_percentile))
-            
-        perc_max = np.nanpercentile(in_array, max_percentile)
-        perc_min = np.nanpercentile(in_array, min_percentile)
-        iqr_p = (perc_max - perc_min) * k
-        upper_limit = perc_max + iqr_p
-        lower_limit = perc_min - iqr_p
+
+        if np.all(np.isnan(in_array)):
+            upper_limit = np.nan
+            lower_limit = np.nan
+        else:
+            perc_max = np.nanpercentile(in_array, max_percentile)
+            perc_min = np.nanpercentile(in_array, min_percentile)
+            iqr_p = (perc_max - perc_min) * k
+            upper_limit = perc_max + iqr_p
+            lower_limit = perc_min - iqr_p
 
         return(upper_limit, lower_limit)
 
@@ -400,8 +404,8 @@ class LSPOutliers(Grits):
                  chunk_step = None, max_chunk = None, max_step = None, k = None, max_k = None,
                  outlier_k = None, return_mask = False, elevation_weight = 1, curvature_weight = 1,
                  slope_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1, tri_weight = 1,
-                 multipass = 1, accumulate = False, interpolation = 'nearest', aggressive = True,
-                 units_are_degrees = True, size_is_step = True, mode = 'scaled', fill_removed_data=False,
+                 count_weight = 0, multipass = 1, accumulate = False, interpolation = 'nearest', aggressive = True,
+                 units_are_degrees = True, size_is_step = True, mode = 'scaled', fill_removed_data = False,
                  **kwargs):
         
         super().__init__(**kwargs)
@@ -420,6 +424,7 @@ class LSPOutliers(Grits):
         self.slope_weight = utils.float_or(slope_weight, .25)
         self.tpi_weight = utils.float_or(tpi_weight, .5)
         self.unc_weight = utils.float_or(unc_weight, 1)
+        self.count_weight = utils.float_or(count_weight, 1)
         self.rough_weight = utils.float_or(rough_weight, .25)
         self.tri_weight = utils.float_or(tri_weight, .5)
         self.k = utils.float_or(k)
@@ -441,6 +446,17 @@ class LSPOutliers(Grits):
                 self.unc_is_fn = True
             else:
                 self.uncertainty_mask = None
+                
+        if self.count_mask is not None:
+            self.cnt_is_band = False
+            self.cnt_is_fn = False
+            if utils.int_or(self.count_mask) is not None:
+                self.cnt_is_band = True
+                self.count_mask = utils.int_or(self.count_mask)
+            elif os.path.exists(self.count_mask):
+                self.cnt_is_fn = True
+            else:
+                self.count_mask = None
 
     def init_percentiles(self, src_ds = None):
         if self.percentile is None or self.k is None:
@@ -479,10 +495,10 @@ class LSPOutliers(Grits):
         if self.units_are_degrees:
             cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
 
-        #m_size = 1000
-        #mm_size = 10000
-        m_size = (src_arr.shape[0] / n_den) / 24#800#500 # 1000
-        mm_size = (src_arr.shape[1] / n_den) / 12#8000 # 10000
+        m_size = 1000
+        mm_size = 10000
+        #m_size = (src_arr.shape[0] / n_den) / 24#800#500 # 1000
+        #mm_size = (src_arr.shape[1] / n_den) / 12#8000 # 10000
         if self.chunk_size is not None:
             if self.chunk_size[-1] == 'm':
                 m_size = utils.int_or(self.chunk_size[:-1])
@@ -591,9 +607,42 @@ class LSPOutliers(Grits):
                 unc_data = unc_band.ReadAsArray()
                 unc_data[(unc_data == self.ds_config['ndv'])] = 0
                 self.mask_outliers(
-                    src_data=unc_data, mask_data=mask_mask, count_data=mask_count, percentile=self.percentile, upper_only=True, k=self.k, src_weight=self.unc_weight
+                    src_data=unc_data,
+                    mask_data=mask_mask,
+                    count_data=mask_count,
+                    percentile=self.percentile,
+                    upper_only=True,
+                    k=self.k,
+                    src_weight=self.unc_weight
                 )
                 unc_data = None
+
+        # # uncertainty ds
+        # cnt_band = None
+        # if self.count_mask is not None:
+        #     if self.cnt_is_fn:
+        #         cnt_ds = gdal.Open(self.count_mask)
+        #         cnt_band = cnt_ds.GetRasterBand(1)
+        #     elif self.cnt_is_band:
+        #         cnt_band = src_ds.GetRasterBand(self.count_mask)
+
+        #     if cnt_band is not None:
+        #         cnt_data = cnt_band.ReadAsArray()
+        #         #cnt_data[(cnt_data == self.ds_config['ndv'])] = np.nan
+        #         tmp_ds = self.generate_mem_ds(band_data=cnt_data, srcwin=None, return_array=False)
+        #         self.mask_gdal_dem_outliers(srcwin_ds=tmp_ds, band_data=cnt_data, mask_mask_data=mask_mask,
+        #                                     mask_count_data=mask_count, percentile=self.percentile,
+        #                                     upper_only=True, src_weight=self.count_weight, var='TPI', k=self.k)
+        #         # self.mask_outliers(
+        #         #     src_data=cnt_data,
+        #         #     mask_data=mask_mask,
+        #         #     count_data=mask_count,
+        #         #     percentile=self.percentile,
+        #         #     upper_only=True,
+        #         #     k=self.k,
+        #         #     src_weight=self.count_weight
+        #         # )
+        #         cnt_data = tmp_ds = None
                 
         self.mask_mask_band.SetNoDataValue(0)        
         self.mask_mask_band.WriteArray(mask_mask)
@@ -705,6 +754,10 @@ class LSPOutliers(Grits):
         if src_data is not None and mask_data is not None and count_data is not None:
             src_data[((np.isnan(src_data)) | (np.isinf(src_data)) | (src_data == self.ds_config['ndv']))] = np.nan
             upper_limit, lower_limit = self.get_outliers(src_data, percentile, k)
+            # if np.isnan(upper_limit) or np.isnan(lower_limit):
+            #upper_limit = np.nanpercentile(src_data, percentile)
+            #lower_limit = np.nanpercentile(src_data, 100-percentile)
+                
             src_size = src_data.size
                 
             if verbose:
@@ -893,13 +946,18 @@ class LSPOutliers(Grits):
         mask_count_data[np.isinf(mask_count_data)] = 0
         mask_count_data[mask_count_data == 0] = np.nan
 
+        if np.all(np.isnan(mask_mask_data)):
+            utils.echo_warning_msg('could not find any outliers')
+            return(0)
+        
         if self.mode == 'average':
             mask_mask_data = mask_mask_data / mask_count_data
             mask_mask_data[np.isnan(mask_mask_data)] = 0
             self.mask_mask_band.WriteArray(mask_mask_data)
             self.mask_mask_band.FlushCache()
             mask_mask_data[mask_mask_data == 0] = np.nan
-        
+
+        k = self.k
         perc,self.k,perc1 = self.get_pk(self.mask_mask_ds, var='elevation')
         if perc is None or np.isnan(perc):
             #perc = 75
@@ -907,9 +965,9 @@ class LSPOutliers(Grits):
 
         if perc1 is None or np.isnan(perc1) or perc1 > 100 or perc1 < 0:
             perc1 = 65
-            
+
         if self.k is None or np.isnan(self.k):
-            self.k = 1.5
+            self.k = k
             
         # if self.aggressive:
         #     perc = perc1
@@ -923,6 +981,9 @@ class LSPOutliers(Grits):
         mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=False)            
         outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
 
+        ## expand the outliers by a cell in each direction
+        #outlier_mask = utils.expand_for(outlier_mask, shiftx=1, shifty=1)
+        
         if self.fill_removed_data:
             utils.echo_msg('filling filtered data from stack')
             src_data[outlier_mask] = np.nan
@@ -1063,7 +1124,7 @@ class LSPOutliers(Grits):
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=tri_weight, var='TRI', k=k)
-                    ## apply curvature outliers
+                    ## apply curvature outliers ## tmp
                     #perc,k,p = self.get_pk(slp_ds, var='slope')
                     # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                     #                             mask_count_data=mask_count_data, percentile=perc,
@@ -1073,10 +1134,10 @@ class LSPOutliers(Grits):
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=rough_weight, var='roughness', k=k)
-                    ## apply TPI outliers
+                    ## apply TPI outliers ## tmp
                     # self.mask_gdal_dem_outliers(srcwin_ds=curv_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                     #                             mask_count_data=mask_count_data, percentile=perc,
-                    #                             upper_only=False, src_weight=tpi_weight, var='TPI', k=k)
+                    #                             upper_only=False, src_weight=curvature_weight, var='TPI', k=k)
                     # self.mask_gdal_dem_outliers(srcwin_ds=rough_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                     #                             mask_count_data=mask_count_data, percentile=perc,
                     #                             upper_only=False, src_weight=rough_weight, var='TPI', k=k)

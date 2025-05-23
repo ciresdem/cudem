@@ -168,6 +168,7 @@ class Waffle:
         self.co = co # the gdal creation options
         self.flatten_nodata_values = flatten_nodata_values # flatten any remaining nodata values
         self.output_files = {}
+        self.status = 0
         
     def __str__(self):
         return('<Waffles: {}>'.format(self.name))
@@ -202,12 +203,19 @@ class Waffle:
             self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
-            
-        return(self)
+
+        self.status = self._init()
+        return(self)            
+
+    def _init(self):
+        return(0)
     
     def __call__(self):
         self.initialize()
-        return(self.generate())
+        if self.status == 0:
+            return(self.generate())
+        else:
+            utils.echo_warning_msg('failed to initialize from sub-module')
     
     def _init_regions(self):
         """Initialize and set regions.
@@ -490,6 +498,24 @@ class Waffle:
                         self.stack = self.data._stacks(out_name=stack_bn)#, mode=self.stack_mode)#supercede=self.supercede)
                 else:
                     self.stack = self.data._stacks(out_name=stack_bn)#, mode=self.stack_mode)#supercede=self.supercede)
+
+                # tmp_tpi = utils.make_temp_fn('temp_tpi.tif')
+                # gds_cmd = 'gdaldem TPI -b 2 {} {}'.format(self.stack, tmp_tpi)
+                # utils.run_cmd(gds_cmd, verbose=True)
+                # perc = gdalfun.gdal_percentile(tmp_tpi, perc=99)
+
+                # tpi_arr = gdalfun.gdal_get_array(tmp_tpi)[0]
+                # tpi_mask = tpi_arr >= perc
+                # tpi_mask = utils.expand_for(tpi_mask, shiftx=2, shifty=2)
+                
+                # with gdalfun.gdal_datasource(self.stack, update=True) as src_ds:                    
+                #     for b in range(1, src_ds.RasterCount+1):
+                #         this_config = gdalfun.gdal_infos(src_ds)
+                #         this_band = src_ds.GetRasterBand(b)
+                #         this_arr = this_band.ReadAsArray()
+                #         #this_arr[np.isnan(tpi_arr)] = np.nan
+                #         this_arr[tpi_mask] = this_config['ndv']
+                #         this_band.WriteArray(this_arr)
                     
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
@@ -702,58 +728,6 @@ class WafflesStacks(Waffle):
             utils.echo_msg('stacked data to {}'.format(self.fn))
             
         return(self)
-
-def flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshold = 1, verbose = True):
-    """Flatten nodata areas larger than `size_threshhold`"""
-
-    # def expand_for(arr, shiftx=1, shifty=1):
-    #     arr_b = arr.copy().astype(bool)
-    #     for i in range(arr.shape[0]):
-    #         for j in range(arr.shape[1]):
-    #             if(arr[i,j]):
-    #                 i_min, i_max = max(i-shifty, 0), min(i+shifty+1, arr.shape[0])
-    #                 j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
-    #                 arr_b[i_min:i_max, j_min:j_max] = True
-    #     return arr_b
-    
-    ## load src_dem array
-    with gdalfun.gdal_datasource(src_dem, update=True if dst_dem is None else False) as src_ds:
-        src_arr = src_ds.GetRasterBand(band).ReadAsArray()
-        src_config = gdalfun.gdal_infos(src_ds)
-        src_arr = gdalfun.flatten_no_data_zones(src_arr, src_config, size_threshold=size_threshold, verbose=verbose)
-        # src_arr[src_arr == src_config['ndv']] = np.nan
-
-        # ## generate the mask array
-        # msk_arr = np.zeros((src_config['ny'], src_config['nx']))
-        # msk_arr[np.isnan(src_arr)] = 1
-        
-        # ## group adjacent non-zero cells
-        # l, n = scipy.ndimage.label(msk_arr)
-        
-        # ## get the total number of cells in each group
-        # mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
-        # #[src_arr[l==i] = np.nanpercentile(src_arr[expand_for(l==i)], 5) if mn[i] >= size_threshold for i in range(0, n)]
-        
-        # for i in trange(0,
-        #                 n,
-        #                 desc='{}: flattening data voids greater than {} cells'.format(
-        #                     os.path.basename(sys.argv[0]), size_threshold
-        #                 ),
-        #                 leave=verbose):
-        #     if mn[i] >= size_threshold:
-        #         i += 1
-        #         ll = expand_for(l==i)
-        #         flat_value = np.nanpercentile(src_arr[ll], 5)
-        #         src_arr[l==i] = flat_value
-
-        # src_arr[np.isnan(src_arr)] = src_config['ndv']
-        
-        if dst_dem is None:
-            src_ds.GetRasterBand(band).WriteArray(src_arr)
-        else:
-            gdalfun.gdal_write(src_arr, dst_dem, src_config)
-
-    return(dst_dem if dst_dem is not None else src_dem, 0)
     
 class WafflesFlatten(Waffle):
     """Stack the data into a DEM and then hydro-flatten all the void areas.
@@ -774,7 +748,7 @@ class WafflesFlatten(Waffle):
         self.size_threshold = size_threshold
         
     def run(self):
-        flatten_no_data_zones(
+        gdalfun.cudem_flatten_no_data_zones(
             self.stack, dst_dem=self.fn, band=1, size_threshold=self.size_threshold
         )
         return(self)
@@ -2625,6 +2599,9 @@ class WafflesLakes(Waffle):
         self.depth = depth
         self.elevations = elevations
         self.ds_config = None
+
+        #self.initialize()
+        #self.init_lakes()
             
     def _fetch_lakes(self):
         """fetch hydrolakes polygons"""
@@ -2779,8 +2756,8 @@ class WafflesLakes(Waffle):
         utils.echo_msg('applied shore elevations to lake depths')
         bathy_arr[np.isnan(bathy_arr)] = 0
         return(bathy_arr)    
-    
-    def run(self):
+
+    def _init(self):
         self.wgs_region = self.p_region.copy()
         if self.dst_srs is not None:
             self.wgs_region.warp('epsg:4326')            
@@ -2790,44 +2767,45 @@ class WafflesLakes(Waffle):
         #self.p_region.buffer(pct=2)
         
         lakes_shp = self._fetch_lakes()
-        lk_ds = ogr.Open(lakes_shp, 1)
-        lk_layer = lk_ds.GetLayer()
+        self.lk_ds = ogr.Open(lakes_shp, 1)
+        self.lk_layer = self.lk_ds.GetLayer()
 
         ## filter layer to region
         filter_region = self.p_region.copy()
-        lk_layer.SetSpatialFilter(filter_region.export_as_geom())
+        self.lk_layer.SetSpatialFilter(filter_region.export_as_geom())
 
         ## filter by ID
         if self.max_id is not None:
-            lk_layer.SetAttributeFilter('Hylak_id < {}'.format(self.max_id))
+            self.lk_layer.SetAttributeFilter('Hylak_id < {}'.format(self.max_id))
             
         if self.min_id is not None:
-            lk_layer.SetAttributeFilter('Hylak_id > {}'.format(self.min_id))
+            self.lk_layer.SetAttributeFilter('Hylak_id > {}'.format(self.min_id))
 
         ## filter by Area
         if self.max_area is not None:
-            lk_layer.SetAttributeFilter('Lake_area < {}'.format(self.max_area))
+            self.lk_layer.SetAttributeFilter('Lake_area < {}'.format(self.max_area))
             
         if self.min_area is not None:
-            lk_layer.SetAttributeFilter('Lake_area > {}'.format(self.min_area))
+            self.lk_layer.SetAttributeFilter('Lake_area > {}'.format(self.min_area))
             
-        lk_features = lk_layer.GetFeatureCount()
+        lk_features = self.lk_layer.GetFeatureCount()
         if lk_features == 0:
             utils.echo_error_msg('no lakes found in region')
-            return(self)
+            return(-1)
+            #return(self)
 
         ## get lake ids and globathy depths
-        lk_ids = []
-        [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
-        utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
+        self.lk_ids = []
+        [self.lk_ids.append(feat.GetField('Hylak_id')) for feat in self.lk_layer]
+        utils.echo_msg('using Lake IDS: {}'.format(self.lk_ids))
         
         lk_regions = self.p_region.copy()
         with tqdm(
-                total=len(lk_layer),
+                total=len(self.lk_layer),
                 desc='processing {} lakes'.format(lk_features),
                 leave=self.verbose
         ) as pbar:            
-            for lk_f in lk_layer:
+            for lk_f in self.lk_layer:
                 pbar.update()
                 this_region = regions.Region()
                 lk_geom = lk_f.GetGeometryRef()
@@ -2838,10 +2816,74 @@ class WafflesLakes(Waffle):
         while not regions.regions_within_ogr_p(self.p_region, lk_regions):
             utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...{}'.format(self.p_region))
             self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
+
+        return(0)
+        #return(self)
+        #return(lk_layer, lk_ids)
+        
+    def run(self):
+        # self.wgs_region = self.p_region.copy()
+        # if self.dst_srs is not None:
+        #     self.wgs_region.warp('epsg:4326')            
+        # else:
+        #     self.dst_srs = 'epsg:4326'
+        
+        # #self.p_region.buffer(pct=2)
+        
+        # lakes_shp = self._fetch_lakes()
+        # lk_ds = ogr.Open(lakes_shp, 1)
+        # lk_layer = lk_ds.GetLayer()
+
+        # ## filter layer to region
+        # filter_region = self.p_region.copy()
+        # lk_layer.SetSpatialFilter(filter_region.export_as_geom())
+
+        # ## filter by ID
+        # if self.max_id is not None:
+        #     lk_layer.SetAttributeFilter('Hylak_id < {}'.format(self.max_id))
+            
+        # if self.min_id is not None:
+        #     lk_layer.SetAttributeFilter('Hylak_id > {}'.format(self.min_id))
+
+        # ## filter by Area
+        # if self.max_area is not None:
+        #     lk_layer.SetAttributeFilter('Lake_area < {}'.format(self.max_area))
+            
+        # if self.min_area is not None:
+        #     lk_layer.SetAttributeFilter('Lake_area > {}'.format(self.min_area))
+            
+        # lk_features = lk_layer.GetFeatureCount()
+        # if lk_features == 0:
+        #     utils.echo_error_msg('no lakes found in region')
+        #     return(self)
+
+        # ## get lake ids and globathy depths
+        # lk_ids = []
+        # [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
+        # utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
+        
+        # lk_regions = self.p_region.copy()
+        # with tqdm(
+        #         total=len(lk_layer),
+        #         desc='processing {} lakes'.format(lk_features),
+        #         leave=self.verbose
+        # ) as pbar:            
+        #     for lk_f in lk_layer:
+        #         pbar.update()
+        #         this_region = regions.Region()
+        #         lk_geom = lk_f.GetGeometryRef()
+        #         lk_wkt = lk_geom.ExportToWkt()
+        #         this_region.from_list(ogr.CreateGeometryFromWkt(lk_wkt).GetEnvelope())
+        #         lk_regions = regions.regions_merge(lk_regions, this_region)
+
+        # while not regions.regions_within_ogr_p(self.p_region, lk_regions):
+        #     utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...{}'.format(self.p_region))
+        #     self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
             
         ## fetch and initialize the shoreline data
         cop_band = None
         cop_arr = None
+        ds_config = gdalfun.gdal_infos(self.stack)
         if self.elevations == 'copernicus':
             cop_ds = self._fetch_copernicus(cop_region=self.p_region)
             cop_band = cop_ds.GetRasterBand(1)
@@ -2850,13 +2892,13 @@ class WafflesLakes(Waffle):
             cop_band = cop_ds.GetRasterBand(1)
         elif utils.float_or(self.elevations) is not None: # single value
             cop_band = None
-            cop_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
+            cop_arr = np.zeros((ds_config['nx'], ds_config['ny']))
             cop_arr[:] = self.elevations
         elif self.elevations == 'self': # from stacks, interpolated
             cop_band = None
             tmp_arr = gdalfun.gdal_get_array(self.stack, band=1)[0]
             cop_arr = gdalfun.generate_mem_ds(
-                self.ds_config,
+                gdalfun.gdal_infos(self.stack),
                 band_data=tmp_arr,
                 srcwin=None,
                 return_array=True,
@@ -2867,82 +2909,85 @@ class WafflesLakes(Waffle):
             if elev_ds is not None:
                 dst_srs = osr.SpatialReference()
                 dst_srs.SetFromUserInput(self.dst_srs)
-                cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='cop', co=self.co)
+                cop_ds = gdalfun.gdal_mem_ds(ds_config, name='cop', co=self.co)
                 gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
                 cop_band = cop_ds.GetRasterBand(1)
 
+        if cop_band is not None:
+            cop_arr = cop_band.ReadAsArray()
+                
         ## initialize the tmp datasources
-        prox_ds = gdalfun.gdal_mem_ds(self.ds_config, name='prox', co=self.co)
-        msk_ds = gdalfun.gdal_mem_ds(self.ds_config, name='msk', co=self.co)
+        prox_ds = gdalfun.gdal_mem_ds(ds_config, name='prox', co=self.co)
+        msk_ds = gdalfun.gdal_mem_ds(ds_config, name='msk', co=self.co)
         msk_band = None
         globd = None
         
-        if len(lk_ids) == 0:
+        if len(self.lk_ids) == 0:
             return(self)
         
         if self.depth == 'globathy':
-            globd = self._fetch_globathy(ids=lk_ids[:])
+            globd = self._fetch_globathy(ids=self.lk_ids[:])
             ## rasterize hydrolakes using id
-            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
+            gdal.RasterizeLayer(msk_ds, [1], self.lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
             msk_band = msk_ds.GetRasterBand(1)
-            msk_band.SetNoDataValue(self.ds_config['ndv'])
+            msk_band.SetNoDataValue(ds_config['ndv'])
 
             ## assign max depth from globathy
             msk_arr = msk_band.ReadAsArray()
             with tqdm(
-                    total=len(lk_ids),
+                    total=len(self.lk_ids),
                     desc='Assigning Globathy Depths to rasterized lakes...',
                     leave=self.verbose
             ) as pbar:
                 
-                for n, this_id in enumerate(lk_ids):
+                for n, this_id in enumerate(self.lk_ids):
                     depth = globd[this_id]
                     msk_arr[msk_arr == this_id] = depth
                     pbar.update()
             
         elif self.depth == 'hydrolakes':
-            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Depth_avg"], callback=gdal.TermProgress)
+            gdal.RasterizeLayer(msk_ds, [1], self.lk_layer, options=["ATTRIBUTE=Depth_avg"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
             msk_band = msk_ds.GetRasterBand(1)
-            msk_band.SetNoDataValue(self.ds_config['ndv'])
+            msk_band.SetNoDataValue(ds_config['ndv'])
             msk_arr = msk_band.ReadAsArray()
             
         elif utils.float_or(self.depth) is not None:
-            msk_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
-            msk_arr[:] = self.depth
-            
+            msk_arr = np.zeros((ds_config['nx'], ds_config['ny']))
+            msk_arr[:] = self.depth            
         else:            
-            msk_arr = np.ones((self.ds_config['nx'], self.ds_config['ny']))
+            msk_arr = np.ones((ds_config['nx'], ds_config['ny']))
 
         ## calculate proximity of lake cells to shore
         if msk_band is None:
-            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
+            gdal.RasterizeLayer(msk_ds, [1], self.lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
             msk_band = msk_ds.GetRasterBand(1)
-            msk_band.SetNoDataValue(self.ds_config['ndv'])
+            msk_band.SetNoDataValue(ds_config['ndv'])
             
-        lk_ds = None
+        self.lk_ds = None
         prox_band = prox_ds.GetRasterBand(1)
         proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
         gdal.ComputeProximity(msk_band, prox_band, options=proximity_options, callback=gdal.TermProgress)        
         prox_arr = prox_band.ReadAsArray()
-        if cop_band is not None:
-            cop_arr = cop_band.ReadAsArray()
 
         ## apply calculation from globathy
         utils.echo_msg('Calculating simulated lake depths...')
-        bathy_arr = self.apply_calculation(
-            prox_arr,
-            msk_arr,
-            shore_arr=cop_arr,
-        )
-        #if self.apply_elevations:
-        #    bathy_arr *= -1
+
+        if self.depth == 'flatten':
+            cop_arr[prox_arr == 0] = 0
+            bathy_arr = cop_arr
+        else:
+            bathy_arr = self.apply_calculation(
+                prox_arr,
+                msk_arr,
+                shore_arr=cop_arr,
+            )
             
         bathy_arr[bathy_arr == 0] = self.ndv            
         gdalfun.gdal_write(
-            bathy_arr, '{}.tif'.format(self.name), self.ds_config,
+            bathy_arr, '{}.tif'.format(self.name), ds_config,
         )            
 
         prox_ds = msk_ds = cop_ds = None
@@ -3238,7 +3283,7 @@ class WafflesCUDEM(Waffle):
 
         ## todo add option to flatten here...or move flatten up
         #os.replace(pre_surface.fn, self.fn)
-        flatten_no_data_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
+        gdalfun.cudem_flatten_no_data_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
 
         ## reset the stack for uncertainty
         ##self.stack = pre_surface.stack
@@ -4892,7 +4937,7 @@ class WaffleDEM:
         ## flatten all nodata values
         if flatten_nodata_values:
             flattened_fn = utils.make_temp_fn('{}_flat.tif'.format(utils.fn_basename2(self.fn)), self.cache_dir)
-            flatten_no_data_zones(self.fn, dst_dem=flattened_fn, band=1, size_threshold=1)
+            gdalfun.cudem_flatten_no_data_zones(self.fn, dst_dem=flattened_fn, band=1, size_threshold=1)
             os.rename(flattened_fn, self.fn)
 
         ## clip/cut

@@ -1004,6 +1004,21 @@ def flatten_no_data_zones(src_arr, src_config, size_threshold = 1, verbose = Tru
 
     return(src_arr)
 
+def cudem_flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshold = 1, verbose = True):
+    """Flatten nodata areas larger than `size_threshhold`"""
+    ## load src_dem array
+    with gdal_datasource(src_dem, update=True if dst_dem is None else False) as src_ds:
+        src_arr = src_ds.GetRasterBand(band).ReadAsArray()
+        src_config = gdal_infos(src_ds)
+        src_arr = flatten_no_data_zones(src_arr, src_config, size_threshold=size_threshold, verbose=verbose)
+        
+        if dst_dem is None:
+            src_ds.GetRasterBand(band).WriteArray(src_arr)
+        else:
+            gdal_write(src_arr, dst_dem, src_config)
+
+    return(dst_dem if dst_dem is not None else src_dem, 0)
+
 def generate_mem_ds(ds_config, band_data = None, srcwin = None, return_array = False, interpolation = 'nearest'):
     tmp_band_data = band_data
     tmp_band_data[tmp_band_data == ds_config['ndv']] = np.nan
@@ -1043,8 +1058,8 @@ def generate_mem_ds(ds_config, band_data = None, srcwin = None, return_array = F
     else:
         ## generate a mem datasource to feed into gdal.DEMProcessing
         dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
-        srcwin_config = gdalfun.gdal_set_infos(srcwin[2], srcwin[3], srcwin[2]*srcwin[3], dst_gt, ds_config['proj'],
-                                                ds_config['dt'], ds_config['ndv'], 'GTiff', {}, 1)
+        srcwin_config = gdal_set_infos(srcwin[2], srcwin[3], srcwin[2]*srcwin[3], dst_gt, ds_config['proj'],
+                                       ds_config['dt'], ds_config['ndv'], 'GTiff', {}, 1)
         srcwin_ds = gdal_mem_ds(srcwin_config, name='MEM', bands=1, src_srs=None)
         srcwin_band = srcwin_ds.GetRasterBand(1)
         srcwin_band.SetNoDataValue(ds_config['ndv'])
@@ -1405,7 +1420,7 @@ def gdal_percentile(src_gdal, perc = 95, band = 1):
     """
 
     p = None
-    with gdal_datasource(src_gdal) as src_ds:        
+    with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
             ds_array = src_ds.GetRasterBand(band).ReadAsArray().astype(float)
             ds_array[ds_array == src_ds.GetRasterBand(band).GetNoDataValue()] = np.nan
