@@ -3744,7 +3744,7 @@ class DAV(FetchModule):
     
     def __init__(
             self, where = '1=1', index = False, datatype = None, layer = 0,
-            name = 'digital_coast', **kwargs
+            name = 'digital_coast', footprints_only = False, **kwargs
     ):
         super().__init__(name=name, **kwargs)
         self.where = where
@@ -3758,6 +3758,7 @@ class DAV(FetchModule):
 
         ## data formats vary
         self.data_format = None
+        self.footprints_only = footprints_only
         
     def run(self):
         '''Run the DAV fetching module'''
@@ -3831,13 +3832,21 @@ class DAV(FetchModule):
                                             break
                                         
                                 utils.remove_glob(urllist)
+                                if self.footprints_only:
+                                    self.add_entry_to_results(
+                                        index_zipurl,
+                                        os.path.basename(index_zipurl),
+                                        'footprint'
+                                    )
+                                    continue
+                                    
                                 try:
                                     status = Fetch(
                                         index_zipurl, callback=self.callback, verbose=self.verbose
                                     ).fetch_file(index_zipfile)
                                 except:
                                     status = -1
-
+                                    
                                 #utils.echo_msg(index_zipfile)
                                 if status == 0:
                                     index_shps = utils.p_unzip(
@@ -4310,7 +4319,7 @@ class TheNationalMap(FetchModule):
                 tags = ds['tags']
                 if len(tags) > 0:
                     for tag in tags:
-                        #print(tag)
+                        utils.echo_msg(tag)
                         this_xml = iso_xml('{}?format=iso'.format(tag['infoUrl']))
                         geom = this_xml.bounds(geom=True)
                         h_epsg, v_epsg = this_xml.reference_system()
