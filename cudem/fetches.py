@@ -3739,12 +3739,12 @@ class DAV(FetchModule):
     * To only return lidar data, use datatype=lidar, for only raster, use datatype=dem
     * datatype is either 'lidar', 'dem' or 'sm'
 
-    < digital_coast:where=None:datatype=None >
+    < digital_coast:where=None:datatype=None:footprints_only=False >
     """
     
     def __init__(
             self, where = '1=1', index = False, datatype = None, layer = 0,
-            name = 'digital_coast', footprints_only = False, **kwargs
+            name = 'digital_coast', want_footprints = False, footprints_only = False, **kwargs
     ):
         super().__init__(name=name, **kwargs)
         self.where = where
@@ -3758,7 +3758,10 @@ class DAV(FetchModule):
 
         ## data formats vary
         self.data_format = None
+        self.want_footprints = want_footprints
         self.footprints_only = footprints_only
+        if self.footprints_only:
+            self.want_footprints = True
         
     def run(self):
         '''Run the DAV fetching module'''
@@ -3832,13 +3835,14 @@ class DAV(FetchModule):
                                             break
                                         
                                 utils.remove_glob(urllist)
-                                if self.footprints_only:
+                                if self.want_footprints:
                                     self.add_entry_to_results(
                                         index_zipurl,
-                                        os.path.basename(index_zipurl),
+                                        os.path.join('{}/{}'.format(feature['attributes']['ID'], index_zipurl.split('/')[-1])),
                                         'footprint'
                                     )
-                                    continue
+                                    if self.footprints_only:
+                                        continue
                                     
                                 try:
                                     status = Fetch(
@@ -3931,7 +3935,9 @@ class DAV(FetchModule):
                                             )
 
                                     index_ds = index_layer = None
+                                    #if not self.want_footprints:
                                     utils.remove_glob(index_zipfile, *index_shps)
+                                    #utils.remove_glob(*index_shps)
                                     
                             elif link['serviceID'] == 166 and self.datatype == 'sm': # spatial_metadata
                                 self.add_entry_to_results(
