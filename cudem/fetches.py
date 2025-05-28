@@ -4279,7 +4279,6 @@ class TheNationalMap(FetchModule):
                 'max': 100,
                 'offset': offset
             }
-
             if self.datasets is not None:
                 datasets = self.datasets.split('/')
                 try:

@@ -1374,6 +1374,8 @@ class GMTSurface(Waffle):
             verbose = False
         )        
 
+        #self.gmt_region = self.ps_region.copy()
+        
         dem_surf_cmd = ('')
         if self.blockmean:
             dem_surf_cmd = (
@@ -1383,9 +1385,10 @@ class GMTSurface(Waffle):
                 )
             )
 
+        ## mrl: removed -rp and switched p_region to ps_region (pre 6.5.0 will shift the grid otherwise)
         dem_surf_cmd += (
-            'gmt surface -V {} -rp -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}{}'.format(
-                self.p_region.format('gmt'), self.xinc, self.yinc,
+            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}{}'.format(
+                self.ps_region.format('gmt'), self.xinc, self.yinc,
                 self.name, self.ndv, self.tension, self.relaxation,
                 ' -Qr' if self.gc['GMT'] >= '6.5.0' else '',
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',

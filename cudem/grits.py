@@ -94,7 +94,13 @@ class Grits:
         if self.ds_band.GetNoDataValue() is None:
             self.ds_band.SetNoDataValue(self.ds_config['ndv'])
         
-        ## setup the uncertainty data if wanted
+        ## setup the associted mask data (uncertainty, weights, counts)
+        self.weight_is_fn = False
+        self.weight_is_band = False
+        self.uncertainty_is_fn = False
+        self.uncertainty_is_band = False
+        self.count_is_fn = False
+        self.count_is_band = False
         if self.weight_mask is not None:
             self.weight_is_band = False
             self.weight_is_fn = False
@@ -106,6 +112,28 @@ class Grits:
             else:
                 self.weight_mask = None        
 
+        if self.uncertainty_mask is not None:
+            self.unc_is_band = False
+            self.unc_is_fn = False
+            if utils.int_or(self.uncertainty_mask) is not None:
+                self.unc_is_band = True
+                self.uncertainty_mask = utils.int_or(self.uncertainty_mask)
+            elif os.path.exists(self.uncertainty_mask):
+                self.unc_is_fn = True
+            else:
+                self.uncertainty_mask = None
+                
+        if self.count_mask is not None:
+            self.cnt_is_band = False
+            self.cnt_is_fn = False
+            if utils.int_or(self.count_mask) is not None:
+                self.cnt_is_band = True
+                self.count_mask = utils.int_or(self.count_mask)
+            elif os.path.exists(self.count_mask):
+                self.cnt_is_fn = True
+            else:
+                self.count_mask = None
+                
     def generate(self):
         if self.verbose:
             utils.echo_msg('filtering {} using {}'.format(self.src_dem, self))
@@ -434,29 +462,6 @@ class LSPOutliers(Grits):
         self.size_is_step = size_is_step
         self.mode = mode
         self.fill_removed_data = fill_removed_data
-
-        ## setup the uncertainty data if wanted
-        if self.uncertainty_mask is not None:
-            self.unc_is_band = False
-            self.unc_is_fn = False
-            if utils.int_or(self.uncertainty_mask) is not None:
-                self.unc_is_band = True
-                self.uncertainty_mask = utils.int_or(self.uncertainty_mask)
-            elif os.path.exists(self.uncertainty_mask):
-                self.unc_is_fn = True
-            else:
-                self.uncertainty_mask = None
-                
-        if self.count_mask is not None:
-            self.cnt_is_band = False
-            self.cnt_is_fn = False
-            if utils.int_or(self.count_mask) is not None:
-                self.cnt_is_band = True
-                self.count_mask = utils.int_or(self.count_mask)
-            elif os.path.exists(self.count_mask):
-                self.cnt_is_fn = True
-            else:
-                self.count_mask = None
 
     def init_percentiles(self, src_ds = None):
         if self.percentile is None or self.k is None:
@@ -1235,6 +1240,62 @@ class Flats(Grits):
         utils.echo_msg('removed {} flats.'.format(count))
         return(self.dst_dem, 0)
 
+class Weights(Grits):
+    def __init__(self, buffer_cells = 1, weight_threshold = 1, **kwargs):
+        super().__init__(**kwargs)
+        self.buffer_cells = utils.int_or(buffer_cells, 1)
+        self.weight_threshold = utils.float_or(weight_threshold, 1)
+
+    def run(self):
+        if self.weight_mask is None:
+            return(self.src_dem)
+        
+        dst_ds = self.copy_src_dem()
+        with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+            if src_ds is not None:
+                self.init_ds(src_ds)
+                if self.weight_is_fn:
+                    weight_ds = gdal.Open(self.weight_mask)
+                    weight_band = weight_ds.GetRasterBand(1)
+                elif self.weight_is_band:
+                    weight_band = src_ds.GetRasterBand(self.weight_mask)
+
+                for srcwin in utils.yield_srcwin(
+                        (self.ds_config['ny'], self.ds_config['nx']),
+                        n_chunk = self.ds_config['ny']/4, verbose=self.verbose,
+                        start_at_edge=True,
+                        msg='parsing srcwin'
+                ):
+                
+                    
+                    # srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+                    # for y in range(
+                    #         srcwin[1], srcwin[1] + srcwin[3], 1
+                    # ):
+                    w_arr = weight_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    w_arr[w_arr == self.ds_config['ndv']] = np.nan
+                    weights = np.unique(w_arr)[::-1]
+                    #if len(weights) == 1:
+                    #    continue
+
+                    this_w_arr = w_arr.copy()
+                    this_w_arr[this_w_arr < 1] = np.nan
+                    expanded_w_arr = utils.expand_for(
+                        this_w_arr >= self.weight_threshold,
+                        shiftx=self.buffer_cells, shifty=self.buffer_cells
+                    )
+                    mask = (w_arr < self.weight_threshold) & expanded_w_arr
+                    utils.echo_msg(mask)
+                    for b in range(1, dst_ds.RasterCount+1):
+                        this_band = dst_ds.GetRasterBand(b)
+                        this_arr = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                        this_arr[mask] = self.ds_config['ndv']
+                        this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
+
+                dst_ds = None
+                if self.weight_is_fn:
+                    weight_ds = None
+    
 class GritsFactory(factory.CUDEMFactory):
     """Grits Factory Settings and Generator
     
@@ -1257,6 +1318,9 @@ class GritsFactory(factory.CUDEMFactory):
         'flats': {'name': 'flats',
                   'description': 'Remove flat areas from the DEM',
                   'call': Flats},
+        'weights': {'name': 'weights',
+                    'description': 'Make a NDV buffer around the weight threshold',
+                    'call': Weights},
     }
     
     def __init__(self, **kwargs):

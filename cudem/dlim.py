@@ -1320,6 +1320,24 @@ class ElevationDataset:
     def __call__(self):
         self.initialize()
 
+    def _init_mask(self):
+        if self.mask is not None:
+            if isinstance(self.mask, str):
+                self.mask = {'mask': self.mask}
+                
+            for kpam, kval in kwargs.items():
+                if kpam not in self.__dict__:
+                    self.mask[kpam] = kval
+
+            for kpam, kval in self.mask.items():
+                if kpam in kwargs:
+                    del kwargs[kpam]
+
+            self.mask['ogr_or_gdal'] = gdalfun.ogr_or_gdal(self.mask['mask'])
+            for key in self.mask_keys:
+                if key not in self.mask.keys():
+                    self.mask[key] = None
+        
     def _set_params(self, **kwargs):
         metadata = copy.deepcopy(self.metadata)
         #metadata['name'] = self.fn
@@ -1373,14 +1391,14 @@ class ElevationDataset:
             self.remote = True
 
         ## Dataset Mask, if the input mask is a vector, rasterize it if possible.
-        if self.mask is not None:
-            if self.mask['ogr_or_gdal'] == 1: # mask is ogr, rasterize it
-                if self.region is not None and self.x_inc is not None and self.y_inc is not None:
-                    self.mask['mask'] = gdalfun.ogr2gdal_mask(
-                        self.mask['mask'], region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, dst_srs=self.dst_srs,
-                        invert=True, verbose=False, temp_dir=self.cache_dir
-                    )
-                    self.mask['ogr_or_gdal'] = 0
+        # if self.mask is not None:
+        #     if self.mask['ogr_or_gdal'] == 1: # mask is ogr, rasterize it
+        #         if self.region is not None and self.x_inc is not None and self.y_inc is not None:
+        #             self.mask['mask'] = gdalfun.ogr2gdal_mask(
+        #                 self.mask['mask'], region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, dst_srs=self.dst_srs,
+        #                 invert=True, verbose=False, temp_dir=self.cache_dir
+        #             )
+        #             self.mask['ogr_or_gdal'] = 0
 
         ## initialize transform
         self.transform = {
@@ -1972,6 +1990,7 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
+    ## todo: superced weights / cnt
     def _stacks(
             self,
             out_name = None,
@@ -2840,12 +2859,23 @@ class ElevationDataset:
         
         mask_band = None
         mask_infos = None
+        data_mask = None
         if self.mask is not None:
-            if os.path.exists(self.mask['mask']):            
-                utils.echo_msg('using mask dataset: {} to array'.format(self.mask['mask']))
+            if self.mask['ogr_or_gdal'] == 1: # mask is ogr, rasterize it
+                if self.region is not None and self.x_inc is not None and self.y_inc is not None:
+                    data_mask = gdalfun.ogr2gdal_mask(
+                        self.mask['mask'], region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, dst_srs=self.dst_srs,
+                        invert=True, verbose=False, temp_dir=self.cache_dir
+                    )
+                    #self.mask['ogr_or_gdal'] = 0
+            else:
+                data_mask = self.mask['mask']
+            
+            if os.path.exists(data_mask):            
+                utils.echo_msg('using mask dataset: {} to array'.format(data_mask))
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
                     src_mask = gdalfun.sample_warp(
-                        self.mask['mask'], None, self.x_inc, self.y_inc,
+                        data_mask, None, self.x_inc, self.y_inc,
                         src_region=self.region,
                         sample_alg='nearest',
                         dst_srs=self.transform['dst_horz_crs'] if self.transform['dst_horz_crs'] is not None else None,
@@ -2856,12 +2886,12 @@ class ElevationDataset:
                         co=["COMPRESS=DEFLATE", "TILED=YES"]
                     )[0]
                 else:
-                    src_mask = gdal.Open(self.mask['mask'])
+                    src_mask = gdal.Open(data_mask)
                     
                 mask_band = src_mask.GetRasterBand(1)
                 mask_infos = gdalfun.gdal_infos(src_mask)
             else:
-                utils.echo_warning_msg('could not load mask {}'.format(self.mask['mask']))
+                utils.echo_warning_msg('could not load mask {}'.format(data_mask))
 
         for out_arrays, this_srcwin, this_gt in self.yield_array():
             #utils.echo_msg(mask_band)
@@ -2886,6 +2916,9 @@ class ElevationDataset:
                                 out_arrays[arr][np.isnan(mask_data)] = np.nan
 
             yield(out_arrays, this_srcwin, this_gt)
+
+        if data_mask is not None:
+            utils.remove_glob('{}*'.format(data_mask))
 
     def mask_and_yield_xyz(self):
         """mask the incoming xyz data from `self.yield_xyz` and yield the results.
@@ -3116,7 +3149,7 @@ class ElevationDataset:
             
             out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
             out_arrays['weight'][:] = self.weight if self.weight is not None else 1
-            out_arrays['weight'][unq[:,0], unq[:,1]] *= ww #*unq_cnt
+            out_arrays['weight'][unq[:,0], unq[:,1]] *= ww * unq_cnt
             #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
             
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
@@ -4072,6 +4105,8 @@ class GDALFile(ElevationDataset):
 
                 #if scan:
                 #    zr = src_ds.GetRasterBand(utils.int_or(self.band_no, 1)).ComputeRasterMinMax()
+
+                ##gdalfun.gdal_polygonize(src_ds, dst_layer, verbose=True)
                 
                 #this_region.zmin, this_region.zmax = zr[0], zr[1]
                 #self.infos.minmax = this_region.export_as_list(include_z=True)
