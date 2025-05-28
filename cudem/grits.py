@@ -1285,7 +1285,7 @@ class Weights(Grits):
                         shiftx=self.buffer_cells, shifty=self.buffer_cells
                     )
                     mask = (w_arr < self.weight_threshold) & expanded_w_arr
-                    utils.echo_msg(mask)
+                    #utils.echo_msg(mask)
                     for b in range(1, dst_ds.RasterCount+1):
                         this_band = dst_ds.GetRasterBand(b)
                         this_arr = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
