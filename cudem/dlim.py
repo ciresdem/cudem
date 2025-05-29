@@ -1924,7 +1924,6 @@ class ElevationDataset:
             if recursive_check and self.parent is not None:
                 self.parent.inf(check_hash=True)
 
-        utils.echo_msg(self.src_srs)
         if self.infos.src_srs is None:
             self.infos.src_srs = self.src_srs
 
