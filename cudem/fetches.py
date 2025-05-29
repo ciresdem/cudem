@@ -2430,7 +2430,6 @@ class R2R(FetchModule):
                                             os.path.basename(data['actual_url']),
                                             'multibeam'
                                         )
-                                        
                         
                         # #pbar.set_description('parsing cruise datasets...{}'.format(cruise_id))
                         # #pbar.refresh()
@@ -2494,7 +2493,7 @@ class Multibeam(FetchModule):
     def __init__(
             self, processed = True, survey_id = None, exclude_survey_id = None, ship_id = None,
             exclude_ship_id = None, min_year = None, max_year = None, exclude = None,
-            make_datalist = False, **kwargs
+            make_datalist = False, want_inf = True, **kwargs
     ):
         super().__init__(name='multibeam', **kwargs)
         self.processed_p = processed
@@ -2506,6 +2505,7 @@ class Multibeam(FetchModule):
         self.exclude_ship_id = exclude_ship_id
         self.exclude = exclude
         self.make_datalist = make_datalist
+        self.want_inf = want_inf
         
         ## various multibeam URLs
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
@@ -2631,13 +2631,35 @@ class Multibeam(FetchModule):
                 if '2' in these_surveys[key].keys():
                     for v2 in these_surveys[key]['2']:
                         self.add_entry_to_results(*v2)
+                        if self.want_inf:
+                            inf_url = self.inf_url(v2)
+                            self.add_entry_to_results(
+                                '{}.inf'.format(inf_url),
+                                '{}.inf'.format(v2[1]),
+                                'mb_inf'
+                            )
                 else:
                     for v1 in these_surveys[key]['1']:
                         self.add_entry_to_results(*v1)
+                        if self.want_inf:
+                            inf_url = self.inf_url(v1)
+                            self.add_entry_to_results(
+                                '{}.inf'.format(inf_url),
+                                '{}.inf'.format(v1[1]),
+                                'mb_inf'
+                            )
             else:
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
                         self.add_entry_to_results(*survs)
+                        if self.want_inf:
+                            inf_url = self.inf_url(survs)
+                            self.add_entry_to_results(
+                                '{}.inf'.format(inf_url),
+                                '{}.inf'.format(survs[1]),
+                                'mb_inf'
+                            )
+
                             
         if self.make_datalist:
             s_got = []
@@ -2657,6 +2679,13 @@ class Multibeam(FetchModule):
                     except:
                         pass
 
+    def inf_url(self, entry):
+        if entry[0][-3:] == 'fbt':
+            inf_url = utils.fn_basename2(entry[0])
+        else:
+            inf_url = entry[0]
+        return(inf_url)            
+                    
     def echo_inf(self, entry):
         print(self.parse_entry_inf(entry))
         

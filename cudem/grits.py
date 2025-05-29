@@ -1207,7 +1207,9 @@ class Flats(Grits):
                 if self.n_chunk is None:
                     self.n_chunk = self.ds_config['nb']
 
-                for srcwin in gdalfun.gdal_yield_srcwin(src_ds, n_chunk=self.n_chunk, step=self.n_chunk, verbose=True):
+                for srcwin in gdalfun.gdal_yield_srcwin(
+                        src_ds, n_chunk=self.n_chunk, step=self.n_chunk, verbose=True
+                ):
                     src_arr = self.ds_band.ReadAsArray(*srcwin).astype(float)
                     uv, uv_counts = np.unique(src_arr, return_counts=True)
                     if self.size_threshold is None:
@@ -1219,20 +1221,6 @@ class Flats(Grits):
                     mask = np.isin(src_arr, uv_)
                     count += np.count_nonzero(mask)
                     src_arr[mask] = self.ds_config['ndv']
-                    
-                    # if len(uv_) > 0:
-                    #     for i in trange(
-                    #             0,
-                    #             len(uv_),
-                    #             desc='{}: removing flattened data greater than {} cells'.format(
-                    #                 os.path.basename(sys.argv[0]), _size_threshold
-                    #             ),
-                    #             leave=self.verbose
-                    #     ):
-                    #         mask = src_arr == uv_[i]
-                    #         count += np.count_nonzero(mask)
-                    #         src_arr[mask] = self.ds_config['ndv']
-
                     dst_band = dst_ds.GetRasterBand(self.band)
                     dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
                 
@@ -1241,6 +1229,16 @@ class Flats(Grits):
         return(self.dst_dem, 0)
 
 class Weights(Grits):
+    """Create a nodata buffer around data above `weight_threshold`
+
+    You must supply a weight-mask raster along with the DEM to filter.
+
+    Parameters:
+
+    buffer_cells(int) - the number of cells to buffer
+    weight_threshold(float) - the weight threshold
+    """
+    
     def __init__(self, buffer_cells = 1, weight_threshold = 1, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
@@ -1248,7 +1246,7 @@ class Weights(Grits):
 
     def run(self):
         if self.weight_mask is None:
-            return(self.src_dem)
+            return(self.src_dem, -1)
         
         dst_ds = self.copy_src_dem()
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
@@ -1266,18 +1264,9 @@ class Weights(Grits):
                         start_at_edge=True,
                         msg='parsing srcwin'
                 ):
-                
-                    
-                    # srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-                    # for y in range(
-                    #         srcwin[1], srcwin[1] + srcwin[3], 1
-                    # ):
                     w_arr = weight_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     w_arr[w_arr == self.ds_config['ndv']] = np.nan
                     weights = np.unique(w_arr)[::-1]
-                    #if len(weights) == 1:
-                    #    continue
-
                     this_w_arr = w_arr.copy()
                     this_w_arr[this_w_arr < 1] = np.nan
                     expanded_w_arr = utils.expand_for(
@@ -1285,7 +1274,6 @@ class Weights(Grits):
                         shiftx=self.buffer_cells, shifty=self.buffer_cells
                     )
                     mask = (w_arr < self.weight_threshold) & expanded_w_arr
-                    #utils.echo_msg(mask)
                     for b in range(1, dst_ds.RasterCount+1):
                         this_band = dst_ds.GetRasterBand(b)
                         this_arr = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
@@ -1295,6 +1283,10 @@ class Weights(Grits):
                 dst_ds = None
                 if self.weight_is_fn:
                     weight_ds = None
+            else:
+                return(self.src_dem, -1)
+            
+        return(self.dst_dem, 0)                
     
 class GritsFactory(factory.CUDEMFactory):
     """Grits Factory Settings and Generator
@@ -1507,13 +1499,6 @@ def grits_cli(argv = sys.argv):
             utils.fn_basename2(src_dem), utils.fn_ext(src_dem)
         ))
         
-    # with gdalfun.gdal_datasource(
-    #         src_dem, update=False
-    # ) as src_ds:
-    #     src_infos = gdalfun.gdal_infos(src_ds)
-    #     driver = gdal.GetDriverByName(src_infos['fmt'])
-    #     driver.CreateCopy(dst_dem, src_ds, 1)
-
     # src_dem = dst_dem        
     for module in filters:
         if module.split(':')[0] not in GritsFactory()._modules.keys():

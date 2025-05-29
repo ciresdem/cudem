@@ -1216,7 +1216,7 @@ class ElevationDataset:
     ]
 
     stack_modes = [
-        'min', 'max', 'mean', 'supercede'
+        'min', 'max', 'mean', 'supercede', 'mixed'
     ]
 
     ## todo: add transformation grid option (stacks += transformation_grid), geoids
@@ -1281,6 +1281,7 @@ class ElevationDataset:
         self.dump_precision = dump_precision # the precision of the dumped xyz data
         self.stack_node = stack_node # yield avg x/y data instead of center
         self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
+        self._init_stack_mode()
         self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal'] # options for input data mask
         if self.mask is not None:
             if isinstance(self.mask, str):
@@ -1298,7 +1299,7 @@ class ElevationDataset:
             for key in self.mask_keys:
                 if key not in self.mask.keys():
                     self.mask[key] = None
-
+                    
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
 
@@ -1320,6 +1321,15 @@ class ElevationDataset:
     def __call__(self):
         self.initialize()
 
+    def _init_stack_mode(self):
+        opts = self.stack_mode.split(':')
+        self.stack_mode_name = opts[0]
+        self.stack_mode_args = {}
+        if self.stack_mode_name not in self.stack_modes:
+            self.stack_mode_name = 'mean'
+        elif len(opts) > 1:
+            self.stack_mode_args = factory.args2dict(list(opts[1:]), self.stack_mode_args)
+        
     def _init_mask(self):
         if self.mask is not None:
             if isinstance(self.mask, str):
@@ -1358,7 +1368,8 @@ class ElevationDataset:
             'upper_limit': self.upper_limit,
             'lower_limit': self.lower_limit,
             'verbose': self.verbose,
-            'metadata': metadata
+            'metadata': metadata,
+            'stack_mode': self.stack_mode,
         }
         for kw in kwargs.keys():
             _params[kw] = kwargs[kw]
@@ -1435,6 +1446,8 @@ class ElevationDataset:
 
         if isinstance(self.pnt_fltrs, str):
             self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
+
+        #self._init_stack_mode()
             
         return(self)
                 
@@ -2020,7 +2033,7 @@ class ElevationDataset:
           uncertainty
           src uncertainty
         """
-
+        
         def add_mask_band(m_ds, this_entry, mask_level = 0):
             if mask_level < 0:
                 m_band = None
@@ -2122,10 +2135,12 @@ class ElevationDataset:
         
         utils.set_cache(self.cache_dir)
         mask_level = utils.int_or(mask_level, 0)
-        if self.stack_mode not in ['mean', 'min', 'max', 'supercede', 'mixed']:
-            mode = 'mean'
-        else:
-            mode = self.stack_mode
+        # if self.stack_mode not in ['mean', 'min', 'max', 'supercede', 'mixed']:
+        #     mode = 'mean'
+        # else:
+        #     mode = self.stack_mode
+        #mode = self.stack_mode.split(':')[0]
+        mode = self.stack_mode_name
 
         if self.verbose:
             utils.echo_msg('stacking using {} mode with mask level of {}'.format(mode, mask_level))
@@ -2312,6 +2327,8 @@ class ElevationDataset:
                 elif mode == 'mixed':
                     ## weights above threshold supercede weights below threshold, otherwise meaned...
                     wt = 1
+                    if 'weight_threshold' in self.stack_mode_args.keys():
+                        wt = utils.float_or(self.stack_mode_args['weight_threshold'], 1)
 
                     # above
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
@@ -2457,7 +2474,8 @@ class ElevationDataset:
                 stacked_data[key][stacked_data[key] == ndv] = np.nan
 
             stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-            if mode == 'mean' or mode == 'min' or mode == 'max' or mode == 'mixed':
+            #if mode == 'mean' or mode == 'min' or mode == 'max' or mode == 'mixed':
+            if mode != 'supercede':
                 if mode == 'mean' or mode == 'mixed':
                     ## average the accumulated arrays for finalization
                     ## x, y, z and u are weighted sums, so divide by weights
@@ -2538,13 +2556,13 @@ class ElevationDataset:
         """
 
         utils.set_cache(self.cache_dir)
-        if self.stack_mode not in ['mean', 'min', 'max', 'supercede']:
-            mode = 'mean'
-        else:
-            mode = self.stack_mode
+        # if self.stack_mode not in ['mean', 'min', 'max', 'supercede']:
+        #     mode = 'mean'
+        # else:
+        #     mode = self.stack_mode
 
         if self.verbose:
-            utils.echo_msg('stacking using {} mode'.format(mode))
+            utils.echo_msg('stacking using {} mode'.format(self.stack_mode))
 
         mask_level = utils.int_or(mask_level, 0)
         ## initialize the output rasters
@@ -2702,7 +2720,7 @@ class ElevationDataset:
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 for key in stack_grp.keys():
                     stacked_data[key] = stack_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]]
-                    if mode != 'min' and mode != 'max':
+                    if self.stack_mode != 'min' and self.stack_mode != 'max':
                         stacked_data[key][np.isnan(stacked_data[key])] = 0
 
                     if key == 'count':
@@ -2713,7 +2731,7 @@ class ElevationDataset:
                 arrs['weight'][np.isnan(arrs['z'])] = 0
                 arrs['uncertainty'][np.isnan(arrs['z'])] = 0
                 
-                if mode != 'min' and mode != 'max':
+                if self.stack_mode != 'min' and self.stack_mode != 'max':
                     arrs['x'][np.isnan(arrs['x'])] = 0
                     arrs['y'][np.isnan(arrs['y'])] = 0
                     arrs['z'][np.isnan(arrs['z'])] = 0
@@ -2726,7 +2744,7 @@ class ElevationDataset:
 
                 ## supercede based on weights, else do weighted mean
                 ## todo: do (weighted) mean on cells with same weight
-                if mode == 'supercede':
+                if self.stack_mode == 'supercede':
                     ## higher weight supercedes lower weight (first come first served atm)
                     stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['x'][arrs['weight'] > stacked_data['weights']] = arrs['x'][arrs['weight'] > stacked_data['weights']]
@@ -2736,7 +2754,7 @@ class ElevationDataset:
                     ## uncertainty is src_uncertainty, as only one point goes into a cell
                     stacked_data['uncertainty'][:] = np.array(stacked_data['src_uncertainty'])
 
-                elif mode == 'min' or mode == 'max':
+                elif self.stack_mode == 'min' or self.stack_mode == 'max':
                     ## set nodata values in stacked_data to whatever the value is in arrs
                     mask = np.isnan(stacked_data['z'])
                     stacked_data['x'][mask] = arrs['x'][mask]
@@ -2747,7 +2765,7 @@ class ElevationDataset:
                     stacked_data['z'][mask] = arrs['z'][mask]
 
                     ## mask the min or max and apply it to stacked_data 
-                    if mode == 'min':
+                    if self.stack_mode == 'min':
                         mask = arrs['z'] <= stacked_data['z']
                     else:
                         mask = arrs['z'] >= stacked_data['z']
@@ -2767,7 +2785,7 @@ class ElevationDataset:
                         * np.power((arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask])), 2)
                     stacked_data['z'][mask] = arrs['z'][mask]
                     
-                elif mode == 'mean':
+                elif self.stack_mode == 'mean':
                     ## accumulate incoming z*weight and uu*weight
                     stacked_data['z'] += (arrs['z'] * arrs['weight'])
                     stacked_data['x'] += (arrs['x'] * arrs['weight'])
@@ -2811,9 +2829,9 @@ class ElevationDataset:
             stacked_data[key][stacked_data[key] == ndv] = np.nan
 
         #utils.echo_msg(stacked_data['count'])
-        if mode == 'mean' or mode == 'min' or mode == 'max':
+        if self.stack_mode == 'mean' or self.stack_mode == 'min' or self.stack_mode == 'max':
             stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-            if mode == 'mean':
+            if self.stack_mode == 'mean':
                 ## average the accumulated arrays for finalization
                 ## x, y, z and u are weighted sums, so divide by weights
                 stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
@@ -2895,6 +2913,19 @@ class ElevationDataset:
 
                         if xyz_region.zmax is not None:
                             points =  points[(points['z'] > xyz_region.zmax)]
+
+                        if xyz_region.wmin is not None:
+                            points =  points[(points['w'] < xyz_region.wmin)]
+                            
+                        if xyz_region.wmax is not None:
+                            points =  points[(points['w'] > xyz_region.wmax)]
+                            
+                        if xyz_region.umin is not None:
+                            points =  points[(points['u'] < xyz_region.umin)]
+                            
+                        if xyz_region.umax is not None:
+                            points =  points[(points['u'] > xyz_region.umax)]
+                            
                     else:
                         points = points[((points['x'] < xyz_region.xmax) & (points['x'] > xyz_region.xmin)) & \
                                         ((points['y'] < xyz_region.ymax) & (points['y'] > xyz_region.ymin))]
@@ -2903,6 +2934,18 @@ class ElevationDataset:
 
                         if xyz_region.zmax is not None:
                             points =  points[(points['z'] < xyz_region.zmax)]
+
+                        if xyz_region.wmin is not None:
+                            points =  points[(points['w'] > xyz_region.wmin)]
+                            
+                        if xyz_region.wmax is not None:
+                            points =  points[(points['w'] < xyz_region.wmax)]
+                            
+                        if xyz_region.umin is not None:
+                            points =  points[(points['u'] > xyz_region.umin)]
+                            
+                        if xyz_region.umax is not None:
+                            points =  points[(points['u'] < xyz_region.umax)]
 
                 if self.upper_limit is not None:
                     points =  points[(points['z'] < self.upper_limit)]
@@ -2915,7 +2958,7 @@ class ElevationDataset:
                     if self.pnt_fltrs is not None:
                         for f in self.pnt_fltrs:
                             point_filter = PointFilterFactory(
-                                mod=f, points=points, verbose=False
+                                mod=f, points=points, verbose=True
                             )._acquire_module()
                             if point_filter is not None:
                                 points = point_filter()
@@ -5948,7 +5991,7 @@ class MBSParser(ElevationDataset):
             mb_format = None
             
         for line in utils.yield_cmd(
-                'mblist -M{}{} -OXYZDAGgFPpRrS -I{}{}'.format(
+                'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
                     self.mb_exclude, ' {}'.format(
                         mb_region.format('gmt') if mb_region is not None else ''
                     ), mb_fn, ' -F{}'.format(mb_format) if mb_format is not None else ''
@@ -5956,13 +5999,10 @@ class MBSParser(ElevationDataset):
                 verbose=False,
         ):
             this_line = [float(x) for x in line.strip().split('\t')]
-            x = this_line[0]
-            y = this_line[1]
-            z = this_line[2]
-            xs.append(x)
-            ys.append(y)
-            zs.append(z)
             if self.auto_weight or self.auto_uncertainty:
+                x = this_line[0]
+                y = this_line[1]
+                z = this_line[2]
                 crosstrack_distance = this_line[3]
                 crosstrack_slope = this_line[4]
                 flat_bottom_grazing_angle = this_line[5]
@@ -5973,16 +6013,26 @@ class MBSParser(ElevationDataset):
                 roll = this_line[10]
                 heave = this_line[11]
                 speed = this_line[12]
-                if int(beamflag) == 0:# and abs(this_line[4]) < .15:
+                sonar_alt = this_line[13]
+                sonar_depth = this_line[14]
+
+                #utils.echo_msg(this_line)
+
+                if int(beamflag) == 0:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
+
+                    xs.append(x)
+                    ys.append(y)
+                    zs.append(z)
                     ## uncertainty
                     #u_depth = 0
                     u_depth = ((2+(0.02*(z*-1)))*0.51)
+                    u_s_depth = ((2+(0.02*(sonar_depth*-1)))*0.51)
                     #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
                     u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
                     #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
                     #u_cd = 0
                     u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
-                    u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
+                    u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2 + u_s_depth**2)
                     us.append(u)
                     if self.auto_weight:
                         ## weight
@@ -5996,7 +6046,14 @@ class MBSParser(ElevationDataset):
                         w *= self.weight if self.weight is not None else 1
 
                         ws.append(w)
-
+            else:
+                x = this_line[0]
+                y = this_line[1]
+                z = this_line[2]
+                xs.append(x)
+                ys.append(y)
+                zs.append(z)
+                        
         if len(xs) > 0:
             mb_points = np.column_stack((xs, ys, zs, ws, us))
             xs = ys = zs = ws = us = None
@@ -7595,6 +7652,7 @@ class MBSFetcher(Fetcher):
         self.fetches_params['mb_exclude'] = mb_exclude
         self.fetches_params['want_binned'] = want_binned
         self.fetches_params['want_mbgrid'] = want_mbgrid
+        self.fetches_parasm['want_inf'] = False
 
     def yield_ds(self, result):            
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
