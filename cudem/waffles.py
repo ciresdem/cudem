@@ -5665,7 +5665,7 @@ Options:
   -O, --output-name\t\tBASENAME for all outputs.
   -P, --t_srs\t\t\tProjection of REGION and output DEM.
   -N, --nodata\t\t\tThe NODATA value of output DEM.
-  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (higher weighted data supercedes lower weighted data).
+  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' (higher weighted data supercedes lower weighted data).
   -G, --wg-config\t\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\t\tGenerate a waffles_config JSON file using the --config flag.
   -H, --threads\t\t\tSet the number of THREADS (1). Each input region will be run in up to THREADS threads. 

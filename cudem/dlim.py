@@ -8458,7 +8458,7 @@ Options:
   -P, --t_srs\t\t\tSet the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir\t\tCACHE Directory for storing temp and output data.
   -Z, --z-precision\t\tSet the target precision of dumped z values. (default is 4)
-  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
+  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' (with -E and -R)
   -T, --stack_filter\t\tFILTER the data stack using one or multiple filters. 
 \t\t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
 \t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
