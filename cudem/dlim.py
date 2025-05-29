@@ -1924,6 +1924,7 @@ class ElevationDataset:
             if recursive_check and self.parent is not None:
                 self.parent.inf(check_hash=True)
 
+        utils.echo_msg(self.src_srs)
         if self.infos.src_srs is None:
             self.infos.src_srs = self.src_srs
 
@@ -1990,7 +1991,7 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
-    ## todo: superced weights / cnt
+    ## todo: cleanup masking
     def _stacks(
             self,
             out_name = None,
@@ -2122,7 +2123,7 @@ class ElevationDataset:
         
         utils.set_cache(self.cache_dir)
         mask_level = utils.int_or(mask_level, 0)
-        if self.stack_mode not in ['mean', 'min', 'max', 'supercede']:
+        if self.stack_mode not in ['mean', 'min', 'max', 'supercede', 'mixed']:
             mode = 'mean'
         else:
             mode = self.stack_mode
@@ -2250,16 +2251,17 @@ class ElevationDataset:
                     m_band = add_mask_band(m_ds, this_entry, mask_level=mask_level)
                     if m_band is not None:
                         m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                        m_array[arrs['count'] != 0] = 1
-                        m_band.WriteArray(m_array, srcwin[0], srcwin[1])
-                        
-                    m_all_array[arrs['count'] != 0] = 1
-                    m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
-                    m_ds.FlushCache()
-                    m_array = m_all_array = None
+                        #m_array[arrs['count'] != 0] = 1
+                        #m_band.WriteArray(m_array, srcwin[0], srcwin[1])
+
+                    #m_all_array[arrs['count'] != 0] = 1
+                    #m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
+                    #m_ds.FlushCache()
+                    #m_array = m_all_array = None
                     # if mask_only:
                     #     continue
-                
+                    ## mrl moved masking to mode sections
+                    
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 for key in stack_keys:
                     stacked_data[key] = stacked_bands[key].ReadAsArray(
@@ -2275,7 +2277,10 @@ class ElevationDataset:
                 arrs['count'][np.isnan(arrs['count'])] = 0
                 arrs['weight'][np.isnan(arrs['z'])] = 0
                 arrs['uncertainty'][np.isnan(arrs['z'])] = 0
-                
+
+                #arrs['weight'][arrs['count']==0] = 0
+                #arrs['uncertainty'][arrs['count']==0] = 0
+
                 if mode != 'min' and mode != 'max':
                     arrs['x'][np.isnan(arrs['x'])] = 0
                     arrs['y'][np.isnan(arrs['y'])] = 0
@@ -2285,11 +2290,16 @@ class ElevationDataset:
                             arrs[arr_key][np.isnan(arrs[arr_key])] = 0
 
                 ## add the count to the accumulated rasters
-                stacked_data['count'] += arrs['count']
+                if mode != 'mixed':
+                    stacked_data['count'] += arrs['count']
 
                 ## supercede based on weights, else do weighted mean
                 ## todo: do (weighted) mean on cells with same weight
                 if mode == 'supercede':
+                    mask = arrs['weight'] > stacked_data['weights']
+                    m_array[(mask) & (arrs['count'] != 0)] = 1
+                    m_all_array[(mask) & (arrs['count'] != 0)] = 1
+                    
                     ## higher weight supercedes lower weight (first come first served atm)
                     stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['x'][arrs['weight'] > stacked_data['weights']] = arrs['x'][arrs['weight'] > stacked_data['weights']]
@@ -2299,8 +2309,54 @@ class ElevationDataset:
                     ## uncertainty is src_uncertainty, as only one point goes into a cell
                     stacked_data['uncertainty'][:] = np.array(stacked_data['src_uncertainty'])
 
+                elif mode == 'mixed':
+                    ## weights above threshold supercede weights below threshold, otherwise meaned...
+                    wt = 1
+
+                    # above
+                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    weight_above = (arrs['weight'] >= wt) & (arrs['weight'] >= tmp_stacked_weight)
+                    m_array[(weight_above) & (arrs['count'] != 0)] = 1
+                    m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
+                    stacked_data['count'][weight_above] += arrs['count'][weight_above]
+                    stacked_data['z'][weight_above] += (arrs['z'][weight_above] * arrs['weight'][weight_above])
+                    stacked_data['x'][weight_above] += (arrs['x'][weight_above] * arrs['weight'][weight_above])
+                    stacked_data['y'][weight_above] += (arrs['y'][weight_above] * arrs['weight'][weight_above])
+                    stacked_data['src_uncertainty'][weight_above] = np.sqrt(np.power(stacked_data['src_uncertainty'][weight_above], 2) \
+                                                                            + np.power(arrs['uncertainty'][weight_above], 2))
+                    stacked_data['weights'][weight_above] += arrs['weight'][weight_above]
+                    ## accumulate variance * weight
+                    stacked_data['uncertainty'][weight_above] += arrs['weight'][weight_above] \
+                        * np.power(
+                            (arrs['z'][weight_above] - (stacked_data['z'][weight_above] / stacked_data['weights'][weight_above])),
+                            2
+                        )
+                    # below
+                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    weight_below = (arrs['weight'] < wt) & (arrs['weight'] >= tmp_stacked_weight)
+                    m_array[(weight_below) & (arrs['count'] != 0)] = 1
+                    m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
+                    stacked_data['count'][weight_below] += arrs['count'][weight_below]
+                    stacked_data['z'][weight_below] += (arrs['z'][weight_below] * arrs['weight'][weight_below])
+                    stacked_data['x'][weight_below] += (arrs['x'][weight_below] * arrs['weight'][weight_below])
+                    stacked_data['y'][weight_below] += (arrs['y'][weight_below] * arrs['weight'][weight_below])
+                    stacked_data['src_uncertainty'][weight_below] = np.sqrt(np.power(stacked_data['src_uncertainty'][weight_below], 2) \
+                                                                            + np.power(arrs['uncertainty'][weight_below], 2))
+                    stacked_data['weights'][weight_below] += arrs['weight'][weight_below]
+                    ## accumulate variance * weight
+                    stacked_data['uncertainty'][weight_below] += arrs['weight'][weight_below] \
+                        * np.power(
+                            (arrs['z'][weight_below] - (stacked_data['z'][weight_below] / stacked_data['weights'][weight_below])),
+                            2
+                        )               
+
                 elif mode == 'min' or mode == 'max':
                     ## set nodata values in stacked_data to whatever the value is in arrs
+                    m_array[arrs['count'] != 0] = 1
+                    m_all_array[arrs['count'] != 0] = 1
+
                     mask = np.isnan(stacked_data['z'])
                     stacked_data['x'][mask] = arrs['x'][mask]
                     stacked_data['y'][mask] = arrs['y'][mask]
@@ -2326,24 +2382,35 @@ class ElevationDataset:
                     stacked_data['weights'][mask][stacked_data['weights'][mask] == 0] = np.nan
                     
                     ## accumulate variance * weight
-                    stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power((arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask])), 2)
+                    stacked_data['uncertainty'][mask] += arrs['weight'][mask] \
+                        * np.power((arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask])), 2)
                     stacked_data['z'][mask] = arrs['z'][mask]
                     
                 elif mode == 'mean':
+                    m_array[arrs['count'] != 0] = 1
+                    m_all_array[arrs['count'] != 0] = 1
+                    
                     ## accumulate incoming z*weight and uu*weight
                     stacked_data['z'] += (arrs['z'] * arrs['weight'])
                     stacked_data['x'] += (arrs['x'] * arrs['weight'])
                     stacked_data['y'] += (arrs['y'] * arrs['weight'])
                     #stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
-                    stacked_data['src_uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2))
+                    stacked_data['src_uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) \
+                                                              + np.power(arrs['uncertainty'], 2))
                     
                     ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
                     stacked_data['weights'] += arrs['weight']
                     stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
                     
                     ## accumulate variance * weight
-                    stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
-
+                    stacked_data['uncertainty'] += arrs['weight'] \
+                        * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
+                    
+                m_band.WriteArray(m_array, srcwin[0], srcwin[1])            
+                m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
+                m_ds.FlushCache()
+                m_array = m_all_array = None
+                    
                 ## write out results to accumulated rasters
                 stacked_data['count'][stacked_data['count'] == 0] = np.nan
 
@@ -2382,9 +2449,9 @@ class ElevationDataset:
                 stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
                 stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-            if mode == 'mean' or mode == 'min' or mode == 'max':
-                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                if mode == 'mean':
+            stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+            if mode == 'mean' or mode == 'min' or mode == 'max' or mode == 'mixed':
+                if mode == 'mean' or mode == 'mixed':
                     ## average the accumulated arrays for finalization
                     ## x, y, z and u are weighted sums, so divide by weights
                     stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
@@ -3149,7 +3216,7 @@ class ElevationDataset:
             
             out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
             out_arrays['weight'][:] = self.weight if self.weight is not None else 1
-            out_arrays['weight'][unq[:,0], unq[:,1]] *= ww * unq_cnt
+            out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
             #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
             
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))

@@ -127,9 +127,12 @@ def wkt2geom(wkt):
     return(ogr.CreateGeometryFromWkt(wkt))
 
 def osr_srs(src_srs):
-    srs = osr.SpatialReference()
-    srs.SetFromUserInput(src_srs)
-    return(srs)
+    try:
+        srs = osr.SpatialReference()
+        srs.SetFromUserInput(src_srs)
+        return(srs)
+    except:
+        return(None)
 
 def osr_wkt(src_srs, esri=False):
     """convert a src_srs to wkt"""
