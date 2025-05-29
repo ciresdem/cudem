@@ -2296,8 +2296,9 @@ class ElevationDataset:
                 ## todo: do (weighted) mean on cells with same weight
                 if mode == 'supercede':
                     mask = arrs['weight'] > stacked_data['weights']
-                    m_array[(mask) & (arrs['count'] != 0)] = 1
-                    m_all_array[(mask) & (arrs['count'] != 0)] = 1
+                    if self.want_mask:
+                        m_array[(mask) & (arrs['count'] != 0)] = 1
+                        m_all_array[(mask) & (arrs['count'] != 0)] = 1
                     
                     ## higher weight supercedes lower weight (first come first served atm)
                     stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
@@ -2316,8 +2317,10 @@ class ElevationDataset:
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     weight_above = (arrs['weight'] >= wt) & (arrs['weight'] >= tmp_stacked_weight)
-                    m_array[(weight_above) & (arrs['count'] != 0)] = 1
-                    m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
+                    if self.want_mask:
+                        m_array[(weight_above) & (arrs['count'] != 0)] = 1
+                        m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
+                        
                     stacked_data['count'][weight_above] += arrs['count'][weight_above]
                     stacked_data['z'][weight_above] += (arrs['z'][weight_above] * arrs['weight'][weight_above])
                     stacked_data['x'][weight_above] += (arrs['x'][weight_above] * arrs['weight'][weight_above])
@@ -2335,8 +2338,10 @@ class ElevationDataset:
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     weight_below = (arrs['weight'] < wt) & (arrs['weight'] >= tmp_stacked_weight)
-                    m_array[(weight_below) & (arrs['count'] != 0)] = 1
-                    m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
+                    if self.want_mask:
+                        m_array[(weight_below) & (arrs['count'] != 0)] = 1
+                        m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
+                        
                     stacked_data['count'][weight_below] += arrs['count'][weight_below]
                     stacked_data['z'][weight_below] += (arrs['z'][weight_below] * arrs['weight'][weight_below])
                     stacked_data['x'][weight_below] += (arrs['x'][weight_below] * arrs['weight'][weight_below])
@@ -2353,8 +2358,9 @@ class ElevationDataset:
 
                 elif mode == 'min' or mode == 'max':
                     ## set nodata values in stacked_data to whatever the value is in arrs
-                    m_array[arrs['count'] != 0] = 1
-                    m_all_array[arrs['count'] != 0] = 1
+                    if self.want_mask:
+                        m_array[arrs['count'] != 0] = 1
+                        m_all_array[arrs['count'] != 0] = 1
 
                     mask = np.isnan(stacked_data['z'])
                     stacked_data['x'][mask] = arrs['x'][mask]
@@ -2386,8 +2392,9 @@ class ElevationDataset:
                     stacked_data['z'][mask] = arrs['z'][mask]
                     
                 elif mode == 'mean':
-                    m_array[arrs['count'] != 0] = 1
-                    m_all_array[arrs['count'] != 0] = 1
+                    if self.want_mask:
+                        m_array[arrs['count'] != 0] = 1
+                        m_all_array[arrs['count'] != 0] = 1
                     
                     ## accumulate incoming z*weight and uu*weight
                     stacked_data['z'] += (arrs['z'] * arrs['weight'])
@@ -2404,11 +2411,12 @@ class ElevationDataset:
                     ## accumulate variance * weight
                     stacked_data['uncertainty'] += arrs['weight'] \
                         * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
-                    
-                m_band.WriteArray(m_array, srcwin[0], srcwin[1])            
-                m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
-                m_ds.FlushCache()
-                m_array = m_all_array = None
+
+                if self.want_mask:
+                    m_band.WriteArray(m_array, srcwin[0], srcwin[1])            
+                    m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
+                    m_ds.FlushCache()
+                    m_array = m_all_array = None
                     
                 ## write out results to accumulated rasters
                 stacked_data['count'][stacked_data['count'] == 0] = np.nan
