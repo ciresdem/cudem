@@ -204,7 +204,7 @@ class Waffle:
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
         if self.verbose:
-            utils.echo_msg('output config: {}'.format(self.ds_config))
+            utils.echo_msg('output size: {}/{}'.format(self.ds_config['nx'], self.ds_config['ny']))
         
         self.status = self._init()
         return(self)            
@@ -3100,7 +3100,7 @@ class WafflesCUDEM(Waffle):
         self.pre_smoothing = utils.float_or(pre_smoothing)
         if self.pre_smoothing is not None:
             self.pre_smoothing = ['blur:blur_factor={}'.format(self.pre_smoothing)]
-
+            
         self.flatten = utils.float_or(flatten)
         self.want_weight = True
         self.pre_verbose = pre_verbose
@@ -3173,7 +3173,7 @@ class WafflesCUDEM(Waffle):
                     '* {} {} <{}> @ {} using data with a minimum weight of {}'.format(
                         'pre_surface' if i !=0 else 'final surface',
                         i,
-                        self.pre_mode if i == self.pre_count else 'stacks' if i != 0 else 'IDW',
+                        self.pre_mode if i == self.pre_count else 'stacks' if i != 0 else 'cubic',
                         self.inc_levels[i],
                         self.weight_levels[i],
                     )
@@ -3282,14 +3282,15 @@ class WafflesCUDEM(Waffle):
                 #     utils.echo_msg('pre data: {}'.format(pre_data))
                 #     utils.echo_msg('pre weight: {}'.format(pre_weight))
 
-                waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
+                last_fltr = ['weights:stacks=True:weight_threshold={}:buffer_cells=2:verbose=False'.format(self.weight_levels[0])]
+                waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'cubic'
                 utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))
                 pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc, yinc=pre_yinc, xsample=xsample, ysample=ysample,
                                             name=_pre_name, node='pixel', want_weight=True, want_uncertainty=self.want_uncertainty,
                                             dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.pre_verbose,
-                                            clip=pre_clip if pre !=0 else None, stack_mode='mixed:weight_threshold={}'.format(pre_weight),
+                                            clip=pre_clip if pre !=0 else None, stack_mode='mixed:weight_threshold={}'.format(self.weight_levels[0]) if pre == 0 else 'mean',
                                             #stack_mode='supercede' if (pre == 0 and self.want_supercede) else self.stack_mode,
-                                            upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else None,
+                                            upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else last_fltr,
                                             percentile_limit=self.flatten if pre == 0 else None)._acquire_module()
                 pre_surface.initialize()
                 pre_surface.generate()

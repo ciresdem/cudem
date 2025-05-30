@@ -1280,12 +1280,15 @@ class Weights(Grits):
                         this_arr[mask] = self.ds_config['ndv']
                         this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
 
-                dst_ds = None
                 if self.weight_is_fn:
                     weight_ds = None
+                    
             else:
+                utils.echo_msg('failed')
+                dst_ds = None
                 return(self.src_dem, -1)
-            
+
+        dst_ds = None
         return(self.dst_dem, 0)                
     
 class GritsFactory(factory.CUDEMFactory):
