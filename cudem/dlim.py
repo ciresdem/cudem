@@ -996,21 +996,30 @@ class PMMOutliers(PointFilter):
         self.return_outliers = return_outliers
 
     def pmm(self, points, percentile = 98, want_iqr=False, return_outliers=False):
-        # from sklearn.experimental import enable_iterative_imputer
-        # from sklearn.impute import IterativeImputer
-        # from sklearn.preprocessing import StandardScaler
+        p = np.array([self.points['y'], self.points['x'], self.points['z']]).T
+        try:
+            from sklearn.experimental import enable_iterative_imputer
+            from sklearn.impute import IterativeImputer
+            from sklearn.preprocessing import StandardScaler
         
-        # scaler = StandardScaler(with_mean=False)
-        # #data_scaled = scaler.fit_transform(data[[‘lat’, ‘lon’, ‘depth’]])
-        # data_scaled = scaler.fit_transform(np.array([self.points['x'], self.points['y'], self.points['z']]))
-        # imputer = IterativeImputer(random_state=36, sample_posterior=True)
-        # data_imputed = imputer.fit_transform(data_scaled)
+            scaler = StandardScaler(with_mean=False)
+            #data_scaled = scaler.fit_transform(data[[‘lat’, ‘lon’, ‘depth’]])
+            #print(np.array([self.points['y'], self.points['x'], self.points['z']]))
+            #p = np.array([self.points['y'], self.points['x'], self.points['z']]).T
+            #data_scaled = scaler.fit_transform(np.array([self.points['y'], self.points['x'], self.points['z']]))
+            data_scaled = scaler.fit_transform(p)
+            imputer = IterativeImputer(random_state=36, sample_posterior=True)
+            data_imputed = imputer.fit_transform(data_scaled)
 
+        except:
+            utils.echo_warning_msg('you must install sklearn for imputing')
+            data_imputed = p
+            
         from scipy.ndimage import uniform_filter1d
-        #smoothed_depth = uniform_filter1d(data_imputed[:, 2], size=50)
-        #residuals = np.abs(data_imputed[:, 2], - smoothed_depth)
-        smoothed_depth = uniform_filter1d(points['z'], size=50)
-        residuals = np.abs(points['z'] - smoothed_depth)
+        smoothed_depth = uniform_filter1d(data_imputed[:, 2], size=50)
+        residuals = np.abs(data_imputed[:, 2], - smoothed_depth)
+        #smoothed_depth = uniform_filter1d(points['z'], size=50)
+        #residuals = np.abs(points['z'] - smoothed_depth)
         if want_iqr:
             perc_max = np.nanpercentile(residuals, percentile)            
             iqr_p = (perc_max - (100-percentile)) * 1.5
@@ -1018,15 +1027,16 @@ class PMMOutliers(PointFilter):
         else:
             outlier_threshold = np.percentile(residuals, percentile)
 
-        outliers = residuals > outlier_threshold
+        outliers = residuals >= outlier_threshold
 
         if self.verbose:
             utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
-        
+
         if return_outliers:
             return(points[outliers])
         else:
             return(points[~outliers])
+            #return(data_imputed[~outliers])
         
     def run(self):
 
