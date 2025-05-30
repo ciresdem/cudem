@@ -2884,8 +2884,8 @@ class ElevationDataset:
         points will be transformed here, based on `self.transformer`, which is set in `set_transform`
         after the points are transformed, the data will pass through the region, if it exists and finally
         yield the transformed and reduced points.
-        """
-            
+        """            
+        
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             for points in self.yield_points():
@@ -2906,52 +2906,52 @@ class ElevationDataset:
                 if self.region is not None and self.region.valid_p():
                     xyz_region = self.region.copy() #if self.transform['trans_region'] is None else self.transform['trans_region'].copy()
                     if self.invert_region:
-                        points = points[((points['x'] > xyz_region.xmax) | (points['x'] < xyz_region.xmin)) | \
-                                        ((points['y'] > xyz_region.ymax) | (points['y'] < xyz_region.ymin))]
+                        points = points[((points['x'] >= xyz_region.xmax) | (points['x'] <= xyz_region.xmin)) | \
+                                        ((points['y'] >= xyz_region.ymax) | (points['y'] <= xyz_region.ymin))]
                         if xyz_region.zmin is not None:
-                            points =  points[(points['z'] < xyz_region.zmin)]
+                            points = points[(points['z'] <= xyz_region.zmin)]
 
                         if xyz_region.zmax is not None:
-                            points =  points[(points['z'] > xyz_region.zmax)]
+                            points = points[(points['z'] >= xyz_region.zmax)]
 
                         if xyz_region.wmin is not None:
-                            points =  points[(points['w'] < xyz_region.wmin)]
+                            points = points[(points['w'] <= xyz_region.wmin)]
                             
                         if xyz_region.wmax is not None:
-                            points =  points[(points['w'] > xyz_region.wmax)]
+                            points = points[(points['w'] >= xyz_region.wmax)]
                             
                         if xyz_region.umin is not None:
-                            points =  points[(points['u'] < xyz_region.umin)]
+                            points = points[(points['u'] <= xyz_region.umin)]
                             
                         if xyz_region.umax is not None:
-                            points =  points[(points['u'] > xyz_region.umax)]
+                            points = points[(points['u'] >= xyz_region.umax)]
                             
                     else:
-                        points = points[((points['x'] < xyz_region.xmax) & (points['x'] > xyz_region.xmin)) & \
-                                        ((points['y'] < xyz_region.ymax) & (points['y'] > xyz_region.ymin))]
+                        points = points[((points['x'] <= xyz_region.xmax) & (points['x'] >= xyz_region.xmin)) & \
+                                        ((points['y'] <= xyz_region.ymax) & (points['y'] >= xyz_region.ymin))]
                         if xyz_region.zmin is not None:
-                            points =  points[(points['z'] > xyz_region.zmin)]
+                            points = points[(points['z'] >= xyz_region.zmin)]
 
                         if xyz_region.zmax is not None:
-                            points =  points[(points['z'] < xyz_region.zmax)]
+                            points = points[(points['z'] <= xyz_region.zmax)]
 
                         if xyz_region.wmin is not None:
-                            points =  points[(points['w'] > xyz_region.wmin)]
+                            points = points[(points['w'] >= xyz_region.wmin)]
                             
                         if xyz_region.wmax is not None:
-                            points =  points[(points['w'] < xyz_region.wmax)]
+                            points = points[(points['w'] <= xyz_region.wmax)]
                             
                         if xyz_region.umin is not None:
-                            points =  points[(points['u'] > xyz_region.umin)]
+                            points = points[(points['u'] >= xyz_region.umin)]
                             
                         if xyz_region.umax is not None:
-                            points =  points[(points['u'] < xyz_region.umax)]
+                            points = points[(points['u'] <= xyz_region.umax)]
 
                 if self.upper_limit is not None:
-                    points =  points[(points['z'] < self.upper_limit)]
+                    points = points[(points['z'] <= self.upper_limit)]
                     
                 if self.lower_limit is not None:
-                    points =  points[(points['z'] > self.lower_limit)]
+                    points = points[(points['z'] >= self.lower_limit)]
                     
                 if len(points) > 0:
                     ## apply any dlim filters to the points

@@ -1328,10 +1328,11 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
         gr_cmd = 'gdal_rasterize -b {} -burn {} -l {} {} {}{}'\
             .format(band_count, gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_gdal, ' -i' if invert else '')
         out, status = utils.run_cmd(gr_cmd, verbose=verbose)
-        utils.remove_glob(tmp_ply)
-        #utils.remove_glob('{}*'.format(utils.fn_basename2(tmp_ply)))#'__tmp_clp_ply.*')
+        #utils.remove_glob(tmp_ply)
+        utils.remove_glob('{}*'.format(utils.fn_basename2(tmp_ply)))#'__tmp_clp_ply.*')
     else:
-        utils.remove_glob(tmp_ply)
+        utils.remove_glob('{}*'.format(utils.fn_basename2(tmp_ply)))
+        #utils.remove_glob(tmp_ply)
         return(None, -1)
     
     return(out, status)

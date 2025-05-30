@@ -203,7 +203,8 @@ class Waffle:
             self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
-        utils.echo_msg('output config: {}'.format(self.ds_config))
+        if self.verbose:
+            utils.echo_msg('output config: {}'.format(self.ds_config))
         
         self.status = self._init()
         return(self)            
@@ -3246,45 +3247,53 @@ class WafflesCUDEM(Waffle):
                 pre_clip = coastline
 
         ## Grid/Stack the data `pre` times concluding in full resolution with data > min_weight
-        for pre in range(self.pre_count, -1, -1): # pre_count - 1
-            pre_xinc = self.inc_levels[pre]
-            pre_yinc = self.inc_levels[pre]
-            xsample = self.inc_levels[pre-1] if pre != 0 else self.xinc
-            ysample = self.inc_levels[pre-1] if pre != 0 else self.yinc
-            
-            ## if not final or initial output, setup the configuration for the pre-surface
-            if pre != self.pre_count:
-                pre_weight = self.weight_levels[pre]
-                _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
-                pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
-                    _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight
-                )
-                #utils.echo_msg(pre_data_entry)
-                pre_data = [stack_data_entry, pre_data_entry]
-                #pre_data = [stack_data_entry]
-                pre_region.wmin = pre_weight
-                
-            ## reset pre_region for final grid
-            if pre == 0:
-                pre_region = self.p_region.copy()
-                pre_region.wmin = self.weight_levels[pre]
 
-            _pre_name = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre))
-            if self.verbose:
-                utils.echo_msg('pre region: {}'.format(pre_region))
-                utils.echo_msg('pre data: {}'.format(pre_data))
+        with tqdm(
+                total=self.pre_count+1,
+                desc='generating CUDEM surfaces',
+                leave=self.verbose
+        ) as pbar:
+            for pre in range(self.pre_count, -1, -1): # pre_count - 1
+                pre_xinc = self.inc_levels[pre]
+                pre_yinc = self.inc_levels[pre]
+                xsample = self.inc_levels[pre-1] if pre != 0 else self.xinc
+                ysample = self.inc_levels[pre-1] if pre != 0 else self.yinc
 
-            waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
-            utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))
-            pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc, yinc=pre_yinc, xsample=xsample, ysample=ysample,#xsample=None, ysample=None,
-                                        name=_pre_name, node='pixel', want_weight=True, want_uncertainty=self.want_uncertainty,
-                                        dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.pre_verbose,
-                                        clip=pre_clip if pre !=0 else None, stack_mode='supercede' if (pre == 0 and self.want_supercede) else self.stack_mode,
-                                        #supercede=self.want_supercede if pre == 0 else self.supercede,
-                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else None,
-                                        percentile_limit=self.flatten if pre == 0 else None)._acquire_module()
-            pre_surface.initialize()
-            pre_surface.generate()
+                ## if not final or initial output, setup the configuration for the pre-surface
+                if pre != self.pre_count:
+                    pre_weight = self.weight_levels[pre]
+                    _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
+                    pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
+                        _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight
+                    )
+                    #utils.echo_msg(pre_data_entry)
+                    pre_data = [stack_data_entry, pre_data_entry]
+                    #pre_data = [stack_data_entry]
+                    pre_region.wmin = pre_weight
+
+                ## reset pre_region for final grid
+                if pre == 0:
+                    pre_region = self.p_region.copy()
+                    pre_region.wmin = self.weight_levels[pre]
+
+                _pre_name = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre))
+                # if self.verbose:
+                #     utils.echo_msg('pre region: {}'.format(pre_region))
+                #     utils.echo_msg('pre data: {}'.format(pre_data))
+                #     utils.echo_msg('pre weight: {}'.format(pre_weight))
+
+                waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
+                utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))
+                pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc, yinc=pre_yinc, xsample=xsample, ysample=ysample,
+                                            name=_pre_name, node='pixel', want_weight=True, want_uncertainty=self.want_uncertainty,
+                                            dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.pre_verbose,
+                                            clip=pre_clip if pre !=0 else None, stack_mode='mixed:weight_threshold={}'.format(pre_weight),
+                                            #stack_mode='supercede' if (pre == 0 and self.want_supercede) else self.stack_mode,
+                                            upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else None,
+                                            percentile_limit=self.flatten if pre == 0 else None)._acquire_module()
+                pre_surface.initialize()
+                pre_surface.generate()
+                pbar.update()
 
         ## todo add option to flatten here...or move flatten up
         #os.replace(pre_surface.fn, self.fn)
@@ -4973,7 +4982,7 @@ class WaffleDEM:
 
         if self.verbose:
             utils.echo_msg('Processed DEM: {}'.format(self.fn))
-            utils.echo_msg('{}'.format(gdalfun.gdal_infos(self.fn)))
+            #utils.echo_msg('{}'.format(gdalfun.gdal_infos(self.fn)))
             
     def set_nodata(self, ndv):
         if self.ds_config['ndv'] != ndv:
@@ -5051,7 +5060,8 @@ class WaffleDEM:
     def cut(self, region = None, node = 'grid'):
         if region is not None:
             _tmp_cut, cut_status = gdalfun.gdal_cut_trans(
-                self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node=node, co=self.co
+                self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir),
+                node=node, co=self.co, verbose=self.verbose
             )
             if cut_status == 0:
                 os.replace(_tmp_cut, self.fn)
