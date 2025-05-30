@@ -1008,14 +1008,17 @@ def cudem_flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshol
     """Flatten nodata areas larger than `size_threshhold`"""
     ## load src_dem array
     with gdal_datasource(src_dem, update=True if dst_dem is None else False) as src_ds:
-        src_arr = src_ds.GetRasterBand(band).ReadAsArray()
-        src_config = gdal_infos(src_ds)
-        src_arr = flatten_no_data_zones(src_arr, src_config, size_threshold=size_threshold, verbose=verbose)
-        
-        if dst_dem is None:
-            src_ds.GetRasterBand(band).WriteArray(src_arr)
+        if src_ds is not None:
+            src_arr = src_ds.GetRasterBand(band).ReadAsArray()
+            src_config = gdal_infos(src_ds)
+            src_arr = flatten_no_data_zones(src_arr, src_config, size_threshold=size_threshold, verbose=verbose)
+
+            if dst_dem is None:
+                src_ds.GetRasterBand(band).WriteArray(src_arr)
+            else:
+                gdal_write(src_arr, dst_dem, src_config)
         else:
-            gdal_write(src_arr, dst_dem, src_config)
+            return(src_dem, -1)
 
     return(dst_dem if dst_dem is not None else src_dem, 0)
 
