@@ -1354,7 +1354,14 @@ class GMTSurface(Waffle):
                  aspect=None, breakline=None, convergence=None, blockmean=False,
                  geographic=True, **kwargs):
         super().__init__(**kwargs)
-        self.tension = tension
+        if utils.float_or(tension) is not None:
+            if utils.float_or(tension) > 1:
+                self.tension = 1
+            else:
+                self.tension = tension
+        else:
+            self.tension = .35
+
         self.convergence = utils.float_or(convergence)
         self.relaxation = relaxation
         self.breakline = breakline

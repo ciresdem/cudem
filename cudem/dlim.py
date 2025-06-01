@@ -987,7 +987,11 @@ class BinZ(PointFilter):
 
 ## Adapted from https://medium.com/@anthony.klemm/dealing-with-outliers-in-crowdsourced-bathymetry-data-using-predictive-mean-matching-pmm-bc490c158c7e
 class PMMOutliers(PointFilter):
-    def __init__(self, percentile = 98, max_percentile = 99.9, multipass = 1, want_iqr = False, return_outliers = False, **kwargs):
+    def __init__(
+            self, percentile = 98, max_percentile = 99.9,
+            multipass = 1, want_iqr = False, return_outliers = False,
+            **kwargs
+    ):
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile, 98)
         self.max_percentile = utils.float_or(max_percentile, 99)
@@ -1001,7 +1005,7 @@ class PMMOutliers(PointFilter):
             from sklearn.experimental import enable_iterative_imputer
             from sklearn.impute import IterativeImputer
             from sklearn.preprocessing import StandardScaler
-        
+
             scaler = StandardScaler(with_mean=False)
             #data_scaled = scaler.fit_transform(data[[‘lat’, ‘lon’, ‘depth’]])
             #print(np.array([self.points['y'], self.points['x'], self.points['z']]))
@@ -1014,10 +1018,10 @@ class PMMOutliers(PointFilter):
         except:
             utils.echo_warning_msg('you must install sklearn for imputing')
             data_imputed = p
-            
+
         from scipy.ndimage import uniform_filter1d
         smoothed_depth = uniform_filter1d(data_imputed[:, 2], size=50)
-        residuals = np.abs(data_imputed[:, 2], - smoothed_depth)
+        residuals = np.abs(data_imputed[:, 2] - smoothed_depth)
         #smoothed_depth = uniform_filter1d(points['z'], size=50)
         #residuals = np.abs(points['z'] - smoothed_depth)
         if want_iqr:
@@ -1049,11 +1053,94 @@ class PMMOutliers(PointFilter):
             self.points = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr, return_outliers=self.return_outliers)
             
         return(self.points)
+
+class RQOutliers(PointFilter):
+    def __init__(
+            self, percentile = 98, max_percentile = 99.9,
+            multipass = 2, want_iqr = False, return_outliers = False,
+            src_raster = None, **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.percentile = utils.float_or(percentile, 98)
+        self.max_percentile = utils.float_or(max_percentile, 99)
+        self.multipass = utils.int_or(multipass, 1)
+        self.want_iqr = want_iqr
+        self.return_outliers = return_outliers
+        self.src_raster = src_raster
+
+    def _fetch_gmrt(self, gmrt_region = None, dst_srs = None):
+        """GMRT - Global low-res.
+        """
+        
+        this_gmrt = fetches.GMRT(
+            src_region=gmrt_region, verbose=self.verbose, layer='topo', outdir='./'#outdir=self.cache_dir
+        )
+        this_gmrt.run()
+
+        fr = fetches.fetch_results(this_gmrt)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        # dst_srs = osr.SpatialReference()
+        # dst_srs.SetFromUserInput(self.dst_srs)
+        
+        gmrt_tif = os.path.join(this_gmrt._outdir, this_gmrt.results[0]['dst_fn'])
+        # gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt', co=self.co)
+        # gdal.Warp(gmrt_ds, gmrt_tif, dstSRS=dst_srs, resampleAlg=self.sample)
+        # return(gmrt_ds)
+        return(gmrt_tif)
+    
+    def rq(self, points, raster, percentile = 98, want_iqr=False, return_outliers=False):
+        p = np.array([points['y'], points['x'], points['z']]).T
+        raster_z = gdalfun.gdal_query(points, raster, 'g').flatten()            
+        residuals = np.abs(p[:,2] - raster_z)
+        #smoothed_depth = uniform_filter1d(points['z'], size=50)
+        #residuals = np.abs(points['z'] - smoothed_depth)
+        if want_iqr:
+            perc_max = np.nanpercentile(residuals, percentile)            
+            iqr_p = (perc_max - (100-percentile)) * 1.5
+            outlier_threshold = perc_max + iqr_p
+        else:
+            outlier_threshold = np.percentile(residuals, percentile)
+
+        outliers = residuals >= outlier_threshold
+
+        if self.verbose:
+            utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
+
+        if return_outliers:
+            return(points[outliers])
+        else:
+            return(points[~outliers])
+            #return(data_imputed[~outliers])
+        
+    def run(self):
+
+        if self.src_raster is None:
+            region = regions.Region().from_list([np.min(self.points['x']), np.max(self.points['x']), np.min(self.points['y']), np.max(self.points['y'])])            
+            self.src_raster = self._fetch_gmrt()
+        #if self.want_iqr:
+        #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
+        #else:
+        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
+            
+        for mpass in range(0, self.multipass):
+            self.points = self.rq(
+                self.points,
+                self.src_raster,
+                percentile=percs_it[mpass],
+                want_iqr=self.want_iqr,
+                return_outliers=self.return_outliers
+            )
+            
+        return(self.points)
     
 class PointFilterFactory(factory.CUDEMFactory):
     _modules = {
         'bin_z': {'name': 'bin_z', 'call': BinZ},
         'pmm': {'name': 'pmm', 'call': PMMOutliers},
+        'rq': {'name': 'rq', 'call': RQOutliers},
     }
     
     def __init__(self, **kwargs):
@@ -1455,7 +1542,7 @@ class ElevationDataset:
             #self.stack_fltrs = [self.stack_fltrs]
 
         if isinstance(self.pnt_fltrs, str):
-            self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
+            self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('//'))]
 
         #self._init_stack_mode()
             
@@ -8753,7 +8840,7 @@ See `datalists_usage` for full cli options.
         sys.exit(0)
 
     stack_fltrs = [':'.join(f.split('/')) for f in stack_fltrs]
-    pnt_fltrs = [':'.join(f.split('/')) for f in pnt_fltrs]
+    pnt_fltrs = [':'.join(f.split('//')) for f in pnt_fltrs]
     if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, want_verbose)
     for rn, this_region in enumerate(these_regions):

@@ -91,7 +91,7 @@ def args2dict(args, dict_args: dict = {}):
     Returns:
       dict_args: a dictionary of the key/values
     """
-    
+
     for arg in args:
         #this_entry = re.findall(r'[^"\s]\S*|".+?"', arg)
         p_arg = arg.split('=')
@@ -329,7 +329,7 @@ class CUDEMFactory:
         Returns:
           (module-name, module-arguments)
         """
-        
+
         opts = mod.split(':')
         self.mod_args = {}
         if opts[0] in self._modules.keys():
