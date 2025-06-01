@@ -2422,21 +2422,21 @@ class ElevationDataset:
                 ## supercede based on weights, else do weighted mean
                 ## todo: do (weighted) mean on cells with same weight
                 if mode == 'supercede':
-                    mask = arrs['weight'] > (stacked_data['weights'] / stacked_data['count'])
+                    sup_mask = arrs['weight'] > (stacked_data['weights'] / stacked_data['count'])
                     if self.want_mask:
                         # remove the mask from other bands
-                        reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=mask)
-                        m_array[(mask) & (arrs['count'] != 0)] = 1
-                        m_all_array[(mask) & (arrs['count'] != 0)] = 1
+                        reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=sup_mask)
+                        m_array[(sup_mask) & (arrs['count'] != 0)] = 1
+                        m_all_array[(sup_mask) & (arrs['count'] != 0)] = 1
                     
                     ## higher weight supercedes lower weight (first come first served atm)
-                    stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
-                    stacked_data['x'][arrs['weight'] > stacked_data['weights']] = arrs['x'][arrs['weight'] > stacked_data['weights']]
-                    stacked_data['y'][arrs['weight'] > stacked_data['weights']] = arrs['y'][arrs['weight'] > stacked_data['weights']]
-                    stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
-                    stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['z'][(sup_mask)] = arrs['z'][(sup_mask)]
+                    stacked_data['x'][(sup_mask)] = arrs['x'][(sup_mask)]
+                    stacked_data['y'][(sup_mask)] = arrs['y'][(sup_mask)]
+                    stacked_data['src_uncertainty'][(sup_mask)] = arrs['uncertainty'][(sup_mask)]
+                    stacked_data['weights'][(sup_mask)] = arrs[(sup_mask)]
                     ## uncertainty is src_uncertainty, as only one point goes into a cell
-                    stacked_data['uncertainty'][:] = np.array(stacked_data['src_uncertainty'])
+                    stacked_data['uncertainty'][(sup_mask)] = np.array(stacked_data['src_uncertainty'][(sup_mask)])
 
                 elif mode == 'mixed':
                     ## weights above threshold supercede weights below threshold, otherwise meaned...
@@ -6282,6 +6282,7 @@ class OGRFile(ElevationDataset):
                  weight_field = None,
                  uncertainty_field = None,
                  z_scale = None,
+                 elevation_value = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.ogr_layer = ogr_layer
@@ -6289,6 +6290,7 @@ class OGRFile(ElevationDataset):
         self.weight_field = weight_field
         self.uncertainty_field = uncertainty_field
         self.z_scale = utils.float_or(z_scale)
+        self.elevation_value = utils.float_or(elevation_value)
 
     def find_elevation_layer(self, ds_ogr):
         for l in self._known_layer_names:
@@ -6298,10 +6300,11 @@ class OGRFile(ElevationDataset):
         return(None, None)
 
     def find_elevation_field(self, ogr_feature):
-        for f in self._known_elev_fields:
+        for f in self._known_elev_fields:            
             test_field = ogr_feature.GetField(f)
             if test_field is not None:
                 return((l, test_field))
+            
         return(None, None)
     
     def yield_points(self):
@@ -6312,17 +6315,29 @@ class OGRFile(ElevationDataset):
             layer_name = None
             if self.ogr_layer is None:
                 layer_name, layer_s = self.find_elevation_layer(ds_ogr)
+
+                if layer_name is None:
+                    layer_s = ds_ogr.GetLayer()
+                    
             elif utils.str_or(self.ogr_layer) is not None:
                 layer_name = self.ogr_layer
                 layer_s = ds_ogr.GetLayer(str(self.ogr_layer))
                 if layer_s is None:
                     layer_name, layer_s = self.find_elevation_layer(ds_ogr)
+                    
             elif utils.int_or(self.ogr_layer) is not None:
                 layer_s = ds_ogr.GetLayer(self.ogr_layer)
             else:
                 layer_s = ds_ogr.GetLayer()
 
             if layer_s is not None:
+                field_names = [field.name for field in layer_s.schema]
+                if self.elev_field not in field_names:                    
+                    for field_name in field_names:
+                        if field_name in self._known_elev_fields:
+                            self.elev_field = field_name
+                            break
+                    
                 if self.region is not None:
                     layer_s.SetSpatialFilter(
                         self.region.export_as_geom() if self.transform['transformer'] is None else self.transform['trans_region'].export_as_geom()
@@ -6333,20 +6348,28 @@ class OGRFile(ElevationDataset):
                     g = json.loads(geom.ExportToJson())
                     #utils.echo_msg(g)
                     xyzs = g['coordinates']
-                    if not geom.GetGeometryName() == 'MULTIPOINT':
+                    if geom.GetGeometryName() != 'MULTIPOINT':# and 'POLYGON' not in geom.GetGeometryName():
                         xyzs = [xyzs]
 
                     out_xyzs = []
                     for xyz in xyzs:
                         if not geom.Is3D():
-                            if self.elev_field is None:
-                                self.elev_field = self.find_elevation_field(f)
+                            # if self.elev_field is None:
+                            #     self.elev_field = self.find_elevation_field(f)
 
-                            elev = utils.float_or(f.GetField(self.elev_field))
+                            if self.elev_field is None:
+                                if self.elevation_value is None:
+                                    elev = 0
+                                else:
+                                    elev = self.elevation_value
+                            else:
+                                elev = utils.float_or(f.GetField(self.elev_field))
+                                
                             if elev is not None:                                
                                 if isinstance(xyz[0], list):
                                     for x in xyz:
                                         for xx in x:
+                                            #utils.echo_msg(xx)
                                             xx.append(elev)
                                 else:
                                     xyz.append(elev)
@@ -6354,26 +6377,41 @@ class OGRFile(ElevationDataset):
                                 continue
 
                         else:
-                            if self.elev_field is not None:
+                            if self.elev_field is None:
+                                if self.elevation_value is None:
+                                    elev = 0
+                                else:
+                                    elev = self.elevation_value
+                                    
+                            else:
                                 elev = utils.float_or(f.GetField(self.elev_field))
-                                if isinstance(xyz[0], list):
-                                    for x in xyz:
-                                        for xx in x:
-                                            xx[2] = elev
+                                
+                            if isinstance(xyz[0], list):
+                                for x in xyz:
+                                    for xx in x:
+                                        xx[2] = elev
 
                     if isinstance(xyzs[0], list):
                         for x in xyzs:
                             if isinstance(x[0], list):
                                 for xx in x:
                                     points = np.rec.fromrecords(xx, names='x, y, z')
+                                    if self.z_scale is not None:
+                                        points['z'] *= self.z_scale
+
+                                    yield(points)
                             else:
                                 points = np.rec.fromrecords([x], names='x, y, z')
+                                if self.z_scale is not None:
+                                    points['z'] *= self.z_scale
 
-                    #points = np.rec.fromrecords(out_xyzs, names='x, y, z')
-                    if self.z_scale is not None:
-                        points['z'] *= self.z_scale
+                                yield(points)
+                                
+                    # #points = np.rec.fromrecords(out_xyzs, names='x, y, z')
+                    # if self.z_scale is not None:
+                    #     points['z'] *= self.z_scale
 
-                    yield(points)
+                    # yield(points)
                             
             ds_ogr = layer_s = None
 

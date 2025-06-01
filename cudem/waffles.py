@@ -3168,7 +3168,6 @@ class WafflesCUDEM(Waffle):
             return(None)
             
     def run(self):
-
         if self.verbose:
             utils.echo_msg_bold('==============================================')
             utils.echo_msg('')
@@ -3276,12 +3275,17 @@ class WafflesCUDEM(Waffle):
                     #utils.echo_msg(pre_data_entry)
                     pre_data = [stack_data_entry, pre_data_entry]
                     #pre_data = [stack_data_entry]
-                    pre_region.wmin = pre_weight
+                    pre_region.wmin = None#pre_weight
 
                 ## reset pre_region for final grid
                 if pre == 0:
                     pre_region = self.p_region.copy()
-                    pre_region.wmin = self.weight_levels[pre]
+                    pre_region.wmin = None#self.weight_levels[pre]
+
+                    # if self.landmask:            
+                    #     if isinstance(self.landmask, str):
+                    #         if os.path.exists(self.landmask.split(':')[0]):
+                    #             pre_data.append('{},302:elev=0,{}'.format(self.landmask, pre_weight))
 
                 _pre_name = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre))
                 # if self.verbose:
@@ -3290,7 +3294,7 @@ class WafflesCUDEM(Waffle):
                 #     utils.echo_msg('pre weight: {}'.format(pre_weight))
 
                 last_fltr = ['weights:stacks=True:weight_threshold={}:buffer_cells=2:verbose=False'.format(self.weight_levels[0])]
-                waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'cubic'
+                waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
                 utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))
                 pre_surface = WaffleFactory(
                     mod=waffles_mod,
@@ -3307,9 +3311,9 @@ class WafflesCUDEM(Waffle):
                     dst_srs=self.dst_srs,
                     srs_transform=self.srs_transform,
                     clobber=True,
-                    verbose=self.pre_verbose,
+                    verbose=True,#self.pre_verbose,
                     clip=pre_clip if pre !=0 else None,
-                    stack_mode='mixed:weight_threshold={}'.format(self.weight_levels[0]) if pre == 0 else 'mean',
+                    stack_mode='mixed:weight_threshold={}'.format(self.weight_levels[0]),# if pre == 0 else 'mean',
                     #stack_mode='supercede' if (pre == 0 and self.want_supercede) else self.stack_mode,
                     upper_limit=self.pre_upper_limit if pre != 0 else None,
                     keep_auxiliary=False,
