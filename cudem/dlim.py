@@ -2183,6 +2183,22 @@ class ElevationDataset:
                         
             return(m_band)
 
+        def reset_mask_bands(m_ds, srcwin, except_band_name = None, mask = None):
+            for b in range(1, m_ds.RasterCount+1):
+                this_band = m_ds.GetRasterBand(b)
+                this_band_name = this_band.GetDescription()
+                
+                if this_band_name != except_band_name:
+                    this_band_array = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    if mask is None:
+                        mask = ~np.isnan(this_band_array)
+                        
+                    this_band_array[(mask)] = 0                        
+                    this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
+                    m_ds.FlushCache()
+                    
+                this_band_array = this_band = None
+        
         ## this is a bit convoluted, we're writing the mem mask to disk, then
         ## creating a VRT with the `good_bands` and re-writing that to a final
         ## mask raster...This is all to remove bands that have no data...other methods
@@ -2409,19 +2425,7 @@ class ElevationDataset:
                     mask = arrs['weight'] > (stacked_data['weights'] / stacked_data['count'])
                     if self.want_mask:
                         # remove the mask from other bands
-                        m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
-                        current_band_name = m_band.GetDescription()
-                        for b in range(1, m_ds.RasterCount+1):
-                            this_band = m_ds.GetRasterBand(b)
-                            this_band_name = this_band.GetDescription()
-
-                            if this_band_name != current_band_name:
-                                this_band_array = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                                this_band_array[(mask) & (arrs['count'] != 0)] = 0
-                                this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
-                                m_ds.FlushCache()
-                                this_band_array = None
-
+                        reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=mask)
                         m_array[(mask) & (arrs['count'] != 0)] = 1
                         m_all_array[(mask) & (arrs['count'] != 0)] = 1
                     
@@ -2448,20 +2452,8 @@ class ElevationDataset:
                     weight_above_sup = (arrs['weight'] >= wt) & (tmp_stacked_weight < wt)
                     #if np.any(weight_above_sup):
                     if self.want_mask:
-                        # remove the mask from other bands
-                        m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
-                        current_band_name = m_band.GetDescription()
-                        for b in range(1, m_ds.RasterCount+1):
-                            this_band = m_ds.GetRasterBand(b)
-                            this_band_name = this_band.GetDescription()
-
-                            if this_band_name != current_band_name:
-                                this_band_array = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                                this_band_array[(weight_above_sup) & (arrs['count'] != 0)] = 0
-                                this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
-                                m_ds.FlushCache()
-                                this_band_array = None
-
+                        # remove the mask from superceded bands
+                        reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_above_sup)
                         m_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
                         m_all_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
 
