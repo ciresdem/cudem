@@ -2193,10 +2193,14 @@ class ElevationDataset:
                     this_band_array = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     if mask is None:
                         mask = ~np.isnan(this_band_array)
+
+                    masked = this_band_array[(mask)] == 1
+                    if np.any(masked):
+                        this_band_array[(mask)][(masked)] = 0                        
+                        #this_band_array[(mask)] = 0                        
+                        this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
+                        m_ds.FlushCache()
                         
-                    this_band_array[(mask)] = 0                        
-                    this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
-                    m_ds.FlushCache()
                     this_band_array = None
                     
                 this_band = None
@@ -6152,9 +6156,10 @@ class MBSParser(ElevationDataset):
                 mb_format = None
         except:
             mb_format = None
-            
+
+        #'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
         for line in utils.yield_cmd(
-                'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
+                'mblist -M{}{} -OXYZDc -I{}{}'.format(
                     self.mb_exclude, ' {}'.format(
                         mb_region.format('gmt') if mb_region is not None else ''
                     ), mb_fn, ' -F{}'.format(mb_format) if mb_format is not None else ''
@@ -6167,48 +6172,48 @@ class MBSParser(ElevationDataset):
                 y = this_line[1]
                 z = this_line[2]
                 crosstrack_distance = this_line[3]
-                crosstrack_slope = this_line[4]
-                flat_bottom_grazing_angle = this_line[5]
-                seafloor_grazing_angle = this_line[6]
-                beamflag = this_line[7]
-                pitch = this_line[8]
-                draft = this_line[9]
-                roll = this_line[10]
-                heave = this_line[11]
-                speed = this_line[12]
-                sonar_alt = this_line[13]
-                sonar_depth = this_line[14]
+                #crosstrack_slope = this_line[4]
+                #flat_bottom_grazing_angle = this_line[5]
+                #seafloor_grazing_angle = this_line[6]
+                #beamflag = this_line[7]
+                #pitch = this_line[8]
+                #draft = this_line[9]
+                #roll = this_line[10]
+                #heave = this_line[11]
+                #speed = this_line[12]
+                #sonar_alt = this_line[13]
+                sonar_depth = this_line[4]
 
                 #utils.echo_msg(this_line)
 
-                if int(beamflag) == 0:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
+                #if int(beamflag) == 0:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
 
-                    xs.append(x)
-                    ys.append(y)
-                    zs.append(z)
-                    ## uncertainty
-                    #u_depth = 0
-                    u_depth = ((2+(0.02*(z*-1)))*0.51)
-                    u_s_depth = ((2+(0.02*(sonar_depth*-1)))*0.51)
-                    #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
-                    u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
-                    #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
-                    #u_cd = 0
-                    u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
-                    u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2 + u_s_depth**2)
-                    us.append(u)
-                    if self.auto_weight:
-                        ## weight
+                xs.append(x)
+                ys.append(y)
+                zs.append(z)
+                ## uncertainty
+                #u_depth = 0
+                u_depth = ((2+(0.02*(z*-1)))*0.51)
+                u_s_depth = ((2+(0.02*(sonar_depth*-1)))*0.51)
+                #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
+                u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
+                #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
+                #u_cd = 0
+                u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
+                u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2 + u_s_depth**2)
+                us.append(u)
+                if self.auto_weight:
+                    ## weight
 
-                        # if mb_perc is not None and mb_date is not None:
-                        #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
-                        #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
-                        #     w *= self.weight if self.weight is not None else 1
-                        # else:
-                        w = (1/u)
-                        w *= self.weight if self.weight is not None else 1
+                    # if mb_perc is not None and mb_date is not None:
+                    #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+                    #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
+                    #     w *= self.weight if self.weight is not None else 1
+                    # else:
+                    w = (1/u)
+                    w *= self.weight if self.weight is not None else 1
 
-                        ws.append(w)
+                    ws.append(w)
             else:
                 x = this_line[0]
                 y = this_line[1]
