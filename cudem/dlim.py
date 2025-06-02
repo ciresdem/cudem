@@ -1022,6 +1022,8 @@ class PMMOutliers(PointFilter):
         from scipy.ndimage import uniform_filter1d
         smoothed_depth = uniform_filter1d(data_imputed[:, 2], size=50)
         residuals = np.abs(data_imputed[:, 2] - smoothed_depth)
+        
+        data_imputed = smoothed_depth = imputer = None
         #smoothed_depth = uniform_filter1d(points['z'], size=50)
         #residuals = np.abs(points['z'] - smoothed_depth)
         if want_iqr:
@@ -1047,8 +1049,7 @@ class PMMOutliers(PointFilter):
         #if self.want_iqr:
         #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
         #else:
-        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
-            
+        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)            
         for mpass in range(0, self.multipass):
             self.points = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr, return_outliers=self.return_outliers)
             
@@ -2196,8 +2197,9 @@ class ElevationDataset:
                     this_band_array[(mask)] = 0                        
                     this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
                     m_ds.FlushCache()
+                    this_band_array = None
                     
-                this_band_array = this_band = None
+                this_band = None
         
         ## this is a bit convoluted, we're writing the mem mask to disk, then
         ## creating a VRT with the `good_bands` and re-writing that to a final
@@ -2453,7 +2455,22 @@ class ElevationDataset:
                     #if np.any(weight_above_sup):
                     if self.want_mask:
                         # remove the mask from superceded bands
-                        reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_above_sup)
+                        #reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_above_sup)
+                        for b in range(1, m_ds.RasterCount+1):
+                            this_band = m_ds.GetRasterBand(b)
+                            this_band_name = this_band.GetDescription()
+                            
+                            if this_band_name != m_band.GetDescription():
+                                this_band_array = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                                masked = this_band_array[(weight_above_sup)] == 1
+                                if np.any(masked):
+                                    this_band_array[(weight_above_sup)][(masked)] = 0                        
+                                    this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
+                                    m_ds.FlushCache()
+                                    this_band_array = None
+
+                            this_band = None
+                        
                         m_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
                         m_all_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
 
@@ -2464,7 +2481,7 @@ class ElevationDataset:
                     stacked_data['src_uncertainty'][weight_above_sup] = arrs['uncertainty'][weight_above_sup]
                     stacked_data['weights'][weight_above_sup] = arrs['weight'][weight_above_sup]
                     stacked_data['uncertainty'][weight_above_sup] = np.array(stacked_data['src_uncertainty'][weight_above_sup])
-
+                    
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                         
@@ -3169,8 +3186,11 @@ class ElevationDataset:
                             else:
                                 out_arrays[arr][np.isnan(mask_data)] = np.nan
 
+                mask_data = None
+                
             yield(out_arrays, this_srcwin, this_gt)
-
+        
+        src_mask = mask_band = None
         if data_mask is not None:
             utils.remove_glob('{}*'.format(data_mask))
 
@@ -3204,7 +3224,9 @@ class ElevationDataset:
                                             yield(this_xyz)
                                     else:
                                         if not this_entry.mask['invert_mask']:
-                                            yield(this_xyz)                                            
+                                            yield(this_xyz)
+                                            
+                        src_ds = ds_band = None
                 else:
                     ## this is very slow! find another way.
                     src_ds = ogr.Open(this_entry.mask['mask'])
@@ -3225,9 +3247,11 @@ class ElevationDataset:
                             else:
                                 if not this_entry.mask['invert_mask']:
                                     yield(this_xyz)
+
+                        src_ds = ds_band = None
                     else:
                         yield(this_xyz)
-        
+                                
     def yield_xyz(self):
         """Yield the data as xyz points
 
@@ -3452,7 +3476,6 @@ class ElevationDataset:
             
             sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-
             sx = sds_x_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             sy = sds_y_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             for x in range(0, sds.RasterXSize):
@@ -3469,7 +3492,10 @@ class ElevationDataset:
                         )
                         
                     yield(out_xyz)
-        sds = None
+                    
+            sw = su = sx = sy = None
+                    
+        sds = sds_z_band = sds_w_band = sds_u_band = sds_x_band = sds_y_band = None
 
     def stacks_yield_xyz_h5(self, out_name = None, ndv = -9999):#, mode = 'mean'):
         """yield the result of `_stacks` as an xyz object"""
