@@ -3311,7 +3311,7 @@ class WafflesCUDEM(Waffle):
                     dst_srs=self.dst_srs,
                     srs_transform=self.srs_transform,
                     clobber=True,
-                    verbose=True,#self.pre_verbose,
+                    verbose=self.pre_verbose,
                     clip=pre_clip if pre !=0 else None,
                     stack_mode='mixed:weight_threshold={}'.format(self.weight_levels[0]),# if pre == 0 else 'mean',
                     #stack_mode='supercede' if (pre == 0 and self.want_supercede) else self.stack_mode,
