@@ -2107,7 +2107,7 @@ class ElevationDataset:
             ndv = -9999,
             fmt = 'GTiff',
             #mask_only = False,
-            mask_level = 0
+            mask_level = 10
     ):
         """stack and mask incoming arrays (from `array_yield`) together
 
