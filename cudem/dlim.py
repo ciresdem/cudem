@@ -6159,7 +6159,7 @@ class MBSParser(ElevationDataset):
 
         #'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
         for line in utils.yield_cmd(
-                'mblist -M{}{} -OXYZDc -I{}{}'.format(
+                'mblist -M{}{} -OXYZDSc -I{}{}'.format(
                     self.mb_exclude, ' {}'.format(
                         mb_region.format('gmt') if mb_region is not None else ''
                     ), mb_fn, ' -F{}'.format(mb_format) if mb_format is not None else ''
@@ -6180,9 +6180,9 @@ class MBSParser(ElevationDataset):
                 #draft = this_line[9]
                 #roll = this_line[10]
                 #heave = this_line[11]
-                #speed = this_line[12]
+                speed = this_line[4]
                 #sonar_alt = this_line[13]
-                sonar_depth = this_line[4]
+                sonar_depth = this_line[5]
 
                 #utils.echo_msg(this_line)
 
