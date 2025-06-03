@@ -2467,24 +2467,24 @@ class ElevationDataset:
                     #if np.any(weight_above_sup):
                     if self.want_mask:
                         # remove the mask from superceded bands
-                        #reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_above_sup)
-                        for b in range(1, m_ds.RasterCount+1):
-                            this_band = m_ds.GetRasterBand(b)
-                            this_band_name = this_band.GetDescription()
+                        reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_above_sup)
+                        # for b in range(1, m_ds.RasterCount+1):
+                        #     this_band = m_ds.GetRasterBand(b)
+                        #     this_band_name = this_band.GetDescription()
                             
-                            if this_band_name != m_band.GetDescription():
-                                this_band_array = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                                masked = this_band_array[(weight_above_sup)] == 1
-                                if np.any(masked):
-                                    this_band_array[(weight_above_sup)][(masked)] = 0                        
-                                    this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
-                                    m_ds.FlushCache()
-                                    this_band_array = None
+                        #     if this_band_name != m_band.GetDescription():
+                        #         this_band_array = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                        #         masked = this_band_array[(weight_above_sup)] == 1
+                        #         if np.any(masked):
+                        #             this_band_array[(weight_above_sup)][(masked)] = 0                        
+                        #             this_band.WriteArray(this_band_array, srcwin[0], srcwin[1])
+                        #             m_ds.FlushCache()
+                        #             this_band_array = None
 
-                            this_band = None
+                        #     this_band = None
                         
-                        m_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
-                        m_all_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
+                        m_array[(weight_above_sup)] = 1
+                        m_all_array[(weight_above_sup)] = 1
 
                     stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
                     stacked_data['z'][weight_above_sup] = (arrs['z'][weight_above_sup] * arrs['weight'][weight_above_sup])
@@ -2500,8 +2500,8 @@ class ElevationDataset:
                     # average of incoming data with existing data above weight_threshold
                     weight_above = (arrs['weight'] >= wt) & (arrs['weight'] >= tmp_stacked_weight) & (~weight_above_sup)
                     if self.want_mask:
-                        m_array[(weight_above) & (arrs['count'] != 0)] = 1
-                        m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
+                        m_array[(weight_above)] = 1
+                        m_all_array[(weight_above)] = 1
                         
                     stacked_data['count'][weight_above] += arrs['count'][weight_above]
                     stacked_data['z'][weight_above] += (arrs['z'][weight_above] * arrs['weight'][weight_above])
@@ -2520,10 +2520,10 @@ class ElevationDataset:
                     # below
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    weight_below = (arrs['weight'] < wt) #& (arrs['weight'] >= tmp_stacked_weight)
+                    weight_below = (arrs['weight'] < wt) & (tmp_stacked_weight < wt)#& (arrs['weight'] >= tmp_stacked_weight)
                     if self.want_mask:
-                        m_array[(weight_below) & (arrs['count'] != 0)] = 1
-                        m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
+                        m_array[(weight_below)] = 1
+                        m_all_array[(weight_below)] = 1
                         
                     stacked_data['count'][weight_below] += arrs['count'][weight_below]
                     stacked_data['z'][weight_below] += (arrs['z'][weight_below] * arrs['weight'][weight_below])
