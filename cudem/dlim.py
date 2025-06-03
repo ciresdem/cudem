@@ -2483,8 +2483,8 @@ class ElevationDataset:
 
                         #     this_band = None
                         
-                        m_array[(weight_above_sup)] = 1
-                        m_all_array[(weight_above_sup)] = 1
+                        m_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
+                        m_all_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
 
                     stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
                     stacked_data['z'][weight_above_sup] = (arrs['z'][weight_above_sup] * arrs['weight'][weight_above_sup])
@@ -2500,8 +2500,8 @@ class ElevationDataset:
                     # average of incoming data with existing data above weight_threshold
                     weight_above = (arrs['weight'] >= wt) & (arrs['weight'] >= tmp_stacked_weight) & (~weight_above_sup)
                     if self.want_mask:
-                        m_array[(weight_above)] = 1
-                        m_all_array[(weight_above)] = 1
+                        m_array[(weight_above) & (arrs['count'] != 0)] = 1
+                        m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
                         
                     stacked_data['count'][weight_above] += arrs['count'][weight_above]
                     stacked_data['z'][weight_above] += (arrs['z'][weight_above] * arrs['weight'][weight_above])
@@ -2522,8 +2522,8 @@ class ElevationDataset:
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     weight_below = (arrs['weight'] < wt) & (tmp_stacked_weight < wt)#& (arrs['weight'] >= tmp_stacked_weight)
                     if self.want_mask:
-                        m_array[(weight_below)] = 1
-                        m_all_array[(weight_below)] = 1
+                        m_array[(weight_below) & (arrs['count'] != 0)] = 1
+                        m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
                         
                     stacked_data['count'][weight_below] += arrs['count'][weight_below]
                     stacked_data['z'][weight_below] += (arrs['z'][weight_below] * arrs['weight'][weight_below])
