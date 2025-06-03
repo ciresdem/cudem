@@ -1425,8 +1425,12 @@ class ElevationDataset:
         self.stack_mode_args = {}
         if self.stack_mode_name not in self.stack_modes:
             self.stack_mode_name = 'mean'
+            
         elif len(opts) > 1:
             self.stack_mode_args = factory.args2dict(list(opts[1:]), self.stack_mode_args)
+
+        if 'mask_level' not in self.stack_mode_args.keys():
+            self.stack_mode_args['mask_level'] = 0
         
     def _init_mask(self):
         if self.mask is not None:
@@ -2107,7 +2111,7 @@ class ElevationDataset:
             ndv = -9999,
             fmt = 'GTiff',
             #mask_only = False,
-            mask_level = 0
+            #mask_level = 0
     ):
         """stack and mask incoming arrays (from `array_yield`) together
 
@@ -2132,55 +2136,55 @@ class ElevationDataset:
         """
         
         def add_mask_band(m_ds, this_entry, mask_level = 0):
-            if mask_level < 0:
-                m_band = None
+            # if mask_level < 0:
+            #     m_band = None
+            #else:
+            m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
+            entry_name = this_entry.metadata['name']
+            if mask_level > 0:
+                if mask_level > len(entry_name.split('/')):
+                    mask_level = len(entry_name.split('/')) - 2
+
+                entry_name = '/'.join(entry_name.split('/')[:-mask_level])
+            elif mask_level < 0:
+                entry_name = '/'.join(entry_name.split('/')[:2])
+
+            if not entry_name in m_bands.keys():
+                m_ds.AddBand()
+                m_band = m_ds.GetRasterBand(m_ds.RasterCount)
+                m_band.SetNoDataValue(0)
+                m_band.SetDescription(entry_name)
             else:
-                m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
-                entry_name = this_entry.metadata['name']
-                if mask_level > 0:
-                    if mask_level > len(entry_name.split('/')):
-                        mask_level = len(entry_name.split('/')) - 2
+                m_band = m_ds.GetRasterBand(m_bands[entry_name])
 
-                    entry_name = '/'.join(entry_name.split('/')[:-mask_level])
-                elif mask_level < 0:
-                    entry_name = '/'.join(entry_name.split('/')[:2])
+            band_md = m_band.GetMetadata()
+            for k in this_entry.metadata.keys():
+                if k not in band_md.keys() or band_md[k] is None:
+                    #utils.echo_msg(this_entry.metadata[k])
+                    band_md[k] = this_entry.metadata[k]
+                ## mrl commented out for no_wa.datalist
+                #else:
+                #    band_md[k] = None
 
-                if not entry_name in m_bands.keys():
-                    m_ds.AddBand()
-                    m_band = m_ds.GetRasterBand(m_ds.RasterCount)
-                    m_band.SetNoDataValue(0)
-                    m_band.SetDescription(entry_name)
-                else:
-                    m_band = m_ds.GetRasterBand(m_bands[entry_name])
-
-                band_md = m_band.GetMetadata()
-                for k in this_entry.metadata.keys():
-                    if k not in band_md.keys() or band_md[k] is None:
-                        #utils.echo_msg(this_entry.metadata[k])
-                        band_md[k] = this_entry.metadata[k]
-                    ## mrl commented out for no_wa.datalist
-                    #else:
-                    #    band_md[k] = None
-
-                band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
-                band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
+            band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
+            band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
+            try:
+                m_band.SetMetadata(band_md)
+            except:
                 try:
-                    m_band.SetMetadata(band_md)
-                except:
-                    try:
-                        for key in band_md.keys():
-                            if band_md[key] is None:
-                                del band_md[key]
+                    for key in band_md.keys():
+                        if band_md[key] is None:
+                            del band_md[key]
 
-                        m_band.SetMetadata(band_md)
-                    except Exception as e:
-                        utils.echo_error_msg(
-                            'could not set band metadata: {}; {}'.format(
-                                band_md, e
-                            )
+                    m_band.SetMetadata(band_md)
+                except Exception as e:
+                    utils.echo_error_msg(
+                        'could not set band metadata: {}; {}'.format(
+                            band_md, e
                         )
-                        
-                m_band.FlushCache()
+                    )
+
+            m_band.FlushCache()
                         
             return(m_band)
 
@@ -2252,13 +2256,17 @@ class ElevationDataset:
             return(msk_ds)
         
         utils.set_cache(self.cache_dir)
-        mask_level = utils.int_or(mask_level, 0)
+        #mask_level = utils.int_or(mask_level, 0)
         # if self.stack_mode not in ['mean', 'min', 'max', 'supercede', 'mixed']:
         #     mode = 'mean'
         # else:
         #     mode = self.stack_mode
         #mode = self.stack_mode.split(':')[0]
         mode = self.stack_mode_name
+        if 'mask_level' in self.stack_mode_args.keys():
+            mask_level = utils.int_or(self.stack_mode_args['mask_level'], 0)
+        else:
+            mask_level = 0
 
         if self.verbose:
             utils.echo_msg('stacking using {} mode with mask level of {}'.format(mode, mask_level))
