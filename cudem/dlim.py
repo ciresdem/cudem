@@ -1061,7 +1061,7 @@ class PMMOutliers(PointFilter):
 class RQOutliers(PointFilter):
     def __init__(
             self, percentile = 98, max_percentile = 99.9,
-            multipass = 2, want_iqr = False, return_outliers = False,
+            multipass = 1, want_iqr = False, return_outliers = False,
             src_raster = None, src_region = None, **kwargs
     ):
         super().__init__(**kwargs)
@@ -1121,9 +1121,7 @@ class RQOutliers(PointFilter):
         #smoothed_depth = uniform_filter1d(points['z'], size=50)
         #residuals = np.abs(points['z'] - smoothed_depth)
         if want_iqr:
-            perc_max = np.nanpercentile(residuals, percentile)            
-            iqr_p = (perc_max - (100-percentile)) * 1.5
-            outlier_threshold = perc_max + iqr_p
+            outlier_threshold = utils.get_outliers(residuals, percentile=percentile)[0]
         else:
             outlier_threshold = np.percentile(residuals, percentile)
 
