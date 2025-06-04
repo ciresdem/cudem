@@ -2690,16 +2690,16 @@ class Multibeam(FetchModule):
         print(self.parse_entry_inf(entry))
         
     def parse_entry_inf(self, entry, keep_inf=False, out_dir=None):
-        src_data = os.path.basename(entry[1])
+        src_data = os.path.basename(entry['dst_fn'])
         if src_data[-3:] == 'fbt':
             src_mb = utils.fn_basename2(src_data)
-            inf_url = utils.fn_basename2(entry[0])
+            inf_url = utils.fn_basename2(entry['url'])
         else:
-            inf_url = entry[0]
+            inf_url = entry['url']
             src_mb = src_data
             
-        survey = entry[0].split('/')[7]
-        src_inf = os.path.join(self._outdir, '{}.inf'.format(entry[1]))
+        survey = entry['url'].split('/')[7]
+        src_inf = os.path.join(self._outdir, '{}.inf'.format(entry['dst_fn']))
         try:
             status = Fetch(
                 '{}.inf'.format(inf_url), callback=self.callback, verbose=True

@@ -3112,6 +3112,63 @@ class WafflesCUDEM(Waffle):
         self.want_weight = True
         self.pre_verbose = pre_verbose
         
+        # ## set the weights if not already set correctly
+        # self.weight_levels.sort(reverse=True)
+        # if len(self.weight_levels) < self.pre_count+1:
+        #     tmp_pre = self.pre_count - len(self.weight_levels)
+        #     while tmp_pre >= 0:
+        #         if len(self.weight_levels) == 0:
+        #             tmp_weight = gdalfun.gdal_percentile(self.stack, perc=75, band=3) # self.stack isn't set yet!
+        #             tmp_weight = utils.float_or(tmp_weight, 1)
+        #         else:
+        #             tmp_weight = self.weight_levels[-1]/(tmp_pre + 1)
+        #             if tmp_weight == 0:
+        #                 tmp_weight = 1-e20
+
+        #         if tmp_pre == 0:
+        #             tmp_weight = 0
+                    
+        #         self.weight_levels.append(tmp_weight)                
+        #         tmp_pre -= 1
+
+        # ## set the increments if not already set correctly
+        # self.inc_levels.sort()
+        # if len(self.inc_levels) < self.pre_count+1:
+        #     tmp_pre = self.pre_count - len(self.inc_levels)
+        #     if len(self.inc_levels) == 0:
+        #         tmp_xinc = self.xinc
+        #         self.inc_levels.append(tmp_xinc)
+                
+        #     for t in range(1, tmp_pre+1):
+        #         tmp_xinc = float(self.inc_levels[-1] * 3)
+        #         tmp_yinc = float(self.inc_levels[-1] * 3)
+        #         self.inc_levels.append(tmp_xinc)
+
+        # if self.inc_levels[0] != self.xinc or len(self.inc_levels) < self.pre_count+1:
+        #     self.inc_levels.insert(0, self.xinc)
+        #     self.inc_levels = self.inc_levels[:self.pre_count+1]
+        #     self.inc_levels.sort()
+                
+    ## todo: remove coastline after processing...
+    def generate_coastline(self, pre_data=None):
+        cst_region = self.p_region.copy()
+        cst_region.wmin = self.weight_levels[0]
+        utils.echo_msg('coast region is: {}'.format(cst_region))
+        cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
+        this_coastline = 'coastline:{}'.format(factory.dict2args(self.coastline_args))
+        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region, want_weight=True, min_weight=self.weight_levels[0],
+                                  xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
+                                  srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
+        coastline.initialize()
+        coastline.generate()
+
+        if coastline is not None:
+            return('{}.shp:invert=True'.format(coastline.name))
+        else:
+            return(None)
+            
+    def run(self):
+
         ## set the weights if not already set correctly
         self.weight_levels.sort(reverse=True)
         if len(self.weight_levels) < self.pre_count+1:
@@ -3148,26 +3205,7 @@ class WafflesCUDEM(Waffle):
             self.inc_levels.insert(0, self.xinc)
             self.inc_levels = self.inc_levels[:self.pre_count+1]
             self.inc_levels.sort()
-                
-    ## todo: remove coastline after processing...
-    def generate_coastline(self, pre_data=None):
-        cst_region = self.p_region.copy()
-        cst_region.wmin = self.weight_levels[0]
-        utils.echo_msg('coast region is: {}'.format(cst_region))
-        cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
-        this_coastline = 'coastline:{}'.format(factory.dict2args(self.coastline_args))
-        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region, want_weight=True, min_weight=self.weight_levels[0],
-                                  xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
-                                  srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
-        coastline.initialize()
-        coastline.generate()
-
-        if coastline is not None:
-            return('{}.shp:invert=True'.format(coastline.name))
-        else:
-            return(None)
-            
-    def run(self):
+        
         if self.verbose:
             utils.echo_msg_bold('==============================================')
             utils.echo_msg('')

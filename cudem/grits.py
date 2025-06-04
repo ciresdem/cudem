@@ -1239,10 +1239,10 @@ class Weights(Grits):
     weight_threshold(float) - the weight threshold
     """
     
-    def __init__(self, buffer_cells = 1, weight_threshold = 1, **kwargs):
+    def __init__(self, buffer_cells = 1, weight_threshold = None, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
-        self.weight_threshold = utils.float_or(weight_threshold, 1)
+        self.weight_threshold = utils.float_or(weight_threshold)
 
     def run(self):
         if self.weight_mask is None:
@@ -1252,12 +1252,22 @@ class Weights(Grits):
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
             if src_ds is not None:
                 self.init_ds(src_ds)
+                
                 if self.weight_is_fn:
+                    if self.weight_threshold is None:
+                        self.weight_threshold = gdalfun.gdal_percentile(self.weight_mask, perc=75)
+                        
                     weight_ds = gdal.Open(self.weight_mask)
                     weight_band = weight_ds.GetRasterBand(1)
+                    
                 elif self.weight_is_band:
+                    if self.weight_threshold is None:
+                        self.weight_threshold = gdalfun.gdal_percentile(self.src_dem, perc=50, band=self.weight_mask)
+                        
                     weight_band = src_ds.GetRasterBand(self.weight_mask)
 
+                utils.echo_msg('buffering from weight {}'.format(self.weight_threshold))
+                    
                 for srcwin in utils.yield_srcwin(
                         (self.ds_config['ny'], self.ds_config['nx']),
                         n_chunk = self.ds_config['ny']/4, verbose=self.verbose,

@@ -1027,9 +1027,10 @@ class PMMOutliers(PointFilter):
         #smoothed_depth = uniform_filter1d(points['z'], size=50)
         #residuals = np.abs(points['z'] - smoothed_depth)
         if want_iqr:
-            perc_max = np.nanpercentile(residuals, percentile)            
-            iqr_p = (perc_max - (100-percentile)) * 1.5
-            outlier_threshold = perc_max + iqr_p
+            outlier_threshold = utils.get_outliers(residuals, percentile=percentile)[0]
+            #perc_max = np.nanpercentile(residuals, percentile)            
+            #iqr_p = (perc_max - (100-percentile)) * 1.5
+            #outlier_threshold = perc_max + iqr_p
         else:
             outlier_threshold = np.percentile(residuals, percentile)
 
@@ -1046,10 +1047,12 @@ class PMMOutliers(PointFilter):
         
     def run(self):
 
-        #if self.want_iqr:
-        #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
-        #else:
-        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)            
+        if self.want_iqr:
+            percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
+            #percs_it = [75 for x in range(0,self.multipass)]
+        else:
+            percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
+            
         for mpass in range(0, self.multipass):
             self.points = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr, return_outliers=self.return_outliers)
             
@@ -1059,7 +1062,7 @@ class RQOutliers(PointFilter):
     def __init__(
             self, percentile = 98, max_percentile = 99.9,
             multipass = 2, want_iqr = False, return_outliers = False,
-            src_raster = None, **kwargs
+            src_raster = None, src_region = None, **kwargs
     ):
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile, 98)
@@ -1068,7 +1071,26 @@ class RQOutliers(PointFilter):
         self.want_iqr = want_iqr
         self.return_outliers = return_outliers
         self.src_raster = src_raster
+        self.src_region = src_region
 
+        self.fetches_modules = ['gmrt']
+
+    def fetch_data(self, fetches_module, src_region, check_size=True):
+        this_fetches = fetches.FetchesFactory(
+            mod=fetches_module,
+            src_region=src_region,
+            verbose=self.verbose,
+            outdir=self.cache_dir,
+            callback=fetches.fetches_callback
+        )._acquire_module()        
+        this_fetches.run()
+        fr = fetches.fetch_results(this_fetches, check_size=check_size)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+        
+        return(fr)
+        
     def _fetch_gmrt(self, gmrt_region = None, dst_srs = None):
         """GMRT - Global low-res.
         """
@@ -1117,23 +1139,35 @@ class RQOutliers(PointFilter):
             #return(data_imputed[~outliers])
         
     def run(self):
+        if self.src_region is None:
+            self.src_region = regions.Region().from_list(
+                [np.min(self.points['x']), np.max(self.points['x']), np.min(self.points['y']), np.max(self.points['y'])]
+            )
 
-        if self.src_raster is None:
-            region = regions.Region().from_list([np.min(self.points['x']), np.max(self.points['x']), np.min(self.points['y']), np.max(self.points['y'])])            
-            self.src_raster = self._fetch_gmrt()
+
+        if os.path.exists(self.src_raster):
+            self.src_raster = [self.src_raster]
+        elif self.src_raster in self.fetches_modules:
+            this_fetch = self.fetch_data(self.src_raster, self.src_region)
+            self.src_raster = [x[1] for x in this_fetch.results]
+        else:            
+            this_fetch = self.fetch_data('gmrt', self.src_region)
+            self.src_raster = [x[1] for x in this_fetch.results]
+            
         #if self.want_iqr:
         #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
         #else:
-        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
-            
+
+        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)            
         for mpass in range(0, self.multipass):
-            self.points = self.rq(
-                self.points,
-                self.src_raster,
-                percentile=percs_it[mpass],
-                want_iqr=self.want_iqr,
-                return_outliers=self.return_outliers
-            )
+            for src_raster in self.src_rasteR:
+                self.points = self.rq(
+                    self.points,
+                    src_raster,
+                    percentile=percs_it[mpass],
+                    want_iqr=self.want_iqr,
+                    return_outliers=self.return_outliers
+                )
             
         return(self.points)
     
@@ -1397,7 +1431,24 @@ class ElevationDataset:
             for key in self.mask_keys:
                 if key not in self.mask.keys():
                     self.mask[key] = None
-                    
+
+        #utils.echo_msg(self.pnt_fltrs)
+        if self.pnt_fltrs is not None:
+            for kpam, kval in kwargs.items():
+                if kpam not in self.__dict__:
+                    #utils.echo_msg(kpam)
+                    #utils.echo_msg(kval)
+                    self.pnt_fltrs = self.pnt_fltrs + ':{}={}'.format(kpam, kval)
+            # for kpam, kval in self.mask.items():
+            #     if kpam in kwargs:
+            #         del kwargs[kpam]
+
+            # self.mask['ogr_or_gdal'] = gdalfun.ogr_or_gdal(self.mask['mask'])
+            # for key in self.mask_keys:
+            #     if key not in self.mask.keys():
+            #         self.mask[key] = None
+        #utils.echo_msg(self.pnt_fltrs)
+        
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
 
@@ -2269,7 +2320,8 @@ class ElevationDataset:
             mask_level = 0
 
         if self.verbose:
-            utils.echo_msg('stacking using {} mode with mask level of {}'.format(mode, mask_level))
+            #utils.echo_msg('stacking using {} mode with mask level of {}'.format(mode, mask_level))
+            utils.echo_msg('stacking using {} with {}'.format(self.stack_mode_name, self.stack_mode_args))
         
         ## initialize the output rasters
         if out_name is None:
@@ -6167,9 +6219,9 @@ class MBSParser(ElevationDataset):
         except:
             mb_format = None
 
-        #'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
+        #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
         for line in utils.yield_cmd(
-                'mblist -M{}{} -OXYZDSc -I{}{}'.format(
+                'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
                     self.mb_exclude, ' {}'.format(
                         mb_region.format('gmt') if mb_region is not None else ''
                     ), mb_fn, ' -F{}'.format(mb_format) if mb_format is not None else ''
@@ -6182,48 +6234,51 @@ class MBSParser(ElevationDataset):
                 y = this_line[1]
                 z = this_line[2]
                 crosstrack_distance = this_line[3]
-                #crosstrack_slope = this_line[4]
-                #flat_bottom_grazing_angle = this_line[5]
-                #seafloor_grazing_angle = this_line[6]
-                #beamflag = this_line[7]
-                #pitch = this_line[8]
-                #draft = this_line[9]
-                #roll = this_line[10]
-                #heave = this_line[11]
-                speed = this_line[4]
-                #sonar_alt = this_line[13]
-                sonar_depth = this_line[5]
+                crosstrack_slope = this_line[4]
+                flat_bottom_grazing_angle = this_line[5]
+                seafloor_grazing_angle = this_line[6]
+                beamflag = this_line[7]
+                pitch = this_line[8]
+                draft = this_line[9]
+                roll = this_line[10]
+                heave = this_line[11]
+                speed = this_line[12]
+                sonar_alt = this_line[13]
+                sonar_depth = this_line[14]
 
                 #utils.echo_msg(this_line)
 
-                #if int(beamflag) == 0:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
+                if int(beamflag) == 0:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
 
-                xs.append(x)
-                ys.append(y)
-                zs.append(z)
-                ## uncertainty
-                #u_depth = 0
-                u_depth = ((2+(0.02*(z*-1)))*0.51)
-                u_s_depth = ((2+(0.02*(sonar_depth*-1)))*0.51)
-                #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
-                u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
-                #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
-                #u_cd = 0
-                u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
-                u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2 + u_s_depth**2)
-                us.append(u)
-                if self.auto_weight:
-                    ## weight
+                    xs.append(x)
+                    ys.append(y)
+                    zs.append(z)
+                    ## uncertainty
+                    #u_depth = 0
+                    u_depth = ((2+(0.02*(z*-1)))*0.51)
+                    u_s_depth = ((2+(0.02*(sonar_depth*-1)))*0.51)
+                    #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
+                    u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
+                    #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
+                    #u_cd = 0
+                    # u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
+                    # u_c_s = math.sqrt(1 + ((.023 * abs(crosstrack_slope))**2))
+                    
+                    # u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2 + u_s_depth**2 + u_c_s**2)
+                    u = math.sqrt(u_depth**2 + u_cd**2)
+                    us.append(u)
+                    if self.auto_weight:
+                        ## weight
 
-                    # if mb_perc is not None and mb_date is not None:
-                    #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
-                    #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
-                    #     w *= self.weight if self.weight is not None else 1
-                    # else:
-                    w = (1/u)
-                    w *= self.weight if self.weight is not None else 1
+                        # if mb_perc is not None and mb_date is not None:
+                        #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+                        #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
+                        #     w *= self.weight if self.weight is not None else 1
+                        # else:
+                        w = math.sqrt((1/u))
+                        w *= self.weight if self.weight is not None else 1
 
-                    ws.append(w)
+                        ws.append(w)
             else:
                 x = this_line[0]
                 y = this_line[1]
@@ -8558,6 +8613,7 @@ class DatasetFactory(factory.CUDEMFactory):
             
         ## parse the entry format options
         opts = str(entry[1]).split(':')
+        #utils.echo_msg(opts)
         if len(opts) > 1:
             self.mod_args = utils.args2dict(list(opts[1:]), {})
             entry[1] = int(opts[0])

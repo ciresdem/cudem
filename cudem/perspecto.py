@@ -185,12 +185,17 @@ def process_cpt(cpt, gmin, gmax, gdal = False, split_cpt = None):
         elevs = np.concatenate((elevs_b,elevs_t))
     else:
         elevs = np.linspace(gmin, gmax, len(trs))
-        
+
     with open('tmp.cpt', 'w') as cpt:
         for i, j in enumerate(elevs):
             if j != None and i + 1 != len(elevs):
-                elev = scale_el_(j, gmin, gmax, trs[i], trs)
-                elev1 = scale_el_(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                if gmin < 0 and gmax > 0:
+                    elev = scale_el_(j, gmin, gmax, trs[i], trs)
+                    elev1 = scale_el_(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                else:
+                    elev = scale_el(j, gmin, gmax, trs[i], trs)
+                    elev1 = scale_el(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                    
                 if elev is not None and elev1 is not None:
                     if not gdal:
                         cpt.write(
