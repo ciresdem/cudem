@@ -2603,6 +2603,7 @@ class ElevationDataset:
                     
                 ## write out results to accumulated rasters
                 stacked_data['count'][stacked_data['count'] == 0] = np.nan
+                #stacked_data['weights'][stacked_data['weights'] == 1] = np.nan
 
                 for key in stack_keys:
                     stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
@@ -2640,6 +2641,7 @@ class ElevationDataset:
                 stacked_data[key][stacked_data[key] == ndv] = np.nan
 
             stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+            stacked_data['weights'][stacked_data['weights'] == 0] = 1
             #if mode == 'mean' or mode == 'min' or mode == 'max' or mode == 'mixed':
             if mode != 'supercede':
                 if mode == 'mean' or mode == 'mixed':
@@ -2648,7 +2650,7 @@ class ElevationDataset:
                     stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
-
+                        
                 ## apply the source uncertainty with the sub-cell variance uncertainty
                 ## caclulate the standard error (sqrt( uncertainty / count))
                 stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
@@ -7866,7 +7868,7 @@ class MBSFetcher(Fetcher):
         self.fetches_params['mb_exclude'] = mb_exclude
         self.fetches_params['want_binned'] = want_binned
         self.fetches_params['want_mbgrid'] = want_mbgrid
-        self.fetches_parasm['want_inf'] = False
+        self.fetches_params['want_inf'] = False
 
     def yield_ds(self, result):            
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
