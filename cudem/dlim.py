@@ -1080,7 +1080,7 @@ class RQOutliers(PointFilter):
             mod=fetches_module,
             src_region=src_region,
             verbose=self.verbose,
-            outdir=self.cache_dir,
+            #outdir='./',
             callback=fetches.fetches_callback
         )._acquire_module()        
         this_fetches.run()
@@ -1145,14 +1145,14 @@ class RQOutliers(PointFilter):
             )
 
 
-        if os.path.exists(self.src_raster):
+        if self.src_raster is None:
+            this_fetch = self.fetch_data('gmrt', self.src_region)
+            self.src_raster = [x[1] for x in this_fetch.results]            
+        elif os.path.exists(self.src_raster):
             self.src_raster = [self.src_raster]
         elif self.src_raster in self.fetches_modules:
             this_fetch = self.fetch_data(self.src_raster, self.src_region)
-            self.src_raster = [x[1] for x in this_fetch.results]
-        else:            
-            this_fetch = self.fetch_data('gmrt', self.src_region)
-            self.src_raster = [x[1] for x in this_fetch.results]
+            self.src_raster = [x['dst_fn'] for x in this_fetch.results]
             
         #if self.want_iqr:
         #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
@@ -1160,7 +1160,7 @@ class RQOutliers(PointFilter):
 
         percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)            
         for mpass in range(0, self.multipass):
-            for src_raster in self.src_rasteR:
+            for src_raster in self.src_raster:
                 self.points = self.rq(
                     self.points,
                     src_raster,
