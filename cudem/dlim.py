@@ -8829,6 +8829,11 @@ Options:
   --help\t\t\tPrint the usage text
   --version\t\t\tPrint the version information
 
+Datalists and data formats:
+  A datalist is a file that contains a number of datalist entries, 
+  while an entry is a space-delineated line:
+  `path [format weight uncertainty [name source date type resolution hdatum vdatum url]]`
+
 Supported datalist formats (see {cmd} --modules <dataset-key> for more info): 
   {dl_formats}
 
