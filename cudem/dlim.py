@@ -1068,16 +1068,17 @@ class RQOutliers(PointFilter):
     #         src_raster = None, src_region = None, **kwargs
     # ):
     def __init__(
-            self, percentage = 50, min_percentage = 10, return_outliers = False,
-            multipass = 1, src_raster = None, src_region = None, **kwargs
+            self, percentage = 50, min_percentage = 10, percentile = 98, max_percentile = 99,
+            return_outliers = False, multipass = 1, src_raster = None, src_region = None,
+            want_iqr = False, **kwargs
     ):
         super().__init__(**kwargs)
         self.percentage = utils.float_or(percentage, 50)
         self.min_percentage = utils.float_or(min_percentage, 10)
-        # self.percentile = utils.float_or(percentile, 98)
-        # self.max_percentile = utils.float_or(max_percentile, 99)
+        self.percentile = utils.float_or(percentile, 98)
+        self.max_percentile = utils.float_or(max_percentile, 99)
         self.multipass = utils.int_or(multipass, 1)
-        # self.want_iqr = want_iqr
+        self.want_iqr = want_iqr
         self.return_outliers = return_outliers
         self.src_raster = src_raster
         self.src_region = src_region
@@ -1100,7 +1101,7 @@ class RQOutliers(PointFilter):
         
         return(fr)
             
-    def rq(self, points, raster, percentage = 50, return_outliers=False):
+    def rq(self, points, raster, percentage = 50, percentile = 98, return_outliers=False):
         p = np.array([points['y'], points['x'], points['z']]).T
         raster_z = gdalfun.gdal_query(points, raster, 'g').flatten()
 
@@ -1110,11 +1111,11 @@ class RQOutliers(PointFilter):
         residuals = np.abs((p[:,2] - smoothed_depth) / smoothed_depth) * 100
         #residuals = np.abs(p[:,2] - raster_z)
 
-        # if percentage is None:
-        #     if want_iqr:
-        #         percentage = utils.get_outliers(residuals, percentile=percentile)[0]
-        #     else:
-        #         percentage = np.percentile(residuals, percentile)
+        if percentage is None:
+            if want_iqr:
+                percentage = utils.get_outliers(residuals, percentile=percentile)[0]
+            else:
+                percentage = np.percentile(residuals, percentile)
 
         outliers = residuals > percentage#outlier_threshold
 
@@ -1146,13 +1147,18 @@ class RQOutliers(PointFilter):
         #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
         #else:
 
-        percs_it = np.linspace(self.percentage, self.min_percentage, self.multipass)
+        if self.percentage is None:
+            percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
+        else:
+            percs_it = np.linspace(self.percentage, self.min_percentage, self.multipass)
+            
         for mpass in range(0, self.multipass):
             for src_raster in self.src_raster:
                 self.points = self.rq(
                     self.points,
                     src_raster,
-                    percentage=percs_it[mpass],
+                    percentage=percs_it[mpass] if self.percentage is not None else None,
+                    percentile=percs_it[mpass],
                     return_outliers=self.return_outliers
                 )
             
