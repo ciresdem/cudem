@@ -1034,41 +1034,50 @@ class PMMOutliers(PointFilter):
         else:
             outlier_threshold = np.percentile(residuals, percentile)
 
-        outliers = residuals >= outlier_threshold
+        outliers = residuals > outlier_threshold
 
         if self.verbose:
             utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
 
         if return_outliers:
-            return(points[outliers])
+            return(points[outliers], outliers)
         else:
-            return(points[~outliers])
+            return(points[~outliers], outliers)
             #return(data_imputed[~outliers])
         
     def run(self):
 
         if self.want_iqr:
-            percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
+            percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
             #percs_it = [75 for x in range(0,self.multipass)]
         else:
             percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
+            #percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
             
         for mpass in range(0, self.multipass):
-            self.points = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr, return_outliers=self.return_outliers)
+            self.points, outliers = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr, return_outliers=self.return_outliers)
+            if np.count_nonzero(outliers) == 0:
+                break
             
         return(self.points)
 
 class RQOutliers(PointFilter):
+    # def __init__(
+    #         self, percentage = 50, percentile = 98, max_percentile = 99.9,
+    #         multipass = 1, want_iqr = False, return_outliers = False,
+    #         src_raster = None, src_region = None, **kwargs
+    # ):
     def __init__(
-            self, percentile = 98, max_percentile = 99.9,
-            multipass = 1, want_iqr = False, return_outliers = False,
-            src_raster = None, src_region = None, **kwargs
+            self, percentage = 50, min_percentage = 10, return_outliers = False,
+            multipass = 1, src_raster = None, src_region = None, **kwargs
     ):
         super().__init__(**kwargs)
-        self.percentile = utils.float_or(percentile, 98)
-        self.max_percentile = utils.float_or(max_percentile, 99)
+        self.percentage = utils.float_or(percentage, 50)
+        self.min_percentage = utils.float_or(min_percentage, 10)
+        # self.percentile = utils.float_or(percentile, 98)
+        # self.max_percentile = utils.float_or(max_percentile, 99)
         self.multipass = utils.int_or(multipass, 1)
-        self.want_iqr = want_iqr
+        # self.want_iqr = want_iqr
         self.return_outliers = return_outliers
         self.src_raster = src_raster
         self.src_region = src_region
@@ -1090,45 +1099,27 @@ class RQOutliers(PointFilter):
         fr.join()
         
         return(fr)
-        
-    def _fetch_gmrt(self, gmrt_region = None, dst_srs = None):
-        """GMRT - Global low-res.
-        """
-        
-        this_gmrt = fetches.GMRT(
-            src_region=gmrt_region, verbose=self.verbose, layer='topo', outdir='./'#outdir=self.cache_dir
-        )
-        this_gmrt.run()
-
-        fr = fetches.fetch_results(this_gmrt)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
-        # dst_srs = osr.SpatialReference()
-        # dst_srs.SetFromUserInput(self.dst_srs)
-        
-        gmrt_tif = os.path.join(this_gmrt._outdir, this_gmrt.results[0]['dst_fn'])
-        # gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt', co=self.co)
-        # gdal.Warp(gmrt_ds, gmrt_tif, dstSRS=dst_srs, resampleAlg=self.sample)
-        # return(gmrt_ds)
-        return(gmrt_tif)
-    
-    def rq(self, points, raster, percentile = 98, want_iqr=False, return_outliers=False):
+            
+    def rq(self, points, raster, percentage = 50, return_outliers=False):
         p = np.array([points['y'], points['x'], points['z']]).T
-        raster_z = gdalfun.gdal_query(points, raster, 'g').flatten()            
-        residuals = np.abs(p[:,2] - raster_z)
-        #smoothed_depth = uniform_filter1d(points['z'], size=50)
-        #residuals = np.abs(points['z'] - smoothed_depth)
-        if want_iqr:
-            outlier_threshold = utils.get_outliers(residuals, percentile=percentile)[0]
-        else:
-            outlier_threshold = np.percentile(residuals, percentile)
+        raster_z = gdalfun.gdal_query(points, raster, 'g').flatten()
 
-        outliers = residuals >= outlier_threshold
+        from scipy.ndimage import uniform_filter1d
+        smoothed_depth = uniform_filter1d(raster_z, size=50)
+
+        residuals = np.abs((p[:,2] - smoothed_depth) / smoothed_depth) * 100
+        #residuals = np.abs(p[:,2] - raster_z)
+
+        # if percentage is None:
+        #     if want_iqr:
+        #         percentage = utils.get_outliers(residuals, percentile=percentile)[0]
+        #     else:
+        #         percentage = np.percentile(residuals, percentile)
+
+        outliers = residuals > percentage#outlier_threshold
 
         if self.verbose:
-            utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
+            utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentage))
 
         if return_outliers:
             return(points[outliers])
@@ -1141,7 +1132,6 @@ class RQOutliers(PointFilter):
             self.src_region = regions.Region().from_list(
                 [np.min(self.points['x']), np.max(self.points['x']), np.min(self.points['y']), np.max(self.points['y'])]
             )
-
 
         if self.src_raster is None:
             this_fetch = self.fetch_data('gmrt', self.src_region)
@@ -1156,14 +1146,13 @@ class RQOutliers(PointFilter):
         #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
         #else:
 
-        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)            
+        percs_it = np.linspace(self.percentage, self.min_percentage, self.multipass)
         for mpass in range(0, self.multipass):
             for src_raster in self.src_raster:
                 self.points = self.rq(
                     self.points,
                     src_raster,
-                    percentile=percs_it[mpass],
-                    want_iqr=self.want_iqr,
+                    percentage=percs_it[mpass],
                     return_outliers=self.return_outliers
                 )
             
@@ -1419,7 +1408,8 @@ class ElevationDataset:
                 
             for kpam, kval in kwargs.items():
                 if kpam not in self.__dict__:
-                    self.mask[kpam] = kval
+                    if kpam in self.mask_keys:
+                        self.mask[kpam] = kval
 
             for kpam, kval in self.mask.items():
                 if kpam in kwargs:
@@ -1430,23 +1420,25 @@ class ElevationDataset:
                 if key not in self.mask.keys():
                     self.mask[key] = None
 
-        #utils.echo_msg(self.pnt_fltrs)
         if self.pnt_fltrs is not None:
-            for kpam, kval in kwargs.items():
-                if kpam not in self.__dict__:
-                    #utils.echo_msg(kpam)
-                    #utils.echo_msg(kval)
-                    self.pnt_fltrs = self.pnt_fltrs + ':{}={}'.format(kpam, kval)
-            # for kpam, kval in self.mask.items():
-            #     if kpam in kwargs:
-            #         del kwargs[kpam]
+            if isinstance(self.pnt_fltrs, str):
+                self.pnt_fltrs = self.pnt_fltrs.split('//')
 
-            # self.mask['ogr_or_gdal'] = gdalfun.ogr_or_gdal(self.mask['mask'])
-            # for key in self.mask_keys:
-            #     if key not in self.mask.keys():
-            #         self.mask[key] = None
+            args=[]
+            for i, m in enumerate(self.pnt_fltrs):
+                pf = PointFilterFactory(mod=m)._acquire_module()
+                for kpam, kval in kwargs.items():
+                    #if kpam not in self.__dict__:
+                    if kpam in pf.__dict__.keys():
+                        m += ':{}={}'.format(kpam, kval)
+                        args.append(kpam)
+                        
+                self.pnt_fltrs[i] = m
+                for kpam in args:
+                    del kwargs[kpam]
+                args=[]
+                    
         #utils.echo_msg(self.pnt_fltrs)
-        
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
 
@@ -3120,7 +3112,7 @@ class ElevationDataset:
                         )
                         
                     points = points[~np.isinf(points['z'])]
-
+                    
                 if self.region is not None and self.region.valid_p():
                     xyz_region = self.region.copy() #if self.transform['trans_region'] is None else self.transform['trans_region'].copy()
                     if self.invert_region:
@@ -6217,6 +6209,12 @@ class MBSParser(ElevationDataset):
         except:
             mb_format = None
 
+        mb_date = self.mb_inf_data_date(src_inf)
+        mb_perc = self.mb_inf_perc_good(src_inf)
+            
+        this_year = int(utils.this_year())
+        this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
+            
         #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
         for line in utils.yield_cmd(
                 'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
@@ -6246,7 +6244,7 @@ class MBSParser(ElevationDataset):
 
                 #utils.echo_msg(this_line)
 
-                if int(beamflag) == 0:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
+                if int(beamflag) == 0:# and speed < 25:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
 
                     xs.append(x)
                     ys.append(y)
@@ -6259,11 +6257,15 @@ class MBSParser(ElevationDataset):
                     u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
                     #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
                     #u_cd = 0
-                    # u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
-                    # u_c_s = math.sqrt(1 + ((.023 * abs(crosstrack_slope))**2))
-                    
+                    if speed >= 25:
+                        u_s = math.sqrt(1 + ((.51 * abs(speed))**2))
+                        # u_c_s = math.sqrt(1 + ((.023 * abs(crosstrack_slope))**2))
+                        u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
+                    else:
+                        u = math.sqrt(u_depth**2 + u_cd**2)
+                        
                     # u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2 + u_s_depth**2 + u_c_s**2)
-                    u = math.sqrt(u_depth**2 + u_cd**2)
+                    #u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
                     us.append(u)
                     if self.auto_weight:
                         ## weight
@@ -6273,7 +6275,8 @@ class MBSParser(ElevationDataset):
                         #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
                         #     w *= self.weight if self.weight is not None else 1
                         # else:
-                        w = math.sqrt((1/u))
+                        
+                        w = math.sqrt((1/u)) * this_weight
                         w *= self.weight if self.weight is not None else 1
 
                         ws.append(w)
