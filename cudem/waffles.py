@@ -5740,7 +5740,7 @@ Options:
   -K, --chunk\t\t\tGenerate the DEM in CHUNKs.
   -F, --format\t\t\tOutput grid FORMAT. [GTiff]
   -O, --output-basename\t\tBASENAME for all OUTPUTs.
-\t\t\t\tnote: Things will get appended to this BASENAME, such as output specifiers and format extensions.
+\t\t\t\tnote: Things will get appended to this OUTPUT_BASENAME, such as output specifiers and format extensions.
   -P, --t_srs\t\t\tProjection of REGION and output DEM.
   -N, --nodata\t\t\tThe NODATA value of output DEM.
   -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' (higher weighted data supercedes lower weighted data).
@@ -5753,8 +5753,8 @@ Options:
   -CO, --creation-options\tGDAL CREATION OPTIONS to use in raster creation.
 
   -f, --transform\t\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
-  -p, --prefix\t\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
-\t\t\t\tnote: Set Resolution, Year and Version by setting this to 'res=X:year=XXXX:version=X', 
+  -p, --prefix\t\t\tAppend OUTPUT_BASENAME (-O) with PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to OUTPUT_BASENAME).
+\t\t\t\tnote: Set Resolution, Year and Version by setting this as '-p res=X:year=XXXX:version=X', 
 \t\t\t\tleave blank for default of <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
   -r, --grid-node\t\tUse grid-node registration, default is pixel-node.
   -w, --want-weight\t\tUse weights provided in the datalist to weight overlapping data.
