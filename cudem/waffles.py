@@ -5739,7 +5739,8 @@ Options:
   -C, --clip\t\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
   -K, --chunk\t\t\tGenerate the DEM in CHUNKs.
   -F, --format\t\t\tOutput grid FORMAT. [GTiff]
-  -O, --output-name\t\tBASENAME for all outputs.
+  -O, --output-basename\t\tBASENAME for all OUTPUTs.
+\t\t\t\tnote: Things will get appended to this BASENAME, such as output specifiers and format extensions.
   -P, --t_srs\t\t\tProjection of REGION and output DEM.
   -N, --nodata\t\t\tThe NODATA value of output DEM.
   -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' (higher weighted data supercedes lower weighted data).
@@ -5870,7 +5871,7 @@ def waffles_cli(argv = sys.argv):
             i += 1
         elif arg[:2] == '-S': wg['sample'] = arg[2:]
                     
-        elif arg == '--outname' or arg == '-O':
+        elif arg == '--output_basename' or arg == '-O':
             wg['name'] = argv[i + 1]
             i += 1
         elif arg[:2] == '-O': wg['name'] = arg[2:]
