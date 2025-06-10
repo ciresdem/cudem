@@ -3604,7 +3604,7 @@ class ElevationDataset:
                     
                 if len(points) > 0:
                     ## apply any dlim filters to the points
-                    self.pnt_fltrs = ['rq', 'outlierz']
+                    #self.pnt_fltrs = ['rq', 'outlierz']
                     if self.pnt_fltrs is not None:
                         for f in self.pnt_fltrs:
                             point_filter = PointFilterFactory(
