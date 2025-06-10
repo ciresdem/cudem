@@ -808,7 +808,7 @@ class PointZ:
     points is an array of xyz data.
     """
 
-    def __init__(self, points, region = None, verbose = True, **kwargs):
+    def __init__(self, points = None, region = None, verbose = True, **kwargs):
         # if isinstance(points, np.ndarray):
         #     self.points = np.rec.fromrecords(points, names='x, y, z')
         # elif isinstance(points, np.core.records.recarray):
@@ -819,8 +819,12 @@ class PointZ:
         # utils.echo_msg(points)
 
         self.points = points
-        
-        self.region = self.init_region(region)
+
+        if self.points is not None:
+            self.region = self.init_region(region)
+        else:
+            self.region = region
+            
         self.verbose = verbose
         self.kwargs = kwargs
 
