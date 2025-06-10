@@ -943,6 +943,13 @@ class RQOutlierZ(PointZOutlier):
     """
     
     def __init__(self, threshold = 10, raster = None, **kwargs):
+        if 'percentile' in kwargs.keys():
+            del kwargs['percentile']
+        if 'percentage' in kwargs.keys():
+            del kwargs['percentage']
+        if 'multipass' in kwargs.keys():
+            del kwargs['multipass']
+            
         super().__init__(percentile = threshold, percentage = True, multipass=1, **kwargs)
         self.threshold = threshold
         self.fetches_modules = ['gmrt']
@@ -962,9 +969,9 @@ class RQOutlierZ(PointZOutlier):
 
     def point_residuals(self, points, percentage = True, res = 50):
         #p = np.array([points['y'], points['x'], points['z']]).T
-        raster_z = gdalfun.gdal_query(points, self.raster[0], 'g').flatten()
-        from scipy.ndimage import uniform_filter1d
-        smoothed_depth = uniform_filter1d(raster_z, size=50)
+        smoothed_depth = gdalfun.gdal_query(points, self.raster[0], 'g').flatten()
+        #from scipy.ndimage import uniform_filter1d
+        #smoothed_depth = uniform_filter1d(raster_z, size=50)
         if percentage:
             #residuals = np.abs((p[:,2] - smoothed_depth) / smoothed_depth) * 100
             residuals =  np.abs((points['z'] - smoothed_depth) / smoothed_depth) * 100
@@ -1864,26 +1871,33 @@ class ElevationDataset:
                 if key not in self.mask.keys():
                     self.mask[key] = None
 
-        #utils.echo_msg(self.pnt_fltrs)
-        if self.pnt_fltrs is not None:
-            if isinstance(self.pnt_fltrs, str):
-                #utils.echo_msg(self.pnt_fltrs.split('//'))
-                self.pnt_fltrs = self.pnt_fltrs.split('//')
-                
-            #utils.echo_msg(self.pnt_fltrs)
-            args=[]
-            for i, m in enumerate(self.pnt_fltrs):
-                pf = PointFilterFactory(mod=m)._acquire_module()
-                for kpam, kval in kwargs.items():
-                    #if kpam not in self.__dict__:
-                    if kpam in pf.__dict__.keys():
-                        m += ':{}={}'.format(kpam, kval)
-                        args.append(kpam)
-                        
-                self.pnt_fltrs[i] = m
-                for kpam in args:
-                    del kwargs[kpam]
-                args=[]
+        # utils.echo_msg(self.pnt_fltrs)
+        # if self.pnt_fltrs is not None:
+        #     if isinstance(self.pnt_fltrs, str):
+        #         #utils.echo_msg(self.pnt_fltrs.split('//'))
+        #         self.pnt_fltrs = self.pnt_fltrs.split('//')
+
+        #     #utils.echo_msg(kwargs)
+        #     #utils.echo_msg(self.pnt_fltrs)
+        #     args=[]
+        #     for i, m in enumerate(self.pnt_fltrs):
+        #         utils.echo_msg(m)
+        #         pf = PointFilterFactory(mod=m)._acquire_module()
+        #         for kpam, kval in kwargs.items():
+        #             #if kpam not in self.__dict__:
+        #             if kpam in pf.__dict__.keys():
+        #                 if kpam in args:
+        #                     continue
+
+        #                 m += ':{}={}'.format(kpam, kval)
+        #                 args.append(kpam)
+
+        #         #utils.echo_msg(m)
+        #         self.pnt_fltrs[i] = m
+        #         for kpam in args:
+        #             del kwargs[kpam]
+
+        #         args=[]
                     
         #utils.echo_msg(self.pnt_fltrs)
         self.upper_limit = utils.float_or(upper_limit)
@@ -2032,11 +2046,16 @@ class ElevationDataset:
         ## initialize filters
         if isinstance(self.stack_fltrs, str):
             self.stack_fltrs = [':'.join(self.stack_fltrs.split('/'))]
-            #self.stack_fltrs = [self.stack_fltrs]
+
+        if self.stack_fltrs is not None:
+            self.stack_fltrs = [x for y in self.stack_fltrs for x in y.split('::')]
 
         if isinstance(self.pnt_fltrs, str):
-            self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('//'))]
+            self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
 
+        if self.pnt_fltrs is not None:
+            self.pnt_fltrs = [x for y in self.pnt_fltrs for x in y.split('::')]
+            
         #self._init_stack_mode()
             
         return(self)

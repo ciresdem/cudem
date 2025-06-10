@@ -2649,7 +2649,7 @@ class Multibeam(FetchModule):
                         else:
                             self.add_entry_to_results(*v2)
                             inf_url = self.inf_url(v2)
-                            
+                        ## ! 'want_inf' doesn't seem to get passed through from dlim
                         # if self.want_inf:
                         #     self.add_entry_to_results(
                         #         '{}.inf'.format(inf_url),
