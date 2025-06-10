@@ -883,7 +883,7 @@ class PointZOutlier(PointZ):
     def __init__(
             self, percentile = 98, max_percentile = 99.9,
             multipass = 4, percentage = False, invert = False,
-            **kwargs
+            res = 50, max_res = 5000, **kwargs
     ):
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile, 98)
@@ -891,6 +891,8 @@ class PointZOutlier(PointZ):
         self.multipass = utils.int_or(multipass, 1)
         self.percentage = percentage
         self.invert = invert
+        self.res = res
+        self.max_res = max_res
 
     def point_residuals(self, points, percentage = False, res = 50):
         point_pixels = self.point_pixels(points, x_size=res, y_size=res)
@@ -925,10 +927,9 @@ class PointZOutlier(PointZ):
         
     def run(self):
         percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
-        res_it = np.linspace(5000, 50, self.multipass)
+        res_it = np.linspace(self.max_res, self.res, self.multipass)
         #percs_it = np.linspace(self.percentile, self.percentile, self.multipass)
         for mpass in range(0, self.multipass):
-            utils.echo_msg(res_it[mpass])
             self.points, outliers = self.filter_points(
                 self.points, percentile=percs_it[mpass], res=res_it[mpass], percentage=self.percentage, invert=self.invert
             )
@@ -943,6 +944,7 @@ class RQOutlierZ(PointZOutlier):
     
     def __init__(self, threshold = 10, raster = None, **kwargs):
         super().__init__(percentile = threshold, percentage = True, multipass=1, **kwargs)
+        self.threshold = threshold
         self.fetches_modules = ['gmrt']
         self.raster = self.init_raster(raster)
 
@@ -6662,7 +6664,10 @@ class MBSParser(ElevationDataset):
             
         this_year = int(utils.this_year())
         #this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
-        this_weight = 1/(abs(int(mb_date)-this_year/this_year)/100.)
+        if mb_date is not None:
+            this_weight = 1/(abs(int(mb_date)-this_year/this_year)/100.)
+        else:
+            this_weight = 1
         
             
         #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
