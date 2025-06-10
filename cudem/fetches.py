@@ -2507,7 +2507,7 @@ class Multibeam(FetchModule):
         self.exclude = exclude
         self.make_datalist = make_datalist
         self.want_inf = want_inf
-        
+
         ## various multibeam URLs
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
@@ -2650,33 +2650,33 @@ class Multibeam(FetchModule):
                             self.add_entry_to_results(*v2)
                             inf_url = self.inf_url(v2)
                             
-                        if self.want_inf:
-                            self.add_entry_to_results(
-                                '{}.inf'.format(inf_url),
-                                '{}.inf'.format(v2[1]),
-                                'mb_inf'
-                            )
+                        # if self.want_inf:
+                        #     self.add_entry_to_results(
+                        #         '{}.inf'.format(inf_url),
+                        #         '{}.inf'.format(v2[1]),
+                        #         'mb_inf'
+                        #     )
                 else:
                     for v1 in these_surveys[key]['1']:
                         self.add_entry_to_results(*v1)
                         if self.want_inf:
                             inf_url = self.inf_url(v1)
-                            self.add_entry_to_results(
-                                '{}.inf'.format(inf_url),
-                                '{}.inf'.format(v1[1]),
-                                'mb_inf'
-                            )
+                            # self.add_entry_to_results(
+                            #     '{}.inf'.format(inf_url),
+                            #     '{}.inf'.format(v1[1]),
+                            #     'mb_inf'
+                            # )
             else:
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
                         self.add_entry_to_results(*survs)
                         if self.want_inf:
                             inf_url = self.inf_url(survs)
-                            self.add_entry_to_results(
-                                '{}.inf'.format(inf_url),
-                                '{}.inf'.format(survs[1]),
-                                'mb_inf'
-                            )
+                            # self.add_entry_to_results(
+                            #     '{}.inf'.format(inf_url),
+                            #     '{}.inf'.format(survs[1]),
+                            #     'mb_inf'
+                            # )
 
                             
         if self.make_datalist:
