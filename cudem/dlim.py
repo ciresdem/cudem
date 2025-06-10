@@ -921,9 +921,10 @@ class PointZOutlier(PointZ):
         
     def run(self):
         percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
-        res_it = np.linspace(50, 5000, self.multipass)
+        res_it = np.linspace(5000, 50, self.multipass)
         #percs_it = np.linspace(self.percentile, self.percentile, self.multipass)
         for mpass in range(0, self.multipass):
+            utils.echo_msg(res_it[mpass])
             self.points, outliers = self.filter_points(
                 self.points, percentile=percs_it[mpass], res=res_it[mpass], percentage=self.percentage, invert=self.invert
             )
@@ -1862,20 +1863,21 @@ class ElevationDataset:
             if isinstance(self.pnt_fltrs, str):
                 #utils.echo_msg(self.pnt_fltrs.split('//'))
                 self.pnt_fltrs = self.pnt_fltrs.split('//')
-        #utils.echo_msg(self.pnt_fltrs)
-        #     args=[]
-        #     for i, m in enumerate(self.pnt_fltrs):
-        #         pf = PointFilterFactory(mod=m)._acquire_module()
-        #         for kpam, kval in kwargs.items():
-        #             #if kpam not in self.__dict__:
-        #             if kpam in pf.__dict__.keys():
-        #                 m += ':{}={}'.format(kpam, kval)
-        #                 args.append(kpam)
+                
+            #utils.echo_msg(self.pnt_fltrs)
+            args=[]
+            for i, m in enumerate(self.pnt_fltrs):
+                pf = PointFilterFactory(mod=m)._acquire_module()
+                for kpam, kval in kwargs.items():
+                    #if kpam not in self.__dict__:
+                    if kpam in pf.__dict__.keys():
+                        m += ':{}={}'.format(kpam, kval)
+                        args.append(kpam)
                         
-        #         self.pnt_fltrs[i] = m
-        #         for kpam in args:
-        #             del kwargs[kpam]
-        #         args=[]
+                self.pnt_fltrs[i] = m
+                for kpam in args:
+                    del kwargs[kpam]
+                args=[]
                     
         #utils.echo_msg(self.pnt_fltrs)
         self.upper_limit = utils.float_or(upper_limit)
