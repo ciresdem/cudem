@@ -415,10 +415,11 @@ class Fetch:
                     )
 
             ## some unaccounted for return status code, report and exit.
-            elif req.status_code != 200 and req.status_code != 201:
-                utils.echo_error_msg(
-                    'request from {} returned {}'.format(req.url, req.status_code)
-                )
+            elif req.status_code < 200 or req.status_code > 299: #req.status_code != 200 and req.status_code != 201:
+                if self.verbose:
+                    utils.echo_error_msg(
+                        'request from {} returned {}'.format(req.url, req.status_code)
+                    )
                 req = None
             
             return(req)
@@ -2577,6 +2578,7 @@ class Multibeam(FetchModule):
         )
         if _req is not None and _req.status_code == 200:
             survey_list = _req.text.split('\n')[:-1]
+            #utils.echo_msg(survey_list)
             for r in survey_list:
                 dst_pfn = r.split(' ')[0]
                 dst_p = dst_pfn.split('/')
@@ -2613,6 +2615,7 @@ class Multibeam(FetchModule):
 
                 self.date = date                    
                 if survey in these_surveys.keys():
+                    mod_url = data_url.split(' ')[0]
                     if version in these_surveys[survey].keys():
                         these_surveys[survey][version].append(
                             [data_url.split(' ')[0], os.path.join(self._outdir, '/'.join([survey, dst_fn])), 'mb']
@@ -2630,9 +2633,24 @@ class Multibeam(FetchModule):
             if self.processed_p:
                 if '2' in these_surveys[key].keys():
                     for v2 in these_surveys[key]['2']:
-                        self.add_entry_to_results(*v2)
-                        if self.want_inf:
+                        #self.add_entry_to_results(*v2)
+                        ## check if there is a 'generated' directory
+                        v2_url = v2[0].split('/')
+                        v2_url.insert(-1, 'generated')
+                        v2_url = '/'.join(v2_url)
+                        v2_gen = [v2_url, v2[1], v2[2]]
+                        _req = Fetch(
+                            v2_url,
+                            verbose=False
+                        ).fetch_req()
+                        if _req is not None and (_req.status_code == 200 or _req.status_code == 206):
+                            self.add_entry_to_results(*v2_gen)
+                            inf_url = self.inf_url(v2_gen)
+                        else:
+                            self.add_entry_to_results(*v2)
                             inf_url = self.inf_url(v2)
+                            
+                        if self.want_inf:
                             self.add_entry_to_results(
                                 '{}.inf'.format(inf_url),
                                 '{}.inf'.format(v2[1]),

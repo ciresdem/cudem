@@ -338,6 +338,13 @@ class Region:
         
         return(this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt)
 
+    def geo_transform_from_count(self, x_count = 0, y_count = 0):
+        x_inc = (self.xmax - self.xmin) / x_count
+        y_inc = (self.ymin - self.ymax) / y_count
+
+        dst_gt = (self.xmin, x_inc, 0, self.ymax, 0, y_inc)
+        return(dst_gt)
+    
     def export_as_list(self, include_z = False, include_w = False, include_u = False):
         """export region as a list
 
