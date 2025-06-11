@@ -3639,13 +3639,14 @@ class ElevationDataset:
                 if len(points) > 0:
                     ## apply any dlim filters to the points
                     #self.pnt_fltrs = ['rq', 'outlierz']
-                    if self.pnt_fltrs is not None:
-                        for f in self.pnt_fltrs:
-                            point_filter = PointFilterFactory(
-                                mod=f, points=points, verbose=True
-                            )._acquire_module()
-                            if point_filter is not None:
-                                points = point_filter()
+                    if isinstance(self.pnt_fltrs, list):
+                        if self.pnt_fltrs is not None:
+                            for f in self.pnt_fltrs:
+                                point_filter = PointFilterFactory(
+                                    mod=f, points=points, verbose=True
+                                )._acquire_module()
+                                if point_filter is not None:
+                                    points = point_filter()
 
                     if len(points) > 0:
                         yield(points)
@@ -7696,12 +7697,13 @@ class Fetcher(ElevationDataset):
             leave=self.verbose
         ) as pbar:
             for result in self.fetch_module.results:
+                self._reset_params()
                 status = self.fetch_module.fetch(result, check_size=self.check_size)
                 if status == 0:
                     self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result['dst_fn'])
                     for this_ds in self.yield_ds(result):
                         if this_ds is not None:
-                            this_ds.initialize()
+                            #this_ds.initialize()
                             f_name = os.path.relpath(this_ds.fn.split(':')[0], self.fetch_module._outdir)
                             if f_name == '.':
                                 f_name = this_ds.fn.split(':')[0]
@@ -8412,7 +8414,7 @@ class MBSFetcher(Fetcher):
         self.fetches_params['want_mbgrid'] = want_mbgrid
         self.fetches_params['want_inf'] = False
 
-    def yield_ds(self, result):            
+    def yield_ds(self, result):
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
