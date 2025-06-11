@@ -820,7 +820,7 @@ class PointZ:
 
         self.points = points
 
-        if self.points is not None:
+        if self.points is not None and len(self.points) > 0:
             self.region = self.init_region(region)
         else:
             self.region = region
@@ -831,7 +831,10 @@ class PointZ:
     def __call__(self):
         if self.verbose:
             utils.echo_msg('filtering points using {}'.format(self))
-            
+
+        if len(self.points) == 0 or self.points is None:
+            return(self.points)
+        
         return(self.run())
         
     def init_region(self, region):
@@ -1483,6 +1486,10 @@ class PointArray():
         }
         count = 0
 
+
+        if len(points) == 0:
+            return(out_arrays, None, None)
+        
         if self.src_region is None:
             self.init_region_from_points(points)
             
@@ -7694,6 +7701,7 @@ class Fetcher(ElevationDataset):
                     self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result['dst_fn'])
                     for this_ds in self.yield_ds(result):
                         if this_ds is not None:
+                            this_ds.initialize()
                             f_name = os.path.relpath(this_ds.fn.split(':')[0], self.fetch_module._outdir)
                             if f_name == '.':
                                 f_name = this_ds.fn.split(':')[0]
@@ -7709,6 +7717,7 @@ class Fetcher(ElevationDataset):
                             this_ds.remote = True
                             this_ds.initialize()
                             for ds in this_ds.parse():
+                                ds.initialize()
                                 yield(ds)
                         else:
                             utils.echo_warning_msg(
