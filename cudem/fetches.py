@@ -2494,7 +2494,7 @@ class Multibeam(FetchModule):
     def __init__(
             self, processed = True, survey_id = None, exclude_survey_id = None, ship_id = None,
             exclude_ship_id = None, min_year = None, max_year = None, exclude = None,
-            make_datalist = False, want_inf = True, **kwargs
+            make_datalist = False, want_inf = False, **kwargs
     ):
         super().__init__(name='multibeam', **kwargs)
         self.processed_p = processed
@@ -2649,34 +2649,34 @@ class Multibeam(FetchModule):
                         else:
                             self.add_entry_to_results(*v2)
                             inf_url = self.inf_url(v2)
-                        ## ! 'want_inf' doesn't seem to get passed through from dlim
-                        # if self.want_inf:
-                        #     self.add_entry_to_results(
-                        #         '{}.inf'.format(inf_url),
-                        #         '{}.inf'.format(v2[1]),
-                        #         'mb_inf'
-                        #     )
+                            
+                        if self.want_inf:
+                            self.add_entry_to_results(
+                                '{}.inf'.format(inf_url),
+                                '{}.inf'.format(v2[1]),
+                                'mb_inf'
+                            )
                 else:
                     for v1 in these_surveys[key]['1']:
                         self.add_entry_to_results(*v1)
                         if self.want_inf:
                             inf_url = self.inf_url(v1)
-                            # self.add_entry_to_results(
-                            #     '{}.inf'.format(inf_url),
-                            #     '{}.inf'.format(v1[1]),
-                            #     'mb_inf'
-                            # )
+                            self.add_entry_to_results(
+                                '{}.inf'.format(inf_url),
+                                '{}.inf'.format(v1[1]),
+                                'mb_inf'
+                            )
             else:
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
                         self.add_entry_to_results(*survs)
                         if self.want_inf:
                             inf_url = self.inf_url(survs)
-                            # self.add_entry_to_results(
-                            #     '{}.inf'.format(inf_url),
-                            #     '{}.inf'.format(survs[1]),
-                            #     'mb_inf'
-                            # )
+                            self.add_entry_to_results(
+                                '{}.inf'.format(inf_url),
+                                '{}.inf'.format(survs[1]),
+                                'mb_inf'
+                            )
 
                             
         if self.make_datalist:

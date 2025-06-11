@@ -7641,6 +7641,7 @@ class Fetcher(ElevationDataset):
         try:
             self.fetch_module.run()
         except:
+            utils.echo_warning_msg('fetch module {} return zero results'.format(self.fn))
             self.fetch_module.results = []
 
         ## breaks when things not set...
