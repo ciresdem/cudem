@@ -5,7 +5,7 @@ process various elevation datasets.
 ## Synopsis
 
 ```
-dlim [ -acdghijnquwEJPRT [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
+dlim [ -acdghijnquwAEJPRT [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
 ```
 
 ## Description
