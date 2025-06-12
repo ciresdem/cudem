@@ -18,8 +18,8 @@ Minimally, `data-path` (column 1) is all that is needed.
 
 An associated `inf` and geojson file will be gerenated for each datalist while only an associated `inf` file will be genereated for individual datasets
 
-Parse various dataset types by region/increments and yield data as xyz or array
-recursive data-structures which point to datasets (datalist, zip, fetches, etc) are negative format numbers, e.g. -1 for datalist
+Parse various dataset types by region/increments and yield data as xyz or array. Recursive data-structures, which point to 
+datasets (datalist, zip, fetches, etc), are negative format numbers, e.g. -1 for datalist. Fetches modules are <= -100.
 
 ### Options
 
