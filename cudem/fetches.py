@@ -2494,7 +2494,7 @@ class Multibeam(FetchModule):
     def __init__(
             self, processed = True, survey_id = None, exclude_survey_id = None, ship_id = None,
             exclude_ship_id = None, min_year = None, max_year = None, exclude = None,
-            make_datalist = False, want_inf = False, **kwargs
+            make_datalist = False, want_inf = True, **kwargs
     ):
         super().__init__(name='multibeam', **kwargs)
         self.processed_p = processed
