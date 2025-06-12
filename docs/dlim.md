@@ -63,7 +63,7 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
      
 `-A, --stack-mode`
 
-> Set the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
+> Set the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' (with -E and -R)
      
 `-T, --stack_filter`
 
@@ -75,45 +75,49 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 `-F, --point_filter`
 
 > FILTER the POINT data using one or multiple filters. \
-> Where FILTER is fltr_name[:opts] \
+> Where FILTER is fltr_name[:opts] (See dlim --point-filters for more information)\
 > The -F switch may be set multiple times to perform multiple filters.\
-> Available FILTERS: bin_z
+> Available FILTERS: outlierz, rq
 
-`--mask`
+`-V, --archive`
+
+> ARCHIVE the datalist to the given REGION[/INCREMENTs]
+
+`-m, --mask`
 
 > MASK the datalist to the given REGION/INCREMENTs
 	
-`--spatial-metadata`
+`-s, --spatial-metadata`
 
 > Generate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
 	
-`--archive`
-
-> ARCHIVE the datalist to the given REGION[/INCREMENTs]
-	
-`--glob`
+`-g, --glob`
 
 > GLOB the datasets in the current directory to stdout
 	
-`--info`
+`-i, --info`
 
 > Generate and return an INFO dictionary of the dataset
 	
-`--weights`
+`-w, --weights`
 
 > Output WEIGHT values along with xyz
 	
-`--uncertainties`
+`-u --uncertainties`
 
 > Output UNCERTAINTY values along with xyz
 	
-`--stack-node`
+`-n, --stack-node`
 
 > Output stacked x/y data rather than pixel
 	
-`--quiet`
+`-q, --quiet`
 
 > Lower the verbosity to a quiet
+
+`--point-filters`
+
+> Display the POINT FILTER descriptions and usage
 
 `--modules`
 

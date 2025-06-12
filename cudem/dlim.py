@@ -801,7 +801,6 @@ def h5_get_datasets_from_grp(grp, count = 0, out_keys = []):
 
     return(count, out_keys)
     
-## TODO: move pointfilter/binz/etc to own module
 class PointZ:
     """Point Data.
 
@@ -873,7 +872,7 @@ class PointZ:
         associated pixel-z-data at the x/y locations of the points
         """
         
-        pa = PointArray(x_size=x_size, y_size=y_size)
+        pa = PointPixels(x_size=x_size, y_size=y_size)
         point_arrays, point_srcwin, point_gt = pa(points)
         point_pixels = point_arrays['z'][point_arrays['pixel_y'], point_arrays['pixel_x']]
         
@@ -881,6 +880,11 @@ class PointZ:
 
 class PointZOutlier(PointZ):
     """XYZ outlier filter.
+
+    Find and remove outliers from the points dataset based on
+    their residual percentile. 
+
+    <outlierz:percentile=98:multipass=4:invert=False:res=50>
     """
     
     def __init__(
@@ -941,8 +945,15 @@ class PointZOutlier(PointZ):
             
         return(self.points)
 
+## todo: remove the gmrt or other fetched rasters after processing...
 class RQOutlierZ(PointZOutlier):
     """xyz outlier filter, using a reference raster
+
+    This will use a reference raster dataset, GMRT by default, to determine
+    residual percentages of the input points dataset and remove points which
+    have a residual percentage above the given threshold.
+
+    <rq:threshold=5>
     """
     
     def __init__(self, threshold = 10, raster = None, **kwargs):
@@ -986,7 +997,7 @@ class RQOutlierZ(PointZOutlier):
 class PointFilterFactory(factory.CUDEMFactory):
     _modules = {
         #'bin_z': {'name': 'bin_z', 'call': BinZ},
-        'outlierz': {'name': 'point_outliers', 'call': PointZOutlier},
+        'outlierz': {'name': 'outlierz', 'call': PointZOutlier},
         'rq': {'name': 'rq', 'call': RQOutlierZ},
     }
     
@@ -1449,7 +1460,7 @@ class PointFilterFactory(factory.CUDEMFactory):
 #         super().__init__(**kwargs)
 
 
-class PointArray():
+class PointPixels():
     def __init__(self, src_region = None, x_size = None, y_size = None, verbose = True, **kwargs):
 
         self.src_region = src_region
@@ -9287,11 +9298,11 @@ Options:
   -Z, --z-precision\t\tSet the target precision of dumped z values. (default is 4)
   -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' (with -E and -R)
   -T, --stack_filter\t\tFILTER the data stack using one or multiple filters. 
-\t\t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
+\t\t\t\tWhere FILTER is filter-name[:opts] (see `grits --modules` for more information)
 \t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
 \t\t\t\tAvailable FILTERS: {grits_modules}
   -F, --point_filter\t\tFILTER the POINT data using one or multiple filters. 
-\t\t\t\tWhere FILTER is fltr_name[:opts] 
+\t\t\t\tWhere FILTER is filter-name[:opts] (See {cmd} --point-filters for more information)
 \t\t\t\tThe -F switch may be set multiple times to perform multiple filters.
 \t\t\t\tAvailable FILTERS: {point_filter_modules}
   -V, --archive\t\t\tArchive the DATALIST to the given REGION[/INCREMENTs].
@@ -9307,6 +9318,7 @@ Options:
   -n, --stack-node\t\tOutput stacked x/y data rather than pixel
   -q, --quiet\t\t\tLower the verbosity to a quiet
 
+  --point-filters\t\tDisplay the POINT FILTER descriptions and usage
   --modules\t\t\tDisplay the datatype descriptions and usage
   --help\t\t\tPrint the usage text
   --version\t\t\tPrint the version information
@@ -9316,7 +9328,9 @@ Datalists and data formats:
   while an entry is a space-delineated line:
   `path [format weight uncertainty [name source date type resolution hdatum vdatum url]]`
 
-Supported datalist formats (see {cmd} --modules <dataset-key> for more info): 
+  `path` can also be a supported fetches module (dataset IDs <= -100)
+
+Supported datalist formats (see {cmd} --modules <dataset-key> for more information): 
   {dl_formats}
 
 Examples:
@@ -9324,6 +9338,7 @@ Examples:
   % {cmd} -R-90/-89/30/31/-100/100 *.tif -l -w > tifs_in_region.datalist
   % {cmd} tifs_in_region.datalist -R -90/-89/30/31 -E 1s > tifs_1s.xyz
   % {cmd} -R my_region.shp my_data.xyz -w -s_srs epsg:4326 -t_srs epsg:3565 > my_data_3565.xyz
+  % {cmd} -R my_region.shp -w multibeam --archive
 """.format(cmd=os.path.basename(sys.argv[0]), 
            dl_version=cudem.__version__,
            dl_formats=factory._cudem_module_name_short_desc(DatasetFactory._modules),
@@ -9469,7 +9484,13 @@ See `datalists_usage` for full cli options.
                 DatasetFactory._modules,
                 None if i+1 >= len(argv) else int(sys.argv[i+1]), True
             )
-            sys.exit(0)           
+            sys.exit(0)
+        elif arg == '--point-filters':
+            factory.echo_modules(
+                PointFilterFactory._modules,
+                None if i+1 >= len(argv) else utils.int_or(sys.argv[i+1], str(sys.argv[i+1]))
+            )
+            sys.exit(0)            
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
