@@ -2051,7 +2051,12 @@ class ElevationDataset:
         } # pyproj transformation info
                     
         if self.valid_p():
-            self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
+            try:
+                self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
+            except:
+                utils.echo_error_msg('could not parse dataset {}'.format(self.fn))
+                return(self)
+
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
@@ -2073,8 +2078,6 @@ class ElevationDataset:
 
         if self.pnt_fltrs is not None:
             self.pnt_fltrs = [x for y in self.pnt_fltrs for x in y.split('::')]
-            
-        #self._init_stack_mode()
             
         return(self)
                 
@@ -4691,7 +4694,11 @@ class XYZFile(ElevationDataset):
                 else:
                     skip -= 1
 
-            self.src_data.close()
+            try:
+                self.src_data.close()
+            except:
+                pass
+            
             dataset = np.column_stack((points_x, points_y, points_z, points_w, points_u))
             points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
             
@@ -4718,8 +4725,11 @@ class XYZFile(ElevationDataset):
                 except:
                     pass
             break
-            
-        self.src_data.close()
+
+        try:
+            self.src_data.close()
+        except:
+            pass
 
     def line_delim(self, xyz_line):
         """guess a line delimiter and return the split line."""
