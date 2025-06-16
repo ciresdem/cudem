@@ -3369,7 +3369,7 @@ class WafflesCUDEM(Waffle):
         ## reset the stack for uncertainty
         ##self.stack = pre_surface.stack
         self.stack = orig_stack
-        utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
+        #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
 

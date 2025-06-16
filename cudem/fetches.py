@@ -2677,7 +2677,6 @@ class Multibeam(FetchModule):
                                 '{}.inf'.format(survs[1]),
                                 'mb_inf'
                             )
-
                             
         if self.make_datalist:
             s_got = []

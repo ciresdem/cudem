@@ -7620,7 +7620,8 @@ class ZIPlist(ElevationDataset):
                         
             utils.remove_glob('{}*'.format(data_set.fn))
             #utils.remove_glob('{}*'.format(this_line))
-        
+
+## todo: rename fetcher_params and fetches_params
 class Fetcher(ElevationDataset):
     """The default fetches dataset type; dlim Fetcher dataset class
 
@@ -7649,14 +7650,15 @@ class Fetcher(ElevationDataset):
                  check_size = True,
                  want_single_metadata_name = False,
                  callback = fetches.fetches_callback,
+                 fetcher_params = {},
                  **kwargs
     ):
         super().__init__(**kwargs)
         ## cache directory to store fetched data
-        #self.outdir = outdir if outdir is not None else self.cache_dir 
+        #self.outdir = outdir if outdir is not None else self.cache_dir
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, callback=callback,
-            verbose=self.verbose, outdir=outdir
+            verbose=self.verbose, outdir=outdir, **fetcher_params
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
             utils.echo_warning_msg('fetches modules {} returned None'.format(self.fn))
@@ -7697,6 +7699,21 @@ class Fetcher(ElevationDataset):
             parent=self,
         )
 
+    def init_fetch_module(self):
+        self.fetch_module = fetches.FetchesFactory(
+            mod=self.fn, src_region=self.region, callback=fetches.fetches_callback,
+            verbose=self.verbose, outdir=outdir
+        )._acquire_module() # the fetches module
+        if self.fetch_module is None:
+            utils.echo_warning_msg('fetches modules {} returned None'.format(self.fn))
+            pass
+
+        try:
+            self.fetch_module.run()
+        except:
+            utils.echo_warning_msg('fetch module {} return zero results'.format(self.fn))
+            self.fetch_module.results = []
+        
     def _reset_params(self):
         self.fetches_params = self._set_params(**self.fetches_params)
         
@@ -7710,6 +7727,7 @@ class Fetcher(ElevationDataset):
         return(self.infos)
 
     def parse(self):
+        #self.init_fetch_module()
         with tqdm(
                 total=len(self.fetch_module.results),
                 desc='parsing datasets from datalist fetches {} @ {}'.format(
@@ -8429,11 +8447,11 @@ class MBSFetcher(Fetcher):
     Fetches Module: <multibeam> - {}'''.format(__doc__, fetches.Multibeam.__doc__)
 
     def __init__(self, mb_exclude = 'A', want_binned = False, want_mbgrid = False, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(fetcher_params = {'want_inf': False}, **kwargs)
         self.fetches_params['mb_exclude'] = mb_exclude
         self.fetches_params['want_binned'] = want_binned
         self.fetches_params['want_mbgrid'] = want_mbgrid
-        self.fetches_params['want_inf'] = False
+        #self.fetches_params['want_inf'] = False
 
     def yield_ds(self, result):
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)

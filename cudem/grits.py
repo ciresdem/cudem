@@ -178,7 +178,8 @@ class Grits:
                             mask_array[elev_array < self.min_z] = 0
                         
                     elev_array[mask_array == 1] = 0
-                    
+
+                    ## todo: all bands
                     with gdalfun.gdal_datasource(self.dst_dem, update=True) as s_ds:
                         if s_ds is not None:
                             s_band = s_ds.GetRasterBand(1)
@@ -228,6 +229,7 @@ class Grits:
 
                         elev_array[mask_array == 1] = 0
 
+                        ## todo: all bands
                         with gdalfun.gdal_datasource(self.dst_dem, update=True) as s_ds:
                             if s_ds is not None:
                                 s_band = s_ds.GetRasterBand(1)
@@ -1239,35 +1241,44 @@ class Weights(Grits):
     weight_threshold(float) - the weight threshold
     """
     
-    def __init__(self, buffer_cells = 1, weight_threshold = None, **kwargs):
+    def __init__(self, buffer_cells = 1, weight_threshold = None, remove_sw = False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold)
+        self.remove_sw = remove_sw
+        
 
+    def init_weight(self, src_ds = None):
+
+        weight_band = None
+        if self.weight_is_fn:
+            if self.weight_threshold is None:
+                self.weight_threshold = gdalfun.gdal_percentile(self.weight_mask, perc=75)
+
+            weight_ds = gdal.Open(self.weight_mask)
+            weight_band = weight_ds.GetRasterBand(1)
+
+        elif self.weight_is_band and src_ds is not None:
+            if self.weight_threshold is None:
+                self.weight_threshold = gdalfun.gdal_percentile(self.src_dem, perc=50, band=self.weight_mask)
+
+            weight_band = src_ds.GetRasterBand(self.weight_mask)
+
+        return(weight_band)
+        
     def run(self):
         if self.weight_mask is None:
             return(self.src_dem, -1)
+
+        if self.remove_sw:
+            return(self.remove_small_weight())
         
         dst_ds = self.copy_src_dem()
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
             if src_ds is not None:
-                self.init_ds(src_ds)
-                
-                if self.weight_is_fn:
-                    if self.weight_threshold is None:
-                        self.weight_threshold = gdalfun.gdal_percentile(self.weight_mask, perc=75)
-                        
-                    weight_ds = gdal.Open(self.weight_mask)
-                    weight_band = weight_ds.GetRasterBand(1)
-                    
-                elif self.weight_is_band:
-                    if self.weight_threshold is None:
-                        self.weight_threshold = gdalfun.gdal_percentile(self.src_dem, perc=50, band=self.weight_mask)
-                        
-                    weight_band = src_ds.GetRasterBand(self.weight_mask)
-
-                utils.echo_msg('buffering from weight {}'.format(self.weight_threshold))
-                    
+                self.init_ds(src_ds)                
+                weight_band = self.init_weight(src_ds)
+                utils.echo_msg('buffering from weight {}'.format(self.weight_threshold))                    
                 for srcwin in utils.yield_srcwin(
                         (self.ds_config['ny'], self.ds_config['nx']),
                         n_chunk = self.ds_config['ny']/4, verbose=self.verbose,
@@ -1277,19 +1288,118 @@ class Weights(Grits):
                     w_arr = weight_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     w_arr[w_arr == self.ds_config['ndv']] = np.nan
                     weights = np.unique(w_arr)[::-1]
+                    #utils.echo_msg(weights)
                     this_w_arr = w_arr.copy()
-                    this_w_arr[this_w_arr < 1] = np.nan
+                    #this_w_arr[this_w_arr < 1] = np.nan
+                    this_w_arr[this_w_arr < self.weight_threshold] = np.nan
                     expanded_w_arr = utils.expand_for(
                         this_w_arr >= self.weight_threshold,
                         shiftx=self.buffer_cells, shifty=self.buffer_cells
                     )
                     mask = (w_arr < self.weight_threshold) & expanded_w_arr
+                    
                     for b in range(1, dst_ds.RasterCount+1):
                         this_band = dst_ds.GetRasterBand(b)
                         this_arr = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                         this_arr[mask] = self.ds_config['ndv']
                         this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
+                        this_band.FlushCache()
 
+                if self.weight_is_fn:
+                    weight_ds = None
+
+            else:
+                utils.echo_msg('failed')
+                dst_ds = None
+                return(self.src_dem, -1)
+
+        dst_ds = None        
+        return(self.dst_dem, 0)
+
+class WeightZones(Weights):
+    def __init__(self, min_z = None, max_z = None, **kwargs):
+        super().__init__(**kwargs)
+        self.min_z = utils.float_or(min_z)
+        self.max_z = utils.float_or(max_z)
+        
+    def run(self):
+        if self.weight_mask is None:
+            return(self.src_dem, -1)
+
+        dst_ds = self.copy_src_dem()
+        with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+            if src_ds is not None:
+                self.init_ds(src_ds)
+                weight_band = self.init_weight(src_ds)                    
+                this_w_arr = weight_band.ReadAsArray()
+                #_mask = np.zeros(this_w_arr.shape)
+                #_mask[(this_w_arr < self.weight_threshold)] = 1
+                this_w_arr[this_w_arr == self.ds_config['ndv']] = np.nan
+                size_mask = (this_w_arr < self.weight_threshold)
+                this_w_arr[size_mask] = 1
+                this_w_arr[~size_mask] = 0
+
+                ## group adjacent non-zero cells
+                l, n = scipy.ndimage.label(this_w_arr)
+
+                ## get the total number of cells in each group
+                mn = scipy.ndimage.sum_labels(this_w_arr, labels=l, index=np.arange(1, n+1))
+                #utils.echo_msg(mn)
+                #utils.echo_msg(np.nanpercentile(mn, 99))
+                #size_threshold = self.buffer_cells**2
+                size_threshold = np.nanpercentile(mn, 99)
+                utils.echo_msg(size_threshold)
+                utils.echo_msg(np.max(mn))
+                utils.echo_msg(np.min(mn))
+                #size_threshold = self.get_outliers(mn, 99)[0]
+                #utils.echo_msg(size_threshold)
+
+                utils.echo_msg(mn[mn < size_threshold])
+
+                # z-mask
+
+                # z_mask = ~np.isnan(this_w_arr)
+                # if self.min_z is not None or self.max_z is not None:
+                #     z_band = src_ds.GetRasterBand(1)
+                #     z_array = z_band.ReadAsArray()
+                #     z_mask = ~np.isnan(z_array)
+
+                #     if self.min_z is not None:
+                #         z_lower_mask = z_array > self.min_z
+                #     else:
+                #         z_lower_mask = ~np.isnan(z_array)                        
+
+                #     if self.max_z is not None:
+                #         z_upper_mask = z_array < self.max_z
+                #     else:
+                #         z_lower_mask = ~np.isnan(z_array)
+
+                #     z_mask = (z_lower_mask) & (z_upper_mask)
+                    
+                for i in trange(
+                        0, n,
+                        desc='{}: checking data voids less than {} cells'.format(
+                            os.path.basename(sys.argv[0]), size_threshold
+                        ),
+                        leave=self.verbose
+                ):
+                    if mn[i] <= size_threshold:
+                        i += 1
+                        #ll = utils.expand_for(l==i)
+                        #flat_value = np.nanpercentile(src_arr[ll], 5)
+                        this_w_arr[l==i] = 2
+
+
+                #mask = (mask) | (size_mask)                    
+                ## remove lower-weight data if the area is small
+                utils.echo_msg(np.count_nonzero(this_w_arr==2))
+
+                for b in range(1, dst_ds.RasterCount+1):
+                    this_band = dst_ds.GetRasterBand(b)
+                    this_arr = this_band.ReadAsArray()
+                    this_arr[this_w_arr==2] = self.ds_config['ndv']
+                    this_band.WriteArray(this_arr)
+                        
                 if self.weight_is_fn:
                     weight_ds = None
                     
@@ -1298,9 +1408,10 @@ class Weights(Grits):
                 dst_ds = None
                 return(self.src_dem, -1)
 
-        dst_ds = None
-        return(self.dst_dem, 0)                
-    
+        dst_ds = None        
+        return(self.dst_dem, 0)
+
+            
 class GritsFactory(factory.CUDEMFactory):
     """Grits Factory Settings and Generator
     
@@ -1326,6 +1437,9 @@ class GritsFactory(factory.CUDEMFactory):
         'weights': {'name': 'weights',
                     'description': 'Make a NDV buffer around the weight threshold',
                     'call': Weights},
+        'weight_zones': {'name': 'weight_zones',
+                         'description': 'Make a NDV buffer around the weight threshold',
+                         'call': WeightZones},
     }
     
     def __init__(self, **kwargs):
