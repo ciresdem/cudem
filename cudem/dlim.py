@@ -984,6 +984,9 @@ class RQOutlierZ(PointZOutlier):
     def point_residuals(self, points, percentage = True, res = 50):
         #p = np.array([points['y'], points['x'], points['z']]).T
         smoothed_depth = gdalfun.gdal_query(points, self.raster[0], 'g').flatten()
+        if len(smoothed_depth) == 0:
+            return([])
+        
         #from scipy.ndimage import uniform_filter1d
         #smoothed_depth = uniform_filter1d(raster_z, size=50)
         if percentage:
@@ -6684,130 +6687,130 @@ class MBSParser(ElevationDataset):
 
     def yield_mblist_ds(self):
         """use mblist to process the multibeam data"""
-        
-        mb_fn = os.path.join(self.fn)
-        xs = []
-        ys = []
-        zs = []
-        ws = []
-        us = []
-        if self.region is not None:
-            mb_region = self.region.copy()
-            mb_region.buffer(pct=25)
-        else:
-            mb_region = None
 
-        src_inf = '{}.inf'.format(self.fn)
-        try:
-            #mb_date = self.mb_inf_data_date(src_inf)
-            #mb_perc = self.mb_inf_perc_good(src_inf)
-            mb_format = self.mb_inf_format(src_inf)
-            if mb_fn.split('.')[-1] == 'fbt':
+        if not self.fn.endswith('.inf'):
+            mb_fn = os.path.join(self.fn)
+            xs = []
+            ys = []
+            zs = []
+            ws = []
+            us = []
+            if self.region is not None:
+                mb_region = self.region.copy()
+                mb_region.buffer(pct=25)
+            else:
+                mb_region = None
+
+            src_inf = '{}.inf'.format(self.fn)
+            try:
+                #mb_date = self.mb_inf_data_date(src_inf)
+                #mb_perc = self.mb_inf_perc_good(src_inf)
+                mb_format = self.mb_inf_format(src_inf)
+                if mb_fn.split('.')[-1] == 'fbt':
+                    mb_format = None
+            except:
                 mb_format = None
-        except:
-            mb_format = None
 
-        mb_date = self.mb_inf_data_date(src_inf)
-        mb_perc = self.mb_inf_perc_good(src_inf)
-            
-        this_year = int(utils.this_year())
-        #this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
-        if mb_date is not None:
-            this_weight = 1/(abs(int(mb_date)-this_year/this_year)/100.)
-        else:
-            this_weight = 1
-        
-            
-        #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
-        for line in utils.yield_cmd(
-                'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
-                    self.mb_exclude, ' {}'.format(
-                        mb_region.format('gmt') if mb_region is not None else ''
-                    ), mb_fn, ' -F{}'.format(mb_format) if mb_format is not None else ''
-                ),
-                verbose=False,
-        ):
-            this_line = [float(x) for x in line.strip().split('\t')]
-            if self.auto_weight or self.auto_uncertainty:
-                x = this_line[0]
-                y = this_line[1]
-                z = this_line[2]
-                crosstrack_distance = this_line[3]
-                crosstrack_slope = this_line[4]
-                flat_bottom_grazing_angle = this_line[5]
-                seafloor_grazing_angle = this_line[6]
-                beamflag = this_line[7]
-                pitch = this_line[8]
-                draft = this_line[9]
-                roll = this_line[10]
-                heave = this_line[11]
-                speed = this_line[12]
-                sonar_alt = this_line[13]
-                sonar_depth = this_line[14]
+            mb_date = self.mb_inf_data_date(src_inf)
+            mb_perc = self.mb_inf_perc_good(src_inf)
 
-                #if abs(crosstrack_slope) > .5:
-                #utils.echo_msg(this_line)
+            this_year = int(utils.this_year())
+            #this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
+            if mb_date is not None:
+                this_weight = 1/(abs(int(mb_date)-this_year/this_year)/100.)
+            else:
+                this_weight = 1
 
-                if int(beamflag) == 0:# and abs(crosstrack_slope < .15):#and speed < 25:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
+            #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
+            for line in utils.yield_cmd(
+                    'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
+                        self.mb_exclude, ' {}'.format(
+                            mb_region.format('gmt') if mb_region is not None else ''
+                        ), mb_fn, ' -F{}'.format(mb_format) if mb_format is not None else ''
+                    ),
+                    verbose=False,
+            ):
+                this_line = [float(x) for x in line.strip().split('\t')]
+                if self.auto_weight or self.auto_uncertainty:
+                    x = this_line[0]
+                    y = this_line[1]
+                    z = this_line[2]
+                    crosstrack_distance = this_line[3]
+                    crosstrack_slope = this_line[4]
+                    flat_bottom_grazing_angle = this_line[5]
+                    seafloor_grazing_angle = this_line[6]
+                    beamflag = this_line[7]
+                    pitch = this_line[8]
+                    draft = this_line[9]
+                    roll = this_line[10]
+                    heave = this_line[11]
+                    speed = this_line[12]
+                    sonar_alt = this_line[13]
+                    sonar_depth = this_line[14]
 
+                    #if abs(crosstrack_slope) > .5:
+                    #utils.echo_msg(this_line)
+
+                    if int(beamflag) == 0:# and abs(crosstrack_slope < .15):#and speed < 25:# and abs(crosstrack_distance) < 1000:#abs(this_line[4]) < .15:
+
+                        xs.append(x)
+                        ys.append(y)
+                        zs.append(z)
+                        ## uncertainty
+                        #u_depth = 0
+                        u_depth = ((2+(0.02*(z*-1)))*0.51)
+                        u_s_depth = ((2+(0.02*(sonar_depth*-1)))*0.51)
+                        #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
+                        u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
+                        #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
+                        #u_cd = 0
+                        if speed >= 25:
+                            u_s = math.sqrt(1 + ((.51 * abs(speed))**2))
+                            # u_c_s = math.sqrt(1 + ((.023 * abs(crosstrack_slope))**2))
+                            u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
+                        else:
+                            u = math.sqrt(u_depth**2 + u_cd**2)
+
+                        # u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2 + u_s_depth**2 + u_c_s**2)
+                        #u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
+                        us.append(u)
+                        if self.auto_weight:
+                            ## weight
+
+                            # if mb_perc is not None and mb_date is not None:
+                            #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+                            #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
+                            #     w *= self.weight if self.weight is not None else 1
+                            # else:
+
+                            w = math.sqrt((1/u)) * this_weight
+                            #w = this_weight
+                            w *= self.weight if self.weight is not None else 1
+
+                            ws.append(w)
+                else:
+                    x = this_line[0]
+                    y = this_line[1]
+                    z = this_line[2]
                     xs.append(x)
                     ys.append(y)
                     zs.append(z)
-                    ## uncertainty
-                    #u_depth = 0
-                    u_depth = ((2+(0.02*(z*-1)))*0.51)
-                    u_s_depth = ((2+(0.02*(sonar_depth*-1)))*0.51)
-                    #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
-                    u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
-                    #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
-                    #u_cd = 0
-                    if speed >= 25:
-                        u_s = math.sqrt(1 + ((.51 * abs(speed))**2))
-                        # u_c_s = math.sqrt(1 + ((.023 * abs(crosstrack_slope))**2))
-                        u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
-                    else:
-                        u = math.sqrt(u_depth**2 + u_cd**2)
-                        
-                    # u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2 + u_s_depth**2 + u_c_s**2)
-                    #u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
-                    us.append(u)
-                    if self.auto_weight:
-                        ## weight
 
-                        # if mb_perc is not None and mb_date is not None:
-                        #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
-                        #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
-                        #     w *= self.weight if self.weight is not None else 1
-                        # else:
-                        
-                        w = math.sqrt((1/u)) * this_weight
-                        #w = this_weight
-                        w *= self.weight if self.weight is not None else 1
+            if len(xs) > 0:
+                mb_points = np.column_stack((xs, ys, zs, ws, us))
+                xs = ys = zs = ws = us = None
+                mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
+                if self.want_binned:
+                    point_filter = PointFilterFactory(
+                        mod='bin_z:percentile=25:y_res=3:z_res=20', points=mb_points
+                    )._acquire_module()
+                    if point_filter is not None:
+                        mb_points = point_filter()
 
-                        ws.append(w)
-            else:
-                x = this_line[0]
-                y = this_line[1]
-                z = this_line[2]
-                xs.append(x)
-                ys.append(y)
-                zs.append(z)
-                        
-        if len(xs) > 0:
-            mb_points = np.column_stack((xs, ys, zs, ws, us))
-            xs = ys = zs = ws = us = None
-            mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
-            if self.want_binned:
-                point_filter = PointFilterFactory(
-                    mod='bin_z:percentile=25:y_res=3:z_res=20', points=mb_points
-                )._acquire_module()
-                if point_filter is not None:
-                    mb_points = point_filter()
-                    
-            if mb_points is not None:
-                yield(mb_points)
-                
-            mb_points = None
+                if mb_points is not None:
+                    yield(mb_points)
+
+                mb_points = None
 
     def yield_mblist2_ds(self):
         """use mblist to process the multibeam data"""
@@ -7621,7 +7624,6 @@ class ZIPlist(ElevationDataset):
             utils.remove_glob('{}*'.format(data_set.fn))
             #utils.remove_glob('{}*'.format(this_line))
 
-## todo: rename fetcher_params and fetches_params
 class Fetcher(ElevationDataset):
     """The default fetches dataset type; dlim Fetcher dataset class
 
@@ -7650,7 +7652,6 @@ class Fetcher(ElevationDataset):
                  check_size = True,
                  want_single_metadata_name = False,
                  callback = fetches.fetches_callback,
-                 fetcher_params = {},
                  **kwargs
     ):
         super().__init__(**kwargs)
@@ -7658,7 +7659,7 @@ class Fetcher(ElevationDataset):
         #self.outdir = outdir if outdir is not None else self.cache_dir
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, callback=callback,
-            verbose=self.verbose, outdir=outdir, **fetcher_params
+            verbose=self.verbose, outdir=outdir,
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
             utils.echo_warning_msg('fetches modules {} returned None'.format(self.fn))
@@ -8447,11 +8448,10 @@ class MBSFetcher(Fetcher):
     Fetches Module: <multibeam> - {}'''.format(__doc__, fetches.Multibeam.__doc__)
 
     def __init__(self, mb_exclude = 'A', want_binned = False, want_mbgrid = False, **kwargs):
-        super().__init__(fetcher_params = {'want_inf': False}, **kwargs)
+        super().__init__(**kwargs)
         self.fetches_params['mb_exclude'] = mb_exclude
         self.fetches_params['want_binned'] = want_binned
         self.fetches_params['want_mbgrid'] = want_mbgrid
-        #self.fetches_params['want_inf'] = False
 
     def yield_ds(self, result):
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
