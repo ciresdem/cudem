@@ -982,15 +982,11 @@ class RQOutlierZ(PointZOutlier):
         return(raster)
 
     def point_residuals(self, points, percentage = True, res = 50):
-        #p = np.array([points['y'], points['x'], points['z']]).T
         smoothed_depth = gdalfun.gdal_query(points, self.raster[0], 'g').flatten()
         if len(smoothed_depth) == 0:
             return([])
         
-        #from scipy.ndimage import uniform_filter1d
-        #smoothed_depth = uniform_filter1d(raster_z, size=50)
         if percentage:
-            #residuals = np.abs((p[:,2] - smoothed_depth) / smoothed_depth) * 100
             residuals =  np.abs((points['z'] - smoothed_depth) / smoothed_depth) * 100
         else:
             residuals = np.abs(points['z'] - smoothed_depth)
@@ -8454,8 +8450,9 @@ class MBSFetcher(Fetcher):
         self.fetches_params['want_mbgrid'] = want_mbgrid
 
     def yield_ds(self, result):
-        mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
-        yield(DatasetFactory(**self.fetches_params)._acquire_module())
+        if not result['url'].endswith('.inf'):
+            mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)            
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class HydroNOSParser(ElevationDataset):
     def __init__(self, **kwargs):
