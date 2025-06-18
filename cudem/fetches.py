@@ -650,7 +650,6 @@ class Fetch:
 
         ## file exists, so we return status of 0, as if we were successful!
         except FileExistsError as e:
-            #utils.echo_msg(e)
             status = 0
 
         ## other exceptions will return a status of -1, failure.
@@ -770,6 +769,7 @@ def fetch_queue(q, c = True):
                 ## There was an exception in fetch_file, we'll put the request back into
                 ## the queue to attempt to try again, fetch_args[4] is the number of times
                 ## we will try to do this, once exhausted, we will give up.
+
                 if fetch_args[4] > 0:# and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
                     utils.echo_warning_msg(
                         'fetch of {} failed...putting back in the queue: {}'.format(fetch_args[0], e)
@@ -926,7 +926,15 @@ class FetchModule:
         
         raise(NotImplementedError)
 
-    def fetch(self, entry, check_size = True, retries=5):
+    def fetch(self, entry, check_size = True, retries = 5):
+        status = Fetch(
+            url=entry['url'],
+            verbose=self.verbose,
+            headers=self.headers,
+        ).fetch_file(entry['dst_fn'], check_size=check_size)
+        return(status)
+
+    def fetch_as_queue(self, entry, check_size = True, retries=5):
         """given the `entry` obtained in the sub-class, fetch that entry.
         status should be 0 if successful, -1 or return-code otherwise.
         """
@@ -2625,7 +2633,7 @@ class Multibeam(FetchModule):
                         
                 else:
                     these_surveys[survey] = {version: [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]}
-                    
+
         else:
             utils.echo_error_msg('failed to fetch multibeam request')
 
@@ -2677,7 +2685,7 @@ class Multibeam(FetchModule):
                                 '{}.inf'.format(survs[1]),
                                 'mb_inf'
                             )
-                            
+
         if self.make_datalist:
             s_got = []
             with open('mb_inf.txt', 'w') as mb_inf_txt:

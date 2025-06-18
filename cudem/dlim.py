@@ -3663,7 +3663,7 @@ class ElevationDataset:
 
                     if len(points) > 0:
                         yield(points)
-        
+
         self.transform['transformer'] = self.transform['vert_transformer'] = None
             
     def mask_and_yield_array(self):
@@ -4270,6 +4270,10 @@ class ElevationDataset:
 
         mask_dataset = None
 
+    def _archive_xyz_test(self, **kwargs):
+        for this_entry in self.parse():
+            utils.echo_msg(this_entry)
+
     def archive_xyz(self, **kwargs):
         """Archive data from the dataset to XYZ in the given dataset region.
         
@@ -4315,16 +4319,17 @@ class ElevationDataset:
                 os.makedirs(datalist_dirname)
 
             sub_datalist = os.path.join(datalist_dirname, '{}.datalist'.format(this_key))
-            with open(sub_datalist, 'a') as sub_dlf:
-                if utils.fn_basename2(os.path.basename(this_entry.fn)) == '':
-                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.metadata['name'])), 'xyz'])
-                else:
-                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])                        
-                this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
-                if os.path.exists(this_xyz_path):
-                    utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
-                    continue
+            if utils.fn_basename2(os.path.basename(this_entry.fn)) == '':
+                sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.metadata['name'])), 'xyz'])
+            else:
+                sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
 
+            this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
+            if os.path.exists(this_xyz_path):
+                utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
+                continue
+
+            with open(sub_datalist, 'a') as sub_dlf:
                 with open(this_xyz_path, 'w') as xp:
                     for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
                         this_xyz.dump(include_w=True if self.weight is not None else False,
@@ -7675,26 +7680,7 @@ class Fetcher(ElevationDataset):
         ## breaks when things not set...
         # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
 
-        ## set the metadata from the fetches module
-        md = copy.deepcopy(self.metadata)
-        md['name'] = self.metadata['name']
-        md['title'] = self.fetch_module.title
-        md['source'] = self.fetch_module.source
-        md['date'] = self.fetch_module.date
-        md['data_type'] = self.data_format
-        md['resolution'] = self.fetch_module.resolution
-        md['hdatum'] = self.fetch_module.hdatum
-        md['vdatum'] = self.fetch_module.vdatum
-        md['url'] = self.fetch_module.url
-
-        self.fetches_params = self._set_params(
-            data_format=self.fetch_module.data_format,
-            src_srs=self.fetch_module.src_srs,
-            cache_dir=self.fetch_module._outdir,
-            remote=True,
-            metadata=md,
-            parent=self,
-        )
+        self._reset_params()
 
     def init_fetch_module(self):
         self.fetch_module = fetches.FetchesFactory(
@@ -7710,9 +7696,29 @@ class Fetcher(ElevationDataset):
         except:
             utils.echo_warning_msg('fetch module {} return zero results'.format(self.fn))
             self.fetch_module.results = []
-        
+
     def _reset_params(self):
-        self.fetches_params = self._set_params(**self.fetches_params)
+        ## set the metadata from the fetches module
+        md = copy.deepcopy(self.metadata)
+        md['name'] = self.metadata['name']
+        md['title'] = self.fetch_module.title
+        md['source'] = self.fetch_module.source
+        md['date'] = self.fetch_module.date
+        md['data_type'] = self.data_format
+        md['resolution'] = self.fetch_module.resolution
+        md['hdatum'] = self.fetch_module.hdatum
+        md['vdatum'] = self.fetch_module.vdatum
+        md['url'] = self.fetch_module.url
+
+        #self.fetches_params = self._set_params(**self.fetches_params)
+        self.fetches_params = self._set_params(
+            data_format=self.fetch_module.data_format,
+            src_srs=self.fetch_module.src_srs,
+            cache_dir=self.fetch_module._outdir,
+            remote=True,
+            metadata=md,
+            parent=self,
+        )
         
     def generate_inf(self):
         """generate a infos dictionary from the Fetches dataset"""
@@ -9640,5 +9646,5 @@ See `datalists_usage` for full cli options.
                     except Exception as e:
                       utils.echo_error_msg(e)
                       print(traceback.format_exc())
-                              
+                      
 ### End
