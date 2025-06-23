@@ -739,13 +739,15 @@ def fetch_queue(q, c = True):
                 verbose=fetch_args[3].verbose,
                 headers=fetch_args[3].headers
             ).fetch_ftp_file(fetch_args[1])
-            fetch_args[5].append([fetch_args[0], fetch_args[1], fetch_args[2]])
+            #fetch_args[5].append([fetch_args[0], fetch_args[1], fetch_args[2]])
+            fetch_results_ = [fetch_args[0], fetch_args[1], fetch_args[2], 0]
+            fetch_args[5].append(fetch_results_)
             
             ## call the fetches callback function, does nothing
             ## unless reset by user, must be defined with a single
             ## argument, which is the fetch_results just populated
             if callable(fetch_args[3].callback):
-                fetch_args[3].callback(fetch_results)
+                fetch_args[3].callback(fetch_results_)
         else:
             try:
                 #utils.echo_msg(fetch_args[3].name)
@@ -756,14 +758,14 @@ def fetch_queue(q, c = True):
                     headers=fetch_args[3].headers,
                     verify=False if fetch_args[3].name in no_verify else True
                 ).fetch_file(fetch_args[1], check_size=c)
-                fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], status]
-                fetch_args[5].append(fetch_results)
+                fetch_results_ = [fetch_args[0], fetch_args[1], fetch_args[2], status]
+                fetch_args[5].append(fetch_results_)
 
                 ## call the fetches callback function, does nothing
                 ## unless reset by user, must be defined with a single
                 ## argument, which is the fetch_results just populated
                 if callable(fetch_args[3].callback):
-                    fetch_args[3].callback(fetch_results)
+                    fetch_args[3].callback(fetch_results_)
                     
             except Exception as e:
                 ## There was an exception in fetch_file, we'll put the request back into
@@ -780,14 +782,14 @@ def fetch_queue(q, c = True):
                 else:
                     utils.echo_error_msg('fetch of {} failed...'.format(fetch_args[0]))
                     fetch_args[3].status = -1
-                    fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], e]
-                    fetch_args[5].append(fetch_results)
+                    fetch_results_ = [fetch_args[0], fetch_args[1], fetch_args[2], e]
+                    fetch_args[5].append(fetch_results_)
 
                     ## call the fetches callback function, does nothing
                     ## unless reset by user, must be defined with a single
                     ## argument, which is the fetch_results just populated
                     if callable(fetch_args[3].callback):
-                        fetch_args[3].callback(fetch_results)
+                        fetch_args[3].callback(fetch_results_)
 
         q.task_done()
         
@@ -803,18 +805,15 @@ class fetch_results(threading.Thread):
     run this on an initialized fetches module:
     >>> fetch_result(fetches_module, n_threads=3).run()
     and this will fill a queue for data fetching, using 'n_threads' threads.
-
-    entry should be a single results entry to fetch a single entry from the fetch module.
     """
     
-    def __init__(self, mod, check_size = True, n_threads = 3, attempts = 5, entry = None):
+    def __init__(self, mod, check_size = True, n_threads = 3, attempts = 5):
         threading.Thread.__init__(self)
         self.fetch_q = queue.Queue()
         self.mod = mod
         self.check_size = check_size
         self.n_threads = n_threads
         self.attempts = attempts
-        self.entry = entry
         ## results holds the info from mod.results as a list,
         ## with the addition of the fetching status at the end.
         self.results = []
@@ -833,33 +832,19 @@ class fetch_results(threading.Thread):
         # fetch_q data is [fetch_results, fetch_path, fetch_dt, fetch_module, retries, results]
         attempts = self.attempts
         while True:
-            if self.entry is not None:
+            for row in self.mod.results:
                 self.fetch_q.put(
-                    [self.entry['url'],
-                     os.path.join(self.mod._outdir, self.entry['dst_fn']),
-                     self.entry['data_type'],
+                    [row['url'],
+                     os.path.join(self.mod._outdir, row['dst_fn']),
+                     row['data_type'],
                      self.mod,
                      self.attempts,
                      self.results]
                 )
-            else:
-                for row in self.mod.results:
-                    self.fetch_q.put(
-                        [row['url'],
-                         os.path.join(self.mod._outdir, row['dst_fn']),
-                         row['data_type'],
-                         self.mod,
-                         self.attempts,
-                         self.results]
-                    )
 
             self.fetch_q.join()
             status = [x[3]==0 for x in self.results]
-            if self.entry is not None:
-                all_ok = len(status) == 1
-            else:
-                all_ok = len(status) == len(self.mod.results)
-                
+            all_ok = len(status) == len(self.mod.results)                
             if (all(status) and all_ok) or attempts < 0:
                 break
             else:
@@ -926,30 +911,14 @@ class FetchModule:
         
         raise(NotImplementedError)
 
-    def fetch(self, entry, check_size = True, retries = 5):
+    def fetch_entry(self, entry, check_size = True, retries = 5):
         status = Fetch(
             url=entry['url'],
             verbose=self.verbose,
             headers=self.headers,
-        ).fetch_file(entry['dst_fn'], check_size=check_size)
+        ).fetch_file(os.path.join(self._outdir, entry['dst_fn']), check_size=check_size)
+        
         return(status)
-
-    def fetch_as_queue(self, entry, check_size = True, retries=5):
-        """given the `entry` obtained in the sub-class, fetch that entry.
-        status should be 0 if successful, -1 or return-code otherwise.
-        """
-
-        _results = []
-
-        ## start the fetching threads
-        fr = fetch_results(
-            self, check_size=check_size, attempts=retries, entry=entry
-        )
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
-        return(fr.results[0][-1])
 
     def fetch_results(self):
         """fetch the gathered `results` from the sub-class"""
@@ -2230,7 +2199,7 @@ class NauticalCharts(FetchModule):
         ## Charts is in FRED, set that up here.
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
-        
+
     def update_if_not_in_FRED(self):
         """update the fetches module in FRED if it's not already in there."""
         
@@ -6453,21 +6422,19 @@ class WSF(FetchModule):
                     geom = this_region.export_as_geom()
                     if geom is not None:
                         surveys.append(
-                            {
-                                'Name': row.split('.')[0],
-                                'ID': sid,
-                                'Agency': 'DLR',
-                                'Date': utils.this_date(),
-                                'MetadataLink': row.split('.')[0] + '_stac.json',
-                                'MetadataDate': utils.this_date(),
-                                'DataLink': self._wsf_url + row,
-                                'DataType': 'WSF',
-                                'DataSource': 'WSF',
-                                'HorizontalDatum': 'epsg:4326',
-                                'VerticalDatum': 'None',
-                                'Info': '',
-                                'geom': geom,
-                            }
+                            {'Name': row.split('.')[0],
+                             'ID': sid,
+                             'Agency': 'DLR',
+                             'Date': utils.this_date(),
+                             'MetadataLink': row.split('.')[0] + '_stac.json',
+                             'MetadataDate': utils.this_date(),
+                             'DataLink': self._wsf_url + row,
+                             'DataType': 'WSF',
+                             'DataSource': 'WSF',
+                             'HorizontalDatum': 'epsg:4326',
+                             'VerticalDatum': 'None',
+                             'Info': '',
+                             'geom': geom,}
                         )
 
         self.FRED._add_surveys(surveys)

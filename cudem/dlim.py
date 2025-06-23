@@ -6062,7 +6062,7 @@ class IceSat2File(ElevationDataset):
                 utils.echo_warning_msg('could not locate associated {} file for {}'.format(short_name, atlxx_filter))
                 return(None)
         else:
-            if this_atlxx.fetch(this_atlxx.results[0], check_size=True) == 0:
+            if this_atlxx.fetch_entry(this_atlxx.results[0], check_size=True) == 0:
                 return(os.path.join(this_atlxx._outdir, this_atlxx.results[0][1]))            
             
     def read_atl_data(self, laser_num, orientation = None):
@@ -7740,7 +7740,7 @@ class Fetcher(ElevationDataset):
         ) as pbar:
             for result in self.fetch_module.results:
                 self._reset_params()
-                status = self.fetch_module.fetch(result, check_size=self.check_size)
+                status = self.fetch_module.fetch_entry(result, check_size=self.check_size)
                 if status == 0:
                     self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result['dst_fn'])
                     for this_ds in self.yield_ds(result):
@@ -7893,7 +7893,7 @@ class DAVFetcher_CoNED(Fetcher):
         #self.fetch_module.run()
         for result in self.fetch_module.results:
             if not self.cog:
-                status = self.fetch_module.fetch(result, check_size=self.check_size)
+                status = self.fetch_module.fetch_entry(result, check_size=self.check_size)
                 if status != 0:
                     break
                 

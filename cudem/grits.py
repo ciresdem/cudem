@@ -155,6 +155,12 @@ class Grits:
             copy_ds = driver.CreateCopy(self.dst_dem, src_ds, 1, options=['COMPRESS=DEFLATE'])
             
         return(copy_ds)
+
+    def _density(self, src_arr):
+        nonzero = np.count_nonzero(~np.isnan(src_arr))
+        dd = nonzero / src_arr.size
+        
+        return(dd)
     
     def split_by_z(self):
         """Split the filtered DEM by z-value"""
@@ -553,7 +559,7 @@ class LSPOutliers(Grits):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
         dd = nonzero / src_arr.size
         
-        return(dd)        
+        return(dd)
         
     def gdal_density(self, src_ds = None):
         src_arr, src_config = gdalfun.gdal_get_array(src_ds)
@@ -1317,10 +1323,8 @@ class Weights(Grits):
         return(self.dst_dem, 0)
 
 class WeightZones(Weights):
-    def __init__(self, min_z = None, max_z = None, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.min_z = utils.float_or(min_z)
-        self.max_z = utils.float_or(max_z)
         
     def run(self):
         if self.weight_mask is None:
@@ -1335,71 +1339,43 @@ class WeightZones(Weights):
                 #_mask = np.zeros(this_w_arr.shape)
                 #_mask[(this_w_arr < self.weight_threshold)] = 1
                 this_w_arr[this_w_arr == self.ds_config['ndv']] = np.nan
+                n_den = self._density(this_w_arr)
+                cell_size = self.ds_config['geoT'][1]
+                #if self.units_are_degrees:
+                cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
+
+                m_size = 25000
+                #m_size = (self.ds_config['nx'] / n_den)# / 24#800#500 # 1000
+                utils.echo_msg([m_size, n_den, cell_size])
+                size_threshold = (m_size * (1/n_den)) / cell_size
+                
                 size_mask = (this_w_arr < self.weight_threshold)
                 this_w_arr[size_mask] = 1
                 this_w_arr[~size_mask] = 0
 
                 ## group adjacent non-zero cells
                 l, n = scipy.ndimage.label(this_w_arr)
-
+                
                 ## get the total number of cells in each group
                 mn = scipy.ndimage.sum_labels(this_w_arr, labels=l, index=np.arange(1, n+1))
-                #utils.echo_msg(mn)
-                #utils.echo_msg(np.nanpercentile(mn, 99))
-                #size_threshold = self.buffer_cells**2
-                size_threshold = np.nanpercentile(mn, 99)
+                utils.echo_msg(mn)
+                #utils.echo_msg(self.ds_config['nb'])
+                #size_threshold = np.nanpercentile(mn, 99)
+                
+                #size_threshold = self.ds_config['nb']  * .1
+                #size_threshold = 10
                 utils.echo_msg(size_threshold)
-                utils.echo_msg(np.max(mn))
-                utils.echo_msg(np.min(mn))
-                #size_threshold = self.get_outliers(mn, 99)[0]
-                #utils.echo_msg(size_threshold)
-
-                utils.echo_msg(mn[mn < size_threshold])
-
-                # z-mask
-
-                # z_mask = ~np.isnan(this_w_arr)
-                # if self.min_z is not None or self.max_z is not None:
-                #     z_band = src_ds.GetRasterBand(1)
-                #     z_array = z_band.ReadAsArray()
-                #     z_mask = ~np.isnan(z_array)
-
-                #     if self.min_z is not None:
-                #         z_lower_mask = z_array > self.min_z
-                #     else:
-                #         z_lower_mask = ~np.isnan(z_array)                        
-
-                #     if self.max_z is not None:
-                #         z_upper_mask = z_array < self.max_z
-                #     else:
-                #         z_lower_mask = ~np.isnan(z_array)
-
-                #     z_mask = (z_lower_mask) & (z_upper_mask)
-                    
-                for i in trange(
-                        0, n,
-                        desc='{}: checking data voids less than {} cells'.format(
-                            os.path.basename(sys.argv[0]), size_threshold
-                        ),
-                        leave=self.verbose
-                ):
-                    if mn[i] <= size_threshold:
-                        i += 1
-                        #ll = utils.expand_for(l==i)
-                        #flat_value = np.nanpercentile(src_arr[ll], 5)
-                        this_w_arr[l==i] = 2
-
-
-                #mask = (mask) | (size_mask)                    
-                ## remove lower-weight data if the area is small
+                mn_size_indices = np.where(mn < size_threshold)
+                for i in mn_size_indices:
+                    i+=1
+                this_w_arr[np.isin(l, mn_size_indices)] = 2
                 utils.echo_msg(np.count_nonzero(this_w_arr==2))
-
                 for b in range(1, dst_ds.RasterCount+1):
                     this_band = dst_ds.GetRasterBand(b)
                     this_arr = this_band.ReadAsArray()
                     this_arr[this_w_arr==2] = self.ds_config['ndv']
                     this_band.WriteArray(this_arr)
-                        
+                       
                 if self.weight_is_fn:
                     weight_ds = None
                     

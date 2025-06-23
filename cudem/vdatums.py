@@ -67,6 +67,8 @@ _tidal_frames = {
            'uncertainty': 0, 'epsg': 0000},
     1: {'name': 'xgeoid20b', 'description': 'xgeoid 2020 B',
         'uncertainty': 0, 'epsg': 1},
+    7968: {'name': 'NGVD27',
+           'uncertainty': 0, 'epsg': 7968},
 }
 
 _htdp_reference_frames = {
@@ -739,10 +741,10 @@ class VerticalTransform:
 
         if self.verbose:
             utils.echo_msg(unc_outfile)
-
             utils.echo_msg('{} {}'.format(self.epsg_in, self.epsg_out))
+            
         if self.epsg_in is None or self.epsg_out is None:
-            utils.echo_error_msg('failed to parse vertical input or output, check inputs')
+            utils.echo_error_msg('failed to parse vertical input or output, check inputs, {}->{}'.format(self.epsg_in, self.epsg_out))
                 
             return(None)
         else:
