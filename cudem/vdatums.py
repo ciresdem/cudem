@@ -513,7 +513,7 @@ class VerticalTransform:
                     #utils.remove_glob('{}*'.format(_trans_out.fn))
             else:
                 _trans_out = None
-        
+
         if _trans_in is None:
             if _trans_out is None:
                 return(np.zeros( (self.ycount, self.xcount) ), None)
@@ -652,6 +652,9 @@ class VerticalTransform:
         unc_array = np.zeros( (self.ycount, self.xcount) )
         if self.epsg_in == 0:
             self.geoid_in = 'geoid09'
+            
+        # elif self.epsg_in == 7968:
+        #     self.geoid_in = 'geoid09'
         # if self.epsg_in in _tidal_frames.keys():
         #     self.geoid_in = 'xgeoid20b'
             
@@ -667,7 +670,7 @@ class VerticalTransform:
         else:
             tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
 
-        #utils.echo_msg('{} {}'.format(epsg_in, epsg_out))
+        utils.echo_msg('{} {}'.format(epsg_in, epsg_out))
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             #utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
@@ -676,6 +679,14 @@ class VerticalTransform:
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
                     epsg_in = epsg_out
+                elif epsg_in == 7968:
+                    tg, tv = self._tidal_transform(_tidal_frames[self.epsg_in]['name'], None)
+                    ## crd here outputs navd88 geoid09
+                    #cg, cv = self._cdn_transform(name='geoid', geoid='geoid09', invert=False)
+                    cg, cv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
+                    #cg, cv = self._cdn_transform(name='geoid', geoid='geoid09', invert=False)
+                    tmp_trans = tg + cg
+                    epsg_in = cv                    
                 else:
                     tg, tv = self._tidal_transform(_tidal_frames[self.epsg_in]['name'], 'tss')
                     ## crd here outputs navd88 geoid09
