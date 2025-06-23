@@ -5027,10 +5027,11 @@ class HRDEM(FetchModule):
 class MRDEM(FetchModule):
     def __init__(self, **kwargs):
         super().__init__(name='mrdem', **kwargs)
-        self.mrdem_url = 'https://datacube-prod-data-public.s3.ca-central-1.amazonaws.com/store/elevation/mrdem/mrdem-30/mrdem-30-dtm.vrt'
+        self.mrdem_dtm_url = 'https://datacube-prod-data-public.s3.ca-central-1.amazonaws.com/store/elevation/mrdem/mrdem-30/mrdem-30-dtm.vrt'
+        self.mrdem_dsm_url = 'https://datacube-prod-data-public.s3.ca-central-1.amazonaws.com/store/elevation/mrdem/mrdem-30/mrdem-30-dsm.vrt'
 
     def run(self):
-        self.add_entry_to_results(self.mrdem_url, self.mrdem_url.split('/')[-1], 'vrt')
+        self.add_entry_to_results(self.mrdem_dtm_url, self.mrdem_dtm_url.split('/')[-1], 'vrt')
         
 ## ArcticDEM
 class ArcticDEM(FetchModule):
@@ -5752,6 +5753,7 @@ class VDATUM(FetchModule):
         5714: {'name': 'tss',
                'description': 'to MSL tss geoid',
                'grid': 'tss.gtx'},
+        
         # 0000: {'name': 'crd',
         #        'description': 'columbia river datum',
         #        'grid': 'crd.gtx'},
@@ -5762,7 +5764,7 @@ class VDATUM(FetchModule):
         
         ## add others IGLD85
         #self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
-        self._vdatums = ['TIDAL', 'CRD', 'IGLD85', 'XGEOID16B', 'XGEOID17B', 'XGEOID18B', 'XGEOID19B', 'XGEOID20B', 'NGVD27']
+        self._vdatums = ['TIDAL', 'CRD', 'IGLD85', 'XGEOID16B', 'XGEOID17B', 'XGEOID18B', 'XGEOID19B', 'XGEOID20B', 'VERTCON']
         self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl']
         #self._xgeoids = ['xgeoid20b']
         self.where = where

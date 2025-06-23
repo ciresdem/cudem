@@ -67,7 +67,7 @@ _tidal_frames = {
            'uncertainty': 0, 'epsg': 0000},
     1: {'name': 'xgeoid20b', 'description': 'xgeoid 2020 B',
         'uncertainty': 0, 'epsg': 1},
-    7968: {'name': 'NGVD27',
+    7968: {'name': 'NGVD',
            'uncertainty': 0, 'epsg': 7968},
 }
 
