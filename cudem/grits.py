@@ -164,7 +164,7 @@ class Grits:
     
     def split_by_z(self):
         """Split the filtered DEM by z-value"""
-        
+
         if self.max_z is not None or self.min_z is not None:
             utils.echo_msg('split by z:{} {}'.format(self.min_z, self.max_z))
             with gdalfun.gdal_datasource(self.src_dem) as src_ds:
@@ -188,6 +188,7 @@ class Grits:
                     ## todo: all bands
                     with gdalfun.gdal_datasource(self.dst_dem, update=True) as s_ds:
                         if s_ds is not None:
+                            #for b in range(1, s_ds.RasterCount+1):
                             s_band = s_ds.GetRasterBand(1)
                             s_array = s_band.ReadAsArray()
                             s_array = s_array * mask_array
@@ -1323,8 +1324,9 @@ class Weights(Grits):
         return(self.dst_dem, 0)
 
 class WeightZones(Weights):
-    def __init__(self, **kwargs):
+    def __init__(self, size_threshold = None, **kwargs):
         super().__init__(**kwargs)
+        self.size_threshold = utils.float_or(size_threshold)
         
     def run(self):
         if self.weight_mask is None:
@@ -1345,9 +1347,11 @@ class WeightZones(Weights):
                 cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
 
                 m_size = 25000
-                #m_size = (self.ds_config['nx'] / n_den)# / 24#800#500 # 1000
                 utils.echo_msg([m_size, n_den, cell_size])
-                size_threshold = (m_size * (1/n_den)) / cell_size
+                if self.size_threshold is None:
+                    size_threshold = (m_size * (1/n_den)) / cell_size
+                else:
+                    size_threshold = self.size_threshold
                 
                 size_mask = (this_w_arr < self.weight_threshold)
                 this_w_arr[size_mask] = 1
@@ -1368,6 +1372,7 @@ class WeightZones(Weights):
                 mn_size_indices = np.where(mn < size_threshold)
                 for i in mn_size_indices:
                     i+=1
+                    
                 this_w_arr[np.isin(l, mn_size_indices)] = 2
                 utils.echo_msg(np.count_nonzero(this_w_arr==2))
                 for b in range(1, dst_ds.RasterCount+1):
@@ -1375,7 +1380,8 @@ class WeightZones(Weights):
                     this_arr = this_band.ReadAsArray()
                     this_arr[this_w_arr==2] = self.ds_config['ndv']
                     this_band.WriteArray(this_arr)
-                       
+                    this_band.FlushCache()
+                    
                 if self.weight_is_fn:
                     weight_ds = None
                     
