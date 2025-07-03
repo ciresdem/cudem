@@ -1838,7 +1838,8 @@ class ElevationDataset:
                  params = {},
                  metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                              'data_type':None, 'resolution':None, 'hdatum':None,
-                             'vdatum':None, 'url':None}, **kwargs):
+                             'vdatum':None, 'url':None},
+                 **kwargs):
         self.fn = fn # dataset filename or fetches module
         self.data_format = data_format # dataset format
         self.weight = weight # dataset weight
@@ -1922,6 +1923,10 @@ class ElevationDataset:
 
         self.infos = INF(name=self.fn, file_hash='0', numpts=0, fmt=self.data_format) # infos blob
 
+        # for kwarg in kwargs:
+        #     if kwarg not in self.__dict__.keys():
+        #         utils.echo_warning_msg('{} is not a valid parameter'.format(kwarg))
+        
         self.params = params # the factory parameters
         if not self.params:
             self.params['kwargs'] = self.__dict__.copy()

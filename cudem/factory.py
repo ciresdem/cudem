@@ -349,7 +349,7 @@ class CUDEMFactory:
 
         for key in type_def.keys():
             self._modules[key] = type_def[key]
-
+            
     def _acquire_module(self):
         """Acquire the module from the factory.
 
@@ -358,6 +358,16 @@ class CUDEMFactory:
         KeyError: '_factory'
         #if 'params' in self._modules[self.mod_name]['call']().__dict__.keys():
         """
+
+        def _get_all_keys(d):
+            for key, value in d.items():
+                if key != 'params':
+                    yield key
+                else:
+                    continue
+                
+                if isinstance(value, dict):
+                    yield from _get_all_keys(value)
         
         self.kwargs['params'] = self.__dict__
         for k in self.kwargs.keys():
@@ -369,11 +379,20 @@ class CUDEMFactory:
                 # )
                 self.kwargs[k] = self.mod_args[k]
                 del self.mod_args[k]
+            #else:
+            #    utils.echo_msg_bold(k)
                 
         if self.mod_name is not None:
             try:
                 m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
-                return(m(self.mod_args, self.kwargs))
+                mm = m(self.mod_args, self.kwargs)
+                        
+                for mod_arg in self.mod_args.keys():
+                    if mod_arg not in list(_get_all_keys(mm.__dict__)):
+                        utils.echo_warning_msg('{} is not a valid parameter...'.format(mod_arg))
+                
+                #return(m(self.mod_args, self.kwargs))
+                return(mm)
             except Exception as e:
                 utils.echo_error_msg(
                     'could not acquire module, {}'.format(e)
