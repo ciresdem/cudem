@@ -1221,6 +1221,7 @@ def config_check(chk_config_file=True, chk_vdatum=False, generate_config_file=Tr
         _waff_co['HTDP'] = cmd_check('htdp{}'.format(ae), 'echo 0 | htdp 2>&1' if host_os == 'win32' else 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\'').decode()
         _waff_co['ImageMagick'] = cmd_check('mogrify{}'.format(ae), 'mogrify --version | grep Version | awk \'{print $3}\'').decode()
         _waff_co['CUDEM'] = str(cudem.__version__)
+        _waff_co['conda'] = os.environ.get('CONDA_DEFAULT_ENV', None)
 
         for key in _waff_co.keys():
             _waff_co[key] = None if _waff_co[key] == '0' else _waff_co[key]

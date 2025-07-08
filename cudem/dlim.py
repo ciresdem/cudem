@@ -911,7 +911,7 @@ class PointZ:
             
         return(ogr_ds)
     
-class PointZMask(PointZ):
+class PointZVectorMask(PointZ):
     """Filter data using a vector mask
 
     <mask:mask_fn=path:invert=False>
@@ -1074,7 +1074,7 @@ class PointFilterFactory(factory.CUDEMFactory):
         #'bin_z': {'name': 'bin_z', 'call': BinZ},
         'outlierz': {'name': 'outlierz', 'call': PointZOutlier},
         'rq': {'name': 'rq', 'call': RQOutlierZ},
-        'mask': {'name': 'mask', 'call': PointZMask},
+        'vector_mask': {'name': 'vector_mask', 'call': PointZVectorMask},
     }
     
     def __init__(self, **kwargs):
@@ -1775,6 +1775,9 @@ class ElevationDataset:
         otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
         """
 
+        #self.array_yield = self.yield_array()
+        #self.xyz_yield = self.yield_xyz()
+        
         self.array_yield = self.mask_and_yield_array()
         self.xyz_yield = self.mask_and_yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
@@ -3255,7 +3258,7 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, verbose=True
+                                    mod=f, points=points, verbose=False
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
