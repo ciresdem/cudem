@@ -3082,14 +3082,13 @@ class WafflesCUDEM(Waffle):
         
         super().__init__(**kwargs)
         self.pre_count = utils.int_or(pre_count, 1)
-
+        self.min_weight = min_weight        
         if min_weight is not None:
             weight_levels = min_weight
         
         if weight_levels is not None:
             self.weight_levels = [utils.float_or(w) for w in weight_levels.split('/')]
             self.weight_levels = self.weight_levels[:self.pre_count]
-            #self.weight_levels.insert(0, self.
         else:
             self.weight_levels = []
             
@@ -3369,7 +3368,7 @@ class WafflesCUDEM(Waffle):
         ## reset the stack for uncertainty
         ##self.stack = pre_surface.stack
         self.stack = orig_stack
-        #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
+        utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
 

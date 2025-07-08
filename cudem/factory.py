@@ -379,8 +379,6 @@ class CUDEMFactory:
                 # )
                 self.kwargs[k] = self.mod_args[k]
                 del self.mod_args[k]
-            #else:
-            #    utils.echo_msg_bold(k)
                 
         if self.mod_name is not None:
             try:

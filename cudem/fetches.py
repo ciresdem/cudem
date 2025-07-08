@@ -603,6 +603,8 @@ class Fetch:
                                         tries=tries-1
                                     )
                                     self.verbose = False
+                                else:
+                                    raise e
 
                     ## something went wrong here and the size of the fetched file does
                     ## not match the requested content-length

@@ -150,10 +150,13 @@ class Grits:
         with gdalfun.gdal_datasource(
                 self.src_dem, update=False
         ) as src_ds:
-            src_infos = gdalfun.gdal_infos(src_ds)
-            driver = gdal.GetDriverByName(src_infos['fmt'])
-            copy_ds = driver.CreateCopy(self.dst_dem, src_ds, 1, options=['COMPRESS=DEFLATE'])
-            
+            if src_ds is not None:
+                src_infos = gdalfun.gdal_infos(src_ds)
+                driver = gdal.GetDriverByName(src_infos['fmt'])
+                copy_ds = driver.CreateCopy(self.dst_dem, src_ds, 1, options=['COMPRESS=DEFLATE'])
+            else:
+                copy_ds = None
+                
         return(copy_ds)
 
     def _density(self, src_arr):
@@ -1254,9 +1257,7 @@ class Weights(Grits):
         self.weight_threshold = utils.float_or(weight_threshold)
         self.remove_sw = remove_sw
         
-
     def init_weight(self, src_ds = None):
-
         weight_band = None
         if self.weight_is_fn:
             if self.weight_threshold is None:
@@ -1276,11 +1277,11 @@ class Weights(Grits):
     def run(self):
         if self.weight_mask is None:
             return(self.src_dem, -1)
-
-        if self.remove_sw:
-            return(self.remove_small_weight())
         
         dst_ds = self.copy_src_dem()
+        if dst_ds is None:
+            return(self.src_dem, -1)
+        
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
             if src_ds is not None:
                 self.init_ds(src_ds)                
@@ -1303,8 +1304,7 @@ class Weights(Grits):
                         this_w_arr >= self.weight_threshold,
                         shiftx=self.buffer_cells, shifty=self.buffer_cells
                     )
-                    mask = (w_arr < self.weight_threshold) & expanded_w_arr
-                    
+                    mask = (w_arr < self.weight_threshold) & expanded_w_arr                    
                     for b in range(1, dst_ds.RasterCount+1):
                         this_band = dst_ds.GetRasterBand(b)
                         this_arr = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
@@ -1323,6 +1323,7 @@ class Weights(Grits):
         dst_ds = None        
         return(self.dst_dem, 0)
 
+## uses way too much memory on large dems
 class WeightZones(Weights):
     def __init__(self, size_threshold = None, **kwargs):
         super().__init__(**kwargs)
@@ -1392,7 +1393,6 @@ class WeightZones(Weights):
 
         dst_ds = None        
         return(self.dst_dem, 0)
-
             
 class GritsFactory(factory.CUDEMFactory):
     """Grits Factory Settings and Generator
@@ -1401,27 +1401,41 @@ class GritsFactory(factory.CUDEMFactory):
     """
     
     _modules = {
-        'blur': {'name': 'blur',
-                 'description': 'Filter with a Gaussian Blur',
-                 'call': Blur},
-        'grdfilter': {'name': 'grdfilter',
-                      'description': 'Filter using GMTs `grdfilter` command',
-                      'call': GMTgrdfilter},
-        'outliers': {'name': 'outliers',
-                     'description': 'Remove outliers from the DEM',
-                     'call': LSPOutliers},
-        'lsp': {'name': 'lsp-outliers',
-                'description': 'Remove outliers from the DEM',
-                'call': LSPOutliers},
-        'flats': {'name': 'flats',
-                  'description': 'Remove flat areas from the DEM',
-                  'call': Flats},
-        'weights': {'name': 'weights',
-                    'description': 'Make a NDV buffer around the weight threshold',
-                    'call': Weights},
-        'weight_zones': {'name': 'weight_zones',
-                         'description': 'Make a NDV buffer around the weight threshold',
-                         'call': WeightZones},
+        'blur': {
+            'name': 'blur',
+            'description': 'Filter with a Gaussian Blur',
+            'call': Blur
+        },
+        'grdfilter': {
+            'name': 'grdfilter',
+            'description': 'Filter using GMTs `grdfilter` command',
+            'call': GMTgrdfilter
+        },
+        'outliers': {
+            'name': 'outliers',
+            'description': 'Remove outliers from the DEM',
+            'call': LSPOutliers
+        },
+        'lsp': {
+            'name': 'lsp-outliers',
+            'description': 'Remove outliers from the DEM',
+            'call': LSPOutliers
+        },
+        'flats': {
+            'name': 'flats',
+            'description': 'Remove flat areas from the DEM',
+            'call': Flats
+        },
+        'weights': {
+            'name': 'weights',
+            'description': 'Make a NDV buffer around the weight threshold',
+            'call': Weights
+        },
+        'weight_zones': {
+            'name': 'weight_zones',
+            'description': 'Make a NDV buffer around the weight threshold',
+            'call': WeightZones
+        },
     }
     
     def __init__(self, **kwargs):

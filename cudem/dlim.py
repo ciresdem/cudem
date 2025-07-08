@@ -244,14 +244,21 @@ def ogr_mask_footprints(
     ) as pbar:
         for i, key in enumerate(src_infos.keys()):
             ## update db using ogrinfo
-            key_val = ', '.join(["'{}' = '{}'".format(x, src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])            
+            key_val = ', '.join(
+                ["'{}' = '{}'".format(
+                    x, src_infos[key]['metadata'][x]
+                ) for x in src_infos[key]['metadata'].keys()]
+            )
             sql = "UPDATE {name} SET {key_val} WHERE rowid = {f}".format(
                 name='footprint',
                 key_val=key_val,
                 value=src_infos[key]['metadata'][md],
                 f=i+1
             )
-            utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose=False)
+            utils.run_cmd(
+                'ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql),
+                verbose=False
+            )
             pbar.update()
             
     return(glob.glob('{}.*'.format(utils.fn_basename2(dst_ogr_fn))), ogr_format)
@@ -833,8 +840,10 @@ class PointZ:
 
         if len(self.points) == 0 or self.points is None:
             return(self.points)
-        
-        return(self.run())
+
+        # return(self.run())
+        self.run()
+        return(self.points)
         
     def init_region(self, region):
         """Initialize the data-region AOI
@@ -878,6 +887,73 @@ class PointZ:
         
         return(point_pixels)
 
+    def vectorize_points(self):
+        """Make a point vector OGR DataSet Object from points
+        """
+
+        dst_ogr = '{}'.format('points_dataset')
+        ogr_ds = gdal.GetDriverByName('Memory').Create(
+            '', 0, 0, 0, gdal.GDT_Unknown
+        )
+        layer = ogr_ds.CreateLayer(
+            dst_ogr, geom_type=ogr.wkbPoint
+        )
+        fd = ogr.FieldDefn('index', ogr.OFTInteger)
+        layer.CreateField(fd)
+        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
+        with tqdm(desc='vectorizing points dataset', leave=False) as pbar:
+            for index, this_row in enumerate(self.points):
+                pbar.update()
+                f.SetField(0, index)
+                g = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(this_row['x'], this_row['y']))
+                f.SetGeometryDirectly(g)
+                layer.CreateFeature(f)
+            
+        return(ogr_ds)
+    
+class PointZMask(PointZ):
+    """Filter data using a vector mask
+
+    <mask:mask_fn=path:invert=False>
+    """
+    
+    def __init__(self, mask_fn = None, invert = False, **kwargs):
+        super().__init__(**kwargs)
+        self.mask_fn = mask_fn
+        self.invert = invert
+
+    def filter_mask(self, points, invert = False):
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        outliers = np.zeros(points.shape)
+
+        if self.mask_fn is not None:
+            ## vectorize the icesate2 photons
+            ogr_ds = self.vectorize_points()
+            if ogr_ds is not None:
+                mask_ds = ogr.Open(self.mask_fn, 0)
+                mask_layer = mask_ds.GetLayer()
+                mask_geom = gdalfun.ogr_union_geom(mask_layer, verbose=False)
+                mask_ds = mask_layer = None
+                points_layer = ogr_ds.GetLayer()
+                points_layer.SetSpatialFilter(mask_geom)
+                for f in points_layer:
+                    idx = f.GetField('index')
+                    outliers[idx] = 1
+
+                points_layer.SetSpatialFilter(None)
+                ogr_ds = None
+                
+        outliers = outliers == 1
+        if invert:
+            return(points[outliers], outliers)
+        else:
+            return(points[~outliers], outliers)
+
+    def run(self):
+        self.points, outliers = self.filter_mask(self.points, invert=self.invert)
+        return(self.points)
+    
 class PointZOutlier(PointZ):
     """XYZ outlier filter.
 
@@ -964,7 +1040,7 @@ class RQOutlierZ(PointZOutlier):
         if 'multipass' in kwargs.keys():
             del kwargs['multipass']
             
-        super().__init__(percentile = threshold, percentage = True, multipass=1, **kwargs)
+        super().__init__(percentile=threshold, percentage=True, multipass=1, **kwargs)
         self.threshold = threshold
         self.fetches_modules = ['gmrt']
         self.raster = self.init_raster(raster)
@@ -998,468 +1074,18 @@ class PointFilterFactory(factory.CUDEMFactory):
         #'bin_z': {'name': 'bin_z', 'call': BinZ},
         'outlierz': {'name': 'outlierz', 'call': PointZOutlier},
         'rq': {'name': 'rq', 'call': RQOutlierZ},
+        'mask': {'name': 'mask', 'call': PointZMask},
     }
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-    
-# class PointFilter:
-#     def __init__(self, points = None, region = None, verbose = True, params = {}, **kwargs):
-#         self.points = points
-#         self.region = region
-#         self.params = params
-#         self.verbose = verbose
-#         self.kwargs = kwargs
-
-#         self.init_region()
-        
-#     def __call__(self):
-#         if self.verbose:
-#             utils.echo_msg('filtering points using {}'.format(self))
-            
-#         return(self.run())
-
-#     def run(self):
-#         return(self.points)
-
-#     def init_region(self):
-#         if self.src_region is None:
-#             self.src_region = regions.Region().from_list(
-#                 [np.min(self.points['x']), np.max(self.points['x']),
-#                  np.min(self.points['y']), np.max(self.points['y'])]
-#             )
-    
-#     def convert_wgs_to_utm(self, lat, lon):
-#         with warnings.catch_warnings():
-#             warnings.simplefilter('ignore')
-#             easting, northing, num, letter = utm.from_latlon(lat, lon)
-#             if letter >= 'N':
-#                 epsg = 'epsg:326' + str(num)
-#             elif letter < 'N':
-#                 epsg = 'epsg:327' + str(num)
-#             else:
-#                 utils.echo_error_msg('Could not find UTM zone')
-
-#             return(epsg)
-
-#     def fetch_data(self, fetches_module, src_region, check_size=True):
-#         this_fetches = fetches.FetchesFactory(
-#             mod=fetches_module,
-#             src_region=src_region,
-#             verbose=self.verbose,
-#             #outdir='./',
-#             callback=fetches.fetches_callback
-#         )._acquire_module()        
-#         this_fetches.run()
-#         fr = fetches.fetch_results(this_fetches, check_size=check_size)
-#         fr.daemon = True
-#         fr.start()
-#         fr.join()
-        
-#         return(fr)
-        
-#     def point_pixels(self, points):
-#         pa = PointArray(x_size=50, y_size=50)
-#         point_arrays, point_srcwin, point_gt = pa(points)
-#         point_pixels = point_arrays['z'][point_arrays['pixel_y'], point_arrays['pixel_x']]
-        
-#         return(point_pixels)
-
-#     def point_residuals(self, points, percentage = False):
-#         point_pixels = self.point_pixels(points)
-#         residuals = np.abs(points[:,2] - point_pixels)
-#         if percentage:
-#             residuals = (residuals / point_pixels) * 100
-        
-#         return(residuals)
-        
-# ## Adapted from CShelph
-# class BinZ(PointFilter):
-#     def __init__(self, y_res = 1, z_res = .5, percentile = 50, z_min = None, z_max = None, **kwargs):
-#         super().__init__(**kwargs)
-#         self.y_res = utils.float_or(y_res, 1)
-#         self.z_res = utils.float_or(z_res, .5)
-#         self.percentile = utils.float_or(percentile, 50)
-#         self.z_min = utils.float_or(z_min)
-#         self.z_max = utils.float_or(z_max)
-        
-#     def bin_points(self, points):
-#         '''Bin data along vertical and horizontal scales for later segmentation'''
-
-#         ## Calculate number of bins required both vertically and
-#         ## horizontally with resolution size
-#         y_bin_number = round(abs(points['y'].min() - points['y'].max())/self.y_res)
-#         if y_bin_number == 0:
-#             y_bin_number = 1
-            
-#         #x_bin_number = round(abs(points['x'].min() - points['x'].max())/self.y_res)
-#         z_bin_number = round(abs(points['z'].min() - points['z'].max())/self.z_res)
-#         if z_bin_number == 0:
-#             z_bin_number = 1
-
-#         if (y_bin_number > 0 and z_bin_number > 0):    
-#             points1 = points
-#             y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
-#             #x_bins = pd.cut(points['x'], x_bin_number, labels = np.array(range(x_bin_number)))
-#             points1['y_bins'] = y_bins
-#             #points1['x_bins'] = x_bins
-#             #utils.echo_msg('{} {} {}'.format(points['z'].min(), points['z'].max(), z_bin_number))
-#             z_bins = pd.cut(
-#                 points['z'], z_bin_number, labels = np.round(
-#                     np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
-#                     decimals = 1
-#                 )
-#             )
-#             points1['z_bins'] = z_bins
-#             points1 = points1.reset_index(drop=True)
-
-#             return(points1)
-
-#         return(None)
-
-#     def get_bin_height(self, binned_data):
-#         '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
-
-#         # Create sea height list
-#         bin_height = []
-#         bin_lat = []
-#         bin_lon = []
-
-#         # Group data by latitude
-#         binned_data_sea = binned_data
-#         #grouped_data = binned_data_sea.groupby(['y_bins', 'x_bins'], group_keys=True)
-#         grouped_data = binned_data_sea.groupby(['y_bins'], group_keys=True)
-#         data_groups = dict(list(grouped_data))
-
-#         # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
-#         # count_threshold = np.percentile(
-#         #     binned_data.groupby(['y_bins', 'x_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(),
-#         #     percentile
-#         # )
-#         count_threshold = np.percentile(
-#             binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(),
-#             self.percentile
-#         )
-#         # Loop through groups and return average sea height
-#         for k,v in data_groups.items():
-#             # Create new dataframe based on occurance of photons per height bin
-#             new_df = pd.DataFrame(v.groupby('z_bins').count())
-
-#             # Return the bin with the highest count
-#             largest_h_bin = new_df['z'].argmax()
-
-#             # Select the index of the bin with the highest count
-#             largest_h = new_df.index[largest_h_bin]
-
-#             # Set threshold of photon counts per bin
-#             if new_df.iloc[largest_h_bin]['y'] >= count_threshold:
-#                 [bin_lat.append(x) for x in v.loc[v['z_bins']==largest_h, 'y']]
-#                 [bin_lon.append(x) for x in v.loc[v['z_bins']==largest_h, 'x']]
-#                 [bin_height.append(x) for x in v.loc[v['z_bins']==largest_h, 'z']]                
-#                 del new_df
-#             else:
-#                 del new_df
-
-#         # Filter out sea height bin values outside 2 SD of mean.
-#         if np.all(np.isnan(bin_height)):
-#             return(None)
-
-#         mean = np.nanmean(bin_height, axis=0)
-#         sd = np.nanstd(bin_height, axis=0)
-#         bin_height_1 = np.where(
-#             (bin_height > (mean + 2*sd)) | (bin_height < (mean - 2*sd)), np.nan, bin_height
-#         ).tolist()
-                
-#         return(bin_lat, bin_lon, bin_height_1)
-    
-#     def run(self):
-#         try:
-#             epsg_code = self.convert_wgs_to_utm(self.points['y'][0], self.points['x'][0])
-#             epsg_num = int(epsg_code.split(':')[-1])
-#             utm_proj = pyproj.Proj(epsg_code)
-#             x_utm, y_utm = utm_proj(self.points['x'], self.points['y'])
-#         except:
-#             utils.echo_warning_msg('could not transform to utm')
-#             x_utm, y_utm = self.points['x'], self.points['y']
-
-#         points_1 = pd.DataFrame(
-#             {'y': y_utm,
-#              'x': x_utm,
-#              'z': self.points['z']},
-#             columns=['y', 'x', 'z']
-#         )
-
-#         if utils.float_or(self.z_min) is not None:
-#             points_1 = points_1[(points_1['z'] > self.z_min)]
-
-#         if utils.float_or(self.z_max) is not None:
-#             points_1 = points_1[(points_1['z'] < self.z_max)]
-
-#         #print(points_1)
-#         #print(len(points_1))
-#         if len(points_1) > 0:
-#             binned_points = self.bin_points(points_1)
-#             points_1 = None
-            
-#             if binned_points is not None:
-#                 ys, xs, zs = self.get_bin_height(binned_points)
-#                 binned_points = None
-                
-#                 bin_ds = np.column_stack((xs, ys, zs))
-#                 bin_ds = np.rec.fromrecords(bin_ds, names='x, y, z')
-                
-#                 xs = ys = zs = None
-#                 bin_ds = bin_ds[~np.isnan(bin_ds['z'])]
-#                 med_surface_h = np.nanmedian(bin_ds['z'])
-#                 #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
-#                 #bin_ds = bin_ds[bin_ds['z'] > med_surface_h - (z_res * 2)]
-
-#                 transformer = pyproj.Transformer.from_crs(
-#                     "EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True
-#                 )
-#                 lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
-#                 bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
-#                 lon_wgs84 = lat_wgs84 = bin_ds = None
-#                 bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
-#                 #utils.echo_msg('bin_points: {}'.format(bin_points))
-#                 return(bin_points)
-#             # return(bin_ds)
-            
-#         return(points_1)
-
-# class PointOutlierZ(PointFilter):
-#     def __init__(
-#             self, percentile = 98, max_percentile = 99.9,
-#             multipass = 4, want_iqr = False, return_outliers = False,
-#             **kwargs
-#     ):
-#         super().__init__(**kwargs)
-#         self.percentile = utils.float_or(percentile, 98)
-#         self.max_percentile = utils.float_or(max_percentile, 99)
-#         self.multipass = utils.int_or(multipass, 1)
-#         self.want_iqr = want_iqr
-#         self.return_outliers = return_outliers
-
-#         #self.point_arrays, self.point_srcwin, self.point_gt = PointArray(points, x_size=10, y_size=10)()        
-
-#     def find_outliers(self, residuals, percentile = 98):
-#         outlier_threshold = np.percentile(residuals, percentile)
-#         outliers = residuals > outlier_threshold
-#         if self.verbose:
-#             utils.echo_msg_bold('found {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
-        
-#         return(outliers)
-        
-#     def filter_points(self, points, percentile = 92, invert = False):
-#         # pa = PointArray(x_size=50, y_size=50)
-#         # point_arrays, point_srcwin, point_gt = pa(points)
-#         p = np.array([points['y'], points['x'], points['z']]).T        
-#         # point_pixels = point_arrays['z'][point_arrays['pixel_y'], point_arrays['pixel_x']]
-#         #point_pixels = self.point_pixels(points)
-#         #residuals = np.abs(p[:,2] - point_pixels)
-#         #residuals = np.abs((p[:,2] - point_pixels) / point_pixels) * 100
-
-#         residuals = self.point_residuals(points)
-        
-#         # if want_iqr:
-#         #     percentile = 75
-#         #     outlier_threshold = utils.get_outliers(residuals, percentile=percentile)[0]
-#         # else:
-#         #     outlier_threshold = np.percentile(residuals, percentile)
-            
-#         # outliers = residuals > outlier_threshold
-
-#         outliers = self.find_outliers(residuals)
-
-#         # if self.verbose:
-#         #     utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
-
-#         if invert:
-#             return(points[outliers], outliers)
-#         else:
-#             return(points[~outliers], outliers)
-        
-#     def pmm_imputer(self, points, percentile = 98, want_iqr=False, return_outliers=False):
-#         p = np.array([self.points['y'], self.points['x'], self.points['z']]).T
-
-#         if len(p[:,2]) == 0:
-#             return(points, points)
-        
-#         try:
-#             from sklearn.experimental import enable_iterative_imputer
-#             from sklearn.impute import IterativeImputer
-#             from sklearn.preprocessing import StandardScaler
-
-#             scaler = StandardScaler(with_mean=False)
-#             #data_scaled = scaler.fit_transform(data[[‘lat’, ‘lon’, ‘depth’]])
-#             #print(np.array([self.points['y'], self.points['x'], self.points['z']]))
-#             #p = np.array([self.points['y'], self.points['x'], self.points['z']]).T
-#             #data_scaled = scaler.fit_transform(np.array([self.points['y'], self.points['x'], self.points['z']]))
-#             data_scaled = scaler.fit_transform(p)
-#             imputer = IterativeImputer(random_state=36, sample_posterior=True)
-#             data_imputed = imputer.fit_transform(data_scaled)
-
-#         except:
-#             utils.echo_warning_msg('you must install sklearn for imputing')
-#             data_imputed = p
-
-#         from scipy.ndimage import uniform_filter1d
-#         smoothed_depth = uniform_filter1d(data_imputed[:, 2], size=50)
-#         residuals = np.abs(data_imputed[:, 2] - smoothed_depth)
-        
-#         data_imputed = smoothed_depth = imputer = None
-#         #smoothed_depth = uniform_filter1d(points['z'], size=50)
-#         #residuals = np.abs(points['z'] - smoothed_depth)
-#         if want_iqr:
-#             outlier_threshold = utils.get_outliers(residuals, percentile=percentile)[0]
-#             #perc_max = np.nanpercentile(residuals, percentile)            
-#             #iqr_p = (perc_max - (100-percentile)) * 1.5
-#             #outlier_threshold = perc_max + iqr_p
-#         else:
-#             outlier_threshold = np.percentile(residuals, percentile)
-
-#         outliers = residuals > outlier_threshold
-
-#         if self.verbose:
-#             utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
-
-#         if return_outliers:
-#             return(points[outliers], outliers)
-#         else:
-#             return(points[~outliers], outliers)
-#             #return(data_imputed[~outliers])
-        
-#     def run(self):
-#         #self.points_scanline(x_inc=0.0002777777777777778, y_inc=0.0002777777777777778)
-
-#         percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
-#         for mpass in range(0, self.multipass):
-#             self.points, outliers = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr, return_outliers=self.return_outliers)
-#             if np.count_nonzero(outliers) == 0:
-#                 break
-            
-#         return(self.points)
-
-# class RQOutliers(PointFilter):
-#     # def __init__(
-#     #         self, percentage = 50, percentile = 98, max_percentile = 99.9,
-#     #         multipass = 1, want_iqr = False, return_outliers = False,
-#     #         src_raster = None, src_region = None, **kwargs
-#     # ):
-#     def __init__(
-#             self, threshold = 10, percentile = 98, max_percentile = 99,
-#             return_outliers = False, multipass = 1, src_raster = None, src_region = None,
-#             want_iqr = False, **kwargs
-#     ):
-#         super().__init__(**kwargs)
-#         self.threshold = utils.float_or(percentage, threshold)
-#         self.percentile = utils.float_or(percentile, 98)
-#         self.max_percentile = utils.float_or(max_percentile, 99)
-#         self.multipass = utils.int_or(multipass, 1)
-#         self.want_iqr = want_iqr
-#         self.return_outliers = return_outliers
-#         self.src_raster = src_raster
-#         self.src_region = src_region
-
-#         self.fetches_modules = ['gmrt']
-
-#     def init_region_from_points(self):
-#         self.src_region = regions.Region().from_list(
-#             [np.min(self.points['x']), np.max(self.points['x']),
-#              np.min(self.points['y']), np.max(self.points['y'])]
-#         )        
-        
-#     def fetch_data(self, fetches_module, src_region, check_size=True):
-#         this_fetches = fetches.FetchesFactory(
-#             mod=fetches_module,
-#             src_region=src_region,
-#             verbose=self.verbose,
-#             #outdir='./',
-#             callback=fetches.fetches_callback
-#         )._acquire_module()        
-#         this_fetches.run()
-#         fr = fetches.fetch_results(this_fetches, check_size=check_size)
-#         fr.daemon = True
-#         fr.start()
-#         fr.join()
-        
-#         return(fr)
-            
-#     def rq(self, points, raster, percentage = 50, percentile = 98, return_outliers=False):
-#         p = np.array([points['y'], points['x'], points['z']]).T
-#         raster_z = gdalfun.gdal_query(points, raster, 'g').flatten()
-
-#         from scipy.ndimage import uniform_filter1d
-#         smoothed_depth = uniform_filter1d(raster_z, size=50)
-
-#         residuals = np.abs((p[:,2] - smoothed_depth) / smoothed_depth) * 100
-#         #residuals = np.abs(p[:,2] - raster_z)
-
-#         if percentage is None:
-#             if want_iqr:
-#                 percentage = utils.get_outliers(residuals, percentile=percentile)[0]
-#             else:
-#                 percentage = np.percentile(residuals, percentile)
-
-#         outliers = residuals > percentage#outlier_threshold
-
-#         if self.verbose:
-#             utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentage))
-
-#         if return_outliers:
-#             return(points[outliers])
-#         else:
-#             return(points[~outliers])
-#             #return(data_imputed[~outliers])
-        
-#     def run(self):
-#         if self.src_region is None:
-#             self.src_region = regions.Region().from_list(
-#                 [np.min(self.points['x']), np.max(self.points['x']), np.min(self.points['y']), np.max(self.points['y'])]
-#             )
-
-#         if self.src_raster is None:
-#             this_fetch = self.fetch_data('gmrt', self.src_region)
-#             self.src_raster = [x[1] for x in this_fetch.results]            
-#         elif os.path.exists(self.src_raster):
-#             self.src_raster = [self.src_raster]
-#         elif self.src_raster in self.fetches_modules:
-#             this_fetch = self.fetch_data(self.src_raster, self.src_region)
-#             self.src_raster = [x['dst_fn'] for x in this_fetch.results]
-            
-#         #if self.want_iqr:
-#         #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
-#         #else:
-
-#         if self.percentage is None:
-#             percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
-#         else:
-#             percs_it = np.linspace(self.percentage, self.min_percentage, self.multipass)
-            
-#         for mpass in range(0, self.multipass):
-#             for src_raster in self.src_raster:
-#                 self.points = self.rq(
-#                     self.points,
-#                     src_raster,
-#                     percentage=percs_it[mpass] if self.percentage is not None else None,
-#                     percentile=percs_it[mpass],
-#                     return_outliers=self.return_outliers
-#                 )
-            
-#         return(self.points)
-    
-# class PointFilterFactory(factory.CUDEMFactory):
-#     _modules = {
-#         'bin_z': {'name': 'bin_z', 'call': BinZ},
-#         'outlierz': {'name': 'point_outliers', 'call': PointOutlierZ},
-#         'rq': {'name': 'rq', 'call': RQOutliers},
-#     }
-    
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-
 
 class PointPixels():
+    """Return the data as an array which coincides with the desired region, x_size and y_size
+
+    incoming data are numpy rec-arrays of x,y,z<w,u> points
+    """
+
     def __init__(self, src_region = None, x_size = None, y_size = None, verbose = True, **kwargs):
 
         self.src_region = src_region
@@ -1481,8 +1107,7 @@ class PointPixels():
             x_count=self.x_size, y_count=self.y_size
         )
         
-    def __call__(self, points, weight = None, uncertainty = None, stack_mode = 'mean'):
-        
+    def __call__(self, points, weight = None, uncertainty = None, stack_mode = 'mean'):    
         out_arrays = {
             'z':None,
             'count':None,
@@ -1495,8 +1120,6 @@ class PointPixels():
             'pixel_y': None
         }
         count = 0
-
-
         if len(points) == 0:
             return(out_arrays, None, None)
         
@@ -1889,35 +1512,6 @@ class ElevationDataset:
                 if key not in self.mask.keys():
                     self.mask[key] = None
 
-        # utils.echo_msg(self.pnt_fltrs)
-        # if self.pnt_fltrs is not None:
-        #     if isinstance(self.pnt_fltrs, str):
-        #         #utils.echo_msg(self.pnt_fltrs.split('//'))
-        #         self.pnt_fltrs = self.pnt_fltrs.split('//')
-
-        #     #utils.echo_msg(kwargs)
-        #     #utils.echo_msg(self.pnt_fltrs)
-        #     args=[]
-        #     for i, m in enumerate(self.pnt_fltrs):
-        #         utils.echo_msg(m)
-        #         pf = PointFilterFactory(mod=m)._acquire_module()
-        #         for kpam, kval in kwargs.items():
-        #             #if kpam not in self.__dict__:
-        #             if kpam in pf.__dict__.keys():
-        #                 if kpam in args:
-        #                     continue
-
-        #                 m += ':{}={}'.format(kpam, kval)
-        #                 args.append(kpam)
-
-        #         #utils.echo_msg(m)
-        #         self.pnt_fltrs[i] = m
-        #         for kpam in args:
-        #             del kwargs[kpam]
-
-        #         args=[]
-                    
-        #utils.echo_msg(self.pnt_fltrs)
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
 
@@ -2242,14 +1836,13 @@ class ElevationDataset:
                     src_srs.split('+')[0],
                     vdatums._tidal_frames[utils.int_or(src_srs.split('+')[-1])]['epsg']
                 )
-
+                
             ## set the proj crs from the src and dst srs input
             try:
                 in_crs = pyproj.CRS.from_user_input(src_srs)
                 out_crs = pyproj.CRS.from_user_input(dst_srs)
             except:
-                utils.echo_error_msg(src_srs)
-                utils.echo_error_msg(src_srs)
+                utils.echo_error_msg([src_srs, dst_srs])
 
             ## if the crs has vertical (compound), parse out the vertical crs
             ## and set the horizontal and vertical crs
@@ -3230,7 +2823,8 @@ class ElevationDataset:
                 utils.echo_msg('generated mask: {}'.format(os.path.basename(mask_fn)))
                            
         return(out_file)
-    
+
+    ## todo: mixed mode
     def _stacks_h5(self, out_name = None, ndv = -9999, mask_level = 0):
         """stack and mask incoming arrays (from `self.array_yield`) together
 
@@ -3680,6 +3274,7 @@ class ElevationDataset:
         mask_band = None
         mask_infos = None
         data_mask = None
+        mask_count = 0
         if self.mask is not None:
             if self.mask['ogr_or_gdal'] == 1: # mask is ogr, rasterize it
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
@@ -3721,20 +3316,22 @@ class ElevationDataset:
                 mask_data = mask_band.ReadAsArray(*this_srcwin)
                 if not np.isnan(mask_infos['ndv']):
                     mask_data[mask_data==mask_infos['ndv']] = np.nan
-
+                               
                 for arr in out_arrays.keys():
                     if out_arrays[arr] is not None:
                         if self.mask['invert_mask']:
                             if arr == 'count':
                                 out_arrays[arr][~np.isnan(mask_data)] = 0
                             else:                            
-                                out_arrays[arr][~np.isnan(mask_data)] = np.nan                            
+                                out_arrays[arr][~np.isnan(mask_data)] = np.nan
+
                         else:
                             if arr == 'count':
                                 out_arrays[arr][np.isnan(mask_data)] = 0
                             else:
                                 out_arrays[arr][np.isnan(mask_data)] = np.nan
 
+                mask_count += np.count_nonzero(~np.isnan(mask_data)) if self.mask['invert_mask'] else np.count_nonzero(np.isnan(mask_data))
                 mask_data = None
                 
             yield(out_arrays, this_srcwin, this_gt)
@@ -3742,6 +3339,11 @@ class ElevationDataset:
         src_mask = mask_band = None
         if data_mask is not None:
             utils.remove_glob('{}*'.format(data_mask))
+            utils.echo_msg_bold(
+                'masked {} data records from {}'.format(
+                    mask_count, self.fn,
+                )
+            )
 
     def mask_and_yield_xyz(self):
         """mask the incoming xyz data from `self.yield_xyz` and yield the results.
@@ -3762,7 +3364,8 @@ class ElevationDataset:
                         ds_band = src_ds.GetRasterBand(1)
                         ds_gt = ds_config['geoT']
                         ds_nd = ds_config['ndv']
-                    
+
+                        mask_count = 0
                         for this_xyz in this_entry.yield_xyz():
                             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
                             if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
@@ -3771,10 +3374,17 @@ class ElevationDataset:
                                     if tgrid[0][0] == ds_nd:
                                         if this_entry.mask['invert_mask']:
                                             yield(this_xyz)
+                                            mask_count += 1
                                     else:
                                         if not this_entry.mask['invert_mask']:
                                             yield(this_xyz)
-                                            
+                                            mask_count += 1
+
+                        utils.echo_msg_bold(
+                            'masked {} data records from {}'.format(
+                                mask_count, self.fn,
+                            )
+                        )       
                         src_ds = ds_band = None
                 else:
                     ## this is very slow! find another way.
@@ -5439,8 +5049,8 @@ class BAGFile(ElevationDataset):
     def __init__(self,
                  explode = False,
                  force_vr = False,
-                 vr_resampled_grid = True,
-                 vr_interpolate = False,
+                 vr_resampled_grid = False,
+                 vr_interpolate = True,
                  vr_strategy = 'MIN',
                  **kwargs):
         super().__init__(**kwargs)
@@ -5457,7 +5067,7 @@ class BAGFile(ElevationDataset):
 
     def init_srs(self):
         if self.src_srs is None:
-            src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn))
+            src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn), as_epsg=True)
             if src_horz is None and src_vert is None:
                 return(None)
             
