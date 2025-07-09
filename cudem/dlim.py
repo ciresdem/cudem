@@ -4944,7 +4944,8 @@ class GDALFile(ElevationDataset):
             else:
                 uncertainty_band = trans_uncertainty.GetRasterBand(1)
 
-        ## parse through the data
+        ## parse through the data / scanline
+        ## todo: option to parse by chunk
         srcwin = self.get_srcwin(gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize, node=self.node)
         for y in range(srcwin[1], (srcwin[1] + srcwin[3]), 1):
             band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
@@ -5076,6 +5077,9 @@ class BAGFile(ElevationDataset):
             
             if src_vert is None:
                 src_vert = '5866'
+
+            # if 'MSL' in src_vert:
+            #     src_vert = '5703'
 
             self.src_srs = gdalfun.combine_epsgs(
                 src_horz, src_vert, name='BAG Combined'

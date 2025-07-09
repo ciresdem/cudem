@@ -3331,7 +3331,7 @@ class WafflesCUDEM(Waffle):
                 #     utils.echo_msg('pre weight: {}'.format(pre_weight))
 
                 last_fltr = ['weights:stacks=True:weight_threshold={}:buffer_cells=2:verbose=False'.format(self.weight_levels[0])]
-                waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'mbgrid'
+                waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'cubic'
                 utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))
                 pre_surface = WaffleFactory(
                     mod=waffles_mod,
@@ -3368,7 +3368,7 @@ class WafflesCUDEM(Waffle):
         ## reset the stack for uncertainty
         ##self.stack = pre_surface.stack
         self.stack = orig_stack
-        utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
+        #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
 
