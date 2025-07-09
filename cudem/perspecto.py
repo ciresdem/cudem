@@ -163,6 +163,9 @@ def process_cpt(cpt, gmin, gmax, gdal = False, split_cpt = None):
     with open(cpt, 'r') as cpt:
         for l in cpt:
             ll = l.split()
+            if len(ll) == 0:
+                continue
+            
             if utils.float_or(ll[0]) is not None:
                 trs.append(float(ll[0]))
 

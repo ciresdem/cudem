@@ -1856,7 +1856,7 @@ class ElevationDataset:
                 in_vertical_name = in_vertical_crs.name
                 in_vertical_epsg = in_vertical_crs.to_epsg()
                 if in_vertical_epsg is None:
-                    in_vertical_epsg = in_vertical_name
+                    in_vertical_epsg = in_vertical_name.split(' ')[0]
             else:
                 in_horizontal_crs = in_crs
                 want_vertical=False
@@ -5071,12 +5071,12 @@ class BAGFile(ElevationDataset):
 
     def init_srs(self):
         if self.src_srs is None:
-            src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn), as_epsg=True)
+            src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn), as_epsg=False)
             if src_horz is None and src_vert is None:
                 return(None)
             
             if src_vert is None:
-                src_vert = '5866'
+                src_vert = 5866
 
             # if 'MSL' in src_vert:
             #     src_vert = '5703'
