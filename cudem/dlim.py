@@ -5077,7 +5077,6 @@ class BAGFile(ElevationDataset):
             
             if src_vert is None:
                 src_vert = 5866
-
             # if 'MSL' in src_vert:
             #     src_vert = '5703'
 
@@ -6574,12 +6573,14 @@ class OGRFile(ElevationDataset):
                 for f in layer_s:
                     geom = f.GetGeometryRef()
                     g = json.loads(geom.ExportToJson())
-                    #utils.echo_msg(g)
                     xyzs = g['coordinates']
-                    if geom.GetGeometryName() != 'MULTIPOINT':# and 'POLYGON' not in geom.GetGeometryName():
-                        xyzs = [xyzs]
+                    xyzs = []
+                    for i in g['coordinates']:
+                        if isinstance(i[0], list):
+                            xyzs += i
+                        else:
+                            xyzs.append(i)
 
-                    out_xyzs = []
                     for xyz in xyzs:
                         if not geom.Is3D():
                             # if self.elev_field is None:
@@ -6592,15 +6593,9 @@ class OGRFile(ElevationDataset):
                                     elev = self.elevation_value
                             else:
                                 elev = utils.float_or(f.GetField(self.elev_field))
-                                
+
                             if elev is not None:                                
-                                if isinstance(xyz[0], list):
-                                    for x in xyz:
-                                        for xx in x:
-                                            #utils.echo_msg(xx)
-                                            xx.append(elev)
-                                else:
-                                    xyz.append(elev)
+                                xyz.append(elev)
                             else:
                                 continue
 
@@ -6616,24 +6611,16 @@ class OGRFile(ElevationDataset):
                                 
                             if isinstance(xyz[0], list):
                                 for x in xyz:
-                                    for xx in x:
-                                        xx[2] = elev
+                                    #for xx in x:
+                                    x[2] = elev
 
                     if isinstance(xyzs[0], list):
                         for x in xyzs:
-                            if isinstance(x[0], list):
-                                for xx in x:
-                                    points = np.rec.fromrecords(xx, names='x, y, z')
-                                    if self.z_scale is not None:
-                                        points['z'] *= self.z_scale
-
-                                    yield(points)
-                            else:
-                                points = np.rec.fromrecords([x], names='x, y, z')
-                                if self.z_scale is not None:
-                                    points['z'] *= self.z_scale
-
-                                yield(points)
+                            points = np.rec.fromrecords([x], names='x, y, z')
+                            if self.z_scale is not None:
+                                points['z'] *= self.z_scale
+                                
+                            yield(points)
                                 
                     # #points = np.rec.fromrecords(out_xyzs, names='x, y, z')
                     # if self.z_scale is not None:
@@ -8047,8 +8034,9 @@ class ChartsFetcher(Fetcher):
     __doc__ = '''{}
     Fetches Module: <charts> - {}'''.format(__doc__, fetches.Charts.__doc__)
 
-    def __init__(self, **kwargs):
+    def __init__(self, want_contours = False, **kwargs):
         super().__init__(**kwargs)
+        self.want_contours = want_contours
         
     def yield_ds(self, result):
         src_000s = utils.p_unzip(
@@ -8064,6 +8052,12 @@ class ChartsFetcher(Fetcher):
             self.fetches_params['z_scale'] = -1
             yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
+            if self.want_contours:
+                self.metadata['name'] = '{}_contours'.format(utils.fn_basename2(self.fn))
+                self.fetches_params['DEPCNT'] = 'SOUNDG'
+                self.fetches_params['data_format'] = '302:ogr_layer=DEPCNT:elev_field=VALDCO:z_scale=-1'
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())            
+            
 class MBSFetcher(Fetcher):
     """NOAA Multibeam Fetcher
     """
@@ -8188,7 +8182,7 @@ class eHydroFetcher(Fetcher):
     __doc__ = '''{}
     Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.eHydro.__doc__)
         
-    def __init__(self, want_contours = False, **kwargs):
+    def __init__(self, want_contours = True, **kwargs):
         super().__init__(**kwargs)
         self.want_contours = want_contours
         

@@ -355,6 +355,16 @@ def slugify(value, allow_unicode=False):
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return(re.sub(r'[-\s]+', '-', value).strip('-_'))
 
+def flatten_recursive(nested_list):
+    flat_list = []
+    for item in nested_list:
+        if isinstance(item, list):
+            flat_list.extend(flatten_recursive(item))
+        else:
+            flat_list.append(item)
+            
+    return(flat_list)
+
 def int_or(val, or_val=None):
     """return val if val is integer
 

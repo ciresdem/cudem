@@ -116,10 +116,10 @@ def combine_epsgs(src_horz, src_vert, name='Combined'):
     horz_srs = osr.SpatialReference()
     horz_srs.SetFromUserInput(src_horz)
     vert_srs = osr.SpatialReference()
-    #if utils.int_or(src_vert) is not None:
-    vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
-    #else:
-    #    vert_srs.SetFromUserInput('{}'.format(src_vert))
+    if utils.int_or(src_vert) is not None:
+        vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
+    else:
+        vert_srs.SetFromUserInput('{}'.format(src_vert))
         
     src_srs = osr.SpatialReference()
     src_srs.SetCompoundCS('{}'.format(name, src_horz, src_vert), horz_srs, vert_srs)
