@@ -2057,6 +2057,7 @@ class WafflesCoastline(Waffle):
     def __init__(
             self,
             want_osm_coast=True,
+            want_enc_coast=False,
             want_nhd=True,
             want_nhd_plus=False,
             want_copernicus=False,
@@ -2095,6 +2096,7 @@ class WafflesCoastline(Waffle):
 
         super().__init__(**kwargs)
         self.want_osm_coast = want_osm_coast
+        self.want_enc_coast = want_enc_coast
         self.want_nhd = want_nhd
         self.want_nhd_plus = want_nhd_plus
         self.want_gmrt = want_gmrt
@@ -2125,7 +2127,6 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        #return(this_fetches)
         return(fr)
         
     def run(self):
@@ -2147,7 +2148,11 @@ class WafflesCoastline(Waffle):
 
         if self.want_osm_coast:
             self._load_osm_coast()
-        
+
+        if self.want_enc_coast:
+            self._load_enc_coast()
+            #sys.exit()
+            
         if self.want_gmrt:
             self._load_gmrt()
             
@@ -2245,7 +2250,52 @@ class WafflesCoastline(Waffle):
                             cst_ds = cst_ds_ = None
                         else:
                             utils.echo_error_msg('could not open {}'.format(out))
-                        
+
+    def _load_enc_coast(self):
+        this_cst = self.fetch_data('charts')
+        if this_cst is not None:
+            with tqdm(
+                    total=len(this_cst.results),
+                    desc='processing charts coastline',
+                    leave=True
+            ) as pbar:
+                for n, cst_result in enumerate(this_cst.results):
+                    if cst_result[-1] == 0:
+                        enc_ds = gdalfun.gdal_mem_ds(self.ds_config, name='enc', src_srs=self.wgs_srs, co=self.co)
+                        pbar.update()
+                        cst_enc = cst_result[1]
+                        #utils.echo_msg_bold(cst_enc)
+                        #enc_zips = utils.unzip(cst_enc, self.cache_dir, verbose=False)
+                        src_000s = utils.p_unzip(
+                            os.path.join(cst_enc),
+                            exts=['000'],
+                            outdir=self.cache_dir,
+                            verbose=self.verbose            
+                        )
+                        for src_000 in src_000s:
+                            if utils.int_or(os.path.basename(src_000)[2], 0) <= 3:
+                                continue
+
+                            utils.run_cmd(
+                                'gdal_rasterize -burn 1 {} -l DEPARE enc_merge.tif -te {} -ts {} {} -ot Int32'.format(
+                                    src_000,
+                                    self.p_region.format('te'),
+                                    self.ds_config['nx'],
+                                    self.ds_config['ny'],
+                                ),
+                                verbose=self.verbose
+                            )
+
+                            gdal.Warp(enc_ds, 'enc_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
+
+                            if enc_ds is not None:
+                                enc_ds_arr = enc_ds.GetRasterBand(1).ReadAsArray()
+                                #enc_ds_arr[enc_ds_arr != 1] = 0
+                                self.coast_array -= (enc_ds_arr * self.min_weight)
+                                #self.coast_array[tnm_ds_arr < 1] = 0
+                                enc_ds = enc_ds_arr = None
+                                utils.remove_glob('nhdArea_merge.*')                                
+                            
     def _load_gmrt(self):
         """GMRT - Global low-res.
 
