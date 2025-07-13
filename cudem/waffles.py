@@ -2283,7 +2283,7 @@ class WafflesCoastline(Waffle):
                                     self.ds_config['nx'],
                                     self.ds_config['ny'],
                                 ),
-                                verbose=self.verbose
+                                verbose=False
                             )
 
                             gdal.Warp(enc_ds, 'enc_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
@@ -3418,7 +3418,7 @@ class WafflesCUDEM(Waffle):
         ## reset the stack for uncertainty
         ##self.stack = pre_surface.stack
         self.stack = orig_stack
-        #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
+        utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
 

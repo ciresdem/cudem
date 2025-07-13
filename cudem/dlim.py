@@ -8034,8 +8034,9 @@ class ChartsFetcher(Fetcher):
     __doc__ = '''{}
     Fetches Module: <charts> - {}'''.format(__doc__, fetches.Charts.__doc__)
 
-    def __init__(self, want_contours = False, **kwargs):
+    def __init__(self, want_soundings = True, want_contours = False, **kwargs):
         super().__init__(**kwargs)
+        self.want_soundings = want_soundings
         self.want_contours = want_contours
         
     def yield_ds(self, result):
@@ -8046,11 +8047,12 @@ class ChartsFetcher(Fetcher):
             verbose=self.verbose            
         )
         for src_000 in src_000s:
-            self.fetches_params['mod'] = src_000
-            self.fetches_params['data_format'] = 302
-            self.fetches_params['ogr_layer'] = 'SOUNDG'
-            self.fetches_params['z_scale'] = -1
-            yield(DatasetFactory(**self.fetches_params)._acquire_module())
+            if self.want_soundings:
+                self.fetches_params['mod'] = src_000
+                self.fetches_params['data_format'] = 302
+                self.fetches_params['ogr_layer'] = 'SOUNDG'
+                self.fetches_params['z_scale'] = -1
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
             if self.want_contours:
                 self.metadata['name'] = '{}_contours'.format(utils.fn_basename2(self.fn))
