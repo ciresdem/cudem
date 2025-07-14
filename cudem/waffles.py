@@ -2277,7 +2277,7 @@ class WafflesCoastline(Waffle):
                                 continue
 
                             utils.run_cmd(
-                                'gdal_rasterize -burn 1 {} -l DEPARE enc_merge.tif -te {} -ts {} {} -ot Int32'.format(
+                                'gdal_rasterize -burn 1 {} -l DEPARE -l SEAARE -l DRGARE enc_merge.tif -te {} -ts {} {} -ot Int32'.format(
                                     src_000,
                                     self.p_region.format('te'),
                                     self.ds_config['nx'],
@@ -2294,7 +2294,7 @@ class WafflesCoastline(Waffle):
                                 self.coast_array -= (enc_ds_arr * self.min_weight)
                                 #self.coast_array[tnm_ds_arr < 1] = 0
                                 enc_ds = enc_ds_arr = None
-                                utils.remove_glob('nhdArea_merge.*')                                
+                                utils.remove_glob('enc_merge.*')
                             
     def _load_gmrt(self):
         """GMRT - Global low-res.
