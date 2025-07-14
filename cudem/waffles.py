@@ -2139,9 +2139,13 @@ class WafflesCoastline(Waffle):
             self.wgs_region.warp(self.wgs_srs)
         else:
             self.dst_srs = self.wgs_srs
-
+            
         horz_epsg, vert_epsg = gdalfun.epsg_from_input(self.dst_srs)
-        self.cst_srs = horz_epsg        
+        self.cst_srs = horz_epsg
+
+        self.mem_config = self.ds_config
+        self.mem_config['dt'] = gdal.GDT_Byte
+        
         self._load_coast_mask()
 
         self.want_nhd = True if self.want_nhd_plus else self.want_nhd
@@ -2213,8 +2217,14 @@ class WafflesCoastline(Waffle):
                                                 self.ndv, 'GTiff', None, None)        
         self.coast_array = np.zeros( (ycount, xcount) )
 
+    def _apply_coast_mask(self, msk_arr, srcwin = None):
+        if srcwin is None:
+            srcwin = (0,0,self.ds_config['nx'],self.ds_config['ny'])
+            
+            self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
+                             srcwin[0]:srcwin[0]+srcwin[2]] += (msk_arr * self.min_weight)
+        
     def _load_osm_coast(self):
-
         this_cst = self.fetch_data('osm:q=coastline')
         if this_cst is not None:
             with tqdm(
@@ -2237,17 +2247,20 @@ class WafflesCoastline(Waffle):
                             line_buffer=0.0000001
                         )
 
-                        cst_ds = gdalfun.gdal_mem_ds(self.ds_config, name='osm_coast', src_srs=self.wgs_srs, co=self.co)
-                        cst_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='osm_coast', src_srs=self.wgs_srs, co=self.co)
+                        cst_ds = gdalfun.gdal_mem_ds(self.mem_config, name='osm_coast', src_srs=self.wgs_srs, co=self.co)
+                        #cst_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='osm_coast', src_srs=self.wgs_srs, co=self.co)
                         cst_ds_ = ogr.Open(out)
                         if cst_ds_ is not None:
                             cst_layer = cst_ds_.GetLayer()
                             gdal.RasterizeLayer(cst_ds, [1], cst_layer, burn_values=[1])
-                            #gdal.Warp(cst_warp_ds, cst_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
-                            cst_ds_arr = cst_ds.GetRasterBand(1).ReadAsArray()
-                            #self.coast_array[cst_ds_arr == 1] = 1 #if not self.invert_lakes else 1 # update for weights
-                            self.coast_array += cst_ds_arr
+
+                            for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):
+                                #gdal.Warp(cst_warp_ds, cst_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
+                                cst_ds_arr = cst_ds.GetRasterBand(1).ReadAsArray(*srcwin)
+                                self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
+                                                 srcwin[0]:srcwin[0]+srcwin[2]] += cst_ds_arr
                             cst_ds = cst_ds_ = None
+                            
                         else:
                             utils.echo_error_msg('could not open {}'.format(out))
 
@@ -2261,11 +2274,9 @@ class WafflesCoastline(Waffle):
             ) as pbar:
                 for n, cst_result in enumerate(this_cst.results):
                     if cst_result[-1] == 0:
-                        enc_ds = gdalfun.gdal_mem_ds(self.ds_config, name='enc', src_srs=self.wgs_srs, co=self.co)
+                        #cst_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='osm_coast', src_srs=self.wgs_srs, co=self.co)
                         pbar.update()
                         cst_enc = cst_result[1]
-                        #utils.echo_msg_bold(cst_enc)
-                        #enc_zips = utils.unzip(cst_enc, self.cache_dir, verbose=False)
                         src_000s = utils.p_unzip(
                             os.path.join(cst_enc),
                             exts=['000'],
@@ -2276,25 +2287,38 @@ class WafflesCoastline(Waffle):
                             if utils.int_or(os.path.basename(src_000)[2], 0) <= 3:
                                 continue
 
-                            utils.run_cmd(
-                                'gdal_rasterize -burn 1 {} -l DEPARE -l SEAARE -l DRGARE enc_merge.tif -te {} -ts {} {} -ot Int32'.format(
-                                    src_000,
-                                    self.p_region.format('te'),
-                                    self.ds_config['nx'],
-                                    self.ds_config['ny'],
-                                ),
-                                verbose=False
-                            )
-
-                            gdal.Warp(enc_ds, 'enc_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
-
+                            enc_ds = gdalfun.gdal_mem_ds(self.mem_config, name='enc', src_srs=self.wgs_srs, co=self.co)
+                            cst_ds_ = ogr.Open(src_000)
+                            if cst_ds_ is not None:
+                                cst_layer = cst_ds_.GetLayer('SEAARE')                            
+                                _ = gdal.RasterizeLayer(enc_ds, [1], cst_layer, burn_values=[1])
+                                #gdal.Warp(cst_warp_ds, cst_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
+                                cst_ds_ = cst_layer = None
+                                
                             if enc_ds is not None:
-                                enc_ds_arr = enc_ds.GetRasterBand(1).ReadAsArray()
-                                #enc_ds_arr[enc_ds_arr != 1] = 0
-                                self.coast_array -= (enc_ds_arr * self.min_weight)
-                                #self.coast_array[tnm_ds_arr < 1] = 0
+                                for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):
+                                    enc_ds_arr = enc_ds.GetRasterBand(1).ReadAsArray(*srcwin)
+                                    self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
+                                                     srcwin[0]:srcwin[0]+srcwin[2]] -= (enc_ds_arr * self.min_weight)
+                                    
                                 enc_ds = enc_ds_arr = None
-                                utils.remove_glob('enc_merge.*')
+
+                            # ## LANDARE
+                            # enc_ds = gdalfun.gdal_mem_ds(self.mem_config, name='enc', src_srs=self.wgs_srs, co=self.co)
+                            # cst_ds_ = ogr.Open(src_000)
+                            # if cst_ds_ is not None:
+                            #     cst_layer = cst_ds_.GetLayer('LNDARE')                            
+                            #     _ = gdal.RasterizeLayer(enc_ds, [1], cst_layer, burn_values=[1])
+                            #     cst_ds_ = cst_layer = None
+                                
+                            # if enc_ds is not None:
+                            #     for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):
+                            #         enc_ds_arr = enc_ds.GetRasterBand(1).ReadAsArray(*srcwin)
+                            #         self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
+                            #                          srcwin[0]:srcwin[0]+srcwin[2]] += (enc_ds_arr * self.min_weight)
+                                    
+                            #     enc_ds = enc_ds_arr = None
+                                
                             
     def _load_gmrt(self):
         """GMRT - Global low-res.
@@ -2321,7 +2345,6 @@ class WafflesCoastline(Waffle):
         this_cop = self.fetch_data('copernicus:datatype=1', check_size=False)
         for i, cop_result in enumerate(this_cop.results):
             if cop_result[-1] == 0:
-                #cop_tif = os.path.join(this_cop._outdir, cop_result[1])
                 cop_tif = cop_result[1]
                 gdalfun.gdal_set_ndv(cop_tif, 0, verbose=False)
                 cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus', src_srs=self.wgs_srs, co=self.co)
@@ -2329,10 +2352,12 @@ class WafflesCoastline(Waffle):
                     cop_ds, cop_tif, dstSRS=self.cst_srs, resampleAlg=self.sample,
                     callback=False, srcNodata=0
                 )
-                cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
-                cop_ds_arr[cop_ds_arr != 0] = 1
-                self.coast_array += (cop_ds_arr * self.min_weight)
-                #self.coast_array += (cop_ds_arr * .5)#self.min_weight)
+                for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):                
+                    cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray(*srcwin)
+                    cop_ds_arr[cop_ds_arr != 0] = 1
+                    self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
+                                     srcwin[0]:srcwin[0]+srcwin[2]] += (cop_ds_arr * self.min_weight)
+                    
                 cop_ds = cop_ds_arr = None
             
     def _load_nhd(self):
