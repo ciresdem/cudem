@@ -2291,7 +2291,8 @@ class WafflesCoastline(Waffle):
                             verbose=self.verbose            
                         )
                         for src_000 in src_000s:
-                            if utils.int_or(os.path.basename(src_000)[2], 0) <= 3:
+                            enc_level = utils.int_or(os.path.basename(src_000)[2], 0)
+                            if enc_level <= 3:
                                 continue
 
                             enc_ds = gdalfun.gdal_mem_ds(self.mem_config, name='enc', src_srs=self.wgs_srs, co=self.co)
@@ -2306,25 +2307,26 @@ class WafflesCoastline(Waffle):
                                 for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):
                                     enc_ds_arr = enc_ds.GetRasterBand(1).ReadAsArray(*srcwin)
                                     self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
-                                                     srcwin[0]:srcwin[0]+srcwin[2]] -= (enc_ds_arr * self.min_weight)
+                                                     srcwin[0]:srcwin[0]+srcwin[2]] -= (enc_ds_arr * self.min_weight)#(enc_level*.25))#self.min_weight)
                                     
                                 enc_ds = enc_ds_arr = None
 
-                            # ## LANDARE
-                            # enc_ds = gdalfun.gdal_mem_ds(self.mem_config, name='enc', src_srs=self.wgs_srs, co=self.co)
-                            # cst_ds_ = ogr.Open(src_000)
-                            # if cst_ds_ is not None:
-                            #     cst_layer = cst_ds_.GetLayer('LNDARE')                            
-                            #     _ = gdal.RasterizeLayer(enc_ds, [1], cst_layer, burn_values=[1])
-                            #     cst_ds_ = cst_layer = None
-                                
-                            # if enc_ds is not None:
-                            #     for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):
-                            #         enc_ds_arr = enc_ds.GetRasterBand(1).ReadAsArray(*srcwin)
-                            #         self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
-                            #                          srcwin[0]:srcwin[0]+srcwin[2]] += (enc_ds_arr * self.min_weight)
-                                    
-                            #     enc_ds = enc_ds_arr = None
+                            ## LANDARE
+                            # if enc_level > 3: # don't use level 3 here
+                            #     enc_ds = gdalfun.gdal_mem_ds(self.mem_config, name='enc', src_srs=self.wgs_srs, co=self.co)
+                            #     cst_ds_ = ogr.Open(src_000)
+                            #     if cst_ds_ is not None:
+                            #         cst_layer = cst_ds_.GetLayer('LNDARE')
+                            #         _ = gdal.RasterizeLayer(enc_ds, [1], cst_layer, burn_values=[1])
+                            #         cst_ds_ = cst_layer = None
+
+                            #     if enc_ds is not None:
+                            #         for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):
+                            #             enc_ds_arr = enc_ds.GetRasterBand(1).ReadAsArray(*srcwin)
+                            #             self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
+                            #                              srcwin[0]:srcwin[0]+srcwin[2]] += (enc_ds_arr * (enc_level*.25))#self.min_weight)
+
+                            #         enc_ds = enc_ds_arr = None
                                 
                             
     def _load_gmrt(self):
@@ -3147,7 +3149,7 @@ class WafflesCUDEM(Waffle):
     def __init__(self, pre_mode = 'gmt-surface', pre_count = 1, pre_upper_limit = -0.1, pre_smoothing = None,
                  weight_levels = None, inc_levels = None, landmask = False, filter_outliers = None,
                  want_supercede = False, flatten = None, exclude_lakes = False, mode = None, min_weight = None,
-                 pre_verbose = False, **kwargs):
+                 pre_verbose = False, final_mode = 'IDW', **kwargs):
 
         self.valid_modes = ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']
         self.coastline_args = {}
@@ -3409,7 +3411,7 @@ class WafflesCUDEM(Waffle):
                     pre_weight = self.weight_levels[pre]
                     _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
                     pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
-                        _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight
+                        _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight - 0.00001
                     )
                     #utils.echo_msg(pre_data_entry)
                     pre_data = [stack_data_entry, pre_data_entry]
@@ -3432,7 +3434,7 @@ class WafflesCUDEM(Waffle):
                 #     utils.echo_msg('pre data: {}'.format(pre_data))
                 #     utils.echo_msg('pre weight: {}'.format(pre_weight))
 
-                last_fltr = ['weights:stacks=True:weight_threshold={}:buffer_cells=2:verbose=False'.format(self.weight_levels[0])]
+                last_fltr = ['weights:stacks=True:weight_threshold={}:buffer_cells=1:verbose=False'.format(pre_weight)]#self.weight_levels[0]+.0001)]
                 waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
                 utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))
                 pre_surface = WaffleFactory(
@@ -3452,11 +3454,11 @@ class WafflesCUDEM(Waffle):
                     clobber=True,
                     verbose=self.pre_verbose,
                     clip=pre_clip if pre !=0 else None,
-                    stack_mode='mixed:weight_threshold={}'.format(self.weight_levels[0]),# if pre == 0 else 'mean',
+                    stack_mode='mixed:weight_threshold={}'.format(pre_weight),#self.weight_levels[0]),# if pre == 0 else 'mean',
                     #stack_mode='supercede' if (pre == 0 and self.want_supercede) else self.stack_mode,
                     upper_limit=self.pre_upper_limit if pre != 0 else None,
                     keep_auxiliary=False,
-                    fltr=self.pre_smoothing if pre != 0 else None,#last_fltr,
+                    fltr=self.pre_smoothing if pre != 0 else last_fltr,
                     percentile_limit=self.flatten if pre == 0 else None
                 )._acquire_module()
                 pre_surface.initialize()

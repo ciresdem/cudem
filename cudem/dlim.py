@@ -6185,6 +6185,12 @@ class MBSParser(ElevationDataset):
             wkt = mbs_region.export_as_wkt()
 
         self.infos.wkt = wkt
+
+        if self.src_srs is None:
+            self.infos.src_srs = 'epsg:4326'
+        else:
+            self.infos.src_srs = self.src_srs
+        
         return(self)
 
     def parse_(self):
@@ -6573,13 +6579,16 @@ class OGRFile(ElevationDataset):
                 for f in layer_s:
                     geom = f.GetGeometryRef()
                     g = json.loads(geom.ExportToJson())
-                    xyzs = g['coordinates']
+                    #xyzs = g['coordinates']
                     xyzs = []
-                    for i in g['coordinates']:
-                        if isinstance(i[0], list):
-                            xyzs += i
-                        else:
-                            xyzs.append(i)
+                    if g['type'] == 'Point':
+                        xyzs = [g['coordinates']]
+                    else:
+                        for i in g['coordinates']:
+                            if isinstance(i[0], list):
+                                xyzs += i
+                            else:
+                                xyzs.append(i)
 
                     for xyz in xyzs:
                         if not geom.Is3D():
