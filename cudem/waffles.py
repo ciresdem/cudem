@@ -3411,7 +3411,7 @@ class WafflesCUDEM(Waffle):
                     pre_weight = self.weight_levels[pre]
                     _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
                     pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
-                        _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight - 0.00001
+                        _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight #- 0.00001
                     )
                     #utils.echo_msg(pre_data_entry)
                     pre_data = [stack_data_entry, pre_data_entry]
@@ -3458,7 +3458,7 @@ class WafflesCUDEM(Waffle):
                     #stack_mode='supercede' if (pre == 0 and self.want_supercede) else self.stack_mode,
                     upper_limit=self.pre_upper_limit if pre != 0 else None,
                     keep_auxiliary=False,
-                    fltr=self.pre_smoothing if pre != 0 else last_fltr,
+                    fltr=self.pre_smoothing if pre != 0 else None,#last_fltr,
                     percentile_limit=self.flatten if pre == 0 else None
                 )._acquire_module()
                 pre_surface.initialize()
