@@ -8055,6 +8055,7 @@ class ChartsFetcher(Fetcher):
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
             if self.want_contours:
+                self.fetches_params['mod'] = src_000
                 self.metadata['name'] = '{}_contours'.format(utils.fn_basename2(self.fn))
                 self.fetches_params['DEPCNT'] = 'SOUNDG'
                 self.fetches_params['data_format'] = '302:ogr_layer=DEPCNT:elev_field=VALDCO:z_scale=-1'
