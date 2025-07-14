@@ -2037,8 +2037,10 @@ class WafflesCoastline(Waffle):
     Parameters:
     
     want_osm_coast=[True/False] - use OSM to fill background
+    want_enc_coast=[True/False] - use ENC charts to fill background
     want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
     want_copernicus=[True/False] - use COPERNICUS to fill background
+    want_cudem=[True/False] - use CUDEM to fill background
     want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
     want_lakes=[True/False] - mask LAKES using HYDROLAKES
     invert_lakes=[True/False] - invert the lake mask (invert=True to remove lakes from the waterbodies)
@@ -2061,6 +2063,7 @@ class WafflesCoastline(Waffle):
             want_nhd=True,
             want_nhd_plus=False,
             want_copernicus=False,
+            want_cudem=False,
             want_gmrt=False,
             want_lakes=False,
             invert_lakes=False,
@@ -2101,6 +2104,7 @@ class WafflesCoastline(Waffle):
         self.want_nhd_plus = want_nhd_plus
         self.want_gmrt = want_gmrt
         self.want_copernicus = want_copernicus
+        self.want_cudem = want_cudem
         self.want_lakes = want_lakes
         self.invert_lakes = invert_lakes
         self.want_buildings = want_buildings
@@ -2162,6 +2166,9 @@ class WafflesCoastline(Waffle):
             
         if self.want_copernicus:
             self._load_copernicus()
+
+        if self.want_cudem:
+            self._load_cudem()
 
         if self.want_nhd:
             self._load_nhd()
@@ -2352,14 +2359,34 @@ class WafflesCoastline(Waffle):
                     cop_ds, cop_tif, dstSRS=self.cst_srs, resampleAlg=self.sample,
                     callback=False, srcNodata=0
                 )
-                for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):                
+                for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):
                     cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray(*srcwin)
                     cop_ds_arr[cop_ds_arr != 0] = 1
                     self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
                                      srcwin[0]:srcwin[0]+srcwin[2]] += (cop_ds_arr * self.min_weight)
                     
                 cop_ds = cop_ds_arr = None
-            
+
+    def _load_cudem(self):
+        """cudem"""
+
+        this_cudem = self.fetch_data('CUDEM:datatype=ninth', check_size=False)
+        for i, cudem_result in enumerate(this_cudem.results):
+            if cudem_result[-1] == 0:
+                cudem_tif = cudem_result[1]
+                cudem_ds = gdalfun.gdal_mem_ds(self.mem_config, name='cudem', src_srs=self.wgs_srs, co=self.co)
+                gdal.Warp(
+                    cudem_ds, cudem_tif, dstSRS=self.cst_srs, resampleAlg=self.sample,
+                    callback=False, srcNodata=0
+                )
+                for srcwin in utils.yield_srcwin((self.ds_config['ny'], self.ds_config['nx']), 1000, verbose=self.verbose):
+                    cudem_ds_arr = cudem_ds.GetRasterBand(1).ReadAsArray(*srcwin)
+                    cudem_ds_arr[cudem_ds_arr != 0] = 1
+                    self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
+                                     srcwin[0]:srcwin[0]+srcwin[2]] += (cudem_ds_arr * self.min_weight)
+                    
+                cudem_ds = cudem_ds_arr = None
+                
     def _load_nhd(self):
         """USGS NHD (HIGH-RES U.S. Only)
         Fetch NHD (NHD High/Plus) data from TNM to fill in near-shore areas. 

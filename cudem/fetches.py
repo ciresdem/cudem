@@ -3999,11 +3999,18 @@ class CoNED(DAV):
 class CUDEM(DAV):
     """CUDEM Tiled DEMs via Digital Coast
 
-    < CUDEM >
+    < CUDEM:datatype=None >
     """
     
-    def __init__(self, **kwargs):
-        super().__init__(name='CUDEM', where="NAME LIKE '%CUDEM%'", **kwargs)
+    def __init__(self, datatype = None, **kwargs):
+        if datatype == '19' or datatype.lower() == 'ninth':
+            where="NAME LIKE '%CUDEM%Ninth%'"
+        elif datatype == '13' or datatype.lower() == 'third':
+            where="NAME LIKE '%CUDEM%Third%'"
+        else:
+            where="NAME LIKE '%CUDEM%'"
+            
+        super().__init__(name='CUDEM', where=where, **kwargs)
     
 ## NCEI THREDDS Catalog
 class NCEIThreddsCatalog(FetchModule):
