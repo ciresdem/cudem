@@ -2157,6 +2157,11 @@ class ElevationDataset:
         # if self.remote:
         #     generate_inf = False
 
+        if self.src_srs is not None:
+            self.infos.src_srs = self.src_srs
+        else:                            
+            self.src_srs = self.infos.src_srs
+        
         if generate_inf:
             self.infos = self.generate_inf()
             
@@ -2166,13 +2171,7 @@ class ElevationDataset:
 
             if recursive_check and self.parent is not None:
                 self.parent.inf(check_hash=True)
-
-        if self.infos.src_srs is None or srsfun.osr_wkt(self.infos.src_srs) == '':
-            self.infos.src_srs = self.src_srs
-        else:                            
-            #if self.src_srs is None:
-            self.src_srs = self.infos.src_srs
-
+            
         if self.transform['transformer'] is not None and self.transform['trans_region'] is None:
             self.transform['trans_region'] = regions.Region().from_list(self.infos.minmax)
             self.transform['trans_region'].src_srs = self.infos.src_srs
