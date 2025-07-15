@@ -703,7 +703,7 @@ class Region:
         
     def transform(self, transformer = None, include_z = True):
         if transformer is None or not self.valid_p():
-            utils.echo_error_msg('could not perform transformation')
+            utils.echo_error_msg('could not perform region transformation; {}'.format(self))
             return(self)
 
         if include_z and (self.zmin is not None and self.zmax is not None):

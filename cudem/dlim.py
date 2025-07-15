@@ -6590,7 +6590,17 @@ class OGRFile(ElevationDataset):
                             else:
                                 xyzs.append(i)
 
-                    for xyz in xyzs:
+                    if self.uncertainty_field is not None:
+                        unc = utils.float_or(f.GetField(self.uncertainty_field))
+                    else:
+                        unc = None
+
+                    if self.weight_field is not None:
+                        weight = utils.float_or(f.GetField(self.weight_field))
+                    else:
+                        weight = None
+                                
+                    for xyz in xyzs:                            
                         if not geom.Is3D():
                             # if self.elev_field is None:
                             #     self.elev_field = self.find_elevation_field(f)
@@ -6625,9 +6635,17 @@ class OGRFile(ElevationDataset):
 
                     if isinstance(xyzs[0], list):
                         for x in xyzs:
-                            points = np.rec.fromrecords([x], names='x, y, z')
+                            x.append(weight if weight is not None else 1)
+                            x.append(unc if unc is not None else 0)
+                            points = np.rec.fromrecords([x], names='x, y, z, w, u')
                             if self.z_scale is not None:
                                 points['z'] *= self.z_scale
+
+                            #if weight is not None:
+                            #points['w'] = weight if weight is not None else 1
+                                
+                            #if unc is not None:
+                            #points['u'] = unc if unc is not None else 0
                                 
                             yield(points)
                                 
