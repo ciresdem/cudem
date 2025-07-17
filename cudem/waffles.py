@@ -3149,7 +3149,7 @@ class WafflesCUDEM(Waffle):
     def __init__(self, pre_mode = 'gmt-surface', pre_count = 1, pre_upper_limit = -0.1, pre_smoothing = None,
                  weight_levels = None, inc_levels = None, landmask = False, filter_outliers = None,
                  want_supercede = False, flatten = None, exclude_lakes = False, mode = None, min_weight = None,
-                 pre_verbose = False, final_mode = 'IDW', **kwargs):
+                 pre_verbose = False, final_mode = 'IDW', keep_pre_surfaces = False, **kwargs):
 
         self.valid_modes = ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']
         self.coastline_args = {}
@@ -3214,6 +3214,7 @@ class WafflesCUDEM(Waffle):
         self.flatten = utils.float_or(flatten)
         self.want_weight = True
         self.pre_verbose = pre_verbose
+        self.keep_pre_surfaces = keep_pre_surfaces
         
         # ## set the weights if not already set correctly
         # self.weight_levels.sort(reverse=True)
@@ -3467,14 +3468,12 @@ class WafflesCUDEM(Waffle):
                 pre_surfaces.append(pre_surface.name)
 
         ## todo add option to flatten here...or move flatten up
-        #os.replace(pre_surface.fn, self.fn)
         gdalfun.cudem_flatten_no_data_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
 
         ## reset the stack for uncertainty
-        ##self.stack = pre_surface.stack
         self.stack = orig_stack
-        utils.remove_glob(*[f"{x}*" for x in pre_surfaces])
-        #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
+        if not self.keep_pre_surfaces:
+            utils.remove_glob(*[f"{x}*" for x in pre_surfaces])
         
         return(self)
 
