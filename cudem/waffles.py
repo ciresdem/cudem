@@ -489,7 +489,7 @@ class Waffle:
                 return(self)
             else:
                 utils.echo_warning_msg(
-                    'DEM {self.fn} exists and will be clobbered.'
+                    f'DEM {self.fn} exists and will be clobbered.'
                 )
                 status = gdal.GetDriverByName(self.fmt).Delete(self.fn)
                 if status != 0:
