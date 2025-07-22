@@ -264,7 +264,7 @@ class Waffle:
         )
         if self.verbose:
             utils.echo_msg(
-                'output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}'
+                f'output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}'
             )
         
         self.status = self._init()
@@ -4017,7 +4017,7 @@ class WafflesCUDEM(Waffle):
                            else None
                     pre_data_entry = (f'{_pre_name_plus}.tif,200'
                                       f':uncertainty_mask={_pre_unc_name}'
-                                      f':sample=cubicspline:check_path=True,{_pre_weight}')
+                                      f':sample=cubicspline:check_path=True,{pre_weight}')
                                       
                     pre_data = [stack_data_entry, pre_data_entry]
                     pre_region.wmin = None#pre_weight
