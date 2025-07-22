@@ -30,7 +30,7 @@
 ## version 3.3.0
 ##  1...NAD_83(2011/CORS96/2007)  (North American plate fixed) 
 ##  2...NAD_83(PA11/PACP00)       (Pacific plate fixed) 
-##  3...NAD_83(MA11/MARP00)       (Mariana plate fixed)                                                  
+##  3...NAD_83(MA11/MARP00)       (Mariana plate fixed)
 ##  5...WGS_84(original) (NAD_83(2011) used) 15...ITRF91 
 ##  6...WGS_84(G730) (ITRF91 used)           16...ITRF92 
 ##  7...WGS_84(G873) (ITRF94 used)           17...ITRF93 
