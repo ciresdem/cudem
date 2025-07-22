@@ -178,7 +178,9 @@ class Waffle:
     
     def initialize(self):
         if self.verbose:
-            utils.echo_msg('initializing waffles module < \033[1m{}\033[m >'.format(self.params['mod']))
+            utils.echo_msg(
+                f'initializing waffles module < \033[1m{self.params["mod"]}\033[m >'
+            )
             
         self.fn = '{}.{}'.format(self.name, gdalfun.gdal_fext(self.fmt)) # output dem filename
         self.gc = utils.config_check() # cudem config file holding foriegn programs and versions
@@ -193,18 +195,23 @@ class Waffle:
             self.co = ["COMPRESS=DEFLATE", "TILED=YES"]
 
             #utils.echo_msg(self.co)
-        ## initialize data, setting set_incs to True will force dlim to process the data to the set increments
+        ## initialize data, setting set_incs to True will force dlim to process the
+        ## data to the set increments
         if self.want_stack:
             self._init_data(set_incs=True) 
 
-        self.xcount, self.ycount, self.dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
+        self.xcount, self.ycount, self.dst_gt \
+            = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
         #print('waffles: {} {}'.format(self.xcount, self.ycount))
         self.ds_config = gdalfun.gdal_set_infos(
-            self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
+            self.xcount, self.ycount, (self.xcount*self.ycount),
+            self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
         if self.verbose:
-            utils.echo_msg('output size: {}/{}'.format(self.ds_config['nx'], self.ds_config['ny']))
+            utils.echo_msg(
+                'output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}'
+            )
         
         self.status = self._init()
         return(self)            
@@ -492,14 +499,24 @@ class Waffle:
                 # self.stack = sk.out_file
                 
                 ## generate the stack
-                stack_fn = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
+                stack_fn = os.path.join(
+                    self.cache_dir,
+                    '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff'))
+                )
+                # stack_fn = os.path.join(
+                #     self.cache_dir, f'{stack_name}.csg'
+                # )
                 stack_bn = utils.fn_basename2(stack_fn)
                 if not self.clobber and os.path.exists(stack_fn):
                     self.stack = stack_fn
-                    if not WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
-                        self.stack = self.data._stacks(out_name=stack_bn)#, mode=self.stack_mode)#supercede=self.supercede)
+                    if not WaffleDEM(
+                            self.stack, cache_dir=self.cache_dir, verbose=self.verbose
+                    ).initialize().valid_p():
+                        self.stack = self.data._stacks(out_name=stack_bn)
+                        #, mode=self.stack_mode)#supercede=self.supercede)
                 else:
-                    self.stack = self.data._stacks(out_name=stack_bn)#, mode=self.stack_mode)#supercede=self.supercede)
+                    self.stack = self.data._stacks(out_name=stack_bn)
+                    #, mode=self.stack_mode)#supercede=self.supercede)
 
                 # tmp_tpi = utils.make_temp_fn('temp_tpi.tif')
                 # gds_cmd = 'gdaldem TPI -b 2 {} {}'.format(self.stack, tmp_tpi)
@@ -5030,15 +5047,36 @@ class WaffleDEM:
 
     def initialize(self):
         if os.path.exists(self.fn):
-            dem_ds = gdal.Open(self.fn, 1)
+            if self.fn.endswith('csg'):
+                dem_ds = h5.File(self.fn)
+                if dem_ds is not None:
+                    dst_gt = tuple([float(x) for x in dem_ds['crs'].attrs['GeoTransform'].split()])
+                    self.ds_config = gdalfun.gdal_set_infos(
+                        dem_ds['lon'].size, dem_ds['lat'].size,
+                        dem_ds['lon'].size * dem_ds['lat'].size,
+                        dst_gt, dem_ds['crs'].attrs['crs_wkt'],
+                        'h5', np.nan, 'h5', None, None
+                    )
+                    self.dem_region = regions.Region().from_geo_transform(
+                        dst_gt, self.ds_config['nx'], self.ds_config['ny']
+                    )
+                    self.ds_config['zr'] \
+                        = [dem_ds['stack/z'][...].min(), dem_ds['stack/z'][...].max()]
+                    
+                    dem_ds = None
+                else:
+                    utils.echo_warning_msg(f'could not open dem: {self.fn}')
+            else:            
+                dem_ds = gdal.Open(self.fn, 1)
+                if dem_ds is not None:
+                    self.ds_config = gdalfun.gdal_infos(dem_ds, scan=self.want_scan)
+                    self.dem_region = regions.Region().from_geo_transform(
+                        self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny']
+                    )
 
-            if dem_ds is not None:
-                self.ds_config = gdalfun.gdal_infos(dem_ds, scan=self.want_scan)
-                self.dem_region = regions.Region().from_geo_transform(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
-
-                dem_ds = None
-            else:
-                utils.echo_warning_msg('could not open dem: {}'.format(self.fn))
+                    dem_ds = None
+                else:
+                    utils.echo_warning_msg(f'could not open dem: {self.fn}')
             
         return(self)
 
@@ -5074,18 +5112,15 @@ class WaffleDEM:
                 utils.echo_warning_msg('dem {} is all nan'.format(self.fn))
                 return(False)
                 
-        # if self.ds_config['raster_count'] == 1:
-        #     if np.isnan(self.ds_config['zr'][0]):
-        #         utils.echo_warning_msg('dem {} is all nan'.format(self.fn))
-        #         return(False)
-        
         return(True)
         
-    def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node='pixel',
-                clip_str = None, upper_limit = None, lower_limit = None, size_limit = None, proximity_limit = None,
-                percentile_limit = None, dst_srs = None, dst_fmt = None, dst_fn = None, dst_dir = None,
-                set_metadata = True, stack_fn = None, mask_fn = None, unc_fn = None, flatten_nodata_values = False,
-                want_nc = False, want_h5 = False):
+    def process(self, filter_ = None, ndv = None, xsample = None, ysample = None,
+                region = None, node='pixel', clip_str = None, upper_limit = None,
+                lower_limit = None, size_limit = None, proximity_limit = None,
+                percentile_limit = None, dst_srs = None, dst_fmt = None, dst_fn = None,
+                dst_dir = None, set_metadata = True, stack_fn = None, mask_fn = None,
+                unc_fn = None, flatten_nodata_values = False, want_nc = False,
+                want_h5 = False):
         """Process the DEM using various optional functions.
 
         set the nodata value, srs, metadata, limits; resample, filter, clip, cut, output.
@@ -6226,7 +6261,10 @@ def waffles_cli(argv = sys.argv):
         ## set the output name, appending the region, etc. if wanted/needed
         if want_prefix or len(these_regions) > 1:
             wg['name'] = utils.append_fn(
-                name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc'], **prefix_args
+                name,
+                wg['src_region'],
+                wg['xsample'] if wg['xsample'] is not None else wg['xinc'],
+                **prefix_args
             )
             
         if want_config: # export the waffles module config file
@@ -6242,7 +6280,9 @@ def waffles_cli(argv = sys.argv):
                     ##this_waffle_module()
                 else:
                     if wg['verbose']:
-                        utils.echo_error_msg('could not acquire waffles module {}'.format(module))
+                        utils.echo_error_msg(
+                            f'could not acquire waffles module {module}'
+                        )
 
     for _ in range(n_threads):
         waffle_q.put(None)

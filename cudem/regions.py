@@ -124,7 +124,7 @@ class Region:
 
     def copy(self):
         """return a copy of the region."""
-        
+
         return(Region(xmin=self.xmin, xmax=self.xmax,
                       ymin=self.ymin, ymax=self.ymax,
                       zmin=self.zmin, zmax=self.zmax,

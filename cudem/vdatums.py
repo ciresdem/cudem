@@ -358,8 +358,8 @@ class VerticalTransform:
     """
     
     def __init__(self, mode, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
-                 geoid_in=None, geoid_out='g2018', node='pixel', verbose=True,
-                 wm = None, cache_dir=None):
+                 geoid_in = None, geoid_out = 'g2018', node = 'pixel', verbose = True,
+                 wm = None, cache_dir = None):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
@@ -1131,8 +1131,15 @@ def vdatums_cli(argv = sys.argv):
             gdalfun.gdal_set_srs(dst_grid.replace(' ', '\ '), out_src_srs.ExportToWkt())
             
         else:
-            utils.echo_error_msg('could not parse input/output vertical datums: {} -> {}; check spelling, etc'.format(vdatum_in, vdatum_out))
-
+            utils.echo_error_msg(
+                (
+                    'could not parse input/output vertical datums: '
+                    '{} -> {}; check spelling, etc'.format(
+                        vdatum_in, vdatum_out
+                    )
+                )
+            )
+            
         #if not keep_cache:
         #    utils.remove_glob(cache_dir)
             
