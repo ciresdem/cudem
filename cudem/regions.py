@@ -11,14 +11,17 @@
 ## of the Software, and to permit persons to whom the Software is furnished to do so, 
 ## subject to the following conditions:
 ##
-## The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
 ##
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
 ## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
 ## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
-## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
 ##
+###############################################################################
 ### Commentary:
 ##
 ## Regions are bounding boxes made up of corner coordinates
@@ -38,6 +41,7 @@ from cudem import srsfun
 
 ogr.DontUseExceptions()
 
+
 ## regions
 ## the region class and associated functions.
 class Region:
@@ -56,15 +60,20 @@ class Region:
       src_srs (str): the regions projection
     """
 
-    full_region = lambda x: [x.xmin, x.xmax, x.ymin, x.ymax, x.zmin, x.zmax, x.wmin, x.wmax, x.umin, x.umax]
+    full_region = lambda x: [x.xmin, x.xmax,
+                             x.ymin, x.ymax,
+                             x.zmin, x.zmax,
+                             x.wmin, x.wmax,
+                             x.umin, x.umax]
     xy_region = lambda x: [x.xmin, x.xmax, x.ymin, x.ymax]
     z_region = lambda x: [x.zmin, x.zmax]
     w_region = lambda x: [x.wmin, x.wmax]
     u_region = lambda x: [x.umin, x.umax]
+
     
-    def __init__(self, xmin = None, xmax = None, ymin = None, ymax = None,
-                 zmin = None, zmax = None, wmin = None, wmax = None,
-                 umin = None, umax = None, src_srs='epsg:4326', wkt=None):        
+    def __init__(self, xmin=None, xmax=None, ymin=None, ymax=None,
+                 zmin=None, zmax=None, wmin=None, wmax=None,
+                 umin=None, umax=None, src_srs='epsg:4326', wkt=None):        
         self.xmin = utils.float_or(xmin)
         self.xmax = utils.float_or(xmax)
         self.ymin = utils.float_or(ymin)
@@ -78,12 +87,15 @@ class Region:
         self.src_srs = src_srs
         self.wkt = wkt
 
+        
     def __repr__(self):
         return(str(self.format('fstr')))
-        
+
+    
     def __str__(self):
         return(str(self.format('fstr')))
-        
+
+    
     def valid_p(self, check_xy=False):
         """check the validity of a region
     
@@ -122,6 +134,7 @@ class Region:
 
         return(True)
 
+    
     def copy(self):
         """return a copy of the region."""
 
@@ -132,6 +145,7 @@ class Region:
                       umin=self.umin, umax=self.umax,
                       src_srs=self.src_srs, wkt=self.wkt))
 
+    
     def _wgs_extremes(self, just_below = False):
         """adjust the region to make sure it is within WGS extremes..."""
         
@@ -146,7 +160,8 @@ class Region:
             
         if self.ymax >= 90:
             self.ymax = 90 if not just_below else 89.85            
-    
+
+            
     def from_list(self, region_list):
         """import a region from a region list 
 
@@ -183,6 +198,7 @@ class Region:
                     
         return(self)
 
+    
     def from_string(self, region_str):
         """import a region from a region string 
 
@@ -204,11 +220,13 @@ class Region:
         if len(str_list) >= 4:
             r_list = [utils.float_or(x) for x in str_list]
             self.from_list(r_list)
-        elif region_str.split()[0] == "POLYGON" or region_str.split()[0] == "MULTIPOLYGON":
+        elif region_str.split()[0] == "POLYGON" \
+             or region_str.split()[0] == "MULTIPOLYGON":
             self.wkt = region_str
             self.from_list(ogr.CreateGeometryFromWkt(region_str).GetEnvelope())
 
         return(self)
+
     
     def from_geo_transform(self, geo_transform=None, x_count=None, y_count=None):
         """import a region from a region string 
@@ -222,7 +240,9 @@ class Region:
           region-object: self
         """
         
-        if geo_transform is not None and x_count is not None and y_count is not None:            
+        if geo_transform is not None \
+           and x_count is not None \
+           and y_count is not None:            
             self.xmin = geo_transform[0]
             self.xmax = geo_transform[0] + geo_transform[1] * x_count
             self.ymin = geo_transform[3] + geo_transform[5] * y_count
@@ -233,10 +253,12 @@ class Region:
             
         return(self)
 
+    
     def from_region(self, input_region):
         """import a region from another region"""
 
         return(input_region.copy())
+
     
     def format(self, t='gmt'):
         """format region to string, defined by `t`
@@ -260,47 +282,69 @@ class Region:
         """
 
         if self.valid_p():
-            if t == 'str': return('/'.join([str(self.xmin), str(self.xmax),
-                                            str(self.ymin), str(self.ymax)]))
-            elif t == 'sstr': return(' '.join([str(self.xmin), str(self.xmax),
-                                               str(self.ymin), str(self.ymax)]))
-            elif t == 'fstr': return(' '.join([str(self.xmin), str(self.xmax),
-                                               str(self.ymin), str(self.ymax),
-                                               str(self.zmin), str(self.zmax),
-                                               str(self.wmin), str(self.wmax),
-                                               str(self.umin), str(self.umax),]))
-            elif t == 'gmt': return('-R{:.16f}/{:.16f}/{:.16f}/{:.16f}'.format(
-                    self.xmin, self.xmax,
-                    self.ymin, self.ymax))
-            elif t == 'cudem': return('-R{:.16f}/{:.16f}/{:.16f}/{:.16f}/{}/{}/{}/{}'.format(
-                    self.xmin, self.xmax,
-                    self.ymin, self.ymax,
-                    utils.float_or(self.wmin, '-'), utils.float_or(self.wmax, '-'),
-                    utils.float_or(self.umin, '-'), utils.float_or(self.umax, '-')))
-            elif t == 'bbox': return(','.join([str(self.xmin), str(self.ymin),
-                                               str(self.xmax), str(self.ymax)]))
-            elif t == 'osm_bbox': return(','.join([str(self.ymin), str(self.xmin),
-                                                   str(self.ymax), str(self.xmax)]))
-            elif t == 'te': return(' '.join([str(self.xmin), str(self.ymin),
-                                             str(self.xmax), str(self.ymax)]))
-            elif t == 'ul_lr': return(' '.join([str(self.xmin), str(self.ymax),
-                                                str(self.xmax), str(self.ymin)]))
+            if t == 'str': return(
+                    '/'.join([str(self.xmin), str(self.xmax),
+                              str(self.ymin), str(self.ymax)])
+            )
+            elif t == 'sstr': return(
+                    ' '.join([str(self.xmin), str(self.xmax),
+                              str(self.ymin), str(self.ymax)])
+            )
+            elif t == 'fstr': return(
+                    ' '.join([str(self.xmin), str(self.xmax),
+                              str(self.ymin), str(self.ymax),
+                              str(self.zmin), str(self.zmax),
+                              str(self.wmin), str(self.wmax),
+                              str(self.umin), str(self.umax),])
+            )
+            elif t == 'gmt': return(
+                    '-R{:.16f}/{:.16f}/{:.16f}/{:.16f}'.format(
+                        self.xmin, self.xmax,
+                        self.ymin, self.ymax)
+            )
+            elif t == 'cudem': return(
+                    '-R{:.16f}/{:.16f}/{:.16f}/{:.16f}/{}/{}/{}/{}'.format(
+                        self.xmin, self.xmax,
+                        self.ymin, self.ymax,
+                        utils.float_or(self.wmin, '-'), utils.float_or(self.wmax, '-'),
+                        utils.float_or(self.umin, '-'), utils.float_or(self.umax, '-'))
+            )
+            elif t == 'bbox': return(
+                    ','.join([str(self.xmin), str(self.ymin),
+                              str(self.xmax), str(self.ymax)])
+            )
+            elif t == 'osm_bbox': return(
+                    ','.join([str(self.ymin), str(self.xmin),
+                              str(self.ymax), str(self.xmax)])
+            )
+            elif t == 'te': return(
+                    ' '.join([str(self.xmin), str(self.ymin),
+                              str(self.xmax), str(self.ymax)])
+            )
+            elif t == 'ul_lr': return(
+                    ' '.join([str(self.xmin), str(self.ymax),
+                              str(self.xmax), str(self.ymin)])
+            )
             elif t == 'fn':
                 ns = 's' if self.ymax < 0 else 'n'
                 ew = 'e' if self.xmin > 0 else 'w'
-                return('{}{:02d}x{:02d}_{}{:03d}x{:02d}'.format(
-                    ns, abs(int(self.ymax)), abs(int(self.ymax * 100)) % 100, 
-                    ew, abs(int(self.xmin)), abs(int(self.xmin * 100)) % 100))
+                return(
+                    '{}{:02d}x{:02d}_{}{:03d}x{:02d}'.format(
+                        ns, abs(int(self.ymax)), abs(int(self.ymax * 100)) % 100, 
+                        ew, abs(int(self.xmin)), abs(int(self.xmin * 100)) % 100)
+                )
             elif t == 'fn_full':
                 ns_mx = 's' if self.ymax < 0 else 'n'
                 ns_mn = 's' if self.ymin < 0 else 'n'
                 ew_mx = 'e' if self.xmax > 0 else 'w'
                 ew_mn = 'e' if self.xmin > 0 else 'w'
-                return('{}{:02d}x{:6f}_{}{:03d}x{:6f}_{}{:02d}x{:6f}_{}{:03d}x{:6f}'.format(
-                    ns_mx, abs(int(self.ymax)), abs(self.ymax * 100) % 100, 
-                    ew_mn, abs(int(self.xmin)), abs(self.xmin * 100) % 100,
-                    ns_mn, abs(int(self.ymin)), abs(self.ymin * 100) % 100,
-                    ew_mx, abs(int(self.xmax)), abs(self.xmax * 100) % 100))
+                return(
+                    '{}{:02d}x{:6f}_{}{:03d}x{:6f}_{}{:02d}x{:6f}_{}{:03d}x{:6f}'.format(
+                        ns_mx, abs(int(self.ymax)), abs(self.ymax * 100) % 100, 
+                        ew_mn, abs(int(self.xmin)), abs(self.xmin * 100) % 100,
+                        ns_mn, abs(int(self.ymin)), abs(self.ymin * 100) % 100,
+                        ew_mx, abs(int(self.xmax)), abs(self.xmax * 100) % 100)
+                )
             elif t == 'polygon': return(
                     '{xmin},{ymin},{xmax},{ymin},{xmax},{ymax},{xmin},{ymax},{xmin},{ymin}'.format(
                         xmin=self.xmin, ymin=self.ymin, xmax=self.xmax, ymax=self.ymax
@@ -313,9 +357,11 @@ class Region:
             
         else:
             return(None)
+
         
     def geo_transform(self, x_inc=0, y_inc=None, node='grid'):
-        """return a count info and a geotransform based on the region and a cellsize
+        """return a count info and a geotransform based on the region 
+        and a cellsize
 
         Args:
           x_inc (float): a x-axis gridding increment
@@ -338,14 +384,16 @@ class Region:
         
         return(this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt)
 
-    def geo_transform_from_count(self, x_count = 0, y_count = 0):
+    
+    def geo_transform_from_count(self, x_count=0, y_count=0):
         x_inc = (self.xmax - self.xmin) / x_count
         y_inc = (self.ymin - self.ymax) / y_count
 
         dst_gt = (self.xmin, x_inc, 0, self.ymax, 0, y_inc)
         return(dst_gt)
+
     
-    def export_as_list(self, include_z = False, include_w = False, include_u = False):
+    def export_as_list(self, include_z=False, include_w=False, include_u=False):
         """export region as a list
 
         Args:
@@ -371,6 +419,7 @@ class Region:
             
         return(region_list)
 
+    
     def export_as_gdal_extent(self):
         """export region as a list
 
@@ -381,6 +430,7 @@ class Region:
         region_list = [self.xmin, self.ymin, self.xmax, self.ymax]
         return(tuple(region_list))
 
+    
     def export_as_polygon(self):
         """convert a region to a polygon list
 
@@ -395,6 +445,7 @@ class Region:
               [self.xmin, self.ymin]]
 
         return(eg)
+
     
     def export_as_wkt(self):
         """convert a region to wkt
@@ -411,6 +462,7 @@ class Region:
 
         return(create_wkt_polygon(eg))
 
+    
     def export_as_geom(self):
         """convert a region to an OGR geometry
 
@@ -425,7 +477,8 @@ class Region:
             return(ogr.CreateGeometryFromWkt(self.wkt))
         else: return(None)
 
-    def export_as_ogr(self, dst_ogr, dst_fmt = 'ESRI Shapefile', append = False):
+        
+    def export_as_ogr(self, dst_ogr, dst_fmt='ESRI Shapefile', append=False):
         """convert a region string to an OGR vector
 
         Args:
@@ -454,6 +507,7 @@ class Region:
         dst_feat = None
         dst_ds = None
 
+        
     def increments(self, x_count, y_count):
         """returns x_inc, y_inc"""
         
@@ -461,8 +515,9 @@ class Region:
         y_inc = float((self.ymax - self.ymin) / y_count)
         
         return(x_inc, y_inc)
-        
-    def srcwin(self, geo_transform, x_count, y_count, node = 'grid'):
+
+    
+    def srcwin(self, geo_transform, x_count, y_count, node='grid'):
         """output the appropriate gdal srcwin for the region 
         based on the geo_transform and x/y count.
 
@@ -477,7 +532,9 @@ class Region:
         this_end = [0 if x < 0 else x for x in utils._geo2pixel(
             self.xmax, self.ymin, geo_transform, node=node
         )]
-        this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
+        this_size = [0 if x < 0 else x for x in (
+            (this_end[0] - this_origin[0]), (this_end[1] - this_origin[1])
+        )]
         if this_size[0] > x_count - this_origin[0]:
             this_size[0] = x_count - this_origin[0]
             
@@ -492,7 +549,8 @@ class Region:
             
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
 
-    def cut(self, cut_region = None, x_inc = None, y_inc = None):
+    
+    def cut(self, cut_region=None, x_inc=None, y_inc=None):
         """ cut the region based on `cut_region` while accounting for
         x_inc and y_inc so as to align to a potential grid
 
@@ -525,8 +583,9 @@ class Region:
                 return(self)
             
         return(self)
-                
-    def buffer(self, x_bv = 0, y_bv = 0, pct = None, x_inc = None, y_inc = None):
+
+    
+    def buffer(self, x_bv=0, y_bv=0, pct=None, x_inc=None, y_inc=None):
         """return the region buffered by buffer-value `bv`
 
         Args:
@@ -565,12 +624,14 @@ class Region:
             
         return(self)
 
+    
     def round(self, round_val=5):
         self.xmin = round(self.xmin, round_val)
         self.xmax = round(self.xmax, round_val)
         self.ymin = round(self.ymin, round_val)
         self.ymax = round(self.ymax, round_val)
-    
+
+        
     def center(self):
         """find the center point of the xy region
 
@@ -584,8 +645,9 @@ class Region:
         
         else:
             return(None)        
+
         
-    def chunk(self, inc, n_chunk = 10):
+    def chunk(self, inc, n_chunk=10):
         """chunk the xy region [xmin, xmax, ymin, ymax] into 
         n_chunk by n_chunk cell regions, given inc.
 
@@ -649,17 +711,21 @@ class Region:
 
         return(o_chunks)
 
-    def warp(self, dst_crs = 'epsg:4326', include_z = True):
+    
+    def warp(self, dst_crs='epsg:4326', include_z=True):
         ## horizontal only for region
         if utils.str_or(self.src_srs) is None:
-            utils.echo_warning_msg('region has no valid associated srs: {}'.format(self.src_srs))
+            utils.echo_warning_msg(
+                f'region has no valid associated srs: {self.src_srs}'
+            )
             return(self)
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             transform = srsfun.parse_srs(src_srs = self.src_srs, dst_srs = dst_crs)
 
-            if transform['src_horz_crs'] is not None and transform['dst_horz_crs'] is not None:        
+            if transform['src_horz_crs'] is not None \
+               and transform['dst_horz_crs'] is not None:        
                 ## horizontal Transformation
                 transform['horz_pipeline'] = '+proj=pipeline +step {} +inv +step {}'.format(
                     transform['src_horz_crs'].to_proj4(), transform['dst_horz_crs'].to_proj4()
@@ -676,45 +742,25 @@ class Region:
             else:
                 return(self)
         
-        #transform = srsfun.set_transform(src_srs = self.src_srs, dst_srs = dst_crs, region = self, infos = None)
-        
-        # if self.src_srs.upper().startswith('EPSG'):
-        #     src_srs = self.src_srs.split('+')[0]
-        # else:
-        #     src_srs = self.src_srs
-
-        # if dst_crs.upper().startswith('EPSG'):
-        #     dst_crs = dst_crs.split('+')[0]
-
-        # try:
-        #     in_horz_epsg = srsfun.epsg_from_input(src_srs)[0]
-        #     in_crs = pyproj.CRS.from_user_input(in_horz_epsg)
-        #     out_horz_epsg = srsfun.epsg_from_input(dst_crs)[0]        
-        #     out_crs = pyproj.CRS.from_user_input(out_horz_epsg)
-        #     transformer = pyproj.Transformer.from_crs(in_crs, out_crs, always_xy=True)
-        # except:
-        #     transformer = None
-        
-        # if transformer is None or not self.valid_p():
-        #     utils.echo_error_msg('could not perform transformation')
-            
-        #     return(self)
-        
-        
-    def transform(self, transformer = None, include_z = True):
+    def transform(self, transformer=None, include_z=True):
         if transformer is None or not self.valid_p():
-            utils.echo_error_msg('could not perform region transformation; {}'.format(self))
+            utils.echo_error_msg(
+                f'could not perform region transformation; {self}'
+            )
             return(self)
 
         if include_z and (self.zmin is not None and self.zmax is not None):
-            self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin)
-            self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax)
+            self.xmin, self.ymin, self.zmin \
+                = transformer.transform(self.xmin, self.ymin, self.zmin)
+            self.xmax, self.ymax, self.zmax \
+                = transformer.transform(self.xmax, self.ymax, self.zmax)
         else:
             self.xmin, self.ymin = transformer.transform(self.xmin, self.ymin)
             self.xmax, self.ymax = transformer.transform(self.xmax, self.ymax)
 
         return(self)
-         
+
+    
 ## do things to and with regions...
 ## various region related functions
 def regions_reduce(region_a, region_b):
@@ -800,6 +846,7 @@ def regions_reduce(region_a, region_b):
                 
     return(region_c)
 
+
 def regions_merge(region_a, region_b):
     """combine two regions and find their maximum combined region.
     
@@ -808,7 +855,8 @@ def regions_merge(region_a, region_b):
       region_b (region): a region object
 
     Returns:
-      region: the maximum region [xmin, xmax, ymin, ymax] when combining `region_a` `and region_b`
+      region: the maximum region [xmin, xmax, ymin, ymax] when 
+      combining `region_a` `and region_b`
     """
     
     region_c = Region()
@@ -825,6 +873,7 @@ def regions_merge(region_a, region_b):
     ## add w and u
             
     return(region_c)
+
 
 def regions_intersect_p(region_a, region_b):
     """check if two regions intersect.
@@ -849,7 +898,8 @@ def regions_intersect_p(region_a, region_b):
             return(False)
         
     return(True)
-    
+
+
 def regions_intersect_ogr_p(region_a, region_b):
     """check if two regions intersect using ogr
 
@@ -869,6 +919,7 @@ def regions_intersect_ogr_p(region_a, region_b):
         
     return(False)
 
+
 def regions_within_ogr_p(region_a, region_b):
     """check if region_b is within region_a using ogr
 
@@ -885,6 +936,7 @@ def regions_within_ogr_p(region_a, region_b):
             return(True)
         
     return(False)
+
 
 def z_region_pass(region, upper_limit = None, lower_limit = None):
     """return True if extended region [xmin, xmax, ymin, ymax, zmin, zmax] is 
@@ -912,6 +964,7 @@ def z_region_pass(region, upper_limit = None, lower_limit = None):
 
     # add w and u
     return(True)
+
 
 def xyz_in_region_p(xyz, this_region):
     """check if xyz point in inside the given region
@@ -965,6 +1018,7 @@ def xyz_in_region_p(xyz, this_region):
 
     return(pass_d)
 
+
 def gdal_ogr_regions(src_ds):
     """return the region(s) of the ogr dataset
     
@@ -991,6 +1045,7 @@ def gdal_ogr_regions(src_ds):
         
     return(these_regions)
 
+
 def create_wkt_polygon(coords, xpos=1, ypos=0):
     """convert coords to Wkt
 
@@ -1011,6 +1066,7 @@ def create_wkt_polygon(coords, xpos=1, ypos=0):
     poly = None
     
     return(poly_wkt)
+
 
 def write_shapefile(geom, out_shp):
     driver = ogr.GetDriverByName('Esri Shapefile')
@@ -1035,6 +1091,7 @@ def write_shapefile(geom, out_shp):
     # Save and close everything
     ds = layer = feat = geom = None
 
+    
 def ogr_wkts(src_ds):
     """return the wkt(s) of the ogr dataset"""
     
@@ -1061,7 +1118,8 @@ def ogr_wkts(src_ds):
         
     return(these_regions)
 
-def parse_cli_region(region_list, verbose = True, pct_buffer = None):
+
+def parse_cli_region(region_list, verbose=True, pct_buffer=None):
     """parse a region list into region(s).
 
     for use in clis
@@ -1100,8 +1158,9 @@ def parse_cli_region(region_list, verbose = True, pct_buffer = None):
                             if '=' not in opts:
                                 region_extender = opts
                                 
-                        #this_region = Region().from_string('/'.join([i.format('str'), i_region_s[1]]))
-                        this_region = Region().from_string('/'.join([i.format('str'), region_extender]))
+                        this_region = Region().from_string(
+                            '/'.join([i.format('str'), region_extender])
+                        )
                         if 'pct_buffer' in args.keys():
                             this_region.buffer(pct=utils.float_or(args['pct_buffer']))
                             
@@ -1112,11 +1171,15 @@ def parse_cli_region(region_list, verbose = True, pct_buffer = None):
     if verbose:
         if len(these_regions) > 4:
             utils.echo_msg(
-                'parsed {} region(s): {}...{}'.format(len(these_regions), these_regions[:2], these_regions[-2:])
+                'parsed {} region(s): {}...{}'.format(
+                    len(these_regions), these_regions[:2], these_regions[-2:]
+                )
             )
         elif len(these_regions) > 0:
             utils.echo_msg(
-                'parsed {} region(s): {}'.format(len(these_regions), these_regions)
+                'parsed {} region(s): {}'.format(
+                    len(these_regions), these_regions
+                )
             )
         else:
             utils.echo_warning_msg(
@@ -1125,7 +1188,8 @@ def parse_cli_region(region_list, verbose = True, pct_buffer = None):
             
     return(these_regions)
 
-def generate_tile_set(in_region = None, inc = .25, pct_buffer = None):
+
+def generate_tile_set(in_region=None, inc=.25, pct_buffer=None):
     """Generate a tile-set based on `in_region` and `inc`.
 
     returns a list of regions
@@ -1146,7 +1210,12 @@ def generate_tile_set(in_region = None, inc = .25, pct_buffer = None):
     this_ymax = tmp_region.ymin+inc
     while this_xmax <= tmp_region.xmax:
         while this_ymax <= tmp_region.ymax: 
-            this_region = Region(xmin=this_xmin, xmax=this_xmax, ymin=this_ymin, ymax=this_ymax)
+            this_region = Region(
+                xmin=this_xmin,
+                xmax=this_xmax,
+                ymin=this_ymin,
+                ymax=this_ymax
+            )
             if pct_buffer is not None:
                 this_region.buffer(pct=utils.float_or(pct_buffer))
                 
@@ -1161,7 +1230,8 @@ def generate_tile_set(in_region = None, inc = .25, pct_buffer = None):
             
     return(tile_regions)
 
-def region_list_to_ogr(region_list, dst_ogr, dst_fmt = 'ESRI Shapefile'):
+
+def region_list_to_ogr(region_list, dst_ogr, dst_fmt='ESRI Shapefile'):
     """convert a region list to an OGR vector
     """
 
@@ -1190,6 +1260,7 @@ def region_list_to_ogr(region_list, dst_ogr, dst_fmt = 'ESRI Shapefile'):
         
     dst_ds = None
 
+    
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $regions
@@ -1282,7 +1353,11 @@ def regions_cli(argv = sys.argv):
             print(regions_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(os.path.basename(sys.argv[0]), cudem.__version__))
+            print(
+                '{}, version {}'.format(
+                    os.path.basename(sys.argv[0]), cudem.__version__
+                )
+            )
             sys.exit(1)
         elif arg[0] == '-':
             print(regions_usage)
@@ -1338,5 +1413,7 @@ def regions_cli(argv = sys.argv):
         elif echo_fn:
             print(this_region.format('fn'))
         else:
-            this_region.export_as_ogr('region_{}.shp'.format(this_region.format('fn')))
+            this_region.export_as_ogr(
+                'region_{}.shp'.format(this_region.format('fn'))
+            )
 ### End
