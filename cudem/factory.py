@@ -112,6 +112,7 @@ def args2dict(args, dict_args: dict = {}):
         
     return(dict_args)
 
+
 def dict2args(in_dict: dict):
     """convert a dict of key:val pairs to a module factory string
 
@@ -130,6 +131,7 @@ def dict2args(in_dict: dict):
         )
         
     return(out_args)
+
 
 def _set_params(
         mc: any,
@@ -154,6 +156,7 @@ def _set_params(
     if 'kwargs' not in mc.params.keys():
         mc.params['kwargs'] = mc.__dict__.copy()
 
+        
 def _set_mod_params(
         mc: any,
         mf: any = None,
@@ -179,6 +182,7 @@ def _set_mod_params(
             if k not in mc.params['kwargs'].keys():
                 mc.params['mod_args'][k] = mc.__dict__[k]
 
+                
 def _factory_module_check(mf: any, mc: any):
     """check if factory module exists in the module class
 
@@ -190,6 +194,7 @@ def _factory_module_check(mf: any, mc: any):
         if isinstance(mf._modules[k]['call'](), mc):
             return(k)
 
+        
 ###############################################################################
 ## echo cudem module options
 ## modules are a dictionary with the module name
