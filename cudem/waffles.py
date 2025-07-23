@@ -3830,7 +3830,12 @@ class WafflesCUDEM(Waffle):
 
         for kpam, kval in self.pre_mode_args.items():
             del kwargs[kpam]
-        
+
+        self.final_mode = final_mode
+        self.final_mode_args = {}
+        if self.final_mode not in self.valid_modes:
+            self.final_mode = 'IDW'
+            
         super().__init__(**kwargs)
         self.pre_count = utils.int_or(pre_count, 1)
         self.min_weight = min_weight        
@@ -3956,7 +3961,7 @@ class WafflesCUDEM(Waffle):
                         i,
                         self.pre_mode if i == self.pre_count \
                         else 'stacks' if i != 0 \
-                        else 'cubic',
+                        else self.final_mode,
                         self.inc_levels[i],
                         self.weight_levels[i],
                     )
