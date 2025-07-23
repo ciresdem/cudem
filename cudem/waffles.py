@@ -101,7 +101,9 @@ gc = utils.config_check()
 gdal.DontUseExceptions()
 ogr.DontUseExceptions()
 osr.DontUseExceptions()
-gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null') 
+gdal.SetConfigOption(
+    'CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null'
+)
 
 
 class Waffle:
@@ -514,9 +516,13 @@ class Waffle:
                     verbose=self.verbose
             ):
                 this_geo_x_origin, this_geo_y_origin \
-                    = utils._pixel2geo(srcwin[0], srcwin[1], self.dst_gt)
+                    = utils._pixel2geo(
+                        srcwin[0], srcwin[1], self.dst_gt
+                    )
                 this_geo_x_end, this_geo_y_end \
-                    = utils._pixel2geo(srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], self.dst_gt)
+                    = utils._pixel2geo(
+                        srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], self.dst_gt
+                    )
                 this_gt = [
                     this_geo_x_origin,
                     float(self.dst_gt[1]),
@@ -1439,7 +1445,9 @@ class WafflesSciPy(Waffle):
             gs.start()
             gs.join()
         except (KeyboardInterrupt, SystemExit):
-            utils.echo_error_msg('user breakage...please wait while fetches exits.')
+            utils.echo_error_msg(
+                'user breakage...please wait while fetches exits.'
+            )
             stop_threads = True
             while not gs.scipy_q.empty():
                 try:
@@ -1723,8 +1731,8 @@ class GMTSurface(Waffle):
     """
     
     def __init__(self, tension=.35, relaxation=1, max_radius=None,
-                 aspect=None, breakline=None, convergence=None, blockmean=False,
-                 geographic=True, **kwargs):
+                 aspect=None, breakline=None, convergence=None,
+                 blockmean=False, geographic=True, **kwargs):
         super().__init__(**kwargs)
         if utils.float_or(tension) is not None:
             if utils.float_or(tension) > 1:
@@ -2010,7 +2018,9 @@ class WafflesMBGrid(Waffle):
         
     def stack2mbdatalist(self):
         mb_datalist_fn = os.path.join(self.cache_dir, '_tmp_mb.datalist')
-        mb_stack_xyz = os.path.join(self.cache_dir, '{}.xyz'.format(utils.fn_basename2(self.stack)))
+        mb_stack_xyz = os.path.join(
+            self.cache_dir, '{}.xyz'.format(utils.fn_basename2(self.stack))
+        )
         with open(mb_datalist_fn, 'w') as dl:
             dl.write('{} 168 1'.format(mb_stack_xyz))
                 
@@ -2018,7 +2028,8 @@ class WafflesMBGrid(Waffle):
             self.dump_xyz(stack_xyz)
 
         return(mb_datalist_fn)
-        
+
+    
     def run(self):
         mb_datalist = self.stack2mbdatalist() if self.use_stack else self.data.fn
         #self.mb_region = self.ps_region.copy()
@@ -2675,7 +2686,9 @@ class WafflesCoastline(Waffle):
     def _load_coast_mask(self):
         """create a nodata grid"""
         
-        xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        xcount, ycount, gt = self.p_region.geo_transform(
+            x_inc=self.xinc, y_inc=self.yinc
+        )
         self.ds_config = gdalfun.gdal_set_infos(
             xcount,
             ycount,
@@ -3803,7 +3816,11 @@ class WafflesCUDEM(Waffle):
         self.pre_mode = pre_mode
         self.pre_mode_args = {}
         if self.pre_mode not in self.valid_modes:
-            self.pre_mode = 'IDW'
+            utils.echo_warning_msg(
+                (f'{self.pre_mode} is not a valid waffles module! '
+                 'falling back to `gmt-surface`')
+            )
+            self.pre_mode = 'gmt-surface'
 
         tmp_waffles_mode = WaffleFactory(mod=self.pre_mode)._acquire_module()
         for kpam, kval in kwargs.items():
@@ -4164,7 +4181,9 @@ class WafflesUncertainty(Waffle):
        
         ds_config = gdalfun.gdal_infos(src_gdal)
         if region is not None:
-            srcwin = region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+            srcwin = region.srcwin(
+                ds_config['geoT'], ds_config['nx'], ds_config['ny']
+            )
         else:
             srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
           
@@ -4189,7 +4208,9 @@ class WafflesUncertainty(Waffle):
         
         ds_config = gdalfun.gdal_infos(src_gdal)
         if region is not None:
-            srcwin = region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+            srcwin = region.srcwin(
+                ds_config['geoT'], ds_config['nx'], ds_config['ny']
+            )
         else:
             srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
             
@@ -4682,9 +4703,9 @@ class WafflesUncertainty(Waffle):
         )
         if xcount <= 0 or ycount <=0:
             utils.echo_error_msg(
-                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
-                    xcount, ycount, self.xinc, self.yinc, self.region
-                )
+                (f'could not create grid of {xcount}x{ycount} '
+                 f'cells with {self.xinc}/{self.yinc} increments '
+                 f'on region: {self.region}')
             )
             sys.exit(-1)
         

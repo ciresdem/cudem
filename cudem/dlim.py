@@ -3882,7 +3882,7 @@ class ElevationDataset:
 
         if self.verbose:
             utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn}{self.weight}'
+                f'parsed {count} data records from {self.fn}@{self.weight}'
             )
 
         
@@ -7094,8 +7094,13 @@ class MBSParser(ElevationDataset):
             for line in utils.yield_cmd(
                     'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
                         self.mb_exclude, ' {}'.format(
-                            mb_region.format('gmt') if mb_region is not None else ''
-                        ), mb_fn, ' -F{}'.format(mb_format) if mb_format is not None else ''
+                            mb_region.format('gmt') \
+                            if mb_region is not None \
+                            else ''
+                        ), mb_fn,
+                        ' -F{}'.format(mb_format) \
+                        if mb_format is not None \
+                        else ''
                     ),
                     verbose=False,
             ):
@@ -7151,10 +7156,13 @@ class MBSParser(ElevationDataset):
             if len(xs) > 0:
                 mb_points = np.column_stack((xs, ys, zs, ws, us))
                 xs = ys = zs = ws = us = None
-                mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
+                mb_points = np.rec.fromrecords(
+                    mb_points, names='x, y, z, w, u'
+                )
                 if self.want_binned:
                     point_filter = PointFilterFactory(
-                        mod='bin_z:percentile=25:y_res=3:z_res=20', points=mb_points
+                        mod='bin_z:percentile=25:y_res=3:z_res=20',
+                        points=mb_points
                     )._acquire_module()
                     if point_filter is not None:
                         mb_points = point_filter()
@@ -7178,14 +7186,18 @@ class MBSParser(ElevationDataset):
         else:
             mb_region = None
 
-        mb_points = [[float(x) for x in l.strip().split('\t')] for l in utils.yield_cmd(
-                'mblist -M{}{} -OXYZ -I{}'.format(
-                    self.mb_exclude, ' {}'.format(
-                        mb_region.format('gmt') if mb_region is not None else ''
-                    ), mb_fn#, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
-                ),
-                verbose=False,
-        )]
+        #, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
+        mb_points = [[float(x) for x in l.strip().split('\t')] \
+                     for l in utils.yield_cmd(
+                             'mblist -M{}{} -OXYZ -I{}'.format(
+                                 self.mb_exclude, ' {}'.format(
+                                     mb_region.format('gmt') \
+                                     if mb_region is not None \
+                                     else ''
+                                 ), mb_fn
+                             ),
+                             verbose=False,
+                     )]
 
         if len(mb_points) > 0:
             mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
@@ -7373,7 +7385,9 @@ class OGRFile(ElevationDataset):
                         for x in xyzs:
                             x.append(weight if weight is not None else 1)
                             x.append(unc if unc is not None else 0)
-                            points = np.rec.fromrecords([x], names='x, y, z, w, u')
+                            points = np.rec.fromrecords(
+                                [x], names='x, y, z, w, u'
+                            )
                             if self.z_scale is not None:
                                 points['z'] *= self.z_scale
 
@@ -7484,7 +7498,8 @@ class Scratch(ElevationDataset):
                 ):
                     this_ds.initialize()
                     for ds in this_ds.parse():
-                        # fill self.data_entries with each dataset for use outside the yield.
+                        # fill self.data_entries with each dataset for
+                        # use outside the yield.
                         self.data_entries.append(ds)
                         yield(ds)
 
@@ -7494,11 +7509,13 @@ class Datalist(ElevationDataset):
     
     A datalist is an extended MB-System style datalist.
     
-    Each datalist consists of datalist-entries, where a datalist entry has the following columns:
-    path format weight uncertainty title source date data_type resolution hdatum vdatum url
+    Each datalist consists of datalist-entries, where a datalist 
+    entry has the following columns:
+    `path format weight uncertainty title source date data_type 
+    resolution hdatum vdatum url`
 
-    the datalist can contain datalist-entries to other datalist files, distributed across a
-    file-system.
+    the datalist can contain datalist-entries to other datalist files, 
+    distributed across a file-system.
 
     see `cudem.dlim.datasets` for superclass ElevationDataset
     """
@@ -7594,7 +7611,8 @@ class Datalist(ElevationDataset):
 
         datasets parsed from the datalist may have variable srs, so
         we want to transform those to whatever self.dst_srs is, if it
-        exists, in order to properly fill the datalist/json srs and regions...
+        exists, in order to properly fill the datalist/json srs and 
+        regions...
         """
 
         self.region = None
@@ -8055,8 +8073,8 @@ class Fetcher(ElevationDataset):
     Generally, though not always, if the fetched data is a raster then
     there is no need to redefine yield_ds, though if the raster has 
     insufficient information, such as with Copernicus, whose nodata value 
-    is not specified in the geotiff files, it may be best to create a simple
-    sub-class for it.
+    is not specified in the geotiff files, it may be best to create a 
+    simple sub-class for it.
     """
 
     def __init__(self,
@@ -8254,7 +8272,9 @@ class NEDFetcher(Fetcher):
     """
 
     __doc__ = '''{}    
-    Fetches Module: <ned> - {}'''.format(__doc__, fetches.NED.__doc__)
+    Fetches Module: <ned> - {}'''.format(
+        __doc__, fetches.NED.__doc__
+    )
 
     
     def __init__(self, coast_buffer=0.00001, **kwargs):
@@ -8300,7 +8320,9 @@ class DNRFetcher(Fetcher):
     """
 
     __doc__ = '''{}    
-    Fetches Module: <wadnr> - {}'''.format(__doc__, fetches.waDNR.__doc__)
+    Fetches Module: <wadnr> - {}'''.format(
+        __doc__, fetches.waDNR.__doc__
+    )
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -8327,12 +8349,14 @@ class DAVFetcher_CoNED(Fetcher):
     """CoNED from the digital coast 
 
     This is a wrapper shortcut for fetching CoNED DEMs from the Digital Coast,
-    mainly so we can pull the vertical datum info from the DAV metadata since the
-    CoNED doesn't assign one to their DEMs.
+    mainly so we can pull the vertical datum info from the DAV metadata 
+    since the CoNED doesn't assign one to their DEMs.
     """
 
     __doc__ = '''{}    
-    Fetches Module: <CoNED> - {}'''.format(__doc__, fetches.CoNED.__doc__)
+    Fetches Module: <CoNED> - {}'''.format(
+        __doc__, fetches.CoNED.__doc__
+    )
     
     
     def __init__(self, keep_fetched_data=True, cog=True, **kwargs):
@@ -8381,9 +8405,9 @@ class DAVFetcher_CoNED(Fetcher):
         except:
             pass
 
-        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result['dst_fn']) \
-            if not self.cog \
-               else result['url']
+        self.fetches_params['mod'] = os.path.join(
+            self.fetch_module._outdir, result['dst_fn']
+        ) if not self.cog else result['url']
         
         self.fetches_params['check_path'] = False if self.cog else True
         self.fetches_params['src_srs'] = self.fetch_module.src_srs
@@ -8400,7 +8424,9 @@ class DAVFetcher_SLR(Fetcher):
     """
 
     __doc__ = '''{}    
-    Fetches Module: <SLR> - {}'''.format(__doc__, fetches.SLR.__doc__)
+    Fetches Module: <SLR> - {}'''.format(
+        __doc__, fetches.SLR.__doc__
+    )
 
     
     def __init__(self, keep_fetched_data = True, **kwargs):
@@ -8473,7 +8499,9 @@ class SWOTFetcher(Fetcher):
     """
 
     __doc__ = '''{}    
-    Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
+    Fetches Module: <swot> - {}'''.format(
+        __doc__, fetches.SWOT.__doc__
+    )
 
     
     def __init__(self,
@@ -8525,7 +8553,8 @@ class SWOTFetcher(Fetcher):
             yield(DatasetFactory(**self.fetches_params).acquire_module())
         else:
             utils.echo_warning_msg(
-                '{} is not a currently supported dlim dataset'.format(result['data_type'])
+                (f'{result["data_type"]} is not a currently supported '
+                 'dlim dataset')
             )
 
             
@@ -8565,7 +8594,9 @@ class IceSat2Fetcher(Fetcher):
     """
 
     __doc__ = '''{}    
-    Fetches Module: <icesat2> - {}'''.format(__doc__, fetches.IceSat2.__doc__)
+    Fetches Module: <icesat2> - {}'''.format(
+        __doc__, fetches.IceSat2.__doc__
+    )
 
     
     def __init__(self,
@@ -8630,7 +8661,9 @@ class GMRTFetcher(Fetcher):
     """
     
     __doc__ = '''{}    
-    Fetches Module: <gmrt> - {}'''.format(__doc__, fetches.GMRT.__doc__)
+    Fetches Module: <gmrt> - {}'''.format(
+        __doc__, fetches.GMRT.__doc__
+    )
 
     
     def __init__(self, swath_only=False, **kwargs):
@@ -8653,7 +8686,9 @@ class GMRTFetcher(Fetcher):
                     self.fetch_module._gmrt_swath_poly_url,
                     verbose=self.verbose
             ).fetch_file(
-                os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip')
+                os.path.join(
+                    self.fetch_module._outdir, 'gmrt_swath_polygons.zip'
+                )
             ) == 0:
                 swath_shps = utils.p_unzip(
                     os.path.join(
@@ -8688,7 +8723,9 @@ class GEBCOFetcher(Fetcher):
     """
     
     __doc__ = '''{}    
-    Fetches Module: <gebco> - {}'''.format(__doc__, fetches.GEBCO.__doc__)
+    Fetches Module: <gebco> - {}'''.format(
+        __doc__, fetches.GEBCO.__doc__
+    )
 
     
     def __init__(self, exclude_tid=None, **kwargs):
@@ -8724,7 +8761,8 @@ class GEBCOFetcher(Fetcher):
                 )
                 for tid_fn in tid_fns:
                     ds_config = gdalfun.gdal_infos(tid_fn)                    
-                    if self.region is not None and self.region.valid_p(check_xy=True):
+                    if self.region is not None \
+                       and self.region.valid_p(check_xy=True):
                         inf_region = regions.Region().from_geo_transform(
                             ds_config['geoT'], ds_config['nx'], ds_config['ny']
                         )
@@ -8776,7 +8814,8 @@ class GEBCOFetcher(Fetcher):
                 inf_region = regions.Region().from_geo_transform(
                     ds_config['geoT'], ds_config['nx'], ds_config['ny']
                 )
-                if self.region is not None and self.region.valid_p(check_xy=True):                
+                if self.region is not None \
+                   and self.region.valid_p(check_xy=True):                
                     inf_region.wmin = self.weight
                     inf_region.wmax = self.weight
                     inf_region.umin = self.uncertainty
@@ -8790,7 +8829,9 @@ class GEBCOFetcher(Fetcher):
             for gebco_fn in wanted_gebco_fns:
                 self.fetches_params['mod'] = gebco_fn
                 self.fetches_params['data_format'] = 200
-                yield(DatasetFactory(**self.fetches_params)._acquire_module())
+                yield(DatasetFactory(
+                    **self.fetches_params
+                )._acquire_module())
 
                 
 class CopernicusFetcher(Fetcher):
@@ -8798,7 +8839,9 @@ class CopernicusFetcher(Fetcher):
     """
     
     __doc__ = '''{}    
-    Fetches Module: <copernicus> - {}'''.format(__doc__, fetches.CopernicusDEM.__doc__)
+    Fetches Module: <copernicus> - {}'''.format(
+        __doc__, fetches.CopernicusDEM.__doc__
+    )
 
     
     def __init__(self, datatype=None, **kwargs):
@@ -8808,9 +8851,12 @@ class CopernicusFetcher(Fetcher):
 
         
     def yield_ds(self, result):
-        if self.datatype is None or result['data_type'] == self.datatype:
+        if self.datatype is None \
+           or result['data_type'] == self.datatype:
             src_cop_dems = utils.p_unzip(
-                os.path.join(self.fetch_module._outdir, result['dst_fn']),
+                os.path.join(
+                    self.fetch_module._outdir, result['dst_fn']
+                ),
                 exts=['tif'],
                 outdir=self.fetch_module._outdir,
                 verbose=self.verbose
@@ -8820,7 +8866,9 @@ class CopernicusFetcher(Fetcher):
                 self.fetches_params['mod'] = src_cop_dem
                 self.fetches_params['data_format'] = 200
                 self.fetches_params['node'] = 'pixel'
-                yield(DatasetFactory(**self.fetches_params)._acquire_module())
+                yield(DatasetFactory(
+                    **self.fetches_params
+                )._acquire_module())
 
                 
 class FABDEMFetcher(Fetcher):
@@ -8828,7 +8876,9 @@ class FABDEMFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <fabdem> - {}'''.format(__doc__, fetches.FABDEM.__doc__)
+    Fetches Module: <fabdem> - {}'''.format(
+        __doc__, fetches.FABDEM.__doc__
+    )
 
     
     def __init__(self, **kwargs):
@@ -8854,7 +8904,9 @@ class MarGravFetcher(Fetcher):
     """
     
     __doc__ = '''{}    
-    Fetches Module: <mar_grav> - {}'''.format(__doc__, fetches.MarGrav.__doc__)
+    Fetches Module: <mar_grav> - {}'''.format(
+        __doc__, fetches.MarGrav.__doc__
+    )
 
     
     def __init__(self,
@@ -8937,7 +8989,9 @@ class ChartsFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <charts> - {}'''.format(__doc__, fetches.Charts.__doc__)
+    Fetches Module: <charts> - {}'''.format(
+        __doc__, fetches.Charts.__doc__
+    )
 
                                         
     def __init__(self, want_soundings=True, want_contours=False, **kwargs):
@@ -8977,10 +9031,13 @@ class MBSFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <multibeam> - {}'''.format(__doc__, fetches.Multibeam.__doc__)
+    Fetches Module: <multibeam> - {}'''.format(
+        __doc__, fetches.Multibeam.__doc__
+    )
 
                                         
-    def __init__(self, mb_exclude='A', want_binned=False, want_mbgrid=False, **kwargs):
+    def __init__(self, mb_exclude='A', want_binned=False,
+                 want_mbgrid=False, **kwargs):
         super().__init__(**kwargs)
         self.fetches_params['mb_exclude'] = mb_exclude
         self.fetches_params['want_binned'] = want_binned
@@ -9003,7 +9060,9 @@ class HydroNOSFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.HydroNOS.__doc__)
+    Fetches Module: <hydronos> - {}'''.format(
+        __doc__, fetches.HydroNOS.__doc__
+    )
 
                                         
     def __init__(self, explode=False, **kwargs):
@@ -9024,7 +9083,8 @@ class HydroNOSFetcher(Fetcher):
             for nos_fn in nos_fns:
                 self.fetches_params['mod'] = nos_fn
                 self.fetches_params['data_format'] \
-                    = '168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,'
+                    = ('168:skip=1:xpos=2:ypos=1'
+                       ':zpos=3:z_scale=-1:delimiter=,')
                 self.fetches_params['src_srs'] = 'epsg:4326+5866'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
@@ -9043,7 +9103,9 @@ class HydroNOSFetcher(Fetcher):
                     self.fetches_params['mod'] = bag_fn
                     self.fetches_params['data_format'] = 201
                     self.fetches_params['src_srs'] = None
-                    yield(DatasetFactory(**self.fetches_params)._acquire_module())
+                    yield(DatasetFactory(
+                        **self.fetches_params
+                    )._acquire_module())
 
                                         
 class CSBFetcher(Fetcher):
@@ -9067,7 +9129,9 @@ class EMODNetFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <emodnet> - {}'''.format(__doc__, fetches.EMODNet.__doc__)
+    Fetches Module: <emodnet> - {}'''.format(
+        __doc__, fetches.EMODNet.__doc__
+    )
 
                                         
     def __init__(self, **kwargs):
@@ -9089,7 +9153,9 @@ class GEDTM30Fetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <gedtm30> - {}'''.format(__doc__, fetches.GEDTM30.__doc__)
+    Fetches Module: <gedtm30> - {}'''.format(
+        __doc__, fetches.GEDTM30.__doc__
+    )
 
                                         
     def __init__(self, **kwargs):
@@ -9149,14 +9215,20 @@ class eHydroFetcher(Fetcher):
                 src_epsg, v if v is not None else '5866'
             ) if src_epsg is not None else None
             self.fetches_params['data_format'] \
-                = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048006096012192'
+                = ('302:ogr_layer=SurveyPoint_HD'
+                   ':elev_field=Z_label'
+                   ':z_scale=-0.3048006096012192')
             self.metadata['name'] = self.fn
             yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
             if self.want_contours:
-                self.metadata['name'] = '{}_contours'.format(utils.fn_basename2(self.fn))
+                self.metadata['name'] = '{}_contours'.format(
+                    utils.fn_basename2(self.fn)
+                )
                 self.fetches_params['data_format'] \
-                    = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048006096012192'
+                    = ('302:ogr_layer=ElevationContour_ALL'
+                       ':elev_field=contourElevation'
+                       ':z_scale=-0.3048006096012192')
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
                 
@@ -9199,10 +9271,13 @@ class BlueTopoFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <bluetopo> - {}'''.format(__doc__, fetches.BlueTopo.__doc__)
+    Fetches Module: <bluetopo> - {}'''.format(
+        __doc__, fetches.BlueTopo.__doc__
+    )
 
     
-    def __init__(self, want_interpolation=False, unc_weights=False, **kwargs):
+    def __init__(self, want_interpolation=False, unc_weights=False,
+                 **kwargs):
         super().__init__(**kwargs)
         self.want_interpolation = want_interpolation
         self.unc_weights = unc_weights
@@ -9213,7 +9288,9 @@ class BlueTopoFetcher(Fetcher):
         if not self.want_interpolation:
             sid = gdalfun.gdal_extract_band(
                 os.path.join(self.fetch_module._outdir, result['dst_fn']),
-                utils.make_temp_fn('tmp_bt_tid.tif', self.fetch_module._outdir),
+                utils.make_temp_fn(
+                    'tmp_bt_tid.tif', self.fetch_module._outdir
+                ),
                 band=3,
                 exclude=[0]
             )[0]
@@ -9253,12 +9330,16 @@ class NGSFetcher(Fetcher):
             
     def yield_ds(self, result):
         with open(
-                os.path.join(self.fetch_module._outdir, result['dst_fn']), 'r'
+                os.path.join(
+                    self.fetch_module._outdir, result['dst_fn']
+                ), 'r'
         ) as json_file:
             r = json.load(json_file)
             if len(r) > 0:
                 with open(
-                        os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz'), 'w'
+                        os.path.join(
+                            self.fetch_module._outdir, '_tmp_ngs.xyz'
+                        ), 'w'
                 ) as tmp_ngs:
                     for row in r:
                         z = utils.float_or(row[self.datum])
@@ -9303,7 +9384,9 @@ class TidesFetcher(Fetcher):
             r = json.load(json_file)
             if len(r) > 0:
                 with open(
-                        os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'), 'w'
+                        os.path.join(
+                            self.fetch_module._outdir, '_tmp_tides.xyz'
+                        ), 'w'
                 ) as tmp_ngs:
                     for feature in r['features']:
                         # if self.fetch_module.station_id is not None:
@@ -9352,7 +9435,9 @@ class WaterServicesFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <waterservices> - {}'''.format(__doc__, fetches.WaterServices.__doc__)
+    Fetches Module: <waterservices> - {}'''.format(
+        __doc__, fetches.WaterServices.__doc__
+    )
 
     
     def __init__(self, site_code='00065', units='m', **kwargs):
@@ -9372,7 +9457,8 @@ class WaterServicesFetcher(Fetcher):
                 ) as tmp_ws:
                     features = r['value']['timeSeries']
                     for feature in features:
-                        if feature['variable']['variableCode'][0]['value'] == self.site_code:
+                        if feature['variable']['variableCode'][0]['value'] \
+                           == self.site_code:
                             lon = float(
                                 feature['sourceInfo']['geoLocation']['geogLocation']['longitude']
                             )
@@ -9397,7 +9483,9 @@ class WaterServicesFetcher(Fetcher):
         self.fetches_params['data_format'] = 168
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
-        utils.remove_glob(os.path.join(self.fetch_module._outdir, '_tmp_ws.xyz'))
+        utils.remove_glob(
+            os.path.join(self.fetch_module._outdir, '_tmp_ws.xyz')
+        )
 
         
 class VDatumFetcher(Fetcher):
@@ -9746,7 +9834,9 @@ class DatasetFactory(factory.CUDEMFactory):
 
         except Exception as e:
             utils.echo_error_msg(
-                'could not parse entry {}, {}'.format(self.kwargs['fn'], this_entry)
+                'could not parse entry {}, {}'.format(
+                    self.kwargs['fn'], this_entry
+                )
             )
             return(self)
 
@@ -9945,7 +10035,8 @@ class DatasetFactory(factory.CUDEMFactory):
                 
         except:
             raise ValueError(
-                'DatasetFactory: Unable to write new parameter file to {}'.format(param_file)
+                ('DatasetFactory: Unable to write new parameter '
+                 f'file to {param_file}')
             )
 
 
@@ -9989,13 +10080,14 @@ Options:
   -X, --extend\t\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
 \t\t\t\tpercentage to extend the processing REGION.
 \t\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
-\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
-\t\t\t\tpercent of the input REGION.
+\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by
+\t\t\t\t10 percent of the input REGION.
   -J, --s_srs\t\t\tSet the SOURCE projection.
   -P, --t_srs\t\t\tSet the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir\t\tCACHE Directory for storing temp and output data.
   -Z, --z-precision\t\tSet the target precision of dumped z values. (default is 4)
-  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' (with -E and -R)
+  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' 
+\t\t\t\t(with -E and -R)
   -T, --stack_filter\t\tFILTER the data stack using one or multiple filters. 
 \t\t\t\tWhere FILTER is filter-name[:opts] (see `grits --modules` for more information)
 \t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
@@ -10005,10 +10097,12 @@ Options:
 \t\t\t\tThe -F switch may be set multiple times to perform multiple filters.
 \t\t\t\tAvailable FILTERS: {point_filter_modules}
   -V, --archive\t\t\tArchive the DATALIST to the given REGION[/INCREMENTs].
-\t\t\t\tSpecify the name of the archive, if not specified an auto-generated name will be used.
+\t\t\t\tSpecify the name of the archive, if not specified an auto-generated 
+\t\t\t\tname will be used.
 
   -m, --mask\t\t\tMASK the datalist to the given REGION/INCREMENTs
-  -s, --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
+  -s, --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given 
+\t\t\t\tREGION/INCREMENTs
   -g, --glob\t\t\tGLOB the datasets in the current directory to stdout
   -i, --info\t\t\tGenerate and return an INFO dictionary of the dataset
   -l, --list\t\t\tList the assocated datasets from the datalist
@@ -10038,11 +10132,19 @@ Examples:
   % {cmd} tifs_in_region.datalist -R -90/-89/30/31 -E 1s > tifs_1s.xyz
   % {cmd} -R my_region.shp my_data.xyz -w -s_srs epsg:4326 -t_srs epsg:3565 > my_data_3565.xyz
   % {cmd} -R my_region.shp -w multibeam --archive
-""".format(cmd=os.path.basename(sys.argv[0]), 
-           dl_version=cudem.__version__,
-           dl_formats=factory._cudem_module_name_short_desc(DatasetFactory._modules),
-           grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules),
-           point_filter_modules=factory._cudem_module_short_desc(PointFilterFactory._modules))
+""".format(
+    cmd=os.path.basename(sys.argv[0]), 
+    dl_version=cudem.__version__,
+    dl_formats=factory._cudem_module_name_short_desc(
+        DatasetFactory._modules
+    ),
+    grits_modules=factory._cudem_module_short_desc(
+        grits.GritsFactory._modules
+    ),
+    point_filter_modules=factory._cudem_module_short_desc(
+        PointFilterFactory._modules
+    )
+)
 
 def datalists_cli(argv=sys.argv):
     """run datalists from command-line
@@ -10103,7 +10205,9 @@ See `datalists_usage` for full cli options.
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
             dst_srs = argv[i + 1]
             i = i + 1
-        elif arg == '-z_precision' or arg == '--z-precision' or arg == '-Z':
+        elif arg == '-z_precision' \
+             or arg == '--z-precision' \
+             or arg == '-Z':
             z_precision = utils.int_or(argv[i + 1], 4)
             i = i + 1
         elif arg[:2] == '-Z':
@@ -10131,7 +10235,9 @@ See `datalists_usage` for full cli options.
             want_archive = True
             dataexts = [
                 xs for y in [
-                    x['fmts'] for x in list(DatasetFactory._modules.values())
+                    x['fmts'] for x in list(
+                        DatasetFactory._modules.values()
+                    )
                 ] for xs in y
             ]
             if i+1 < len(argv) and not argv[i + 1].startswith('-'):
@@ -10238,7 +10344,9 @@ See `datalists_usage` for full cli options.
         ## this effects the output naming of masks/stacks!
         ## do we want this like in waffles where the output name
         ## does not include the -X extend buffer?
-        if xy_inc[0] is not None and xy_inc[1] is not None and this_region is not None:
+        if xy_inc[0] is not None \
+           and xy_inc[1] is not None \
+           and this_region is not None:
             this_region.buffer(
                 x_bv=(utils.str2inc(xy_inc[0])*extend),
                 y_bv=(utils.str2inc(xy_inc[1])*extend)
@@ -10281,10 +10389,13 @@ See `datalists_usage` for full cli options.
                     this_datalist.uncertainty = None
                     
                 if want_inf:
-                    print(this_datalist.inf()) # output the datalist inf blob
+                    # output the datalist inf blob
+                    print(this_datalist.inf()) 
                 elif want_list:
-                    this_datalist.echo() # output each dataset from the datalist
-                elif want_region: # get the region and warp it if necessary
+                    # output each dataset from the datalist
+                    this_datalist.echo() 
+                elif want_region:
+                    # get the region and warp it if necessary
                     this_inf = this_datalist.inf()
                     this_region = regions.Region().from_list(this_inf.minmax)
                     if dst_srs is not None:
@@ -10302,10 +10413,12 @@ See `datalists_usage` for full cli options.
                         utils.remove_glob('{}*'.format(this_archive.name))
                 else:
                     try:
-                        if want_separate: # process and dump each dataset independently
+                        # process and dump each dataset independently
+                        if want_separate: 
                             for this_entry in this_datalist.parse():
                                 this_entry.dump_xyz()
-                        else: # process and dump the datalist as a whole
+                        else:
+                            # process and dump the datalist as a whole
                             this_datalist.dump_xyz()
                     except KeyboardInterrupt:
                       utils.echo_error_msg('Killed by user')

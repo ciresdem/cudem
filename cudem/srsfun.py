@@ -11,14 +11,17 @@
 ## of the Software, and to permit persons to whom the Software is furnished to do so, 
 ## subject to the following conditions:
 ##
-## The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
 ##
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
 ## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
 ## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
-## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
 ##
+###############################################################################
 ### Commentary:
 ##
 ## Functions, etc. for common pyproj/osr usage.
@@ -41,7 +44,10 @@ gc = utils.config_check()
 ogr.DontUseExceptions()
 osr.DontUseExceptions()
 
+
+###############################################################################
 ## OSR/WKT/proj
+###############################################################################
 def split_srs(srs, as_epsg = False):
     """split an SRS into the horizontal and vertical elements.
 
@@ -94,10 +100,12 @@ def split_srs(srs, as_epsg = False):
         horz_wkt = horz.to_wkt()
 
     if as_epsg:
-        return(horz_epsg if horz_epsg is not None else horz_wkt, vert_epsg if vert_epsg is not None else vert_wkt)
+        return(horz_epsg if horz_epsg is not None else horz_wkt,
+               vert_epsg if vert_epsg is not None else vert_wkt)
     else:
         return(horz_wkt, vert_epsg)
 
+    
 def combine_epsgs(src_horz, src_vert, name='Combined'):
     """combine src_horz and src_vert into a CompoundCS"""
     
@@ -109,9 +117,11 @@ def combine_epsgs(src_horz, src_vert, name='Combined'):
     vert_srs = osr.SpatialReference()
     vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
     src_srs = osr.SpatialReference()
-    src_srs.SetCompoundCS('{}'.format(name, src_horz, src_vert), horz_srs, vert_srs)
+    src_srs.SetCompoundCS('{}'.format(name, src_horz, src_vert),
+                          horz_srs, vert_srs)
     return(src_srs.ExportToWkt())
-    
+
+
 def wkt2geom(wkt):
     """transform a wkt to an ogr geometry
 
@@ -126,6 +136,7 @@ def wkt2geom(wkt):
     
     return(ogr.CreateGeometryFromWkt(wkt))
 
+
 def osr_srs(src_srs):
     try:
         srs = osr.SpatialReference()
@@ -134,6 +145,7 @@ def osr_srs(src_srs):
     except:
         return(None)
 
+    
 def osr_wkt(src_srs, esri=False):
     """convert a src_srs to wkt"""
     
@@ -147,6 +159,7 @@ def osr_wkt(src_srs, esri=False):
     except:
         return(None)
 
+    
 def osr_prj_file(dst_fn, src_srs):
     """generate a .prj file given a src_srs
 
@@ -164,6 +177,7 @@ def osr_prj_file(dst_fn, src_srs):
     else:
         return(-1)
 
+    
 def srs_get_cstype(in_srs):
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(in_srs)
@@ -177,9 +191,11 @@ def srs_get_cstype(in_srs):
     src_srs = None
 
     return(cstype)
-    
+
+
 def epsg_from_input(in_srs):
-    """get the epsg(s) from srs suitable as input to SetFromUserInput
+    """get the epsg(s) from srs suitable as input to 
+    SetFromUserInput
 
     -----------
     Parameters:
@@ -234,7 +250,8 @@ def epsg_from_input(in_srs):
 
     return(src_horz, src_vert)
 
-def osr_parse_srs(src_srs, return_vertcs = True):
+
+def osr_parse_srs(src_srs, return_vertcs=True):
     """parse an OSR SRS object and return a proj string"""
     
     if src_srs is not None:
@@ -271,7 +288,8 @@ def osr_parse_srs(src_srs, return_vertcs = True):
     else:
         return(None)
 
-def parse_srs(src_srs = None, dst_srs = None):
+    
+def parse_srs(src_srs=None, dst_srs=None):
     transform = {}
     if src_srs is not None and dst_srs is not None:
         want_vertical = True
@@ -369,7 +387,9 @@ def parse_srs(src_srs = None, dst_srs = None):
 
         return(transform)
 
-def set_vertical_transform(transform, region = None, infos = None, cache_dir = './', verbose = True):
+    
+def set_vertical_transform(transform, region=None, infos=None,
+                           cache_dir='./', verbose=True):
     ## set the region for the vdatum transformation grid.
     ## this is either from the input `self.region` or from the input
     ## data's bounding box. Transform it to WGS84.
@@ -393,7 +413,9 @@ def set_vertical_transform(transform, region = None, infos = None, cache_dir = '
     ## set `self.transform.trans_fn`, which is the transformation grid
     transform['trans_fn'] = os.path.join(
         cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
-            transform['src_vert_epsg'], transform['dst_vert_epsg'], vd_region.format('fn')
+            transform['src_vert_epsg'],
+            transform['dst_vert_epsg'],
+            vd_region.format('fn')
         )
     )
 
@@ -402,7 +424,8 @@ def set_vertical_transform(transform, region = None, infos = None, cache_dir = '
     if not os.path.exists(transform['trans_fn']):
         with tqdm(
                 desc='generating vertical transformation grid {} from {} to {}'.format(
-                    transform['trans_fn'], transform['src_vert_epsg'],
+                    transform['trans_fn'],
+                    transform['src_vert_epsg'],
                     transform['dst_vert_epsg']
                 ),
                 leave=verbose
@@ -450,17 +473,19 @@ def set_vertical_transform(transform, region = None, infos = None, cache_dir = '
             )
     else:
         utils.echo_error_msg(
-            'failed to generate vertical transformation grid between {} and {} for this region!'.format(
-                transform['src_vert_epsg'], os.path.abspath(transform['dst_vert_epsg'])
-            )
+            ('failed to generate vertical transformation grid '
+             f'between {transform["src_vert_epsg"]} '
+             f'and {os.path.abspath(transform["dst_vert_epsg"])} for this region!')
         )
 
-def set_transform(src_srs = None, dst_srs = None, region = None, infos = None):
+        
+def set_transform(src_srs=None, dst_srs=None, region=None, infos=None):
     """Set the pyproj horizontal and vertical transformations for the dataset"""
 
     #in_horizontal_crs, out_horizontal_crs, in_vertical_crs, out_vertical_crs, src_geoid, dst_geoid, want_vertical = self.parse_srs()
     transform = parse_srs(src_srs=src_srs, dst_srs=dst_srs)
-    if transform['src_horz_crs'] is not None and transform['dst_horz_crs'] is not None:        
+    if transform['src_horz_crs'] is not None \
+       and transform['dst_horz_crs'] is not None:        
         ## horizontal Transformation
         transform['horz_pipeline'] = '+proj=pipeline +step {} +inv +step {}'.format(
             transform['src_horz_crs'].to_proj4(), transform['dst_horz_crs'].to_proj4()
