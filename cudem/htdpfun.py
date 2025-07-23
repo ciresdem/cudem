@@ -218,8 +218,9 @@ class HTDP:
             else:
                 utils.run_cmd(
                     '{} < {}'.format(
-                        self.htdp_bin, htdp_control), verbose=self.verbos
-                    e
+                        self.htdp_bin, htdp_control
+                    ),
+                    verbose=self.verbose
                 )
 
                 

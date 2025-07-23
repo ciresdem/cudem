@@ -9,14 +9,17 @@
 ## of the Software, and to permit persons to whom the Software is furnished to do so, 
 ## subject to the following conditions:
 ##
-## The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
 ##
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
 ## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
 ## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
-## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
 ##
+###############################################################################
 ### Commentary:
 ##
 ## Generate iMAGEs from a DEm
@@ -50,6 +53,7 @@ try:
     has_pygmt = True
 except ImportError as e:
     has_pygmt = False
+
     
 ## lll
 def lll(src_lat):
@@ -60,6 +64,7 @@ def lll(src_lat):
     latl_ = gds_equator
 
     return(lonl_, latl_)
+
 
 ## CPT          
 def scale_el__(value, gmin, gmax, tr):
@@ -73,6 +78,7 @@ def scale_el__(value, gmin, gmax, tr):
         print(value)
         return(None)
 
+    
 def scale_el_(value, gmin, gmax, tr, trs):
     if value > 0 and gmax > 0:
         return((gmax * tr) / max(trs))
@@ -86,6 +92,7 @@ def scale_el_(value, gmin, gmax, tr, trs):
     else:
         return(None)
 
+    
 def scale_el(value, gmin, gmax, tr, trs):
     p = (tr - min(trs)) / (max(trs) - min(trs))
     v = (1-p) * (gmin - gmax) + gmax
@@ -101,9 +108,9 @@ def scale_el(value, gmin, gmax, tr, trs):
     #     v = 0
 
     return(v)
-    
-def generate_etopo_cpt(gmin, gmax):
 
+
+def generate_etopo_cpt(gmin, gmax):
     trs = [
         -11000, -10500, -10000, -9500, -9000, -8500,
         -8000, -7500, -7000, -6500, -6000, -5500,
@@ -152,12 +159,14 @@ def generate_etopo_cpt(gmin, gmax):
                     )
     return('tmp.cpt')
 
+
 cpt_colors = {
     'black': [0, 0, 0],
     'white': [255, 255, 255],
 }
 
-def process_cpt(cpt, gmin, gmax, gdal = False, split_cpt = None):
+
+def process_cpt(cpt, gmin, gmax, gdal=False, split_cpt=None):
     trs = []
     colors = []
     with open(cpt, 'r') as cpt:
@@ -171,12 +180,16 @@ def process_cpt(cpt, gmin, gmax, gdal = False, split_cpt = None):
 
                 if utils.int_or(ll[1]) is not None:
                     colors.append(
-                        [int(float(ll[1])), int(float(ll[2])), int(float(ll[3]))]
+                        [int(float(ll[1])),
+                         int(float(ll[2])),
+                         int(float(ll[3]))]
                     )
                 elif ll[1] in cpt_colors.keys():
                     colors.append(cpt_colors[ll[1]])
                 elif len(ll[1].split('/')) > 1:
-                    colors.append([int(float(x)) for x in ll[1].split('/')])
+                    colors.append(
+                        [int(float(x)) for x in ll[1].split('/')]
+                    )
 
     if split_cpt is not None:
         _trs = np.array(trs)
@@ -216,7 +229,8 @@ def process_cpt(cpt, gmin, gmax, gdal = False, split_cpt = None):
         if gdal:
             cpt.write('nv 0 0 0 0\n')
     return('tmp.cpt')
-    
+
+
 def get_correctMap(path, luminosity, contrast):
         ds = gdal.Open(image_path)
         #To normalize
@@ -228,7 +242,10 @@ def get_correctMap(path, luminosity, contrast):
         elif band1.DataType == gdal.GDT_Byte:
             maxValue = int(2**8 -1)
         else:
-            LOGGER.info(f"band type {band1.DataType} not handled: use default size of value (16 bits)")
+            LOGGER.info(
+                (f'band type {band1.DataType} not handled: '
+                'use default size of value (16 bits)')
+            )
 
         band1 = ds.ReadAsArray(0,0,ds.RasterXSize,ds.RasterYSize)[0]
         band2 = ds.ReadAsArray(0,0,ds.RasterXSize,ds.RasterYSize)[1]
@@ -248,9 +265,10 @@ def get_correctMap(path, luminosity, contrast):
                     s = min(max(0, s + (s - 0.5)*(contrast - 0.5)) , 1)
 
                     (r,g,b) = colorsys.hls_to_rgb(h, l, s)
+
                     
-def fetch_cpt_city(q = 'grass/haxby', cache_dir = './'):
-    utils.echo_msg('checking for `{}` at cpt-city'.format(q))
+def fetch_cpt_city(q='grass/haxby', cache_dir='./'):
+    utils.echo_msg(f'checking for `{q}` at cpt-city')
     this_fetches = fetches.FetchesFactory(
         mod='cpt_city', verbose=True, outdir=cache_dir, q=q
     )._acquire_module()
@@ -265,21 +283,23 @@ def fetch_cpt_city(q = 'grass/haxby', cache_dir = './'):
     ).fetch_file(
         this_fetches.results[0]['dst_fn']
     )
+    
     return(this_fetches.results[0]['dst_fn'])
+
 
 class Perspecto:
     def __init__(
             self,
-            mod = None,
-            src_dem = None,
-            cpt = None,
-            min_z = None,
-            max_z = None,
-            callback = lambda: False,
-            outfile = None,
-            outdir = None,
-            verbose = True,
-            split_cpt = False,
+            mod=None,
+            src_dem=None,
+            cpt=None,
+            min_z=None,
+            max_z=None,
+            callback=lambda: False,
+            outfile=None,
+            outdir=None,
+            verbose=True,
+            split_cpt=False,
             params={}
     ):
         self.mod = mod
@@ -304,15 +324,20 @@ class Perspecto:
             )
         
         self.init_cpt(want_gdal=True)
-            
+
+        
     def __call__(self):
         return(self.run())
 
+    
     def init_cpt(self, want_gdal=False):
         min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
         max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
         if self.cpt is None:
-            #self.makecpt('etopo1', output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem)))
+            # self.makecpt(
+            #     'etopo1',
+            #     output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem))
+            # )
             self.cpt = generate_etopo_cpt(min_z, max_z)
         #else:
         #self.cpt = process_cpt(self.cpt, min_z, max_z)
@@ -330,7 +355,11 @@ class Perspecto:
             )
         else:
             self.cpt = process_cpt(
-                fetch_cpt_city(q=self.cpt), min_z, max_z, gdal=want_gdal, split_cpt=self.split_cpt
+                fetch_cpt_city(q=self.cpt),
+                min_z,
+                max_z,
+                gdal=want_gdal,
+                split_cpt=self.split_cpt
             )
         
     
@@ -348,6 +377,7 @@ class Perspecto:
         )
         self.cpt = output
 
+        
     def cpt_no_slash(self):
         # Read in the file
         with open(self.cpt, 'r') as file:
@@ -359,7 +389,8 @@ class Perspecto:
         # Write the file out again
         with open(self.cpt, 'w') as file:
             file.write(filedata)
-        
+
+            
     def lll(self):
         gds_equator = 111321.543
         gds_pi = 3.14159265358979323846
@@ -368,18 +399,23 @@ class Perspecto:
         latl_ = gds_equator
 
         return(lonl_, latl_)
-        
+
+    
     def export_as_png(self, rgb=True, dem=True):
         if dem:
             utils.run_cmd(
                 'gdal_translate -ot UInt16 -of PNG -scale {} {} 0 65535 {} _dem_temp.png'.format(
-                    self.dem_infos['zr'][0], self.dem_infos['zr'][1], self.src_dem
+                    self.dem_infos['zr'][0],
+                    self.dem_infos['zr'][1],
+                    self.src_dem
                 ),
                 verbose=True
             )
             utils.run_cmd(
                 'gdal_translate -srcwin 1 1 {} {} -of PNG _dem_temp.png {}_16bit.png'.format(
-                    self.dem_infos['nx']-1, self.dem_infos['ny']-1, utils.fn_basename2(self.src_dem)
+                    self.dem_infos['nx']-1,
+                    self.dem_infos['ny']-1,
+                    utils.fn_basename2(self.src_dem)
                 ),
                 verbose=True
             )
@@ -394,20 +430,26 @@ class Perspecto:
             # )
             
             utils.run_cmd(
-                'gdaldem color-relief {} {} _rgb_temp.tif -alpha'.format(self.src_dem, self.cpt),
+                'gdaldem color-relief {} {} _rgb_temp.tif -alpha'.format(
+                    self.src_dem, self.cpt
+                ),
                 verbose=True
             )
             utils.run_cmd(
                 'gdal_translate -srcwin 1 1 {} {} -of PNG _rgb_temp.tif {}_rgb.png'.format(
-                    self.dem_infos['nx']-1, self.dem_infos['ny']-1, utils.fn_basename2(self.src_dem)
+                    self.dem_infos['nx']-1,
+                    self.dem_infos['ny']-1,
+                    utils.fn_basename2(self.src_dem)
                 ),
                 verbose=True
             )
             utils.remove_glob('_rgb_temp*')
-        
+
+            
     def run(self):
         raise(NotImplementedError)
 
+    
 class Hillshade(Perspecto):
     """Generate a Hillshade Image
 
@@ -439,13 +481,18 @@ class Hillshade(Perspecto):
         self.gamma = utils.float_or(gamma)
         self.cpt_no_slash()
 
+        
     def _modulate(self, gdal_fn):
         utils.run_cmd(
-            'mogrify -modulate {} -depth 8 {}'.format(self.modulate, gdal_fn),
+            'mogrify -modulate {} -depth 8 {}'.format(
+                self.modulate, gdal_fn
+            ),
             verbose=False
         )
+
         
-    def gamma_correction_calc(self, hs_fn = None, gamma = .5, outfile = 'gdaldem_gamma.tif'):
+    def gamma_correction_calc(self, hs_fn=None, gamma=.5,
+                              outfile='gdaldem_gamma.tif'):
         gdal_calc.Calc(
             "uint8(((A / 255.)**(1/0.5)) * 255)",
             A=hs_fn,
@@ -454,14 +501,17 @@ class Hillshade(Perspecto):
         )
         return(outfile)
 
+    
     def gamma_correction(self, arr):
         if self.gamma is not None:
             gc_arr = (((arr/255.)**(1/self.gamma)) * 255.).astype(np.uint8)
             return(gc_arr)
         else:
             return(arr)
-    
-    def blend(self, hs_file, rgb_file, mode = 'multiply', gamma = None, outfile = 'gdaldem_multiply.tif'):
+
+        
+    def blend(self, hs_file, rgb_file, mode='multiply', gamma=None,
+              outfile='gdaldem_multiply.tif'):
         modes = ['multiply', 'screen', 'overlay', 'hard_light', 'soft_light']
         if mode not in modes:
             mode = 'multiply'
@@ -518,6 +568,7 @@ class Hillshade(Perspecto):
                         
         os.rename(rgb_file, outfile)
         return(outfile)
+
     
     def run(self):
         #self.init_cpt(want_gdal=True)
@@ -542,6 +593,7 @@ class Hillshade(Perspecto):
         
         return(self.outfile)
 
+    
 class Hillshade_cmd(Perspecto):
     """Generate a Hillshade Image
 
@@ -608,11 +660,13 @@ class Hillshade_cmd(Perspecto):
         utils.remove_glob('temp2.tif')
 
         return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
+
     
 class HillShade_test(Perspecto):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+        
     def hillshade(self, array, azimuth, angle_altitude):
         azimuth = 360.0 - azimuth 
     
@@ -624,6 +678,7 @@ class HillShade_test(Perspecto):
         shaded = np.sin(alt_rad) * np.sin(slope) + np.cos(alt_rad)*np.cos(slope)*np.cos((azm_rad - np.pi/2.) - aspect)
         
         return(255*(shaded + 1)/2)
+
     
 class POVRay(Perspecto):
     def __init__(self, **kwargs):
@@ -636,6 +691,7 @@ class POVRay(Perspecto):
         #if not os.path.exists(self.rgb_image) or not os.path.exists(self.dem_image):
         self.export_as_png()            
         self.output_pov = '{}.pov'.format(utils.fn_basename2(self.src_dem))
+
         
     def run_povray(self, src_pov_template, pov_width=800, pov_height=800):
         utils.run_cmd(
@@ -643,6 +699,7 @@ class POVRay(Perspecto):
             verbose=True
         )
 
+        
 class perspective(POVRay):
     """Generate a perspective image
 
@@ -669,7 +726,9 @@ class perspective(POVRay):
         self.light_distance = light_distance
         self.vertical_exaggeration = vertical_exaggeration
         self.dem_lll = lll(self.dem_region.ymin)
-        self.output_pov = '{}_perspective.pov'.format(utils.fn_basename2(self.src_dem))
+        self.output_pov = '{}_perspective.pov'.format(
+            utils.fn_basename2(self.src_dem)
+        )
         
         self.template = """
 // DEM
@@ -774,8 +833,11 @@ background {{ White }}""".format(
         with open(self.output_pov, 'w') as pov_temp:
             pov_temp.write(self.template)
         
-        self.run_povray(self.output_pov, self.dem_infos['nx'], self.dem_infos['ny'])
+        self.run_povray(
+            self.output_pov, self.dem_infos['nx'], self.dem_infos['ny']
+        )
 
+        
 class sphere(POVRay):
     """Generate a sphere image
 
@@ -806,8 +868,9 @@ class sphere(POVRay):
             self.center_long = center_long
             self.center_lat = center_lat
 
-        self.output_pov = '{}_sphere.pov'.format(utils.fn_basename2(self.src_dem))
-            
+        self.output_pov = '{}_sphere.pov'.format(
+            utils.fn_basename2(self.src_dem)
+        )            
         self.template = """
 //Generates a hillshade color image on a sphere 
 //CUDEM 2023MAR08
@@ -892,6 +955,7 @@ camera {{
             self.output_pov, self.dem_infos['nx'], self.dem_infos['ny']
         )
 
+        
 class GMTImage(Perspecto):
     """Use GMTImage with pygmt"""
     
@@ -909,17 +973,20 @@ class GMTImage(Perspecto):
         self.grid = pygmt.load_dataarray(self.src_dem)
         self.makecpt(self.cpt, output=None)
 
+        
 class colorbar(GMTImage):
     """Generate a colorbar
 
 < colorbar:colorbar_text='Elevation':widt=10:height=2 >
     """
     
-    def __init__(self, colorbar_text = 'Elevation', width = 10, height = 2, **kwargs):
+    def __init__(self, colorbar_text='Elevation', width=10,
+                 height=2, **kwargs):
         super().__init__(**kwargs)
         self.colorbar_text=colorbar_text
         self.width = utils.int_or(width)
         self.height = utils.int_or(height)
+
         
     def run(self):
         fig = pygmt.Figure()
@@ -931,7 +998,8 @@ class colorbar(GMTImage):
         )
         fig.savefig('{}_cbar.png'.format(utils.fn_basename2(self.src_dem)))
         return('{}_cbar.png'.format(utils.fn_basename2(self.src_dem)))
-                
+
+    
 class figure1(GMTImage):
     """Generate Figure 1
 
@@ -959,6 +1027,7 @@ class figure1(GMTImage):
         self.shade=shade
         self.want_colorbar=want_colorbar
         self.colorbar_text=colorbar_text
+
         
     def figure1_perspective(self):
         dem_lll = lll(self.dem_region.ymin)
@@ -979,11 +1048,16 @@ class figure1(GMTImage):
             #shading=self.grad_grid,
             contourpen='0.1p',
         )
-        #fig.colorbar(perspective=True, frame=["a{}".format(self.interval), "x+lElevation", "y+lm"])
+        # fig.colorbar(
+        #     perspective=True,
+        #     frame=["a{}".format(self.interval),
+        #            "x+lElevation", "y+lm"]
+        # )
         fig.colorbar(perspective=True, frame=["x+lElevation", "y+lm"])
         fig.savefig('{}_persp.png'.format(utils.fn_basename2(self.src_dem)))
         return('{}_persp.png'.format(utils.fn_basename2(self.src_dem)))
-        
+
+    
     def figure1(self):
         self.grad_grid=pygmt.grdgradient(
             grid=self.grid, azimuth=[self.azimuth, self.elevation], normalize='e0.6'
@@ -1015,7 +1089,8 @@ class figure1(GMTImage):
 
         fig.savefig('{}_figure1.png'.format(utils.fn_basename2(self.src_dem)))
         return('{}_figure1.png'.format(utils.fn_basename2(self.src_dem)))
-        
+
+    
     def run(self):
         if self.perspective:
             return(self.figure1_perspective())
@@ -1024,6 +1099,7 @@ class figure1(GMTImage):
 
         ## this is removing the netcdf, self.src_dem is redefined in __init__
         utils.remove_glob(self.src_dem)
+
         
 class PerspectoFactory(factory.CUDEMFactory):
     if has_pygmt:
@@ -1044,6 +1120,7 @@ class PerspectoFactory(factory.CUDEMFactory):
         }    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
         
 ## ==============================================
 ## Command-line Interface (CLI)
@@ -1110,7 +1187,9 @@ def perspecto_cli(argv = sys.argv):
             split_cpt = 0
         
         elif arg == '--modules' or arg == '-m':
-            factory.echo_modules(PerspectoFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
+            factory.echo_modules(
+                PerspectoFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1]
+            )
             sys.exit(0)            
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(perspecto_cli_usage())
@@ -1171,19 +1250,30 @@ def perspecto_cli(argv = sys.argv):
     else:
         sys.stderr.write(perspecto_cli_usage())
         utils.echo_error_msg(
-            'you must supply a waffles config file or an existing DEM; see waffles --help for more information.'
+            ('you must supply a waffles config file or an existing DEM; '
+             'see waffles --help for more information.')
         )
         sys.exit(-1)
 
-    this_perspecto = PerspectoFactory(mod=module, src_dem=src_dem, cpt=src_cpt, min_z=min_z, max_z=max_z, split_cpt=split_cpt)
+    this_perspecto = PerspectoFactory(
+        mod=module,
+        src_dem=src_dem,
+        cpt=src_cpt,
+        min_z=min_z,
+        max_z=max_z,
+        split_cpt=split_cpt
+    )
     if this_perspecto is not None:
         this_perspecto_module = this_perspecto._acquire_module()
         if this_perspecto_module is not None:
             out_fig = this_perspecto_module()
-            utils.echo_msg('generated {}'.format(out_fig))
+            utils.echo_msg(f'generated {out_fig}')
             #this_perspecto_module.run()
         else:
-            utils.echo_error_msg('could not acquire perspecto module {}'.format(module))
+            utils.echo_error_msg(
+                f'could not acquire perspecto module {module}'
+            )
 
+            
 ### End
     
