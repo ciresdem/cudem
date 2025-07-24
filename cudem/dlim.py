@@ -561,7 +561,9 @@ def polygonize_mask_multibands2(
                     tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
 
                 with tqdm(
-                        desc='polygonizing {} mask bands from {}.'.format(len(band_infos[m]['bands']), m),
+                        desc='polygonizing {} mask bands from {}.'.format(
+                            len(band_infos[m]['bands']), m,
+                        ),
                         total=len(band_infos[m]['bands']),
                         leave=verbose
                 ) as poly_pbar:                                            
@@ -779,7 +781,13 @@ def init_data(data_list,
             f'could not initialize data, {data_list}: {e}'
         )
         return(None)
+
     
+###############################################################################
+## PointZ filters
+##
+## filter points and return the result
+###############################################################################
 class PointZ:
     """Point Data.
 
@@ -813,9 +821,15 @@ class PointZ:
         if len(self.points) == 0 or self.points is None:
             return(self.points)
 
-        self.run()
+        outliers = self.run()
+        # if self.verbose:
+        #     utils.echo_msg(f'filtered {len(outliers)} records')
+            
         return(self.points)
 
+
+    def run(self):
+        pass
     
     def init_region(self, region):
         """Initialize the data-region AOI
@@ -929,6 +943,11 @@ class PointZVectorMask(PointZ):
                 ogr_ds = None
                 
         outliers = outliers == 1
+        if self.verbose:
+            utils.echo_msg_bold(
+                f'found {np.count_nonzero(outliers)} outliers @ {self.mask_fn}'
+            )
+            
         if invert:
             return(points[outliers], outliers)
         else:
@@ -939,7 +958,9 @@ class PointZVectorMask(PointZ):
         self.points, outliers = self.filter_mask(
             self.points, invert=self.invert
         )
-        return(self.points)
+
+        #return(self.points)
+        return(outliers)
 
     
 class PointZOutlier(PointZ):
@@ -1025,7 +1046,8 @@ class PointZOutlier(PointZ):
             if np.count_nonzero(outliers) == 0:
                 break
             
-        return(self.points)
+        #return(self.points)
+        return(outliers)
 
     
 ## todo: remove the gmrt or other fetched rasters after processing...
@@ -1287,7 +1309,10 @@ class PointPixels():
 
         return(out_arrays, this_srcwin, self.dst_gt)
 
-    
+
+###############################################################################
+## INF files and processing
+###############################################################################
 class INF:
     """INF Files contain information about datasets"""
     
@@ -1405,7 +1430,9 @@ class INF:
         except:
             pass
 
-        
+###############################################################################
+## ElevationDataset and sub-modules
+###############################################################################
 class ElevationDataset:
     """representing an Elevation Dataset
     
@@ -1585,16 +1612,25 @@ class ElevationDataset:
 
         
     def _init_stack_mode(self):
-        opts = self.stack_mode.split(':')
-        self.stack_mode_name = opts[0]
-        self.stack_mode_args = {}
+        opts, self.stack_mode_name, self.stack_mode_args \
+            = factory.parse_fmod(self.stack_mode)
+
         if self.stack_mode_name not in self.stack_modes:
-            self.stack_mode_name = 'mean'
-            
-        elif len(opts) > 1:
-            self.stack_mode_args = factory.args2dict(
-                list(opts[1:]), self.stack_mode_args
+            utils.echo_warning_msg(
+                f'{self.stack_mode_name} is not a valid stack mode'
             )
+            self.stack_mode_name = 'mean'
+        
+        # opts = self.stack_mode.split(':')
+        # self.stack_mode_name = opts[0]
+        # self.stack_mode_args = {}
+        # if self.stack_mode_name not in self.stack_modes:
+        #     self.stack_mode_name = 'mean'
+            
+        # elif len(opts) > 1:
+        #     self.stack_mode_args = factory.args2dict(
+        #         list(opts[1:]), self.stack_mode_args
+        #     )
 
         if 'mask_level' not in self.stack_mode_args.keys():
             self.stack_mode_args['mask_level'] = 0
@@ -1838,10 +1874,10 @@ class ElevationDataset:
         otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
         """
 
-        #self.array_yield = self.yield_array()
-        #self.xyz_yield = self.yield_xyz()    
-        self.array_yield = self.mask_and_yield_array()
-        self.xyz_yield = self.mask_and_yield_xyz()
+        self.array_yield = self.yield_array()
+        self.xyz_yield = self.yield_xyz()    
+        # self.array_yield = self.mask_and_yield_array()
+        # self.xyz_yield = self.mask_and_yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
         #    self.xyz_yield = self.archive_xyz()
         # if (self.region is None \
@@ -3655,7 +3691,7 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, verbose=False
+                                    mod=f, points=points, verbose=self.verbose
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
@@ -4057,7 +4093,7 @@ class ElevationDataset:
 
         if self.verbose:
             utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn}{self.weight}'
+                f'parsed {count} data records from {self.fn}@{self.weight}'
             )    
 
             
@@ -9046,7 +9082,9 @@ class MBSFetcher(Fetcher):
                                         
     def yield_ds(self, result):
         if not result['url'].endswith('.inf'):
-            mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)            
+            mb_infos = self.fetch_module.parse_entry_inf(
+                result, keep_inf=True
+            )
             yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
                                         
@@ -9823,10 +9861,12 @@ class DatasetFactory(factory.CUDEMFactory):
         #this_entry = shlex.split(shlex.quote(self.kwargs['fn'].rstrip()))#.replace("'", "\'")))
         #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
         #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
+        #utils.echo_msg(self.kwargs['fn'])
         this_entry = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+        #utils.echo_msg(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 \
-                     else utils.str_or(x) if n < 2 \
+                     else utils.str_or(x, replace_quote=False) if n < 2 \
                      else utils.float_or(x) if n < 3 \
                      else utils.float_or(x) if n < 4 \
                      else utils.str_or(x) \
@@ -9870,14 +9910,19 @@ class DatasetFactory(factory.CUDEMFactory):
                 return(self)
             
         ## parse the entry format options
-        opts = str(entry[1]).split(':')
-        #utils.echo_msg(opts)
-        if len(opts) > 1:
-            self.mod_args = utils.args2dict(list(opts[1:]), {})
-            entry[1] = int(opts[0])
-        else:
-            self.mod_args = {}
-                                                       
+        opts = factory.fmod2dict(str(entry[1]), {})
+        if '_module' in opts.keys():# and len(opts.keys()) > 1:
+            entry[1] = int(opts['_module'])
+            self.mod_args = {i:opts[i] for i in opts if i!='_module'}
+
+        # opts = str(entry[1]).split(':')
+        # #utils.echo_msg(opts)
+        # if len(opts) > 1:
+        #     self.mod_args = utils.args2dict(list(opts[1:]), {})
+        #     entry[1] = int(opts[0])
+        # else:
+        #     self.mod_args = {}
+
         try:
             assert isinstance(utils.int_or(entry[1]), int)
         except:
@@ -10310,7 +10355,8 @@ See `datalists_usage` for full cli options.
         elif arg[0] == '-':
             print(datalists_usage())
             sys.exit(0)
-        else: dls.append(arg)#'"{}"'.format(arg)) # FIX THIS!!!
+        else:
+            dls.append(f'{arg}')#'"{}"'.format(arg)) # FIX THIS!!!
         
         i = i + 1
 
@@ -10335,8 +10381,8 @@ See `datalists_usage` for full cli options.
                     
         sys.exit(0)
 
-    stack_fltrs = [':'.join(f.split('/')) for f in stack_fltrs]
-    pnt_fltrs = [':'.join(f.split('//')) for f in pnt_fltrs]
+    #stack_fltrs = [':'.join(f.split('/')) for f in stack_fltrs]
+    #pnt_fltrs = [':'.join(f.split('//')) for f in pnt_fltrs]
     if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, want_verbose)
     for rn, this_region in enumerate(these_regions):

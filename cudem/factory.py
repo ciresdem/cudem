@@ -84,8 +84,80 @@
 
 import os
 import sys
+import re
 import json
 from cudem import utils
+
+
+## a factory module string is
+## 'mod_name:mod_arg=arg_val:mod_arg1=arg_val:sub-mod_name="sub-mod_arg=sub_mod_val'
+
+def parse_fmod(fmod):
+    opts = fmod2dict(fmod)
+    
+    mod = opts['_module']
+    mod_args = {i:opts[i] for i in opts if i!='_module'}
+
+    return(opts, mod, mod_args)
+
+
+def fmod2dict(fmod, dict_args: dict = {}):
+    """convert factory module string to a dict
+    
+    Parameter:
+      fmod (str): a facotory module string
+      dict_args (dict): a dict to append to
+
+    Returns:
+      dict_args: a dictionary of the key/values
+    """
+
+    args_list = re.split(r':(?=(?:[^"]*"[^"]*")*[^"]*$)', fmod)
+    for arg in args_list:
+        p_arg = re.split(
+            r'=(?=(?:[^"]*"[^"]*")*[^"]*$)',
+            arg
+        )
+        if len(p_arg) == 1:
+            if '_module' not in dict_args.keys():
+                dict_args['_module'] = p_arg[0]
+                
+        elif len(p_arg) > 1:
+            dict_args[p_arg[0]] = False \
+                if p_arg[1].lower() == 'false' \
+                   else True if p_arg[1].lower() == 'true' \
+                        else None if p_arg[1].lower() == 'none' \
+                             else '='.join(p_arg[1:]) if len(p_arg) > 2 \
+                                  else p_arg[1].strip('"').split(';') if ';' in p_arg[1] \
+                                       else p_arg[1].strip('"')
+        
+    return(dict_args)
+
+
+def dict2fmod(in_dict: dict):
+    """convert a dict of key:val pairs to a module factory string
+
+    Parameter:
+      in_dict (dict): the dictionary to convert
+
+    Returns:
+      out_args (str): a string representatino of in_dict, 
+                      suitable for a factory cli
+    """
+    
+    out_args = ''
+    for i, key in enumerate(in_dict.keys()):
+        if key == '_module':
+            out_args += f'{in_dict[key]}:'
+        elif isinstance(in_dict[key], list):
+            out_args += f'{key}="{";".join(in_dict[key])}"'
+        else:
+            
+            out_args += '{}={}{}'.format(
+                key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else ''
+            )
+        
+    return(out_args)
 
 
 def args2dict(args, dict_args: dict = {}):
@@ -372,8 +444,29 @@ class CUDEMFactory:
     def __repr__(self):
         return('<{}>'.format(self.__dict__))
 
-    
+
     def _parse_mod(self, mod: str):
+        """parse the module string.
+
+        Returns:
+          (module-name, module-arguments)
+        """
+        
+        opts = fmod2dict(mod, {})
+        if opts['_module'] in self._modules.keys():
+            self.mod_name = opts['_module']
+            self.mod_args = {i:opts[i] for i in opts if i!='_module'}
+            
+        else:
+            utils.echo_error_msg(
+                'invalid module name `{}`'.format(opts['_module'])
+            )            
+            self.mod_args['modules'] = self._modules
+            
+        return(self.mod_name, self.mod_args)
+
+
+    def _parse_mod_old(self, mod: str):
         """parse the module string.
 
         Returns:

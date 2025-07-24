@@ -4039,7 +4039,7 @@ class WafflesCUDEM(Waffle):
                            else None
                     pre_data_entry = (f'{_pre_name_plus}.tif,200'
                                       f':uncertainty_mask={_pre_unc_name}'
-                                      f':sample=cubicspline:check_path=True,{pre_weight}')
+                                      f':sample=cubicspline:check_path=True,{pre_weight-.1}')
                                       
                     pre_data = [stack_data_entry, pre_data_entry]
                     pre_region.wmin = None#pre_weight
@@ -4096,7 +4096,7 @@ class WafflesCUDEM(Waffle):
                     #else self.stack_mode,
                     upper_limit=self.pre_upper_limit if pre != 0 else None,
                     keep_auxiliary=False,
-                    fltr=self.pre_smoothing if pre != 0 else None,#last_fltr,
+                    fltr=self.pre_smoothing if pre != 0 else last_fltr,
                     percentile_limit=self.flatten if pre == 0 else None
                 )._acquire_module()
                 pre_surface.initialize()
