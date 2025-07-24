@@ -1874,10 +1874,10 @@ class ElevationDataset:
         otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
         """
 
-        self.array_yield = self.yield_array()
-        self.xyz_yield = self.yield_xyz()    
-        # self.array_yield = self.mask_and_yield_array()
-        # self.xyz_yield = self.mask_and_yield_xyz()
+        #self.array_yield = self.yield_array()
+        #self.xyz_yield = self.yield_xyz()    
+        self.array_yield = self.mask_and_yield_array()
+        self.xyz_yield = self.mask_and_yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
         #    self.xyz_yield = self.archive_xyz()
         # if (self.region is None \
