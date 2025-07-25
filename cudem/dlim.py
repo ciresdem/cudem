@@ -917,6 +917,7 @@ class PointZVectorMask(PointZ):
         self.mask_fn = mask_fn
         self.invert = invert
 
+        utils.echo_msg(f'masking with {mask_fn}')
         
     def filter_mask(self, points, invert = False):
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
@@ -1757,18 +1758,18 @@ class ElevationDataset:
 
             self.set_yield()
 
-        ## initialize filters
-        if isinstance(self.stack_fltrs, str):
-            self.stack_fltrs = [':'.join(self.stack_fltrs.split('/'))]
+        # ## initialize filters
+        # if isinstance(self.stack_fltrs, str):
+        #     self.stack_fltrs = [':'.join(self.stack_fltrs.split('/'))]
 
-        if self.stack_fltrs is not None:
-            self.stack_fltrs = [x for y in self.stack_fltrs for x in y.split('::')]
+        # if self.stack_fltrs is not None:
+        #     self.stack_fltrs = [x for y in self.stack_fltrs for x in y.split('::')]
 
-        if isinstance(self.pnt_fltrs, str):
-            self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
+        # if isinstance(self.pnt_fltrs, str):
+        #     self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
 
-        if self.pnt_fltrs is not None:
-            self.pnt_fltrs = [x for y in self.pnt_fltrs for x in y.split('::')]
+        # if self.pnt_fltrs is not None:
+        #     self.pnt_fltrs = [x for y in self.pnt_fltrs for x in y.split('::')]
             
         return(self)
 
@@ -7885,7 +7886,7 @@ class Datalist(ElevationDataset):
                             md['name'] = utils.fn_basename2(
                                 os.path.basename(self.fn)
                             )
-                            
+
                             ## generate the dataset object to yield
                             data_set = DatasetFactory(
                                **self._set_params(
