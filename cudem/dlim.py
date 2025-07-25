@@ -3054,9 +3054,8 @@ class ElevationDataset:
             os.replace(
                 mask_fn,
                 os.path.join(
-                    os.path.dirname(
-                        out_file, os.path.basename(mask_fn)
-                    )
+                    os.path.dirname(out_file),
+                    os.path.basename(mask_fn)
                 )
             )
             
