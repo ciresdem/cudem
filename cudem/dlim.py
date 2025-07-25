@@ -378,7 +378,8 @@ def polygonize_mask_multibands(
 
     -----------
     Parameters:
-    src_ds (GDALDataset): the source multi-band raster as a gdal dataset object
+    src_ds (GDALDataset): the source multi-band raster as a gdal 
+                          dataset object
     dst_srs (str): the output srs
     ogr_format (str): the output OGR format
     verbose (bool): be verbose
@@ -949,7 +950,9 @@ class PointZVectorMask(PointZ):
                         
                     points_layer.SetSpatialFilter(None)
                 else:
-                    utils.echo_warning_msg(f'could not load mask {self.mask_fn}')
+                    utils.echo_warning_msg(
+                        f'could not load mask {self.mask_fn}'
+                    )
 
                 ogr_ds = None
                 
@@ -1081,7 +1084,8 @@ class RQOutlierZ(PointZOutlier):
             del kwargs['multipass']
             
         super().__init__(
-            percentile=threshold, percentage=True, multipass=1, **kwargs
+            percentile=threshold, percentage=True, multipass=1,
+            **kwargs
         )
         self.threshold = threshold
         self.fetches_modules = ['gmrt']
@@ -1175,7 +1179,8 @@ class PointPixels():
 
         
     def __call__(
-            self, points, weight=None, uncertainty=None, stack_mode='mean'
+            self, points, weight=None, uncertainty=None,
+            stack_mode='mean'
     ):
         out_arrays = {
             'z':None,
@@ -1382,7 +1387,7 @@ class INF:
         return(self.file_hash)
 
     
-    def generate_mini_grid(self, x_size = 10, y_size = 10):
+    def generate_mini_grid(self, x_size=10, y_size=10):
         """generate a 'mini-grid' of the data in about a 10x10 grid.
         this will help us determine the location of data before processing.
         """
@@ -1416,7 +1421,8 @@ class INF:
                     mb_inf = True
                 except Exception as e:
                     raise ValueError(
-                        f'CUDEMFactory: Unable to read data from {inf_fn} as mb-system inf, {e}'
+                        (f'CUDEMFactory: Unable to read data from {inf_fn} '
+                         f'as mb-system inf, {e}')
                     )
             except:
                 raise ValueError(
@@ -1537,9 +1543,11 @@ class ElevationDataset:
                  upper_limit=None,
                  lower_limit=None,
                  params={},
-                 metadata={'name':None, 'title':None, 'source':None, 'date':None,
-                           'data_type':None, 'resolution':None, 'hdatum':None,
-                           'vdatum':None, 'url':None},
+                 metadata={
+                     'name':None, 'title':None, 'source':None, 'date':None,
+                     'data_type':None, 'resolution':None, 'hdatum':None,
+                     'vdatum':None, 'url':None
+                 },
                  **kwargs):
         self.fn = fn # dataset filename or fetches module
         self.data_format = data_format # dataset format
