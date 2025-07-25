@@ -224,12 +224,16 @@ def scan_mask_bands(
 
 
 def ogr_mask_footprints(
-        src_ds, ogr_format='GPKG', dst_srs='epsg:4326', mask_level=0, verbose=True
+        src_ds, ogr_format='GPKG', dst_srs='epsg:4326',
+        mask_level=0, verbose=True
 ):
     
-    src_infos = scan_mask_bands(src_ds, mask_level=mask_level, verbose=verbose)
+    src_infos = scan_mask_bands(
+        src_ds, mask_level=mask_level, verbose=verbose
+    )
     ## initialize output vector
-    dst_ogr_fn = f'{utils.fn_basename2(src_ds.GetDescription())}_sm.{gdalfun.ogr_fext(ogr_format)}'
+    dst_ogr_fn = (f'{utils.fn_basename2(src_ds.GetDescription())}_sm'
+                  '.{gdalfun.ogr_fext(ogr_format)}')
     driver = ogr.GetDriverByName(ogr_format)
     ds = driver.CreateDataSource(dst_ogr_fn)
     srs = srsfun.osr_srs(src_ds.GetProjectionRef())
@@ -296,7 +300,9 @@ def merge_mask_bands_by_name(
 ):
     """merge data mask raster bands based on the top-level datalist name"""
 
-    band_infos = scan_mask_bands(src_ds, mask_level=mask_level, verbose=verbose)
+    band_infos = scan_mask_bands(
+        src_ds, mask_level=mask_level, verbose=verbose
+    )
     mask_level = utils.int_or(mask_level, 0)
     src_infos = gdalfun.gdal_infos(src_ds)
     ## create new mem gdal ds to hold new raster
