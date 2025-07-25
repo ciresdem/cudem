@@ -1,4 +1,4 @@
-### factory.py - CUDEM utilities and functions
+### factory.py - CUDEM module factory
 ##
 ## Copyright (c) 2023 - 2025 Regents of the University of Colorado
 ##
@@ -91,9 +91,8 @@ from cudem import utils
 
 ## a factory module string is
 ## 'mod_name:mod_arg=arg_val:mod_arg1=arg_val:sub-mod_name="sub-mod_arg=sub_mod_val'
-
 def parse_fmod(fmod):
-    opts = fmod2dict(fmod)
+    opts = fmod2dict(fmod, {})
     
     mod = opts['_module']
     mod_args = {i:opts[i] for i in opts if i!='_module'}

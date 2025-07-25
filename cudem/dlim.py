@@ -928,18 +928,22 @@ class PointZVectorMask(PointZ):
             ogr_ds = self.vectorize_points()
             if ogr_ds is not None:
                 mask_ds = ogr.Open(self.mask_fn, 0)
-                mask_layer = mask_ds.GetLayer()
-                mask_geom = gdalfun.ogr_union_geom(
-                    mask_layer, verbose=False
-                )
-                mask_ds = mask_layer = None
-                points_layer = ogr_ds.GetLayer()
-                points_layer.SetSpatialFilter(mask_geom)
-                for f in points_layer:
-                    idx = f.GetField('index')
-                    outliers[idx] = 1
+                if mask_ds is not None:
+                    mask_layer = mask_ds.GetLayer()
+                    mask_geom = gdalfun.ogr_union_geom(
+                        mask_layer, verbose=False
+                    )
+                    mask_ds = mask_layer = None
+                    points_layer = ogr_ds.GetLayer()
+                    points_layer.SetSpatialFilter(mask_geom)
+                    for f in points_layer:
+                        idx = f.GetField('index')
+                        outliers[idx] = 1
+                        
+                    points_layer.SetSpatialFilter(None)
+                else:
+                    utils.echo_warning_msg(f'could not load mask {self.mask_fn}')
 
-                points_layer.SetSpatialFilter(None)
                 ogr_ds = None
                 
         outliers = outliers == 1
@@ -3918,7 +3922,7 @@ class ElevationDataset:
 
         if self.verbose:
             utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn}@{self.weight}'
+                f'parsed {count} data records from {self.fn} @ {self.weight}'
             )
 
         
@@ -4093,7 +4097,7 @@ class ElevationDataset:
 
         if self.verbose:
             utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn}@{self.weight}'
+                f'parsed {count} data records from {self.fn} @ {self.weight}'
             )    
 
             
@@ -9122,7 +9126,7 @@ class HydroNOSFetcher(Fetcher):
                 self.fetches_params['mod'] = nos_fn
                 self.fetches_params['data_format'] \
                     = ('168:skip=1:xpos=2:ypos=1'
-                       ':zpos=3:z_scale=-1:delimiter=,')
+                       ':zpos=3:z_scale=-1:delim=,')
                 self.fetches_params['src_srs'] = 'epsg:4326+5866'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
