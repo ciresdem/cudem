@@ -3078,7 +3078,8 @@ class ElevationDataset:
             utils.echo_msg(f'filtering stacks module with {f}')
             grits_filter = grits.GritsFactory(
                 mod=f, src_dem=out_file, uncertainty_mask=4,
-                weight_mask=3, count_mask=2
+                weight_mask=3, count_mask=2,
+                cache_dir=self.cache_dir,
             )._acquire_module()
             if grits_filter is not None:
                 grits_filter()
