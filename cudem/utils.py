@@ -1147,7 +1147,7 @@ cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) \
                            for path in os.environ['PATH'].split(os.pathsep))
 
 
-def run_cmd(cmd, data_fun=None, verbose=False):
+def run_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
     """Run a system command while optionally passing data.
 
     `data_fun` should be a function to write to a file-port:
@@ -1174,9 +1174,11 @@ def run_cmd(cmd, data_fun=None, verbose=False):
         else:
             pipe_stdin = None
 
+        #encoding='utf-8',
+        #, universal_newlines=True, bufsize=1,
         p = subprocess.Popen(
-            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, #encoding='utf-8',
-            stderr=subprocess.PIPE, close_fds=True#, universal_newlines=True, bufsize=1,
+            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, close_fds=True, cwd=cwd
         )
 
         if data_fun is not None:
@@ -1201,7 +1203,9 @@ def run_cmd(cmd, data_fun=None, verbose=False):
         p.stdout.close()
         if verbose:
             echo_msg(
-                'ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode)
+                'ran cmd {} and returned {}'.format(
+                    cmd.rstrip(), p.returncode
+                )
             )
 
         ## todo update so no crash if cmd doesn't exist!
@@ -1211,7 +1215,7 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     return(out, p.returncode)
 
 
-def yield_cmd(cmd, data_fun=None, verbose=False):
+def yield_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
     """Run a system command while optionally passing data.
 
     `data_fun` should be a function to write to a file-port:
@@ -1231,7 +1235,8 @@ def yield_cmd(cmd, data_fun=None, verbose=False):
         pipe_stdin = subprocess.PIPE
     else: pipe_stdin = None
     p = subprocess.Popen(
-        cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True
+        cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE,
+        close_fds=True, cwd=cwd
     )
     
     if data_fun is not None:
@@ -1249,7 +1254,10 @@ def yield_cmd(cmd, data_fun=None, verbose=False):
     line = p.stdout.read().decode('utf-8')
     p.stdout.close()
     if verbose:
-        echo_msg('ran cmd: {} and returned {}.'.format(cmd.rstrip(), p.returncode))
+        echo_msg(
+            'ran cmd: {} and returned {}.'.format(
+                cmd.rstrip(), p.returncode)
+        )
 
         
 def cmd_check(cmd_str, cmd_vers_str):

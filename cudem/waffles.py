@@ -1760,7 +1760,8 @@ class GMTSurface(Waffle):
 
         out, status = utils.run_cmd(
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
-            verbose = False
+            verbose = False,
+            cwd = self.cache_dir
         )        
 
         #self.gmt_region = self.ps_region.copy()
