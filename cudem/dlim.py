@@ -7096,7 +7096,10 @@ class MBSParser(ElevationDataset):
             )
             
             grits_filter = grits.GritsFactory(
-                mod='outliers:multipass=2', src_dem='{}.tif'.format(ofn))._acquire_module()
+                mod='outliers:multipass=2',
+                src_dem='{}.tif'.format(ofn),
+                cache_dir=self.cache_dir,
+            )._acquire_module()
             
             if grits_filter is not None:
                 try:
@@ -7106,7 +7109,10 @@ class MBSParser(ElevationDataset):
                     pass
 
             mbs_ds = DatasetFactory(
-                **self._set_params(mod='{}.tif'.format(ofn), data_format=200)
+                **self._set_params(
+                    mod='{}.tif'.format(ofn),
+                    data_format=200
+                )
             )._acquire_module()
             mbs_ds.initialize()
             for gdal_ds in mbs_ds.parse():
