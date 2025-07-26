@@ -1784,6 +1784,8 @@ class ElevationDataset:
 
         # if self.pnt_fltrs is not None:
         #     self.pnt_fltrs = [x for y in self.pnt_fltrs for x in y.split('::')]
+        if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
+            self.pnt_fltrs = [self.pnt_fltrs]
             
         return(self)
 
@@ -3077,8 +3079,11 @@ class ElevationDataset:
         for f in self.stack_fltrs:
             utils.echo_msg(f'filtering stacks module with {f}')
             grits_filter = grits.GritsFactory(
-                mod=f, src_dem=out_file, uncertainty_mask=4,
-                weight_mask=3, count_mask=2,
+                mod=f,
+                src_dem=out_file,
+                uncertainty_mask=4,
+                weight_mask=3,
+                count_mask=2,
                 cache_dir=self.cache_dir,
             )._acquire_module()
             if grits_filter is not None:
@@ -3086,9 +3091,13 @@ class ElevationDataset:
                 os.replace(grits_filter.dst_dem, out_file)
 
         if self.verbose:
-            utils.echo_msg(f'generated stack: {os.path.basename(out_file)}')
+            utils.echo_msg(
+                f'generated stack: {os.path.basename(out_file)}'
+            )
             if self.want_mask:
-                utils.echo_msg(f'generated mask: {os.path.basename(mask_fn)}')
+                utils.echo_msg(
+                    f'generated mask: {os.path.basename(mask_fn)}'
+                )
                            
         return(out_file)
 
@@ -3279,12 +3288,14 @@ class ElevationDataset:
                 mask_dset.attrs['uncertainty'] = (this_entry.uncertainty
                                                   if this_entry.uncertainty is not None
                                                   else 0)
-                
+
+            ###################################################################
             ## yield entry arrays for stacks
             ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'],
             ## and arrs['count']
             ## srcwin is the srcwin of the waffle relative to the incoming arrays
             ## gt is the geotransform of the incoming arrays
+            ###################################################################
             for arrs, srcwin, gt in this_entry.array_yield:
                 ## update the mask
                 mask_all_dset[srcwin[1]:srcwin[1]+srcwin[3],
@@ -3293,7 +3304,8 @@ class ElevationDataset:
                     mask_dset[srcwin[1]:srcwin[1]+srcwin[3],
                               srcwin[0]:srcwin[0]+srcwin[2]][arrs['count'] != 0] = 1
 
-                ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
+                ## Read the saved accumulated rasters at the incoming srcwin
+                ## and set ndv to zero
                 for key in stack_grp.keys():
                     stacked_data[key] = stack_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
                                                        srcwin[0]:srcwin[0]+srcwin[2]]
@@ -3536,11 +3548,13 @@ class ElevationDataset:
                     stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
                     stack_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
                                    srcwin[0]:srcwin[0]+srcwin[2]] = stacked_data[key]
-                                    
+
+        #######################################################################
         ## Finalize weighted mean rasters and close datasets
         ## incoming arrays have all been processed, if weighted mean the
         ## "z" is the sum of z*weight, "weights" is the sum of weights
         ## "uncertainty" is the sum of variance*weight
+        #######################################################################
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
 
@@ -3563,7 +3577,8 @@ class ElevationDataset:
         #utils.echo_msg(stacked_data['count'])
         #if mode == 'mean' or mode == 'min' or mode == 'max' or mode == 'mixed':
         if mode != 'supercede':
-            stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+            stacked_data['weights'] = stacked_data['weights'] \
+                / stacked_data['count']
             if mode == 'mean' or mode == 'mixed':
                 ## average the accumulated arrays for finalization
                 ## x, y, z and u are weighted sums, so divide by weights
@@ -3714,6 +3729,7 @@ class ElevationDataset:
                 if len(points) > 0:
                     ## apply any dlim filters to the points
                     #self.pnt_fltrs = ['rq', 'outlierz']
+                    #utils.echo_msg_bold(self.pnt_fltrs)
                     if isinstance(self.pnt_fltrs, list):
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
@@ -3727,11 +3743,14 @@ class ElevationDataset:
                         yield(points)
 
         self.transform['transformer'] = self.transform['vert_transformer'] = None
-            
-    def mask_and_yield_array(self):
-        """mask the incoming array from `self.yield_array` and yield the results.
+
         
-        the mask should be either an ogr supported vector or a gdal supported raster.
+    def mask_and_yield_array(self):
+        """mask the incoming array from `self.yield_array` 
+        and yield the results.
+        
+        the mask should be either an ogr supported vector or a 
+        gdal supported raster.
         """
         
         mask_band = None
@@ -3739,7 +3758,8 @@ class ElevationDataset:
         data_mask = None
         mask_count = 0
         if self.mask is not None:
-            if self.mask['ogr_or_gdal'] == 1: # mask is ogr, rasterize it
+            # mask is ogr, rasterize it
+            if self.mask['ogr_or_gdal'] == 1: 
                 if self.region is not None \
                    and self.x_inc is not None \
                    and self.y_inc is not None:
@@ -4165,7 +4185,8 @@ class ElevationDataset:
                     
             sw = su = sx = sy = None
                     
-        sds = sds_z_band = sds_w_band = sds_u_band = sds_x_band = sds_y_band = None
+        sds = sds_z_band = sds_w_band = sds_u_band \
+            = sds_x_band = sds_y_band = None
 
         
     def stacks_yield_xyz_h5(self, out_name=None):
@@ -5106,21 +5127,34 @@ class GDALFile(ElevationDataset):
         # associated raster file/band holding uncertainty data
         self.uncertainty_mask = uncertainty_mask 
         # uncertainty data factor to meters
-        self.uncertainty_mask_to_meter = uncertainty_mask_to_meter 
-        self.open_options = open_options # GDAL open-options
-        self.sample = sample # GDAL resampling method
-        self.check_path = check_path # check for the path to the input data file
-        self.super_grid = super_grid # input has super_grids (force their use)
-        self.band_no = band_no # band number holding elevation data
-        self.tmp_elev_band = None # temporary elevation band
-        self.tmp_unc_band = None # temporary uncertainty band
-        self.tmp_weight_band = None # temporary weight band
-        self.src_ds = None # the GDAL dataset object
-        self.remove_flat = remove_flat # remove flattened data from input
+        self.uncertainty_mask_to_meter = uncertainty_mask_to_meter
+        # GDAL open-options
+        self.open_options = open_options
+        # GDAL resampling method
+        self.sample = sample
+        # check for the path to the input data file
+        self.check_path = check_path
+        # input has super_grids (force their use)
+        self.super_grid = super_grid
+        # band number holding elevation data
+        self.band_no = band_no
+        # temporary elevation band
+        self.tmp_elev_band = None
+        # temporary uncertainty band
+        self.tmp_unc_band = None
+        # temporary weight band
+        self.tmp_weight_band = None
+        # the GDAL dataset object
+        self.src_ds = None
+        # remove flattened data from input
+        self.remove_flat = remove_flat 
         self.flat_removed = False
-        self.x_band = x_band # band holding x values
-        self.y_band = y_band # band holding y values
-        self.node = node # input is 'pixel' or 'grid' registered (force)
+        # band holding x values
+        self.x_band = x_band
+        # band holding y values
+        self.y_band = y_band
+        # input is 'pixel' or 'grid' registered (force)
+        self.node = node 
         self.resample_and_warp = resample_and_warp
 
         if self.fn.startswith('http') \
@@ -5347,7 +5381,8 @@ class GDALFile(ElevationDataset):
                 self.tmp_elev_band = tmp_elev_fn
                 if self.verbose:
                     utils.echo_msg(
-                        f'extracting elevation data from {self.fn} to {self.tmp_elev_band}'
+                        (f'extracting elevation data from {self.fn} '
+                        f'to {self.tmp_elev_band}')
                     )
                     
                 self.tmp_elev_band, status = gdalfun.gdal_extract_band(
@@ -5367,9 +5402,8 @@ class GDALFile(ElevationDataset):
                     self.tmp_unc_band = tmp_unc_fn
                     if self.verbose:
                         utils.echo_msg(
-                            'extracting uncertainty mask from {} to {}'.format(
-                                self.fn, self.tmp_unc_band
-                            )
+                            (f'extracting uncertainty mask from {self.fn} '
+                             f'to {self.tmp_unc_band}')
                         )
                         
                     self.tmp_unc_band, status = gdalfun.gdal_extract_band(
@@ -5385,9 +5419,8 @@ class GDALFile(ElevationDataset):
                     self.tmp_weight_band = tmp_weight_fn
                     if self.verbose:
                         utils.echo_msg(
-                            'extracting weight mask from {} to {}'.format(
-                                self.fn, self.tmp_weight_band
-                            )
+                            (f'extracting weight mask from {self.fn} '
+                             f'to {self.tmp_weight_band}')
                         )
                         
                     self.tmp_weight_band, status = gdalfun.gdal_extract_band(
@@ -5457,7 +5490,8 @@ class GDALFile(ElevationDataset):
                 if self.src_ds is None:
                     if self.verbose:
                         utils.echo_warning_msg(
-                            f'could not open file using open options {self.open_options}'
+                            ('could not open file using open '
+                             f'options {self.open_options}')
                         )
                         
                     self.src_ds = gdal.Open(self.fn)
@@ -5467,7 +5501,9 @@ class GDALFile(ElevationDataset):
         self.src_dem_infos = gdalfun.gdal_infos(self.src_ds)
         if self.src_ds is None:
             if self.verbose:
-                utils.echo_error_msg(f'could not load raster file {self.fn}')
+                utils.echo_error_msg(
+                    f'could not load raster file {self.fn}'
+                )
 
         band = self.src_ds.GetRasterBand(utils.int_or(self.band_no, 1))
         gt = self.src_ds.GetGeoTransform()
@@ -5484,7 +5520,9 @@ class GDALFile(ElevationDataset):
         src_dem_x_inc = self.src_dem_infos['geoT'][1]
         src_dem_y_inc = -1*self.src_dem_infos['geoT'][5]
         src_dem_region = regions.Region().from_geo_transform(
-            self.src_dem_infos['geoT'], self.src_dem_infos['nx'], self.src_dem_infos['ny']
+            self.src_dem_infos['geoT'],
+            self.src_dem_infos['nx'],
+            self.src_dem_infos['ny']
         )
 
         #######################################################################
@@ -5581,10 +5619,13 @@ class GDALFile(ElevationDataset):
             else:
                 uncertainty_band = trans_uncertainty.GetRasterBand(1)
 
+        #######################################################################
         ## parse through the data / scanline
         ## todo: option to parse by chunk
+        #######################################################################
         srcwin = self.get_srcwin(
-            gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize, node=self.node
+            gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize,
+            node=self.node
         )
         for y in range(srcwin[1], (srcwin[1] + srcwin[3]), 1):
             band_data = band.ReadAsArray(
@@ -5627,12 +5668,14 @@ class GDALFile(ElevationDataset):
                 x_precision = 12#len(str(gt[0]).split('.')[-1])
                 y_precision = 12#len(str(gt[3]).split('.')[-1])
                 while True:
+                    # 'self.node to 'pixel', this breaks if set to
+                    # 'grid' even if 'grid-node'
                     geo_x_origin, geo_y_origin = utils._pixel2geo(
                         srcwin[0], y, gt,
                         node='pixel',
                         x_precision=x_precision,
                         y_precision=y_precision
-                    ) # 'self.node to 'pixel', this breaks if set to 'grid' even if 'grid-node'
+                    ) 
                     geo_x_end, geo_y_end = utils._pixel2geo(
                         srcwin[0] + srcwin[2], y, gt,
                         node='grid',
@@ -5697,7 +5740,6 @@ class GDALFile(ElevationDataset):
             utils.remove_glob(self.fn)
 
             
-## todo: update to h5py
 class BAGFile(ElevationDataset):
     """providing a BAG raster dataset parser.
 
