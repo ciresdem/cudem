@@ -6838,7 +6838,7 @@ class IceSat2File(ElevationDataset):
                 f.SetField(0, index)
                 #[f.SetField(n+1, this_row[x]) for n,x in enumerate(dataset.columns.to_list())]
                 g = ogr.CreateGeometryFromWkt(
-                    f'POINT ({this_row["longitude"]} {this_row["latitude"})'
+                    f'POINT ({this_row["longitude"]} {this_row["latitude"]})'
                 )
                 f.SetGeometryDirectly(g)
                 layer.CreateFeature(f)
