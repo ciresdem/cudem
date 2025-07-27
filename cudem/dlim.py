@@ -924,7 +924,8 @@ class PointZVectorMask(PointZ):
         self.mask_fn = mask_fn
         self.invert = invert
 
-        utils.echo_msg(f'masking with {mask_fn}')
+        if self.verbose:
+            utils.echo_msg(f'masking with {mask_fn}')
         
     def filter_mask(self, points, invert = False):
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
@@ -3739,7 +3740,7 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, verbose=self.verbose
+                                    mod=f, points=points, verbose=False
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
