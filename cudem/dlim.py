@@ -888,7 +888,7 @@ class PointZ:
         """Make a point vector OGR DataSet Object from points
         """
 
-        dst_ogr = '{}'.format('points_dataset')
+        dst_ogr = 'points_dataset'
         ogr_ds = gdal.GetDriverByName('Memory').Create(
             '', 0, 0, 0, gdal.GDT_Unknown
         )
@@ -905,7 +905,7 @@ class PointZ:
                 pbar.update()
                 f.SetField(0, index)
                 g = ogr.CreateGeometryFromWkt(
-                    f'POINT ({this_row["x"]}, {this_row["y"]})'
+                    f'POINT ({this_row["x"]} {this_row["y"]})'
                 )
                 f.SetGeometryDirectly(g)
                 layer.CreateFeature(f)
@@ -941,7 +941,8 @@ class PointZVectorMask(PointZ):
                     mask_geom = gdalfun.ogr_union_geom(
                         mask_layer, verbose=False
                     )
-                    mask_ds = mask_layer = None
+                    #for f in mask_layer:
+                    #mask_geom = f.geometry()                        
                     points_layer = ogr_ds.GetLayer()
                     points_layer.SetSpatialFilter(mask_geom)
                     for f in points_layer:
@@ -949,12 +950,18 @@ class PointZVectorMask(PointZ):
                         outliers[idx] = 1
                         
                     points_layer.SetSpatialFilter(None)
+                    mask_ds = mask_layer = None
                 else:
                     utils.echo_warning_msg(
                         f'could not load mask {self.mask_fn}'
                     )
-
                 ogr_ds = None
+                
+            else:
+                utils.echo_warning_msg(
+                    f'could not load mask {self.mask_fn}'
+                )
+
                 
         outliers = outliers == 1
         if self.verbose:
@@ -3728,8 +3735,6 @@ class ElevationDataset:
                     
                 if len(points) > 0:
                     ## apply any dlim filters to the points
-                    #self.pnt_fltrs = ['rq', 'outlierz']
-                    #utils.echo_msg_bold(self.pnt_fltrs)
                     if isinstance(self.pnt_fltrs, list):
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
@@ -6833,7 +6838,7 @@ class IceSat2File(ElevationDataset):
                 f.SetField(0, index)
                 #[f.SetField(n+1, this_row[x]) for n,x in enumerate(dataset.columns.to_list())]
                 g = ogr.CreateGeometryFromWkt(
-                    'POINT ({} {})'.format(this_row['longitude'], this_row['latitude'])
+                    f'POINT ({this_row["longitude"]} {this_row["latitude"})'
                 )
                 f.SetGeometryDirectly(g)
                 layer.CreateFeature(f)
