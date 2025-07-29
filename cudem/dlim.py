@@ -1903,10 +1903,10 @@ class ElevationDataset:
         otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
         """
 
-        #self.array_yield = self.yield_array()
-        #self.xyz_yield = self.yield_xyz()    
-        self.array_yield = self.mask_and_yield_array()
-        self.xyz_yield = self.mask_and_yield_xyz()
+        self.array_yield = self.yield_array()
+        self.xyz_yield = self.yield_xyz()    
+        #self.array_yield = self.mask_and_yield_array()
+        #self.xyz_yield = self.mask_and_yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
         #    self.xyz_yield = self.archive_xyz()
         # if (self.region is None \
@@ -9029,19 +9029,19 @@ class MarGravFetcher(Fetcher):
     def __init__(self,
                  rasterize=False,
                  bathy_only=False,
-                 upper_limit=None,
-                 lower_limit=None,
+                 #upper_limit=None,
+                 #lower_limit=None,
                  **kwargs):
         super().__init__(**kwargs)
         self.rasterize = rasterize
         self.bathy_only = bathy_only
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)
-        if self.bathy_only:
-            self.upper_limit = 0
+        #self.upper_limit = utils.float_or(upper_limit)
+        #self.lower_limit = utils.float_or(lower_limit)
+        #if self.bathy_only:
+        #    self.upper_limit = 0
 
-        self.region.zmax=self.upper_limit
-        self.region.zmin=self.lower_limit
+        #self.region.zmax=self.upper_limit
+        #self.region.zmin=self.lower_limit
 
         
     def yield_ds(self, result):
@@ -9061,12 +9061,15 @@ class MarGravFetcher(Fetcher):
             self.fetches_params['data_format'] = 200
             self.fetches_params['resample_and_warp'] = False
             self.fetches_params['node'] = 'grid'
+            if self.bathy_only:
+                self.fetches_params['upper_limit'] = 0
             
         elif self.rasterize:
             from cudem import waffles
             mg_region = self.region.copy()
-            mg_region.zmax = self.upper_limit
-            mg_region.zmin = self.lower_limit        
+            if self.bathy_only:
+                mg_region.zmax = 0
+                #mg_region.zmin = self.lower_limit        
             mar_grav_fn = utils.make_temp_fn('mar_grav')
             _raster = waffles.WaffleFactory(
                 mod='IDW:min_points=16',
@@ -9081,17 +9084,17 @@ class MarGravFetcher(Fetcher):
                 node='pixel',
                 verbose=True
             )._acquire_module()()            
-            if self.upper_limit is not None or self.lower_limit is not None:
-                ds = gdal.Open(_raster.fn)
-                ds_band = ds.GetRasterBand(1)
-                ds_arr = ds_band.ReadAsArray()
-                if self.upper_limit is not None:
-                    ds_arr[ds_arr >= self.upper_limit] = ds_band.GetNoDataValue()
+            #if self.upper_limit is not None or self.lower_limit is not None:
+            ds = gdal.Open(_raster.fn)
+            ds_band = ds.GetRasterBand(1)
+            ds_arr = ds_band.ReadAsArray()
+            # if self.upper_limit is not None:
+            #     ds_arr[ds_arr >= self.upper_limit] = ds_band.GetNoDataValue()
 
-                if self.lower_limit is not None:
-                    ds_arr[ds_arr <= self.lower_limit] = ds_band.GetNoDataValue()
+            # if self.lower_limit is not None:
+            #     ds_arr[ds_arr <= self.lower_limit] = ds_band.GetNoDataValue()
                     
-                ds = None
+            ds = None
 
             self.fetches_params['mod'] = _raster.fn
             self.fetches_params['data_format'] = 200
@@ -9133,6 +9136,12 @@ class ChartsFetcher(Fetcher):
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
             if self.want_contours:
+                enc_level = utils.int_or(
+                    os.path.basename(src_000)[2], 0
+                )
+                if enc_level < 5:
+                    continue
+                
                 self.fetches_params['mod'] = src_000
                 self.metadata['name'] = '{}_contours'.format(
                     utils.fn_basename2(self.fn)
