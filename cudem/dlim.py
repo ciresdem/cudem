@@ -1859,11 +1859,11 @@ class ElevationDataset:
                         if not utils.fn_url_p(self.fn):
                             if self.data_format > -10:
                                 if not os.path.exists(self.fn):
-                                    utils.echo_warning_msg(f'{self.fn} is not valid')
+                                    utils.echo_warning_msg(f'{self.fn} does not exist')
                                     return (False)
 
                                 if os.stat(self.fn).st_size == 0:
-                                    utils.echo_warning_msg(f'{self.fn} is not valid')
+                                    utils.echo_warning_msg(f'{self.fn} is 0 bytes')
                                     return(False)
                         
         return(True)
@@ -1922,10 +1922,10 @@ class ElevationDataset:
         otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
         """
 
-        self.array_yield = self.yield_array()
-        self.xyz_yield = self.yield_xyz()    
-        #self.array_yield = self.mask_and_yield_array()
-        #self.xyz_yield = self.mask_and_yield_xyz()
+        #self.array_yield = self.yield_array()
+        #self.xyz_yield = self.yield_xyz()    
+        self.array_yield = self.mask_and_yield_array()
+        self.xyz_yield = self.mask_and_yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
         #    self.xyz_yield = self.archive_xyz()
         # if (self.region is None \
@@ -2373,9 +2373,6 @@ class ElevationDataset:
                 else:
                     self.inf_region = None
 
-        if self.region is None:
-            self.region = self.inf_region.copy()
-
         #self.transform['trans_region'] = self.inf_region.copy()
         if self.transform['transformer'] is not None \
            and self.transform['trans_region'] is None:
@@ -2384,7 +2381,13 @@ class ElevationDataset:
             self.transform['trans_region'] = self.inf_region.copy()
             self.transform['trans_region'].src_srs = self.infos.src_srs
             self.transform['trans_region'].warp(self.dst_srs)
-        
+
+        # if self.region is None:
+        #     if self.transform['trans_region'] is not None:
+        #         self.region = self.transform['trans_region'].copy()
+        #     else:
+        #         self.region = self.inf_region.copy()
+
         return(self.infos)
 
     
@@ -2420,7 +2423,7 @@ class ElevationDataset:
             ):
                 self.data_entries.append(self)
                 yield(self)
-
+                
         else:
             self.data_entries.append(self)
             yield(self)
@@ -3674,11 +3677,10 @@ class ElevationDataset:
         will pass through the region, if it exists and finally
         yield the transformed and reduced points.
         """            
-        
+
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             for points in self.yield_points():
-
                 if self.transform['transformer'] is not None \
                    or self.transform['vert_transformer'] is not None:
                     if self.transform['transformer'] is not None:
@@ -3753,7 +3755,7 @@ class ElevationDataset:
                     
                 if self.lower_limit is not None:
                     points = points[(points['z'] >= self.lower_limit)]
-                    
+
                 if len(points) > 0:
                     ## apply any dlim filters to the points
                     if isinstance(self.pnt_fltrs, list):
@@ -5335,14 +5337,13 @@ class GDALFile(ElevationDataset):
             self.warp_region = self.region.copy()
         else:
             if self.transform['transformer'] is not None:
-                self.warp_region = self.transform['transformer'].copy()
+                self.warp_region = self.transform['trans_region'].copy()
             else:
                 self.warp_region = self.inf_region.copy()
             
         tmp_elev_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
         tmp_unc_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
         tmp_weight_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
-
         if self.remove_flat:
             grits_filter = grits.GritsFactory(
                 mod='flats',
@@ -5812,6 +5813,7 @@ class BAGFile(ElevationDataset):
         if self.src_srs is None:
             self.src_srs = self.init_srs()
 
+
     def init_srs(self):
         if self.src_srs is None:
             src_horz, src_vert = gdalfun.split_srs(
@@ -5831,7 +5833,8 @@ class BAGFile(ElevationDataset):
             return(self.src_srs)
         else:
             return(self.src_srs)
-                    
+
+        
     def generate_inf(self):
         if self.src_srs is None:
             self.infos.src_srs = self.init_srs()
@@ -5905,7 +5908,8 @@ class BAGFile(ElevationDataset):
                                 check_path=False,
                                 super_grid=True,
                                 weight_multiplier=sub_weight,
-                                uncertainty_mask=2)
+                                uncertainty_mask=2,
+                            )
                         )._acquire_module()
                         self.data_entries.append(sub_ds)
                         sub_ds.initialize()
@@ -5927,7 +5931,7 @@ class BAGFile(ElevationDataset):
                         band_no=1,
                         open_options=oo,
                         uncertainty_mask=2,
-                        uncertainty_mask_to_meter=0.01
+                        uncertainty_mask_to_meter=0.01,
                     )
                 )._acquire_module()
                 self.data_entries.append(sub_ds)
@@ -5955,7 +5959,7 @@ class BAGFile(ElevationDataset):
                         data_format=200,
                         band_no=1,
                         uncertainty_mask=2,
-                        uncertainty_mask_to_meter=0.01
+                        uncertainty_mask_to_meter=0.01,
                     )
                 )._acquire_module()
                 self.data_entries.append(sub_ds)
@@ -5965,10 +5969,8 @@ class BAGFile(ElevationDataset):
                 
         else:
             ds_infos = gdalfun.gdal_infos(self.fn)
-            #utils.echo_msg(ds_infos)
             x_res = ds_infos['geoT'][1]
             sub_weight = 3/x_res
-            
             sub_ds = DatasetFactory(
                 **self._set_params(
                     mod=self.fn,
@@ -5976,11 +5978,14 @@ class BAGFile(ElevationDataset):
                     band_no=1,
                     uncertainty_mask=2,
                     uncertainty_mask_to_meter=0.01,
-                    weight_multiplier=sub_weight
+                    weight_multiplier=sub_weight,
+                    parent=self.parent,
                 )
             )._acquire_module()
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
+            utils.echo_msg(sub_ds.fn)
+            #yield(sub_ds)
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
 
@@ -8054,6 +8059,7 @@ class Datalist(ElevationDataset):
                                         
                                 ## fill self.data_entries with each dataset for use
                                 ## outside the yield and yield the dataset object.
+                                #yield(data_set)
                                 for ds in data_set.parse(): 
                                     self.data_entries.append(ds)
                                     yield(ds)
@@ -8256,9 +8262,17 @@ class Fetcher(ElevationDataset):
         super().__init__(**kwargs)
         ## cache directory to store fetched data
         #self.outdir = outdir if outdir is not None else self.cache_dir
+
+        self.wgs_region = self.region.copy()
+        self.wgs_region.src_srs = self.dst_srs
+        self.wgs_srs = 'epsg:4326'
+        if self.dst_srs is not None:
+            self.wgs_region.warp(self.wgs_srs)
+        
         self.fetch_module = fetches.FetchesFactory(
-            mod=self.fn, src_region=self.region, callback=callback,
-            verbose=self.verbose, outdir=outdir,
+            mod=self.fn, src_region=self.wgs_region,
+            callback=callback, verbose=self.verbose,
+            outdir=outdir,
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
             utils.echo_warning_msg(
@@ -8328,9 +8342,9 @@ class Fetcher(ElevationDataset):
             data_format=self.fetch_module.data_format,
             src_srs=self.fetch_module.src_srs,
             cache_dir=self.fetch_module._outdir,
-            remote=True,
+            #remote=True,
             metadata=md,
-            parent=self,
+            #parent=self,
         )
 
         
@@ -8364,6 +8378,9 @@ class Fetcher(ElevationDataset):
                     self.fetches_params['mod'] = os.path.join(
                         self.fetch_module._outdir, result['dst_fn']
                     )
+
+                    #self.fetches_params['mod'] = result['dst_fn']
+                    #utils.echo_msg(self.fetches_params)
                     for this_ds in self.yield_ds(result):
                         if this_ds is not None:
                             #this_ds.initialize()
@@ -8387,10 +8404,11 @@ class Fetcher(ElevationDataset):
                                     ),
                                      f_name]
                                 )
-                            this_ds.remote = True
+                            #this_ds.remote = True
                             this_ds.initialize()
                             for ds in this_ds.parse():
                                 ds.initialize()
+                                self.data_entries.append(ds)
                                 yield(ds)
                         else:
                             utils.echo_warning_msg(
@@ -9279,9 +9297,17 @@ class HydroNOSFetcher(Fetcher):
             for bag_fn in bag_fns:
                 # bag_fn = os.path.join(self.fetch_module._outdir, result[1])
                 if 'ellipsoid' not in bag_fn.lower():
+                    src_srs = gdalfun.gdal_get_srs(
+                        os.path.join(
+                            self.fetch_module._outdir, result['dst_fn']
+                        )
+                    )
+                    #utils.echo_msg(src_srs)
+                    #self.src_srs = src_srs
                     self.fetches_params['mod'] = bag_fn
                     self.fetches_params['data_format'] = 201
-                    self.fetches_params['src_srs'] = None
+                    #self.fetches_params['src_srs'] = src_srs
+                    self.fetches_params['explode'] = self.explode
                     yield(DatasetFactory(
                         **self.fetches_params
                     )._acquire_module())
@@ -10090,6 +10116,9 @@ class DatasetFactory(factory.CUDEMFactory):
             self.kwargs['fn'] = entry[0]
         else:
             if self.mod_name >= -2:
+                #utils.echo_msg(entry[0])
+                #utils.echo_msg(os.path.dirname(self.kwargs['parent'].fn))
+                #utils.echo_msg(self.kwargs['parent'].fn)
                 self.kwargs['fn'] = os.path.join(
                     os.path.dirname(self.kwargs['parent'].fn), entry[0]
                 )
