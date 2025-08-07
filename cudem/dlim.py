@@ -5964,6 +5964,11 @@ class BAGFile(ElevationDataset):
                     yield(gdal_ds)
                 
         else:
+            ds_infos = gdalfun.gdal_infos(self.fn)
+            #utils.echo_msg(ds_infos)
+            x_res = ds_infos['geoT'][1]
+            sub_weight = 3/x_res
+            
             sub_ds = DatasetFactory(
                 **self._set_params(
                     mod=self.fn,
@@ -5971,6 +5976,7 @@ class BAGFile(ElevationDataset):
                     band_no=1,
                     uncertainty_mask=2,
                     uncertainty_mask_to_meter=0.01,
+                    weight_multiplier=sub_weight
                 )
             )._acquire_module()
             self.data_entries.append(sub_ds)
