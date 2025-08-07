@@ -32,11 +32,13 @@ import os
 import sys
 
 import warnings
+import math
 import pyproj
 from osgeo import ogr
 
 import cudem
 from cudem import utils
+from cudem import factory
 from cudem import srsfun
 
 ogr.DontUseExceptions()
@@ -1141,6 +1143,7 @@ def parse_cli_region(region_list, verbose=True, pct_buffer=None):
         i_region_s = i_region.split(':')
         tmp_region = Region().from_string(i_region_s[0])
         args = utils.args2dict(i_region_s[1:], {})
+        kwargs = factory.args2dict(i_region_s[1:], {})
         if tmp_region.valid_p(check_xy=True):
             if 'pct_buffer' in args.keys():
                 tmp_region.buffer(pct=utils.float_or(args['pct_buffer']))
@@ -1148,6 +1151,13 @@ def parse_cli_region(region_list, verbose=True, pct_buffer=None):
             these_regions.append(tmp_region)
         elif str(i_region_s[0]) == 'tile_set':
             these_regions = generate_tile_set(**args)
+        elif str(i_region_s[0]) == 'coordinates':
+            tmp_region = quarter_tile_from_coordinates(**kwargs)
+            these_regions.append(tmp_region)
+        elif str(i_region_s[0]) == 'q':
+            coords = fetch_gps_coordinates(i_region_s[1])
+            tmp_region = quarter_tile_from_coordinates(x=coords[0], y=coords[1])
+            these_regions.append(tmp_region)
         else:
             tmp_region = ogr_wkts(i_region_s[0])
             for i in tmp_region:
@@ -1189,14 +1199,43 @@ def parse_cli_region(region_list, verbose=True, pct_buffer=None):
     return(these_regions)
 
 
-def global_tiles(in_x, in_y):
-    tile_regions = []
-    x_min = math.floor(in_x*4)/4
-    x_max = math.ceil(in_x*4)/4
-    y_min = math.floor(in_y*4)/4
-    y_max = math.ceil(in_y*4)/4
+def fetch_gps_coordinates(q):
+    from cudem import fetches
 
-    return(Region(xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max))
+    fetches.GPSCoordinates(q)
+    gpsc_api_url = "http://www.gps-coordinates.net/api/"
+    if utils.str_or(q) is not None:
+        q_url = f'{gpsc_api_url}{q}'
+        _req = fetches.Fetch(
+            q_url,
+            verbose=True
+        ).fetch_req()
+        if _req is not None:
+            results = _req.json()
+            if results["responseCode"] == '200':
+                x = utils.float_or(results["longitude"])
+                y = utils.float_or(results["latitude"])
+
+                return(x, y)
+
+    return(None)
+
+
+def quarter_tile_from_coordinates(x=None, y=None):
+    x = utils.float_or(x)
+    y = utils.float_or(y)
+    if x is not None and y is not None:
+        tile_regions = []
+        x_min = math.floor(x*4)/4
+        x_max = math.ceil(x*4)/4
+        y_min = math.floor(y*4)/4
+        y_max = math.ceil(y*4)/4
+
+        this_region = Region(xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max)
+        return(this_region)
+    else:
+        return(None)
+    
     
 def generate_tile_set(in_region=None, inc=.25, pct_buffer=None):
     """Generate a tile-set based on `in_region` and `inc`.
