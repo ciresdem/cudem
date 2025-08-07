@@ -4810,13 +4810,14 @@ class TheNationalMap(FetchModule):
             #utils.echo_msg(_req.url)
             if _req is not None:
                 features = _req.json()
-                total = features['total']
-                for feature in features['items']:
-                    self.add_entry_to_results(
-                        feature['downloadURL'],
-                        feature['downloadURL'].split('/')[-1],
-                        feature['format']
-                    )
+                if 'total' in features.keys():
+                    total = features['total']
+                    for feature in features['items']:
+                        self.add_entry_to_results(
+                            feature['downloadURL'],
+                            feature['downloadURL'].split('/')[-1],
+                            feature['format']
+                        )
 
             offset += 100
             if offset >= total:

@@ -3984,7 +3984,7 @@ class WafflesCUDEM(Waffle):
                         'cudem using coastline: Waffles COASTLINE module'
                     )
                 
-            utils.echo_msg_bold(f'cudem flattening: {self.name}')
+            utils.echo_msg_bold(f'cudem flattening: {self.flatten}')
             utils.echo_msg_bold(f'cudem output DEM: {self.name}')
             utils.echo_msg('')
             utils.echo_msg_bold('==============================================')

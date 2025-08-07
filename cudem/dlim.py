@@ -912,7 +912,8 @@ class PointZ:
             
         return(ogr_ds)
 
-    
+
+## check if regions overlap before vectorizing points
 class PointZVectorMask(PointZ):
     """Filter data using a vector mask
 
@@ -932,37 +933,52 @@ class PointZVectorMask(PointZ):
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         outliers = np.zeros(points.shape)
 
+        points_region = regions.Region().from_list(
+            [points.x.min(), points.y.min(),
+             points.x.max(), points.y.max()]
+        )
+        
         if self.mask_fn is not None:
-            ## vectorize the icesate2 photons
-            ogr_ds = self.vectorize_points()
-            if ogr_ds is not None:
-                mask_ds = ogr.Open(self.mask_fn, 0)
-                if mask_ds is not None:
-                    mask_layer = mask_ds.GetLayer()
-                    mask_geom = gdalfun.ogr_union_geom(
-                        mask_layer, verbose=False
-                    )
-                    #for f in mask_layer:
-                    #mask_geom = f.geometry()                        
-                    points_layer = ogr_ds.GetLayer()
-                    points_layer.SetSpatialFilter(mask_geom)
-                    for f in points_layer:
-                        idx = f.GetField('index')
-                        outliers[idx] = 1
+            ## vectorize the points
+            mask_ds = ogr.Open(self.mask_fn, 0)
+            if mask_ds is not None:
+                mask_layer = mask_ds.GetLayer()
+                mask_geom = gdalfun.ogr_union_geom(
+                    mask_layer, verbose=False
+                )
+                mask_region = regions.Region().from_list(
+                    mask_geom.GetEnvelope()
+                )
+
+                if regions.regions_intersect_p(points_region, mask_region):                
+                    ogr_ds = self.vectorize_points()
+                    if ogr_ds is not None:
+                        #for f in mask_layer:
+                        #mask_geom = f.geometry()                        
+                        points_layer = ogr_ds.GetLayer()
+                        points_layer.SetSpatialFilter(mask_geom)
+                        for f in points_layer:
+                            idx = f.GetField('index')
+                            outliers[idx] = 1
+
+                        points_layer.SetSpatialFilter(None)
+                        mask_ds = mask_layer = None
+                        ogr_ds = None
                         
-                    points_layer.SetSpatialFilter(None)
-                    mask_ds = mask_layer = None
-                else:
-                    utils.echo_warning_msg(
-                        f'could not load mask {self.mask_fn}'
-                    )
-                ogr_ds = None
+                    else:
+                        utils.echo_warning_msg(
+                            f'could not vectorize {len(self.points)} points for masking'
+                        )
                 
             else:
                 utils.echo_warning_msg(
                     f'could not load mask {self.mask_fn}'
                 )
 
+        else:
+            utils.echo_warning_msg(
+                f'no vector mask was specified {self.mask_fn}'
+            )
                 
         outliers = outliers == 1
         if self.verbose:
@@ -2356,7 +2372,8 @@ class ElevationDataset:
 
         if self.region is None:
             self.region = self.inf_region.copy()
-                    
+
+        #self.transform['trans_region'] = self.inf_region.copy()
         if self.transform['transformer'] is not None \
            and self.transform['trans_region'] is None:
             ## trans_region is the inf_region reprojected to dst_srs
@@ -5288,18 +5305,23 @@ class GDALFile(ElevationDataset):
             ## only perform 'upsamples' if the input raster is of higher resolution than the
             ## target self.x_inc, etc. then treat the data as points and do any 'downsampling'
             ## in stacks.
-            raster_is_higher_res = np.prod(
-                self.transform['trans_region'].geo_transform(
-                    x_inc=self.dem_infos['geoT'][1]
-                )[:2]
-            ) > np.prod(
-                self.transform['trans_region'].geo_transform(
-                    x_inc=self.x_inc
-                )[:2]
-            )
+            if self.transform['trans_region'] is not None:
+                raster_is_higher_res = np.prod(
+                    self.transform['trans_region'].geo_transform(
+                        x_inc=self.dem_infos['geoT'][1]
+                    )[:2]
+                ) > np.prod(
+                    self.transform['trans_region'].geo_transform(
+                        x_inc=self.x_inc
+                    )[:2]
+                )
+
+            else:
+                raster_is_higher_res = False
+
             if raster_is_higher_res:
                 self.resample_and_warp = False
-            
+                
         if self.node == 'grid':
             self.resample_and_warp = False
 
