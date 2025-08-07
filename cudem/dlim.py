@@ -5146,6 +5146,7 @@ class GDALFile(ElevationDataset):
                  remove_flat=False,
                  node=None,
                  resample_and_warp=True,
+                 weight_multiplier=1,
                  **kwargs):
         super().__init__(**kwargs)
         # associated raster file/band holding weight data
@@ -5182,6 +5183,7 @@ class GDALFile(ElevationDataset):
         # input is 'pixel' or 'grid' registered (force)
         self.node = node 
         self.resample_and_warp = resample_and_warp
+        self.weight_multiplier = weight_multiplier
 
         if self.fn.startswith('http') \
            or self.fn.startswith('/vsicurl/') \
@@ -5678,8 +5680,8 @@ class GDALFile(ElevationDataset):
                     weight_data[weight_data==weight_ndv] = np.nan
             else:
                 weight_data = np.ones(band_data.shape)
-                if utils.float_or(self.weight) is not None:
-                    weight_data *= weight_data * self.weight
+
+            weight_data *= weight_data * self.weight_multiplier
 
             ## uncertainty
             if uncertainty_band is not None:
@@ -5902,13 +5904,14 @@ class BAGFile(ElevationDataset):
                                 uncertainty_mask_to_meter=0.01,
                                 check_path=False,
                                 super_grid=True,
-                                weight=sub_weight,
+                                weight_multiplier=sub_weight,
                                 uncertainty_mask=2)
                         )._acquire_module()
                         self.data_entries.append(sub_ds)
                         sub_ds.initialize()
                         for gdal_ds in sub_ds.parse():
                             yield(gdal_ds)
+                            
 
             elif self.vr_resampled_grid or self.vr_interpolate:
                 if self.vr_resampled_grid:
