@@ -5678,7 +5678,8 @@ class GDALFile(ElevationDataset):
                     weight_data[weight_data==weight_ndv] = np.nan
             else:
                 weight_data = np.ones(band_data.shape)
-                weight_data *= weight_data * self.weight
+                if utils.float_or(self.weight) is not None:
+                    weight_data *= weight_data * self.weight
 
             ## uncertainty
             if uncertainty_band is not None:

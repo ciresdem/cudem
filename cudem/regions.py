@@ -1189,6 +1189,15 @@ def parse_cli_region(region_list, verbose=True, pct_buffer=None):
     return(these_regions)
 
 
+def global_tiles(in_x, in_y):
+    tile_regions = []
+    x_min = math.floor(in_x*4)/4
+    x_max = math.ceil(in_x*4)/4
+    y_min = math.floor(in_y*4)/4
+    y_max = math.ceil(in_y*4)/4
+
+    return(Region(xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max))
+    
 def generate_tile_set(in_region=None, inc=.25, pct_buffer=None):
     """Generate a tile-set based on `in_region` and `inc`.
 
