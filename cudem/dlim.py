@@ -1773,7 +1773,8 @@ class ElevationDataset:
             'vert_transformer': None,
             'want_vertical': False,
         } # pyproj transformation info
-                    
+
+
         if self.valid_p():
             try:
                 self.infos = self.inf(
@@ -1852,15 +1853,17 @@ class ElevationDataset:
                not isinstance(self.fn, np.ndarray) and \
                not isinstance(self.fn, np.core.records.recarray):
                 if self.fn not in fmts:
-                    if self.fn.startswith('http') \
-                       or self.fn.startswith('/vsicurl/') \
-                       or self.fn.startswith('BAG'):
+                    if not self.fn.startswith('http') \
+                       and not self.fn.startswith('/vsicurl/') \
+                       and not self.fn.startswith('BAG'):
                         if not utils.fn_url_p(self.fn):
                             if self.data_format > -10:
                                 if not os.path.exists(self.fn):
+                                    utils.echo_warning_msg(f'{self.fn} is not valid')
                                     return (False)
 
                                 if os.stat(self.fn).st_size == 0:
+                                    utils.echo_warning_msg(f'{self.fn} is not valid')
                                     return(False)
                         
         return(True)
@@ -3690,7 +3693,7 @@ class ElevationDataset:
                             )
                         
                     points = points[~np.isinf(points['z'])]
-                    
+
                 if self.region is not None and self.region.valid_p():
                     xyz_region = self.region.copy()
                     #if self.transform['trans_region'] is None \
@@ -5675,6 +5678,7 @@ class GDALFile(ElevationDataset):
                     weight_data[weight_data==weight_ndv] = np.nan
             else:
                 weight_data = np.ones(band_data.shape)
+                weight_data *= weight_data * self.weight
 
             ## uncertainty
             if uncertainty_band is not None:
@@ -5863,11 +5867,15 @@ class BAGFile(ElevationDataset):
            or 'MAX_RESOLUTION_X' in mt.keys() \
            or 'MAX_RESOLUTION_Y' in mt.keys():
             if self.explode:
+                min_res = float(mt['MIN_RESOLUTION_X'])
+                max_res = float(mt['MAX_RESOLUTION_X'])
                 oo.append("MODE=LIST_SUPERGRIDS")
                 src_ds = gdal.OpenEx(self.fn, open_options=oo)
                 sub_datasets = src_ds.GetSubDatasets()
                 src_ds = None
 
+                utils.echo_msg(f'VRBAG min resolution is {min_res}')
+                utils.echo_msg(f'VRBAG max resolution is {max_res}')
                 with tqdm(
                         total=len(sub_datasets),
                         desc=f'parsing {len(sub_datasets)} supergrids from BAG file {self.fn}',
@@ -5875,6 +5883,16 @@ class BAGFile(ElevationDataset):
                 ) as pbar:                
                     for sub_dataset in sub_datasets:
                         pbar.update()
+                        res = sub_dataset[-1].split(',')[-2:]
+                        res = [float(re.findall(r'\d+\.\d+|\d+', x)[0]) for x in res]
+                        sub_weight = 3/res[0]
+                        # if res[0] < 3:
+                        #     sub_weight = 1
+                        # elif res[0] < 10:
+                        #     sub_weight = .5
+                        # else:
+                        #     sub_weight = .25
+                            
                         sub_ds = DatasetFactory(
                             **self._set_params(
                                 mod=sub_dataset[0],
@@ -5883,6 +5901,7 @@ class BAGFile(ElevationDataset):
                                 uncertainty_mask_to_meter=0.01,
                                 check_path=False,
                                 super_grid=True,
+                                weight=sub_weight,
                                 uncertainty_mask=2)
                         )._acquire_module()
                         self.data_entries.append(sub_ds)
@@ -10570,22 +10589,22 @@ See `datalists_usage` for full cli options.
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
                 else:
-                    try:
-                        # process and dump each dataset independently
-                        if want_separate: 
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else:
-                            # process and dump the datalist as a whole
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                      utils.echo_error_msg('Killed by user')
-                      break
-                    except BrokenPipeError:
-                      utils.echo_error_msg('Pipe Broken')
-                      break
-                    except Exception as e:
-                      utils.echo_error_msg(e)
-                      print(traceback.format_exc())
+                    #try:
+                    # process and dump each dataset independently
+                    if want_separate: 
+                        for this_entry in this_datalist.parse():
+                            this_entry.dump_xyz()
+                    else:
+                        # process and dump the datalist as a whole
+                        this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #   utils.echo_error_msg('Killed by user')
+                    #   break
+                    # except BrokenPipeError:
+                    #   utils.echo_error_msg('Pipe Broken')
+                    #   break
+                    # except Exception as e:
+                    #   utils.echo_error_msg(e)
+                    #   print(traceback.format_exc())
                       
 ### End

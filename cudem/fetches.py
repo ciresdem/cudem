@@ -7232,6 +7232,45 @@ class CPTCity(FetchModule):
             self.cpt_pub_url + f, f.split('/')[-1], 'cpt'
         ) for f in ff]
 
+
+class GPSCoordinates(FetchModule):
+    """GPS Coordinates
+
+    Fetch various coordinates for places
+    """
+    
+    def __init__(self, q = 'boulder', **kwargs):
+        super().__init__(name='gps_coordinates', **kwargs)
+        self.q = q
+
+        ## The various gps-coordinates URLs
+        self.gpsc_api_url = "http://www.gps-coordinates.net/api/"
+        self.gpsc_web_url = "http://www.gps-coordinates.net/id/"
+
+        
+    def run(self):
+        """Run the gps-coordiantes fetches module"""
+
+        if utils.str_or(self.q) is not None:
+            q_url = f'{self.gpsc_api_url}{self.q}'
+            qw_url = f'{self.gpsc_web_url}{self.q}'
+
+        _req = Fetch(
+            q_url,
+            verbose=self.verbose
+        ).fetch_req()
+        if _req is not None:
+            results = _req.json()
+            if results["responseCode"] == '200':
+                x = utils.float_or(results["longitude"])
+                y = utils.float_or(results["latitude"])
+                print(f'{x}, {y}')
+            else:
+                print(results)
+            
+                # self.add_entry_to_results(
+                #     qw_url, qw_url.split('/')[-1], 'gps-coordinates'
+                # )                
         
 class HttpDataset(FetchModule):
     """fetch an http file"""
@@ -7305,6 +7344,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'waterservices': {'call': WaterServices},
         'csb': {'call': CSB},
         'cpt_city': {'call': CPTCity},
+        'gps_coordinates': {'call': GPSCoordinates},
         'wa_dnr': {'call': waDNR},
         'nsw_tb': {'call': NSW_TB},
     }
