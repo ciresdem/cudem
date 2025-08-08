@@ -5353,7 +5353,7 @@ class EMODNet(FetchModule):
     < emodnet:want_erddap=True:erddap_format=nc >
     """
 
-    def __init__(self, want_erddap = True, erddap_format = 'nc', **kwargs):
+    def __init__(self, want_erddap = False, erddap_format = 'nc', **kwargs):
         super().__init__(name='emodnet', **kwargs)
         self.want_erddap = want_erddap
         self.erddap_format = erddap_format

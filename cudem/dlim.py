@@ -3666,8 +3666,8 @@ class ElevationDataset:
         for ds in self.parse():
             for points in ds.yield_points():
                 yield(points)
-
                 
+
     def transform_and_yield_points(self):
         """points are an array of `points['x']`, `points['y']`, `points['z']`, 
         <`points['w']`, `points['u']`>`
@@ -5148,7 +5148,6 @@ class GDALFile(ElevationDataset):
                  remove_flat=False,
                  node=None,
                  resample_and_warp=True,
-                 weight_multiplier=1,
                  **kwargs):
         super().__init__(**kwargs)
         # associated raster file/band holding weight data
@@ -5185,7 +5184,6 @@ class GDALFile(ElevationDataset):
         # input is 'pixel' or 'grid' registered (force)
         self.node = node 
         self.resample_and_warp = resample_and_warp
-        self.weight_multiplier = weight_multiplier
 
         if self.fn.startswith('http') \
            or self.fn.startswith('/vsicurl/') \
@@ -5197,7 +5195,6 @@ class GDALFile(ElevationDataset):
                 self.src_srs = self.init_srs(self.fn)
             else:
                 self.src_srs = self.infos.src_srs
-
                 
     def destroy_ds(self):
         self.src_ds = None
@@ -5682,8 +5679,6 @@ class GDALFile(ElevationDataset):
             else:
                 weight_data = np.ones(band_data.shape)
 
-            weight_data *= weight_data * self.weight_multiplier
-
             ## uncertainty
             if uncertainty_band is not None:
                 uncertainty_data = uncertainty_band.ReadAsArray(
@@ -5860,6 +5855,9 @@ class BAGFile(ElevationDataset):
 
     def parse(self, resample=True):
         mt = gdal.Info(self.fn, format='json')['metadata']['']
+        ds_infos = gdalfun.gdal_infos(self.fn)
+        x_res = ds_infos['geoT'][1]
+        sub_weight = 3/x_res
         oo = []
         if self.data_region is not None and self.data_region.valid_p():
             oo.append('MINX={}'.format(self.data_region.xmin))
@@ -5892,13 +5890,6 @@ class BAGFile(ElevationDataset):
                         res = sub_dataset[-1].split(',')[-2:]
                         res = [float(re.findall(r'\d+\.\d+|\d+', x)[0]) for x in res]
                         sub_weight = 3/res[0]
-                        # if res[0] < 3:
-                        #     sub_weight = 1
-                        # elif res[0] < 10:
-                        #     sub_weight = .5
-                        # else:
-                        #     sub_weight = .25
-                            
                         sub_ds = DatasetFactory(
                             **self._set_params(
                                 mod=sub_dataset[0],
@@ -5907,7 +5898,8 @@ class BAGFile(ElevationDataset):
                                 uncertainty_mask_to_meter=0.01,
                                 check_path=False,
                                 super_grid=True,
-                                weight_multiplier=sub_weight,
+                                #weight_multiplier=sub_weight,
+                                weight=sub_weight*(self.weight if self.weight is not None else 1),
                                 uncertainty_mask=2,
                             )
                         )._acquire_module()
@@ -5930,6 +5922,7 @@ class BAGFile(ElevationDataset):
                         data_format=200,
                         band_no=1,
                         open_options=oo,
+                        weight=sub_weight*(self.weight if self.weight is not None else 1),
                         uncertainty_mask=2,
                         uncertainty_mask_to_meter=0.01,
                     )
@@ -5958,6 +5951,7 @@ class BAGFile(ElevationDataset):
                         mod=tmp_bag_as_tif,
                         data_format=200,
                         band_no=1,
+                        weight=sub_weight*(self.weight if self.weight is not None else 1),
                         uncertainty_mask=2,
                         uncertainty_mask_to_meter=0.01,
                     )
@@ -5978,16 +5972,14 @@ class BAGFile(ElevationDataset):
                     band_no=1,
                     uncertainty_mask=2,
                     uncertainty_mask_to_meter=0.01,
-                    weight_multiplier=sub_weight,
-                    parent=self.parent,
+                    weight=sub_weight*(self.weight if self.weight is not None else 1),
                 )
             )._acquire_module()
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
-            utils.echo_msg(sub_ds.fn)
-            #yield(sub_ds)
-            for gdal_ds in sub_ds.parse():
-                yield(gdal_ds)
+            yield(sub_ds)
+            #for gdal_ds in sub_ds.parse():
+            #    yield(gdal_ds)
 
                 
 class CUDEMFile(ElevationDataset):
@@ -10116,12 +10108,13 @@ class DatasetFactory(factory.CUDEMFactory):
             self.kwargs['fn'] = entry[0]
         else:
             if self.mod_name >= -2:
-                #utils.echo_msg(entry[0])
-                #utils.echo_msg(os.path.dirname(self.kwargs['parent'].fn))
-                #utils.echo_msg(self.kwargs['parent'].fn)
-                self.kwargs['fn'] = os.path.join(
-                    os.path.dirname(self.kwargs['parent'].fn), entry[0]
-                )
+                if os.path.dirname(self.kwargs['parent'].fn) \
+                   != os.path.dirname(entry[0]):
+                    self.kwargs['fn'] = os.path.join(
+                        os.path.dirname(self.kwargs['parent'].fn), entry[0]
+                    )
+                else:
+                    self.kwargs['fn'] = entry[0]
             else:
                 self.kwargs['fn'] = entry[0]
             
