@@ -10107,14 +10107,13 @@ class DatasetFactory(factory.CUDEMFactory):
         if self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
         else:
-            if self.mod_name >= -2:
-                if os.path.dirname(self.kwargs['parent'].fn) \
-                   != os.path.dirname(entry[0]):
-                    self.kwargs['fn'] = os.path.join(
-                        os.path.dirname(self.kwargs['parent'].fn), entry[0]
-                    )
-                else:
-                    self.kwargs['fn'] = entry[0]
+            if self.mod_name >= -2 \
+               and os.path.dirname(self.kwargs['parent'].fn) \
+               != os.path.dirname(entry[0]) \
+                   and ':' not in entry[0]:
+                self.kwargs['fn'] = os.path.join(
+                    os.path.dirname(self.kwargs['parent'].fn), entry[0]
+                )
             else:
                 self.kwargs['fn'] = entry[0]
             
