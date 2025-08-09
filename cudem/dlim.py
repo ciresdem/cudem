@@ -1062,15 +1062,18 @@ class PointZOutlier(PointZ):
         residuals = self.point_residuals(
             points, percentage=percentage, res=res
         )
-        outliers = self.find_outliers(
-            residuals, percentile=percentile, percentile_is_threshold=percentage
-        )
+        if residuals is not None:
+            outliers = self.find_outliers(
+                residuals, percentile=percentile, percentile_is_threshold=percentage
+            )
 
-        if invert:
-            return(points[outliers], outliers)
+            if invert:
+                return(points[outliers], outliers)
+            else:
+                return(points[~outliers], outliers)
         else:
-            return(points[~outliers], outliers)
-
+            return(points, None)
+        
         
     def run(self):
         percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
@@ -1129,7 +1132,10 @@ class RQOutlierZ(PointZOutlier):
         return(raster)
 
     
-    def point_residuals(self, points, percentage = True, res = 50):
+    def point_residuals(self, points, percentage=True, res=50):
+        if len(self.raster) == 0:
+            return(None)
+        
         smoothed_depth = gdalfun.gdal_query(
             points, self.raster[0], 'g'
         ).flatten()
@@ -2451,6 +2457,7 @@ class ElevationDataset:
     ###########################################################################
     ## todo: 'separate mode': multi-band z?
     ## todo: cleanup masking
+    ## mask_level (int): the granularity of the mask, 0 is every file
     ###########################################################################
     def _stacks(self, out_name=None, ndv=-9999, fmt='GTiff',
     ):
@@ -2461,7 +2468,6 @@ class ElevationDataset:
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
         fmt (str): the output GDAL file format
-        mask_level (int): the granularity of the mask, 0 is every file
 
         --------
         Returns:
@@ -5907,6 +5913,8 @@ class BAGFile(ElevationDataset):
                         sub_ds.initialize()
                         for gdal_ds in sub_ds.parse():
                             yield(gdal_ds)
+
+                            utils.remove_glob(f'{gdal_ds.fn}.inf')
                             
 
             elif self.vr_resampled_grid or self.vr_interpolate:
@@ -8283,7 +8291,7 @@ class Fetcher(ElevationDataset):
             self.fetch_module.run()
         except:
             utils.echo_warning_msg(
-                f'fetch module {self.fn} return zero results'
+                f'fetch module {self.fn} returned zero results'
             )
             self.fetch_module.results = []
 
@@ -8311,7 +8319,7 @@ class Fetcher(ElevationDataset):
             self.fetch_module.run()
         except:
             utils.echo_warning_msg(
-                f'fetch module {self.fn} return zero results'
+                f'fetch module {self.fn} returned zero results'
             )
             self.fetch_module.results = []
 
@@ -8479,9 +8487,7 @@ class NEDFetcher(Fetcher):
                 ned_mask = {'mask': coast_mask, 'invert_mask': True}
         
         src_dem = os.path.join(self.fetch_module._outdir, result['dst_fn'])
-        #ned_metadata = copy.deepcopy(self.metadata)
-        #ned_metadata['name'] = src_dem
-        #self.fetches_params['metadata'] = ned_metadata
+            
         self.fetches_params['mod'] = src_dem
         self.fetches_params['mask'] = ned_mask
         self.fetches_params['remove_flat'] = True

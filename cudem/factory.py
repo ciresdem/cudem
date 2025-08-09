@@ -539,7 +539,7 @@ class CUDEMFactory:
                 return(mm)
             except Exception as e:
                 utils.echo_error_msg(
-                    'could not acquire module, {}'.format(e)
+                    f'could not acquire module {self.mod_name}, {e}'
                 )
                 
         #return(self._modules[self.mod_name]['call'](self.mod_args, self.kwargs))

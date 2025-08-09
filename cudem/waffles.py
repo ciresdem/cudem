@@ -1730,7 +1730,7 @@ class GMTSurface(Waffle):
     < gmt-surface:tension=.35:relaxation=1:max_radius=None:aspect=None:breakline=None:convergence=None:blockmean=False:geographic=True >
     """
     
-    def __init__(self, tension=.35, relaxation=1, max_radius=None,
+    def __init__(self, tension=1, relaxation=1, max_radius=None,
                  aspect=None, breakline=None, convergence=None,
                  blockmean=False, geographic=True, **kwargs):
         super().__init__(**kwargs)
@@ -3775,7 +3775,7 @@ class WafflesCUDEM(Waffle):
     def __init__(
             self,
             pre_mode='gmt-surface',
-            pre_count=1,
+            pre_count=2,
             pre_upper_limit=-0.1,
             pre_smoothing=None,
             weight_levels=None,

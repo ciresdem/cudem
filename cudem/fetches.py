@@ -692,7 +692,7 @@ class Fetch:
                     if check_size \
                        and (total_size != 0) \
                        and (total_size != os.stat(dst_fn).st_size):
-                        raise UnboundLocalError('sizes do not match!')
+                        raise UnboundLocalError(f'sizes do not match! {total_size} {os.stat(dst_fn).st_size}')
 
                 ## 429: "Too Many Requests!"
                 ## 416: "Bad header Range!"
@@ -1036,14 +1036,17 @@ class FetchModule:
 
     
     def fetch_entry(self, entry, check_size=True, retries=5):
-        status = Fetch(
-            url=entry['url'],
-            verbose=self.verbose,
-            headers=self.headers,
-        ).fetch_file(
-            os.path.join(self._outdir, entry['dst_fn']),
-            check_size=check_size
-        )
+        try:
+            status = Fetch(
+                url=entry['url'],
+                verbose=self.verbose,
+                headers=self.headers,
+            ).fetch_file(
+                os.path.join(self._outdir, entry['dst_fn']),
+                check_size=check_size
+            )
+        except:
+            status = -1
         
         return(status)
 
@@ -1196,6 +1199,7 @@ class GMRT(FetchModule):
         ).fetch_req(
             params=self.data, tries=10, timeout=2
         )
+
         if req is not None:
             outf = 'gmrt_{}_{}_{}.{}'.format(
                 self.layer,
@@ -1204,41 +1208,41 @@ class GMRT(FetchModule):
                 'tif' if self.fmt == 'geotiff' else 'grd'
             )
             self.add_entry_to_results(req.url, outf, 'gmrt')
-        else:
-            ## we got multiple URLs, so lets loop through those
-            ## and fetch them individually
-            gmrt_urls = req.json()
-            for url in gmrt_urls:
-                if self.layer == 'topo-mask':
-                    url = url.replace('topo', 'topo-mask')
+        # else:
+        #     ## we got multiple URLs, so lets loop through those
+        #     ## and fetch them individually
+        #     gmrt_urls = req.json()
+        #     for url in gmrt_urls:
+        #         if self.layer == 'topo-mask':
+        #             url = url.replace('topo', 'topo-mask')
 
-                opts = {}
-                for url_opt in url.split('?')[1].split('&'):
-                    opt_kp = url_opt.split('=')
-                    opts[opt_kp[0]] = opt_kp[1]
+        #         opts = {}
+        #         for url_opt in url.split('?')[1].split('&'):
+        #             opt_kp = url_opt.split('=')
+        #             opts[opt_kp[0]] = opt_kp[1]
 
-                url_region = regions.Region().from_list([
-                    float(opts['west']),
-                    float(opts['east']),
-                    float(opts['south']),
-                    float(opts['north'])
-                ])
-                outf = 'gmrt_{}_{}.{}'.format(
-                    opts['layer'],
-                    url_region.format('fn'),
-                    'tif' if self.fmt == 'geotiff' else 'grd'
-                )
-                self.add_entry_to_results(url, outf, 'gmrt')
+        #         url_region = regions.Region().from_list([
+        #             float(opts['west']),
+        #             float(opts['east']),
+        #             float(opts['south']),
+        #             float(opts['north'])
+        #         ])
+        #         outf = 'gmrt_{}_{}.{}'.format(
+        #             opts['layer'],
+        #             url_region.format('fn'),
+        #             'tif' if self.fmt == 'geotiff' else 'grd'
+        #         )
+        #         self.add_entry_to_results(url, outf, 'gmrt')
 
-                ## if want_swath is True, we will download the swath
-                ## polygons so that we can clip the data to that in
-                ## dlim or elsewhere.
-                if self.want_swath:
-                    self.add_entry_to_results(
-                        self._gmrt_swath_poly_url,
-                        'gmrt_swath_polygons.zip',
-                        'gmrt'
-                    )
+        #         ## if want_swath is True, we will download the swath
+        #         ## polygons so that we can clip the data to that in
+        #         ## dlim or elsewhere.
+        #         if self.want_swath:
+        #             self.add_entry_to_results(
+        #                 self._gmrt_swath_poly_url,
+        #                 'gmrt_swath_polygons.zip',
+        #                 'gmrt'
+        #             )
                 
         return(self)
 
@@ -2473,6 +2477,7 @@ class Charts(FetchModule):
             self._charts_query_url, verbose=self.verbose
         ).fetch_req(params=_data)
         if _req is not None:
+            #utils.echo_msg(_req)
             _req_json = _req.json()
             print(len(_req_json['charts']))
             print(_req_json['charts'][0])
@@ -4765,7 +4770,9 @@ class TheNationalMap(FetchModule):
         self.date_end = date_end
         
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
-        self._tnm_api_products_url = 'http://tnmaccess.nationalmap.gov/api/v1/products?'        
+        self._tnm_api_products_url = 'http://tnmaccess.nationalmap.gov/api/v1/products?'
+        self.headers['Host'] = 	'tnmaccess.nationalmap.gov'
+        utils.echo_msg(self.headers)
 
         
     def run(self):
@@ -4804,10 +4811,12 @@ class TheNationalMap(FetchModule):
                 else:
                     _data['dateType'] = 'dateCreated'
 
+            utils.echo_msg(self._tnm_api_products_url)
+            utils.echo_msg(_data)
             _req = Fetch(
                 self._tnm_api_products_url, verbose=self.verbose
             ).fetch_req(params=_data)
-            #utils.echo_msg(_req.url)
+            utils.echo_msg(_req.url)
             if _req is not None:
                 features = _req.json()
                 if 'total' in features.keys():
@@ -6014,7 +6023,21 @@ class OpenStreetMap(FetchModule):
                 '(if: length() > {})'.format(
                     min_length
                 ) if min_length is not None else ''
-            ) 
+            )
+
+        # if self.q == 'place':
+        #     #self.h = '[maxsize:2000000000]'
+        #     self.h = '[timeout:3600]'
+        #     self.q = '''
+        #     nwr["name"=""];
+        #     (._;>;);
+        #     out meta;
+        #     '''.format(
+        #         '(if: length() > {})'.format(
+        #             min_length
+        #         ) if min_length is not None else ''
+        #     )       
+            
             
         ## various OSM URLs
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
@@ -6120,7 +6143,8 @@ class OpenStreetMap(FetchModule):
                 '{}.{}'.format(out_fn, self.fmt),
                 'osm'
             )
-
+        
+        
 ## BING Building Footprints
 class BingBFP(FetchModule):
     """Bing Building Footprints
@@ -7233,6 +7257,30 @@ class CPTCity(FetchModule):
         ) for f in ff]
 
 
+class Nominatim(FetchModule):
+    def __init__(self, q='boulder', **kwargs):
+        super().__init__(name='nominatim', **kwargs)
+        self.q = q
+        self._nom_url = 'https://nominatim.openstreetmap.org/search?'
+        self.headers = {
+            'User-Agent': ('Fetches/CUDEM'),
+            'referer': 'https://nominatim.openstreetmap.org/ui/search.html?q=seattle'
+        }
+
+    def run(self):
+        if utils.str_or(self.q) is not None:
+            q_url = f'{self._nom_url}q={self.q}&format=jsonv2'
+
+        _req = Fetch(
+            q_url,
+            verbose=self.verbose
+        ).fetch_req()
+        if _req is not None:
+            results = _req.json()
+            x = utils.float_or(results["lon"])
+            y = utils.float_or(results["lat"])
+            print(f'{x}, {y}')
+            
 class GPSCoordinates(FetchModule):
     """GPS Coordinates
 
