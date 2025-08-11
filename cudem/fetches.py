@@ -4772,7 +4772,6 @@ class TheNationalMap(FetchModule):
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_api_products_url = 'http://tnmaccess.nationalmap.gov/api/v1/products?'
         self.headers['Host'] = 	'tnmaccess.nationalmap.gov'
-        utils.echo_msg(self.headers)
 
         
     def run(self):
@@ -4811,12 +4810,9 @@ class TheNationalMap(FetchModule):
                 else:
                     _data['dateType'] = 'dateCreated'
 
-            utils.echo_msg(self._tnm_api_products_url)
-            utils.echo_msg(_data)
             _req = Fetch(
                 self._tnm_api_products_url, verbose=self.verbose
             ).fetch_req(params=_data)
-            utils.echo_msg(_req.url)
             if _req is not None:
                 features = _req.json()
                 if 'total' in features.keys():

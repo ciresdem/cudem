@@ -569,7 +569,26 @@ class Hillshade(Perspecto):
         os.rename(rgb_file, outfile)
         return(outfile)
 
-    
+    def gmt_figure(self, colorbar_text='Elevation'):
+        fig = pygmt.Figure()
+        # fig.basemap(
+        #     region=self.dem_region.format('str'),
+        #     frame=[f'a', '+t{self.outfile}'],
+        # )
+        
+        fig.grdimage(
+            frame=[f'af', '+t{self.outfile}'],
+            grid=self.outfile,
+            cmap=False,
+        )
+
+        #if self.want_colorbar:
+        #fig.colorbar(frame=['a{}'.format(self.interval), 'x+lElevation', 'y+1m'])
+        fig.colorbar(frame=['x+l{}'.format(colorbar_text), 'y+1m'])
+
+        fig.savefig('{}_gmt.png'.format(utils.fn_basename2(self.src_dem)))
+            
+        
     def run(self):
         #self.init_cpt(want_gdal=True)
         hs_fn = utils.make_temp_fn('gdaldem_hs.tif', self.outdir)
@@ -590,7 +609,8 @@ class Hillshade(Perspecto):
         utils.remove_glob(hs_fn, cr_fn)
         os.rename(cr_hs_fn, self.outfile)
         #self._modulate(self.outfile)
-        
+
+        #self.gmt_figure()
         return(self.outfile)
 
     
@@ -1011,8 +1031,8 @@ class figure1(GMTImage):
             perspective=False,
             vertical_exaggeration=1.5,
             interval=100,
-            azimuth=-130,
-            elevation=30,
+            azimuth=315,
+            elevation=45,
             shade=True,
             want_colorbar=True,
             colorbar_text='Elevation',
@@ -1060,7 +1080,7 @@ class figure1(GMTImage):
     
     def figure1(self):
         self.grad_grid=pygmt.grdgradient(
-            grid=self.grid, azimuth=[self.azimuth, self.elevation], normalize='e0.6'
+            grid=self.grid, azimuth=[self.azimuth, self.elevation], normalize='e0.9'
         )
         fig = pygmt.Figure()
         # fig.basemap(
@@ -1071,8 +1091,8 @@ class figure1(GMTImage):
         fig.grdimage(
             frame=['af', '+t{}'.format(utils.fn_basename2(self.src_dem))],
             grid=self.grid,
-            #cmap=self.cpt,
-            cmap=True,
+            cmap=self.cpt,
+            #cmap=True,
             shading=self.grad_grid if self.shade else None,
             #dpi=100,
         )

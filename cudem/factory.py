@@ -197,7 +197,7 @@ def dict2args(in_dict: dict):
     
     out_args = ''
     for i, key in enumerate(in_dict.keys()):
-        out_args += '{}={}{}'.format(
+        out_args += '{}="{}"{}'.format(
             key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else ''
         )
         
@@ -413,7 +413,13 @@ class CUDEMFactory:
     }
 
     
-    def __init__(self, mod: str = None, **kwargs: any):
+    def __init__(
+            self,
+            mod: str = None,
+            mod_name: str = '_factory',
+            mod_args: dict = {},
+            **kwargs: any
+    ):
         """
         Initialize the factory default settings
         
@@ -427,8 +433,8 @@ class CUDEMFactory:
         """
         
         self.mod = mod
-        self.mod_name = '_factory'
-        self.mod_args = {}
+        self.mod_name = mod_name
+        self.mod_args = mod_args
         self.kwargs = kwargs
         if self.mod is not None:
             self._parse_mod(self.mod)
@@ -575,7 +581,18 @@ class CUDEMFactory:
         
         try:
             with open(param_file, 'w') as outfile:
-                json.dump(self.__dict__, outfile, indent=4)
+                params = self.__dict__
+                for key in params['mod_args'].keys():
+                    if isinstance(params['mod_args'][key], str):
+                        if os.path.exists(params['mod_args'][key]):
+                            params['mod_args'][key] = os.path.abspath(params['mod_args'][key])
+                    
+                for key in params.keys():
+                    if isinstance(params[key], str):
+                        if os.path.exists(params[key]):
+                            params[key] = os.path.abspath(params[key])
+                            
+                json.dump(params, outfile, indent=4)                
                 utils.echo_msg(
                     f'New CUDEMFactory file written to {param_file}'
                 )

@@ -7231,7 +7231,7 @@ def waffles_cli(argv = sys.argv):
                     if this_inf.src_srs is not None:
                         this_region.src_srs = this_inf.src_srs
                         this_region.warp(dst_srs)
-                        
+
             utils.echo_msg('region is {}'.format(this_region))
             if this_region is None: # couldn't gather a region from the data
                 break
@@ -7248,7 +7248,26 @@ def waffles_cli(argv = sys.argv):
             )
             
         if want_config: # export the waffles module config file
+            this_datalist = dlim.init_data(
+                dls,
+                region=this_region,
+                dst_srs=wg['dst_srs'],
+                want_verbose=wg['verbose'],
+                want_weight=True,
+            )
+            if this_datalist is not None and this_datalist.valid_p(
+                    fmts=dlim.DatasetFactory._modules[this_datalist.data_format]['fmts']
+            ):
+                this_datalist.initialize()
+                wg['data'] = this_datalist.format_data(sep=',')
+                
             wg['src_region'] = this_region.export_as_list()
+            wg['name'] = os.path.abspath(wg['name'])
+            # for key in wg.keys():
+            #     if isinstance(wg[key], str):
+            #         if os.path.exists(wg[key]):
+            #             wg[key] = os.path.abspath(wg[key])
+                    
             this_waffle = WaffleFactory(mod=module, **wg)
             this_waffle.write_parameter_file('{}.json'.format(wg['name']))
         else: # get the waffle module and add it to the queue

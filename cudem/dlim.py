@@ -672,6 +672,7 @@ def write_datalist(data_list, outname=None):
 
     return('{}.datalist'.format(outname))
 
+
 def h5_get_datasets_from_grp(grp, count = 0, out_keys = []):
     if isinstance(grp, h5.Dataset):
         count += 1
@@ -1886,21 +1887,62 @@ class ElevationDataset:
         return(sep.join(['"{}"'.format(str(x)) for x in out]))
 
     
-    def echo(self, **kwargs):
+    def echo(self, sep=' ', **kwargs):
         """print self.data_entries as a datalist entries."""
 
+        out = []
         for entry in self.parse():
             entry_path = os.path.abspath(entry.fn) if not self.remote else entry.fn
+            #entry_data_mod_name = entry.params['mod']
+            #entry_data_mod_args = entry.params['mod_args']
+            #utils.echo_msg(factory.dict2args(entry_data_mod_args))
+            #entry_data_mod = f'{entry.data_format}:{factory.dict2args(entry_data_mod_args)}'
+
+            #l = [entry_path, entry_data_mod, entry.weight, self.echo_(sep=sep)]
             l = [entry_path, entry.data_format]
             if entry.weight is not None:
                 l.append(entry.weight)
-                
-            print('{}'.format(" ".join([str(x) for x in l])))
 
-            
+            entry_string = '{}'.format(sep.join([str(x) for x in l]))
+            out.append(entry_string)
+            print(entry_string)
+
+        return(out)
+
+
+    def format_data(self, sep=' '):
+        out = []
+        if os.path.exists(self.fn):
+            with open(self.fn, 'r') as f:
+                count = sum(1 for _ in f)
+            with open(self.fn, 'r') as op:
+                with tqdm(
+                        total=count,
+                        desc=f'parsing datalist {self.fn}...',
+                        leave=self.verbose
+                ) as pbar:
+                    for l, this_line in enumerate(op):
+                        pbar.update()
+                        ## parse the datalist entry line
+                        if this_line[0] != '#' \
+                           and this_line[0] != '\n' \
+                               and this_line[0].rstrip() != '':
+                            fn = this_line.split(' ')[0]
+                            if os.path.exists(fn) and \
+                               fn not in fetches.FetchesFactory._modules:
+                                this_line = ' '.join([os.path.abspath(fn)] + this_line.split(' ')[1:])
+                            out.append(this_line)
+        
+        # for entry in self.parse():
+        #     out.append(entry.format_entry(sep=sep))
+
+        return(out)
+
+    
     def format_entry(self, sep=' '):
         """format the dataset information as a `sep` separated string."""
-        
+
+        utils.echo_msg_bold(self.params)
         dl_entry = sep.join(
             [str(x) for x in [
                 self.fn,
