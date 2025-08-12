@@ -3210,7 +3210,7 @@ class CSB(FetchModule):
         self._csb_query_url = '{0}/{1}/query?'.format(self._csb_map_server, layer)
         
         ## for dlim
-        self.data_format = '168:skip=1:xpos=2:ypos=3:zpos=4:z_scale=-1:delimiter=,'
+        self.data_format = '168:skip=1:xpos=2:ypos=3:zpos=4:z_scale=-1:delim=,'
         self.src_srs = 'epsg:4326+5866'
 
         self.title = 'Crowd Sourced Bathymetry'

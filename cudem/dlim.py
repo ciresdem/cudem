@@ -9383,7 +9383,7 @@ class EMODNetFetcher(Fetcher):
     def yield_ds(self, result):
         if result['data_type'] == 'csv':
             self.fetches_params['data_format'] \
-                = '168:skip=1:xpos=2:ypos=1:zpos=3:delimiter=,'
+                = '168:skip=1:xpos=2:ypos=1:zpos=3:delim=,'
         elif result['data_type'] == 'nc':
             self.fetches_params['data_format'] = 200
             
