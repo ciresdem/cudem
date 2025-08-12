@@ -6122,8 +6122,9 @@ class WaffleDEM:
                     )
                     
             else:
-                utils.echo_error_msg(
-                    f'could not find clip ogr source/clip keyword {clip_args["src_ply"]}'
+                utils.echo_warning_msg(
+                    ('could not find clip ogr source/clip '
+                     f'keyword {clip_args["src_ply"]}')
                 )
 
                 
