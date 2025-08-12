@@ -364,7 +364,7 @@ class Waffle:
             stack_fltrs=stack_fltr,
             invert_region=False,
             cache_dir=self.cache_dir,
-            stack_mode=self.stack_mode
+            stack_mode=self.stack_mode,
         )
 
         if self.data is not None:
@@ -2715,7 +2715,7 @@ class WafflesCoastline(Waffle):
 
             
     def _load_osm_coast(self):
-        this_cst = self.fetch_data('osm:q=coastline')
+        this_cst = self.fetch_data('osm:q=coastline', check_size=False)
         if this_cst is not None:
             with tqdm(
                     total=len(this_cst.results),
@@ -3896,7 +3896,7 @@ class WafflesCUDEM(Waffle):
             dst_srs=self.dst_srs,
             srs_transform=self.srs_transform,
             clobber=True,
-            verbose=False)._acquire_module()
+            verbose=True)._acquire_module()
         coastline.initialize()
         coastline.generate()
 
@@ -4013,6 +4013,7 @@ class WafflesCUDEM(Waffle):
                     (f'{self.stack},200:band_no=1:weight_mask=3:'
                      'uncertainty_mask=4:sample=cubicspline,1')]
                 coastline = self.generate_coastline(pre_data=coast_data)
+                utils.echo_msg_bold(coastline)
                 pre_clip = coastline
 
         ## Grid/Stack the data `pre` times concluding in full
@@ -7151,12 +7152,18 @@ def waffles_cli(argv = sys.argv):
         if os.path.exists(wg_user):
             with open(wg_user, 'r') as wgj:
                 wg = json.load(wgj)
-                if wg['kwargs']['src_region'] is not None:
-                    wg['kwargs']['src_region'] = regions.Region().from_list(
-                        wg['kwargs']['src_region']
-                    )
+                # if wg['kwargs']['src_region'] is not None and \
+                #    isinstance(wg['kwargs']['src_region'], list):
+                #     wg['kwargs']['src_region'] = regions.Region().from_list(
+                #         wg['kwargs']['src_region']
+                #     )
 
-            this_waffle = WaffleFactory(mod=wg['mod'], **wg['kwargs'])
+            this_waffle = WaffleFactory(
+                mod=None,
+                mod_name=wg['mod_name'],
+                mod_args=wg['mod_args'],
+                **wg['kwargs']
+            )
             this_waffle_module = this_waffle._acquire_module()
             waffle_q.put([this_waffle_module])
         else:
@@ -7254,20 +7261,33 @@ def waffles_cli(argv = sys.argv):
                 dst_srs=wg['dst_srs'],
                 want_verbose=wg['verbose'],
                 want_weight=True,
+                xy_inc=[wg['xinc'],wg['yinc']],
+                
             )
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=dlim.DatasetFactory._modules[this_datalist.data_format]['fmts']
             ):
                 this_datalist.initialize()
-                wg['data'] = this_datalist.format_data(sep=',')
+                wg['data'] = []
+                for this_entry in this_datalist.parse():
+                    params = this_entry.params
+
+                    if params['kwargs']['pnt_fltrs'] is not None and \
+                       isinstance(params['kwargs']['pnt_fltrs'], list):
+                        for fltr in params['kwargs']['pnt_fltrs']:
+                            fltr_dict = factory.fmod2dict(fltr)
+                            fltr_dict = utils.dict_path2abspath(fltr_dict)
+                            params['kwargs']['pnt_fltrs'] = factory.dict2fmod(fltr_dict)
+                    
+                    params['kwargs'].pop('params')
+                    params['kwargs'].pop('parent')
+                    params['kwargs']['src_region'] = \
+                        params['kwargs']['src_region'].export_as_list()
+                    params = utils.dict_path2abspath(params, except_keys=['mod'])
+                    wg['data'].append(params)
                 
             wg['src_region'] = this_region.export_as_list()
             wg['name'] = os.path.abspath(wg['name'])
-            # for key in wg.keys():
-            #     if isinstance(wg[key], str):
-            #         if os.path.exists(wg[key]):
-            #             wg[key] = os.path.abspath(wg[key])
-                    
             this_waffle = WaffleFactory(mod=module, **wg)
             this_waffle.write_parameter_file('{}.json'.format(wg['name']))
         else: # get the waffle module and add it to the queue

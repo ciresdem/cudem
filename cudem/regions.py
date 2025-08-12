@@ -163,7 +163,17 @@ class Region:
         if self.ymax >= 90:
             self.ymax = 90 if not just_below else 89.85            
 
-            
+
+    def from_user_input(self, region_like):
+        if isinstance(region_like, list):
+            return(self.from_list(region_like))
+        elif isinstance(region_like, str):
+            return(self.from_string(region_like))
+        elif isinstance(region_like, Region):
+            return(self.from_region(region_like))
+
+        return(self)
+        
     def from_list(self, region_list):
         """import a region from a region list 
 

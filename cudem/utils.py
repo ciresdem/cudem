@@ -389,6 +389,37 @@ def flatten_recursive(nested_list):
     return(flat_list)
 
 
+def dict_path2abspath(d = {}, except_keys = []):
+    for key in d.keys():
+        if key in except_keys:
+            continue
+        
+        if isinstance(d[key], dict):
+            d[key] = dict_path2abspath(d[key])
+        elif isinstance(d[key], str):
+            # if len(factory.fmod2dict(d[key])) > 1:
+            #     dd = factory.fmod2dict(d[key])
+            #     dd = dict_path2abspath(dd)
+            #     d[key] = factory.dict2fmod(dd)            
+            if os.path.exists(d[key]):
+                d[key] = os.path.abspath(d[key])
+                
+        # elif isinstance(d[key], list):
+        #     d_list = []
+        #     for dd in d[key]:
+        #         if isinstance(dd, str):
+        #             if len(factory.fmod2dict(dd)) > 1:
+        #                 dd = factory.fmod2dict(dd)
+        #                 dd = dict_path2abspath(dd)
+        #                 dd = factory.dict2fmod(dd)            
+        #             elif os.path.exists(d[key]):
+        #                 dd = os.path.abspath(dd)
+        #         d_list.append(dd)
+        #     d[key] = d_list
+            
+    return(d)
+                
+
 def int_or(val, or_val=None):
     """return val if val is integer
 

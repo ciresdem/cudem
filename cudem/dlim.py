@@ -719,34 +719,55 @@ def init_data(data_list,
     """initialize a datalist object from a list of supported dataset entries"""
 
     try:
-        xdls = [DatasetFactory(
-            mod=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-            data_format = None,
-            weight=None if not want_weight else 1,
-            uncertainty=None if not want_uncertainty else 0,
-            src_srs=src_srs,
-            dst_srs=dst_srs,
-            src_geoid=src_geoid,
-            dst_geoid=dst_geoid,
-            x_inc=xy_inc[0],
-            y_inc=xy_inc[1],
-            sample_alg=sample_alg,
-            parent=None,
-            src_region=region,
-            invert_region=invert_region,
-            cache_dir=cache_dir,
-            want_mask=want_mask,
-            want_sm=want_sm,
-            verbose=want_verbose,
-            dump_precision=dump_precision,
-            pnt_fltrs=pnt_fltrs,
-            stack_fltrs=stack_fltrs,
-            stack_node=stack_node,
-            stack_mode=stack_mode,
-            upper_limit=None,
-            lower_limit=None,
-            mask=mask
-        )._acquire_module() for dl in data_list]
+        #utils.echo_msg(data_list[0])
+        xdls = []
+        for dl in data_list:
+            if isinstance(dl, str):
+                xdls.append(
+                    DatasetFactory(
+                        mod=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+                        data_format = None,
+                        weight=None if not want_weight else 1,
+                        uncertainty=None if not want_uncertainty else 0,
+                        src_srs=src_srs,
+                        dst_srs=dst_srs,
+                        src_geoid=src_geoid,
+                        dst_geoid=dst_geoid,
+                        x_inc=xy_inc[0],
+                        y_inc=xy_inc[1],
+                        sample_alg=sample_alg,
+                        parent=None,
+                        src_region=region,
+                        invert_region=invert_region,
+                        cache_dir=cache_dir,
+                        want_mask=want_mask,
+                        want_sm=want_sm,
+                        verbose=want_verbose,
+                        dump_precision=dump_precision,
+                        pnt_fltrs=pnt_fltrs,
+                        stack_fltrs=stack_fltrs,
+                        stack_node=stack_node,
+                        stack_mode=stack_mode,
+                        upper_limit=None,
+                        lower_limit=None,
+                        mask=mask
+                    )._acquire_module()
+                )
+            elif isinstance(dl, dict):
+                    
+                if dl['kwargs']['src_region'] is not None:
+                    dl['kwargs']['src_region'] = regions.Region().from_list(
+                        dl['kwargs']['src_region']
+                )
+                dl['kwargs']['xinc'] = xy_inc[0]
+                dl['kwargs']['yinc'] = xy_inc[1]
+                xdls.append(
+                    DatasetFactory(
+                        mod_name=dl['mod_name'], mod_args=dl['mod_args'], **dl['kwargs']
+                    )._acquire_module()
+                )
+
+        #utils.echo_msg(region)
 
         if len(xdls) > 1:
             this_datalist = Scratch(
@@ -781,15 +802,16 @@ def init_data(data_list,
             this_datalist = xdls[0]
         else:
             this_datalist = None
-
+            
         return(this_datalist)
     
-    except Exception as e:
+    except:
+        #utils.echo_warning_msg('failed to parse datalist obs')
         utils.echo_error_msg(
             f'could not initialize data, {data_list}: {e}'
         )
         return(None)
-
+    
     
 ###############################################################################
 ## PointZ filters
@@ -1602,6 +1624,9 @@ class ElevationDataset:
         self.metadata = copy.deepcopy(metadata) # dataset metadata
         self.parent = parent # dataset parent obj
         self.region = src_region # ROI
+        if self.region is not None:
+            self.region = regions.Region().from_user_input(self.region)
+            
         self.invert_region = invert_region # invert the region
         self.cache_dir = cache_dir # cache_directory
         self.verbose = verbose # be verbose
@@ -1792,7 +1817,7 @@ class ElevationDataset:
                     f'could not parse dataset {self.fn}'
                 )
                 return(self)
-
+                
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
@@ -1893,12 +1918,6 @@ class ElevationDataset:
         out = []
         for entry in self.parse():
             entry_path = os.path.abspath(entry.fn) if not self.remote else entry.fn
-            #entry_data_mod_name = entry.params['mod']
-            #entry_data_mod_args = entry.params['mod_args']
-            #utils.echo_msg(factory.dict2args(entry_data_mod_args))
-            #entry_data_mod = f'{entry.data_format}:{factory.dict2args(entry_data_mod_args)}'
-
-            #l = [entry_path, entry_data_mod, entry.weight, self.echo_(sep=sep)]
             l = [entry_path, entry.data_format]
             if entry.weight is not None:
                 l.append(entry.weight)
@@ -1911,30 +1930,9 @@ class ElevationDataset:
 
 
     def format_data(self, sep=' '):
-        out = []
-        if os.path.exists(self.fn):
-            with open(self.fn, 'r') as f:
-                count = sum(1 for _ in f)
-            with open(self.fn, 'r') as op:
-                with tqdm(
-                        total=count,
-                        desc=f'parsing datalist {self.fn}...',
-                        leave=self.verbose
-                ) as pbar:
-                    for l, this_line in enumerate(op):
-                        pbar.update()
-                        ## parse the datalist entry line
-                        if this_line[0] != '#' \
-                           and this_line[0] != '\n' \
-                               and this_line[0].rstrip() != '':
-                            fn = this_line.split(' ')[0]
-                            if os.path.exists(fn) and \
-                               fn not in fetches.FetchesFactory._modules:
-                                this_line = ' '.join([os.path.abspath(fn)] + this_line.split(' ')[1:])
-                            out.append(this_line)
-        
-        # for entry in self.parse():
-        #     out.append(entry.format_entry(sep=sep))
+        out = []        
+        for entry in self.parse():
+            out.append(entry.format_entry(sep=sep))
 
         return(out)
 
@@ -1942,7 +1940,6 @@ class ElevationDataset:
     def format_entry(self, sep=' '):
         """format the dataset information as a `sep` separated string."""
 
-        utils.echo_msg_bold(self.params)
         dl_entry = sep.join(
             [str(x) for x in [
                 self.fn,
@@ -3810,7 +3807,7 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, verbose=self.verbose
+                                    mod=f, points=points, verbose=False
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()

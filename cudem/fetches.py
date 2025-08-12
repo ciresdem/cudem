@@ -5992,7 +5992,7 @@ class OpenStreetMap(FetchModule):
             
         if self.q == 'coastline':
             #self.h = '[maxsize:2000000000]'
-            self.h = '[timeout:3600]'
+            self.h = '[timeout:32]'
             self.q = '''
             (way["natural"="coastline"]{};
             relation["type"="lines"];
