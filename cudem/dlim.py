@@ -798,6 +798,7 @@ def init_data(data_list,
                 lower_limit=None,
                 mask=mask
             )
+
         elif len(xdls) > 0:
             this_datalist = xdls[0]
         else:
@@ -2399,7 +2400,7 @@ class ElevationDataset:
             self.infos = self.generate_inf()
             
             ## update this
-            if self.data_format >= -2 and write_inf:
+            if self.data_format >= -3 and write_inf:
                 self.infos.write_inf_file()
 
             if recursive_check and self.parent is not None:
@@ -3807,7 +3808,7 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, verbose=False
+                                    mod=f, points=points, verbose=True
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
@@ -7651,7 +7652,7 @@ class Scratch(ElevationDataset):
         self.region = None
         out_regions = []
         out_srs = []
-        for entry in self.parse():
+        for entry in self.parse():            
             entry_minmax = entry.infos.minmax
             ## entry has an srs and dst_srs is set,
             ## so lets transform the region to suit

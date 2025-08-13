@@ -3915,7 +3915,7 @@ class WafflesCUDEM(Waffle):
                 if len(self.weight_levels) == 0:
                     # self.stack isn't set yet!
                     tmp_weight = gdalfun.gdal_percentile(
-                        self.stack, perc=75, band=3
+                        self.stack, perc=99, band=3
                     ) 
                     tmp_weight = utils.float_or(tmp_weight, 1)
                 else:
@@ -4013,7 +4013,7 @@ class WafflesCUDEM(Waffle):
                     (f'{self.stack},200:band_no=1:weight_mask=3:'
                      'uncertainty_mask=4:sample=cubicspline,1')]
                 coastline = self.generate_coastline(pre_data=coast_data)
-                utils.echo_msg_bold(coastline)
+                #utils.echo_msg_bold(coastline)
                 pre_clip = coastline
 
         ## Grid/Stack the data `pre` times concluding in full
@@ -4099,7 +4099,7 @@ class WafflesCUDEM(Waffle):
                     #else self.stack_mode,
                     upper_limit=self.pre_upper_limit if pre != 0 else None,
                     keep_auxiliary=False,
-                    fltr=self.pre_smoothing if pre != 0 else last_fltr,
+                    fltr=self.pre_smoothing if pre != 0 else None,#last_fltr,
                     percentile_limit=self.flatten if pre == 0 else None
                 )._acquire_module()
                 pre_surface.initialize()
