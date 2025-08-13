@@ -7348,6 +7348,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'CoNED': {'call': CoNED},
         'CUDEM': {'call': CUDEM},
         'multibeam': {'call': Multibeam}, # MBDB isn't working!
+        'mbdb': {'call': MBDB},
         'r2r': {'call': R2R},
         'MBDB': {'call': MBDB},# isn't working!
         'gebco': {'call': GEBCO},

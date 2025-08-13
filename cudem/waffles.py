@@ -3764,6 +3764,8 @@ class WafflesCUDEM(Waffle):
     pre_smoothing (float) - the smoothing (blur) factor to apply to the pre-surfaces
     pre_verbose (bool) - increase the verbosity of pre-surface generation
     landmask (bool): path to coastline vector mask or set as `coastline` to auto-generate
+    invert_landmask (bool): invert the coastline mask, invert assumes mask over ocean, while
+                            non invert assumes mask over land.
     want_supercede (bool) - supercede subsquent pre-surfaces
     flatten (float) - the nodata-size percentile above which to flatten
     exclude_lakes (bool) - exclude lakes from the landmask
@@ -3781,6 +3783,7 @@ class WafflesCUDEM(Waffle):
             weight_levels=None,
             inc_levels=None,
             landmask=False,
+            invert_landmask=True,
             filter_outliers=None,
             want_supercede=False,
             flatten=None,
@@ -3856,6 +3859,7 @@ class WafflesCUDEM(Waffle):
             self.inc_levels = []
             
         self.landmask = landmask
+        self.invert_landmask = invert_landmask
         self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) \
             if landmask \
                else None
@@ -3901,7 +3905,7 @@ class WafflesCUDEM(Waffle):
         coastline.generate()
 
         if coastline is not None:
-            return('{}.shp:invert=True'.format(coastline.name))
+            return('{}.shp:invert={}'.format(coastline.name, self.invert_landmask))
         else:
             return(None)
 
@@ -4006,7 +4010,7 @@ class WafflesCUDEM(Waffle):
             if isinstance(self.landmask, str):
                 if os.path.exists(self.landmask.split(':')[0]):
                     # todo: update to make 'invert' an option
-                    pre_clip = '{}:invert=True'.format(self.landmask) 
+                    pre_clip = '{}:invert={}'.format(self.landmask, self.invert_landmask) 
 
             if pre_clip is None:
                 coast_data = [
