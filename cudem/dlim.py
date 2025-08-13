@@ -3804,11 +3804,12 @@ class ElevationDataset:
 
                 if len(points) > 0:
                     ## apply any dlim filters to the points
+                    #utils.echo_msg(points)
                     if isinstance(self.pnt_fltrs, list):
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, verbose=True
+                                    mod=f, points=points, verbose=False
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
@@ -7595,16 +7596,31 @@ class OGRFile(ElevationDataset):
                                     x[2] = elev
 
                     if isinstance(xyzs[0], list):
+                        #[x.append(weight if weight is not None else 1) for x in xyzs]
+                        #[x.append(unc if unc is not None else 0) for x in xyzs]
+                        
                         for x in xyzs:
                             x.append(weight if weight is not None else 1)
                             x.append(unc if unc is not None else 0)
-                            points = np.rec.fromrecords(
-                                [x], names='x, y, z, w, u'
-                            )
-                            if self.z_scale is not None:
-                                points['z'] *= self.z_scale
+                            
+                        points = np.rec.fromrecords(
+                            xyzs, names='x, y, z, w, u'
+                        )
+                        if self.z_scale is not None:
+                            points['z'] *= self.z_scale
+                            
+                        yield(points)
 
-                            yield(points)
+                        # for x in xyzs:
+                        #     x.append(weight if weight is not None else 1)
+                        #     x.append(unc if unc is not None else 0)
+                        #     points = np.rec.fromrecords(
+                        #         [x], names='x, y, z, w, u'
+                        #     )
+                        #     if self.z_scale is not None:
+                        #         points['z'] *= self.z_scale
+
+                        #     yield(points)
                                 
             ds_ogr = layer_s = None
 
@@ -7710,11 +7726,13 @@ class Scratch(ElevationDataset):
                         fmts=DatasetFactory._modules[this_ds.data_format]['fmts']
                 ):
                     this_ds.initialize()
-                    for ds in this_ds.parse():
-                        # fill self.data_entries with each dataset for
-                        # use outside the yield.
-                        self.data_entries.append(ds)
-                        yield(ds)
+                    self.data_entries.append(this_ds)
+                    yield(this_ds)
+                    #for ds in this_ds.parse():
+                    # fill self.data_entries with each dataset for
+                    # use outside the yield.
+                    #self.data_entries.append(ds)
+                    #yield(ds)
 
                         
 class Datalist(ElevationDataset):
