@@ -2632,11 +2632,17 @@ class NauticalCharts(FetchModule):
 class MBDB(FetchModule):
     """MBDB fetching. This is a test module and does not work."""
     
-    def __init__(self, where = '1=1', **kwargs):
+    def __init__(self, where='1=1', layer=0, **kwargs):
         super().__init__(name='multibeam', **kwargs)
         self.where = where        
         self._mb_dynamic_url = ('https://gis.ngdc.noaa.gov/arcgis/rest/'
                                 'services/multibeam_footprints/MapServer/0')
+        self._mb_features_url = ('https://gis.ngdc.noaa.gov/arcgis/rest/'
+                                 'services/multibeam_datasets/FeatureServer/')
+        self._mb_features_products_url = f'{self._mb_features_url}0'
+        self._mb_features_processed_url = f'{self._mb_features_url}1'
+        self._mb_features_raw_url = f'{self._mb_features_url}2'
+
         self._mb_query_url = '{0}/query?'.format(self._mb_dynamic_url)
 
         
@@ -2656,9 +2662,11 @@ class MBDB(FetchModule):
             'returnGeometry':'False',
         }
         _req = Fetch(
-            self._mb_query_url, verbose=self.verbose
+            self._mb_features_processed_url, verbose=self.verbose
         ).fetch_req(params=_data)
         if _req is not None:
+            print(_req.url)
+            print(_req.text)
             features = _req.json()
             for feature in features['features']:
                 print(feature)

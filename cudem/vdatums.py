@@ -1077,7 +1077,8 @@ def vdatums_cli(argv = sys.argv):
         # utils.echo_msg('trans region: {}'.format(trans_region))
         # utils.echo_msg('input inf: {}'.format(src_infos))
         
-        vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, wm=wm, cache_dir=cache_dir)
+        vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc,
+                               vdatum_in, vdatum_out, wm=wm, cache_dir=cache_dir)
         _trans_grid, _trans_grid_unc = vt.run()
         out_trans_grid = utils.make_temp_fn('_trans_grid.tif', cache_dir)
         
