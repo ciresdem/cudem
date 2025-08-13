@@ -4608,8 +4608,8 @@ class DAV(FetchModule):
                     except:
                         status = -1
 
-                    utils.echo_msg(index_zipurl)
-                    utils.echo_msg(status)
+                    #utils.echo_msg(index_zipurl)
+                    #utils.echo_msg(status)
                     if status == 0:
                         index_shps = utils.p_unzip(
                             index_zipfile, ['shp', 'shx', 'dbf', 'prj'],
