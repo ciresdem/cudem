@@ -4068,7 +4068,7 @@ class BUOYS(FetchModule):
 
     
 ## Digital Coast - Data Access Viewer
-class DAV(FetchModule):
+class DAV_old(FetchModule):
     """Fetch NOAA lidar data from DAV
 
     Uses Digital Coasts Data Access Viewer Mapserver to discover
@@ -4224,6 +4224,8 @@ class DAV(FetchModule):
                 utils.echo_error_msg(
                     'DAV failed to execute query...try again later'
                 )
+                utils.echo_msg(_req.text)
+                utils.echo_msg(_req.url)
             else:
                 for feature in features['features']:
                     if self.datatype is not None:
@@ -4425,6 +4427,305 @@ class DAV(FetchModule):
         #self.results = [x for x in np.unique(self.results, axis=0)]
         return(self)
 
+
+class DAV(FetchModule):
+    """Fetch NOAA lidar data from DAV
+
+    Uses Digital Coasts Data Access Viewer Mapserver to discover
+    dataset footprints.
+
+    This map service presents spatial information about Elevation Data Access 
+    Viewer services across the United States and Territories in the Web 
+    Mercator projection. The service was developed by the National Oceanic 
+    and Atmospheric Administration (NOAA), but may contain data and information 
+    from a variety of data sources, including non-NOAA data. 
+
+    NOAA provides the information “as-is” and shall incur no responsibility or 
+    liability as to the completeness or accuracy of this information. NOAA 
+    assumes no responsibility arising from the use of this information. 
+    The NOAA Office for Coastal Management will make every effort to provide 
+    continual access to this service but it may need to be taken down during
+    routine IT maintenance or in case of an emergency. If you plan to ingest 
+    this service into your own application and would like to be informed about 
+    planned and unplanned service outages or changes to existing services, 
+    please register for our Data Services Newsletter 
+    (http://coast.noaa.gov/digitalcoast/publications/subscribe). 
+
+    For additional information, please contact the NOAA Office for Coastal 
+    Management (coastal.info@noaa.gov).
+
+    https://coast.noaa.gov
+    
+    Use where=SQL_QUERY to query the MapServer to filter datasets
+
+    * For CUDEM tiles, use where="ID=8483" (1/9) or where="ID=8580" (1/3) or where="Name LIKE '%CUDEM%'" for all available.
+    * For OCM SLR DEMs, use where="ID=6230" or where="Name LIKE '%Sea Level Rise%'"
+    * For USGS CoNED DEMs, use where="ID=9181" or where="Name LIKE '%CoNED%'"
+    * To only return lidar data, use datatype=lidar, for only raster, use datatype=dem
+    * datatype is either 'lidar', 'dem' or 'sm'
+
+    < digital_coast:where=None:datatype=None:footprints_only=False >
+    """
+    
+    def __init__(
+            self,
+            where='1=1',
+            index=False,
+            datatype=None,
+            layer=0,
+            name='digital_coast',
+            want_footprints=False,
+            footprints_only=False,
+            **kwargs
+    ):
+        super().__init__(name=name, **kwargs)
+        self.where = where
+        self.index = index
+        self.datatype = datatype
+        self.layer = utils.int_or(layer)
+    
+        ## The various DAV URLs
+        self._dav_api_url = ('https://maps.coast.noaa.gov/arcgis/rest/services/'
+                             'DAV/DAV_footprints/MapServer/')
+
+        ## data formats vary
+        self.data_format = None
+        self.want_footprints = want_footprints
+        self.footprints_only = footprints_only
+        if self.footprints_only:
+            self.want_footprints = True
+
+            
+    def run(self):
+        '''Run the DAV fetching module'''
+        
+        if self.region is None:
+            return([])
+
+        _data = {
+            'where': self.where,
+            'outFields': '*',
+            'geometry': self.region.format('bbox'),
+            'inSR':4326,
+            #'outSR':4326,
+            'f':'pjson',
+            'returnGeometry':'False',
+        }
+        _req = Fetch(
+            self._dav_api_url + str(self.layer) + '/query?', verbose=self.verbose
+        ).fetch_req(params=_data)
+        if _req is not None:
+            features = _req.json()
+            if not 'features' in features.keys():
+                utils.echo_error_msg(
+                    'DAV failed to execute query...try again later'
+                )
+                utils.echo_msg(_req.text)
+                utils.echo_msg(_req.url)
+            else:
+                for feature in features['features']:
+                    if self.datatype is not None:
+                        if self.datatype.lower() != feature['attributes']['data_type'].lower():
+                            if self.datatype.lower() != 'sm':
+                                continue
+
+                    fid = feature['attributes']['id']
+                    metadata_link = feature['attributes']['metadata']
+                    page = Fetch(metadata_link, verbose=False).fetch_html()
+                    if page is None:
+                        utils.echo_msg(metadata_link)
+                        continue
+                    
+                    index_urls = page.xpath('//a[contains(@href, "index.html")]/@href')
+                    if len(index_urls) == 0:
+                        #utils.echo_msg(metadata_link)
+                        #page = Fetch(metadata_link, verbose=False).fetch_xml()
+                        #index_urls = page.findall('.//distributorTransferOptions')
+                        index_urls = page.xpath(f'//a[contains(@href, "_{fid}/")]/@href')
+
+                    if len(index_urls) == 0:
+                        continue
+                    
+                    # for link in links['links']:
+                    #     if link['serviceID'] == 46 \
+                    #        and (self.datatype == 'lidar' \
+                    #             or self.datatype == 'dem' \
+                    #             or self.datatype is None):
+                    surv_name = '_'.join(index_urls[0].split('/')[-2].split('_'))
+                    index_zipfile = os.path.join(
+                        self._outdir, 'tileindex_{}.zip'.format(surv_name)
+                    )
+                    page = Fetch(index_urls[0], verbose=False).fetch_html()
+                    if page is None:
+                        utils.echo_msg(index_urls)
+                        continue
+                    
+                    rows = page.xpath('//a[contains(@href, ".txt")]/@href')
+                    for l in rows:
+                        if 'urllist' in l:
+                            urllist = l
+                            break
+
+                    #utils.echo_msg(urllist)
+                        
+                    if 'http' in urllist:
+                        urllist_url = urllist
+                    else:
+                        urllist_url = os.path.dirname(index_urls[0]) + '/' + urllist
+
+                    urllist = os.path.join(self._outdir, os.path.basename(urllist))
+                    status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
+                    if not os.path.exists(urllist):
+                        continue
+
+                    with open(urllist, 'r') as ul:
+                        for line in ul:
+                            if 'tileindex' in line and 'zip' in line:
+                                index_zipurl = line.strip()
+                                break
+
+                    utils.remove_glob(urllist)
+                    if self.want_footprints:
+                        self.add_entry_to_results(
+                            index_zipurl,
+                            os.path.join(
+                                '{}/{}'.format(
+                                    feature['attributes']['id'],
+                                    index_zipurl.split('/')[-1]
+                                )
+                            ),
+                            'footprint'
+                        )
+                        if self.footprints_only:
+                            continue
+
+                    try:
+                        status = Fetch(
+                            index_zipurl,
+                            callback=self.callback,
+                            verbose=self.verbose
+                        ).fetch_file(index_zipfile)
+                    except:
+                        status = -1
+
+                    utils.echo_msg(index_zipurl)
+                    utils.echo_msg(status)
+                    if status == 0:
+                        index_shps = utils.p_unzip(
+                            index_zipfile, ['shp', 'shx', 'dbf', 'prj'],
+                            outdir=self._outdir,
+                            verbose=True
+                        )
+                        index_shp = None
+                        for v in index_shps:
+                            if v.split('.')[-1] == 'shp':
+                                index_shp = v
+
+                        warp_region = self.region.copy()
+                        index_prj = None
+                        for v in index_shps:
+                            if v.split('.')[-1] == 'prj':
+                                index_prj = v
+
+                        if index_prj is not None:
+                            prj_ds = open(index_prj)
+                            prj_wkt = prj_ds.read()
+                            warp_region.warp(dst_crs = prj_wkt)
+                            prj_ds.close()
+
+                        index_ds = ogr.Open(index_shp)
+                        index_layer = index_ds.GetLayer(0)
+                        for index_feature in index_layer:
+                            index_geom = index_feature.GetGeometryRef()
+                            known_name_fields = ['Name', 'location', 'filename']
+                            known_url_fields = ['url', 'URL']
+
+                            if index_geom.Intersects(warp_region.export_as_geom()):
+                                tile_name = None
+                                tile_url = None
+                                field_names = [field.name for field in index_layer.schema]
+
+                                for f in known_name_fields:
+                                    if f in field_names:
+                                        tile_name = index_feature.GetField(f).strip()
+
+                                    if tile_name is not None:
+                                        break
+
+                                for f in known_url_fields:
+                                    if f in field_names:
+                                        tile_url = index_feature.GetField(f).strip()
+
+                                    if tile_url is not None:
+                                        break
+
+                                if tile_name is None or tile_url is None:
+                                    utils.echo_warning_msg('could not parse index fields')
+                                    continue
+
+                                tile_url = '/'.join(tile_url.split('/')[:-1]) + '/' + tile_name.split('/')[-1]
+                                ## add vertical datum to output;
+                                ## field is NativeVdatum
+                                ## must get from metadata
+                                # if ept_infos is None:
+                                #     this_epsg = vdatums.get_vdatum_by_name(
+                                #         feature['attributes']['NativeVdatum']
+                                #     )
+                                # else:
+                                #     #print(ept_infos['srs'])
+                                #     ## horizontal datum is wrong in ept, most seem to be nad83
+                                #     #this_epsg = 'epsg:{}+{}'.format(ept_infos['srs']['horizontal'], ept_infos['srs']['vertical'])
+                                #     if 'vertical' in ept_infos['srs'].keys():
+                                #         vertical_epsg = ept_infos['srs']['vertical']
+                                #         horizontal_epsg = ept_infos['srs']['horizontal']
+                                #         this_epsg = 'epsg:{}+{}'.format(
+                                #             horizontal_epsg, vertical_epsg
+                                #         )
+                                #         #this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
+                                #     else:
+                                #         # try to extract the vertical datum from the wkt
+                                #         #horizontal_epsg = ept_infos['srs']['horizontal']
+                                #         this_wkt = ept_infos['srs']['wkt']
+                                #         dst_horz, dst_vert = gdalfun.epsg_from_input(
+                                #             this_wkt
+                                #         )
+                                #         this_epsg = '{}+{}'.format(
+                                #             dst_horz, dst_vert
+                                #         )
+
+                                self.add_entry_to_results(
+                                    tile_url,
+                                    os.path.join(
+                                        '{}/{}'.format(
+                                            feature['attributes']['id'],
+                                            tile_url.split('/')[-1]
+                                        )
+                                    ),
+                                    feature['attributes']['data_type'],
+                                    #this_epsg=this_epsg,
+                                )
+
+                        index_ds = index_layer = None
+                        #if not self.want_footprints:
+                        utils.remove_glob(index_zipfile, *index_shps)
+                        #utils.remove_glob(*index_shps)
+
+                # # spatial_metadata
+                # elif link['serviceID'] == 166 and self.datatype == 'sm': 
+                #     self.add_entry_to_results(
+                #         link['link'],
+                #         os.path.join(
+                #             '{}/{}'.format(
+                #                 feature['attributes']['ID'],
+                #                 link['link'].split('/')[-1]
+                #             )
+                #         ),
+                #         link['label'],
+                #         this_epsg=None
+                #     )
+ 
+        #self.results = [x for x in np.unique(self.results, axis=0)]
+        return(self)
     
 ## Digital Coast - Data Access Viewer - SLR shortcut
 class SLR(DAV):
@@ -4458,12 +4759,14 @@ class CUDEM(DAV):
     """
     
     def __init__(self, datatype = None, **kwargs):
+        datatype = utils.str_or(datatype, 'all')
+
         if datatype == '19' or datatype.lower() == 'ninth':
-            where="NAME LIKE '%CUDEM%Ninth%'"
+            where="title LIKE '%CUDEM%Ninth%'"
         elif datatype == '13' or datatype.lower() == 'third':
-            where="NAME LIKE '%CUDEM%Third%'"
+            where="title LIKE '%CUDEM%Third%'"
         else:
-            where="NAME LIKE '%CUDEM%'"
+            where="title LIKE '%CUDEM%'"
             
         super().__init__(name='CUDEM', where=where, **kwargs)
 

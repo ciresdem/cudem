@@ -3789,7 +3789,7 @@ class WafflesCUDEM(Waffle):
             flatten=None,
             exclude_lakes=False,
             mode=None,
-            min_weight=None,
+            min_weight='1',
             pre_verbose=False,
             final_mode='IDW',
             keep_pre_surfaces=False,
@@ -7260,37 +7260,37 @@ def waffles_cli(argv = sys.argv):
             )
             
         if want_config: # export the waffles module config file
-            this_datalist = dlim.init_data(
-                dls,
-                region=this_region,
-                dst_srs=wg['dst_srs'],
-                want_verbose=wg['verbose'],
-                want_weight=True,
-                xy_inc=[wg['xinc'],wg['yinc']],
+            # this_datalist = dlim.init_data(
+            #     dls,
+            #     region=this_region,
+            #     dst_srs=wg['dst_srs'],
+            #     want_verbose=wg['verbose'],
+            #     want_weight=True,
+            #     xy_inc=[wg['xinc'],wg['yinc']],
                 
-            )
-            if this_datalist is not None and this_datalist.valid_p(
-                    fmts=dlim.DatasetFactory._modules[this_datalist.data_format]['fmts']
-            ):
-                this_datalist.initialize()
-                wg['data'] = []
-                for this_entry in this_datalist.parse():
-                    params = this_entry.params
+            # )
+            # if this_datalist is not None and this_datalist.valid_p(
+            #         fmts=dlim.DatasetFactory._modules[this_datalist.data_format]['fmts']
+            # ):
+            #     this_datalist.initialize()
+            #     wg['data'] = []
+            #     for this_entry in this_datalist.parse():
+            #         params = this_entry.params
 
-                    if params['kwargs']['pnt_fltrs'] is not None and \
-                       isinstance(params['kwargs']['pnt_fltrs'], list):
-                        for fltr in params['kwargs']['pnt_fltrs']:
-                            fltr_dict = factory.fmod2dict(fltr)
-                            fltr_dict = utils.dict_path2abspath(fltr_dict)
-                            params['kwargs']['pnt_fltrs'] = factory.dict2fmod(fltr_dict)
+            #         if params['kwargs']['pnt_fltrs'] is not None and \
+            #            isinstance(params['kwargs']['pnt_fltrs'], list):
+            #             for fltr in params['kwargs']['pnt_fltrs']:
+            #                 fltr_dict = factory.fmod2dict(fltr)
+            #                 fltr_dict = utils.dict_path2abspath(fltr_dict)
+            #                 params['kwargs']['pnt_fltrs'] = factory.dict2fmod(fltr_dict)
                     
-                    params['kwargs'].pop('params')
-                    params['kwargs'].pop('parent')
-                    params['kwargs']['src_region'] = \
-                        params['kwargs']['src_region'].export_as_list()
-                    params = utils.dict_path2abspath(params, except_keys=['mod'])
-                    wg['data'].append(params)
-                
+            #         params['kwargs'].pop('params')
+            #         params['kwargs'].pop('parent')
+            #         params['kwargs']['src_region'] = \
+            #             params['kwargs']['src_region'].export_as_list()
+            #         params = utils.dict_path2abspath(params, except_keys=['mod'])
+            #         wg['data'].append(params)
+            
             wg['src_region'] = this_region.export_as_list()
             wg['name'] = os.path.abspath(wg['name'])
             this_waffle = WaffleFactory(mod=module, **wg)
