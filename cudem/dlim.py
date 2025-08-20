@@ -7313,7 +7313,7 @@ class MBSParser(ElevationDataset):
             if mb_date is not None:
                 #this_weight = min(0.9, .5*(int(mb_date)-1900)/(2020-1900))
                 #this_weight = max(0.01, 1 - ((this_year - int(mb_date)) / (this_year - 1990)))
-                this_weight = min(0.99, max(0.01, 1 - ((2024 - min(int(mb_date), 2024)) / (2024 - 1990))))
+                this_weight = min(0.99, max(0.01, 1 - ((2024 - int(mb_date))) / (2024 - 1980)))
             else:
                 this_weight = 1
 
