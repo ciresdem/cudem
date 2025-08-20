@@ -7316,6 +7316,7 @@ class MBSParser(ElevationDataset):
             else:
                 this_weight = 1
 
+            self.weight *= this_weight
             #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
             for line in utils.yield_cmd(
                     'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
@@ -7351,6 +7352,7 @@ class MBSParser(ElevationDataset):
                         xs.append(x)
                         ys.append(y)
                         zs.append(z)
+                        ws.append(1)
                         ## uncertainty
                         u_depth = ((2+(0.02*(z*-1)))*0.51)
                         u_s_depth = ((2+(0.02*(sonar_depth*-1)))*0.51)
@@ -7362,12 +7364,12 @@ class MBSParser(ElevationDataset):
                             u = math.sqrt(u_depth**2 + u_cd**2)
 
                         us.append(u)
-                        if self.auto_weight:
-                            ## weight
-                            #w = math.sqrt((1/u)) * this_weight
-                            w = this_weight
-                            w *= self.weight if self.weight is not None else 1
-                            ws.append(w)
+                        #if self.auto_weight:
+                        ## weight
+                        #w = math.sqrt((1/u)) * this_weight
+                        # w = this_weight
+                        # w *= self.weight if self.weight is not None else 1
+                        # ws.append(w)
                 else:
                     x = this_line[0]
                     y = this_line[1]
