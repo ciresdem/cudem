@@ -2786,7 +2786,7 @@ class Multibeam(FetchModule):
     def __init__(
             self, processed=True, survey_id=None, exclude_survey_id=None, ship_id=None,
             exclude_ship_id=None, min_year=None, max_year=None, exclude=None,
-            make_datalist=False, want_inf=True, **kwargs
+            make_datalist=False, want_inf=True, want_vdatum=False, **kwargs
     ):
         super().__init__(name='multibeam', **kwargs)
         self.processed_p = processed
@@ -2799,6 +2799,7 @@ class Multibeam(FetchModule):
         self.exclude = exclude
         self.make_datalist = make_datalist
         self.want_inf = want_inf
+        self.want_vdatum = want_vdatum
 
         ## various multibeam URLs
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
@@ -2811,7 +2812,10 @@ class Multibeam(FetchModule):
 
         ## for dlim, data_format of 301 is multibeam data parsed with MBSystem.
         self.data_format = 301
-        self.src_srs = 'epsg:4326+3855'
+        if self.want_vdatum:
+            self.src_srs = 'epsg:4326+3855'
+        else:
+            self.src_srs = 'epsg:4326'
 
         self.title = 'NOAA NCEI Multibeam bathymetric surveys'
         self.source = 'NOAA/NCEI'
