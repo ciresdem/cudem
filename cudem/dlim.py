@@ -7312,11 +7312,13 @@ class MBSParser(ElevationDataset):
             this_year = int(utils.this_year())
             if mb_date is not None:
                 #this_weight = 3/(abs(int(mb_date)-this_year/this_year)/100.)
-                this_weight = 50 * ((this_year-int(mb_date))/this_year)
+                this_weight = 100 * ((this_year-int(mb_date))/this_year)
             else:
                 this_weight = 1
 
-            self.weight *= this_weight
+            if self.auto_weight:
+                self.weight *= this_weight
+                
             #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
             for line in utils.yield_cmd(
                     'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
