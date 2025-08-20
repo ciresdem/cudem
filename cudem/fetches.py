@@ -2895,7 +2895,7 @@ class Multibeam(FetchModule):
             timeout=20
         )
         if _req is not None and _req.status_code == 200:
-            utils.echo_msg(_req.url)
+            #utils.echo_msg(_req.url)
             survey_list = _req.text.split('\n')[:-1]
             #utils.echo_msg(survey_list)
             for r in survey_list:
