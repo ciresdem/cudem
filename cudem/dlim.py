@@ -1126,7 +1126,7 @@ class RQOutlierZ(PointZOutlier):
     <rq:threshold=5>
     """
     
-    def __init__(self, threshold = 10, raster = None, **kwargs):
+    def __init__(self, threshold=10, raster=None, scaled_percentile=False, **kwargs):
         if 'percentile' in kwargs.keys():
             del kwargs['percentile']
         if 'percentage' in kwargs.keys():
@@ -1139,19 +1139,20 @@ class RQOutlierZ(PointZOutlier):
             **kwargs
         )
         self.threshold = threshold
-        self.fetches_modules = ['gmrt']
+        self.fetches_modules = ['gmrt', 'CUDEM']
         self.raster = self.init_raster(raster)
+        self.scaled_percentile = scaled_percentile
 
         
     def init_raster(self, raster):
         if raster is None:
             this_fetch = self.fetch_data('gmrt', self.region)
             raster = [x[1] for x in this_fetch.results]            
-        elif os.path.exists(raster):
+        elif os.path.exists(raster) and os.path.isfile(raster):
             raster = [raster]
-        elif raster in self.fetches_modules:
+        elif raster.split(':')[0] in self.fetches_modules:
             this_fetch = self.fetch_data(raster, self.region)
-            raster = [x['dst_fn'] for x in this_fetch.results]
+            raster = [x[1] for x in this_fetch.results]
 
         return(raster)
 
@@ -1167,9 +1168,14 @@ class RQOutlierZ(PointZOutlier):
             return([])
         
         if percentage:
-            residuals =  np.abs(
-                (points['z'] - smoothed_depth) / smoothed_depth
-            ) * 100
+            if self.scaled_percentile:
+                residuals =  np.abs(
+                    (points['z'] - smoothed_depth) / (points['z'] + smoothed_depth)
+                ) * 100
+            else:
+                residuals =  np.abs(
+                    (points['z'] - smoothed_depth) / smoothed_depth
+                ) * 100
         else:
             residuals = np.abs(points['z'] - smoothed_depth)
 
@@ -2400,7 +2406,7 @@ class ElevationDataset:
             self.infos = self.generate_inf()
             
             ## update this
-            if self.data_format >= -3 and write_inf:
+            if self.data_format >= -2 and write_inf:
                 self.infos.write_inf_file()
 
             if recursive_check and self.parent is not None:
@@ -5935,16 +5941,19 @@ class BAGFile(ElevationDataset):
                     for sub_dataset in sub_datasets:
                         pbar.update()
                         res = sub_dataset[-1].split(',')[-2:]
+                        #utils.echo_msg(res)
                         res = [float(re.findall(r'\d+\.\d+|\d+', x)[0]) for x in res]
                         sub_weight = 3/res[0]
                         sub_ds = DatasetFactory(
                             **self._set_params(
                                 mod=sub_dataset[0],
                                 data_format=200,
+                                src_srs=self.src_srs,
                                 band_no=1,
                                 uncertainty_mask_to_meter=0.01,
                                 check_path=False,
                                 super_grid=True,
+                                #node='pixel',
                                 #weight_multiplier=sub_weight,
                                 weight=sub_weight*(self.weight if self.weight is not None else 1),
                                 uncertainty_mask=2,
@@ -7037,7 +7046,9 @@ class MBSParser(ElevationDataset):
         self.min_year = min_year
         self.auto_weight = auto_weight
         self.auto_uncertainty = auto_uncertainty
-
+        if self.src_srs is None:
+            #self.src_srs = 'epsg:4326+3855'
+            self.src_srs = 'epsg:4326'
         
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
@@ -7300,7 +7311,8 @@ class MBSParser(ElevationDataset):
             mb_perc = self.mb_inf_perc_good(src_inf)
             this_year = int(utils.this_year())
             if mb_date is not None:
-                this_weight = 1/(abs(int(mb_date)-this_year/this_year)/100.)
+                #this_weight = 3/(abs(int(mb_date)-this_year/this_year)/100.)
+                this_weight = 50 * ((this_year-int(mb_date))/this_year)
             else:
                 this_weight = 1
 
@@ -7352,7 +7364,8 @@ class MBSParser(ElevationDataset):
                         us.append(u)
                         if self.auto_weight:
                             ## weight
-                            w = math.sqrt((1/u)) * this_weight
+                            #w = math.sqrt((1/u)) * this_weight
+                            w = this_weight
                             w *= self.weight if self.weight is not None else 1
                             ws.append(w)
                 else:
@@ -7373,13 +7386,13 @@ class MBSParser(ElevationDataset):
                 mb_points = np.rec.fromrecords(
                     mb_points, names='x, y, z, w, u'
                 )
-                if self.want_binned:
-                    point_filter = PointFilterFactory(
-                        mod='bin_z:percentile=25:y_res=3:z_res=20',
-                        points=mb_points
-                    )._acquire_module()
-                    if point_filter is not None:
-                        mb_points = point_filter()
+                # if self.want_binned:
+                #     point_filter = PointFilterFactory(
+                #         mod='bin_z:percentile=25:y_res=3:z_res=20',
+                #         points=mb_points
+                #     )._acquire_module()
+                #     if point_filter is not None:
+                #         mb_points = point_filter()
 
                 if mb_points is not None:
                     yield(mb_points)
@@ -7726,13 +7739,13 @@ class Scratch(ElevationDataset):
                         fmts=DatasetFactory._modules[this_ds.data_format]['fmts']
                 ):
                     this_ds.initialize()
-                    self.data_entries.append(this_ds)
-                    yield(this_ds)
-                    #for ds in this_ds.parse():
+                    #self.data_entries.append(this_ds)
+                    #yield(this_ds)
+                    for ds in this_ds.parse():
                     # fill self.data_entries with each dataset for
                     # use outside the yield.
-                    #self.data_entries.append(ds)
-                    #yield(ds)
+                        self.data_entries.append(ds)
+                        yield(ds)
 
                         
 class Datalist(ElevationDataset):

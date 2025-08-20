@@ -1765,7 +1765,6 @@ class GMTSurface(Waffle):
         )        
 
         #self.gmt_region = self.ps_region.copy()
-        
         dem_surf_cmd = ('')
         if self.blockmean:
             dem_surf_cmd = (
@@ -1789,6 +1788,19 @@ class GMTSurface(Waffle):
                 ' -fg' if self.geographic else '',
             )
         )
+
+        # dem_surf_cmd += (
+        #     'gmt surface -V {} -I{:.16f}/{:.16f} -G{}.tif=gd+n{}:GTiff -rp -T{} -Z{} {}{}{}{}{}{}'.format(
+        #         self.p_region.format('gmt'), self.xinc, self.yinc,
+        #         self.name, self.ndv, self.tension, self.relaxation,
+        #         '' if self.gc['GMT'] >= '6.5.0' else '',
+        #         ' -D{}'.format(self.breakline) if self.breakline is not None else '',
+        #         ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
+        #         ' -C{}'.format(self.convergence) if self.convergence is not None else '',
+        #         ' -A{}'.format(self.aspect) if self.aspect is not None else '',
+        #         ' -fg' if self.geographic else '',
+        #     )
+        # )
 
         out, status = utils.run_cmd(
             dem_surf_cmd,

@@ -2855,6 +2855,28 @@ class Multibeam(FetchModule):
                     if til[0].strip() == 'Number of Good Beams':
                         return(til[1].split()[-1].split('%')[0])
 
+
+    def want_generated(self, tmp_url):
+        #tmp_url = these_surveys[key]['1'][0][0]
+        _req = Fetch(
+            tmp_url,
+            verbose=False
+        ).fetch_req()
+        if _req is None or _req.status_code == 404:
+            tmp_url = tmp_url.split('/')
+            tmp_url.insert(-1, 'generated')
+            tmp_url = '/'.join(tmp_url)
+            
+            _req = Fetch(
+                tmp_url,
+                verbose=False
+            ).fetch_req()
+            if _req is not None and _req.status_code != 404:
+                want_generated = True
+        else:
+            want_generated = False    
+
+        return(want_generated)
                     
     def run(self):
         """Run the multibeam fetches module"""
@@ -2873,6 +2895,7 @@ class Multibeam(FetchModule):
             timeout=20
         )
         if _req is not None and _req.status_code == 200:
+            utils.echo_msg(_req.url)
             survey_list = _req.text.split('\n')[:-1]
             #utils.echo_msg(survey_list)
             for r in survey_list:
@@ -2933,55 +2956,79 @@ class Multibeam(FetchModule):
                 'failed to fetch multibeam request'
             )
 
-        for key in these_surveys.keys():
-            if self.processed_p:
-                if '2' in these_surveys[key].keys():
-                    for v2 in these_surveys[key]['2']:
-                        #self.add_entry_to_results(*v2)
-                        ## check if there is a 'generated' directory
-                        v2_url = v2[0].split('/')
-                        v2_url.insert(-1, 'generated')
-                        v2_url = '/'.join(v2_url)
-                        v2_gen = [v2_url, v2[1], v2[2]]
-                        _req = Fetch(
-                            v2_url,
-                            verbose=False
-                        ).fetch_req()
-                        if _req is not None \
-                           and (_req.status_code == 200 or _req.status_code == 206):
-                            self.add_entry_to_results(*v2_gen)
-                            inf_url = self.inf_url(v2_gen)
-                        else:
-                            self.add_entry_to_results(*v2)
-                            inf_url = self.inf_url(v2)
-                            
-                        if self.want_inf:
-                            self.add_entry_to_results(
-                                '{}.inf'.format(inf_url),
-                                '{}.inf'.format(v2[1]),
-                                'mb_inf'
-                            )
+        with tqdm(
+                total=len(these_surveys.keys()),
+                desc='scanning NCEI Multibeam datasets',
+                leave=self.verbose
+        ) as pbar:
+
+            for key in these_surveys.keys():
+                pbar.update()
+                want_generated = False
+                if self.processed_p:
+                    if '2' in these_surveys[key].keys():
+                        want_generated = self.want_generated(these_surveys[key]['2'][0][0])
+                        for v2 in these_surveys[key]['2']:
+                            if want_generated:
+                                v2_url = v2[0].split('/')
+                                v2_url.insert(-1, 'generated')
+                                v2_url = '/'.join(v2_url)
+                                v2_gen = [v2_url, v2[1], v2[2]]
+                                self.add_entry_to_results(*v2_gen)
+                                inf_url = self.inf_url(v2_gen)
+                            else:
+                                self.add_entry_to_results(*v2)
+                                inf_url = self.inf_url(v2)
+
+                            if self.want_inf:
+                                self.add_entry_to_results(
+                                    '{}.inf'.format(inf_url),
+                                    '{}.inf'.format(v2[1]),
+                                    'mb_inf'
+                                )
+                    else:
+                        want_generated = self.want_generated(these_surveys[key]['1'][0][0])
+                        for v1 in these_surveys[key]['1']:
+                            if want_generated:
+                                v1_url = v1[0].split('/')
+                                v1_url.insert(-1, 'generated')
+                                v1_url = '/'.join(v1_url)
+                                v1_gen = [v1_url, v1[1], v1[2]]
+                                self.add_entry_to_results(*v1_gen)
+                                inf_url = self.inf_url(v1_gen)
+                            else:
+                                self.add_entry_to_results(*v1)
+                                inf_url = self.inf_url(v1)
+
+                            if self.want_inf:
+                                #inf_url = self.inf_url(v1)
+                                self.add_entry_to_results(
+                                    '{}.inf'.format(inf_url),
+                                    '{}.inf'.format(v1[1]),
+                                    'mb_inf'
+                                )
                 else:
-                    for v1 in these_surveys[key]['1']:
-                        self.add_entry_to_results(*v1)
-                        if self.want_inf:
-                            inf_url = self.inf_url(v1)
-                            self.add_entry_to_results(
-                                '{}.inf'.format(inf_url),
-                                '{}.inf'.format(v1[1]),
-                                'mb_inf'
-                            )
-            else:
-                for keys in these_surveys[key].keys():
-                    for survs in these_surveys[key][keys]:
-                        self.add_entry_to_results(*survs)
-                        if self.want_inf:
-                            inf_url = self.inf_url(survs)
-                            self.add_entry_to_results(
-                                '{}.inf'.format(inf_url),
-                                '{}.inf'.format(survs[1]),
-                                'mb_inf'
-                            )
+                    for keys in these_surveys[key].keys():
+                        want_generated = self.want_generated(these_surveys[key][keys][0][0])
+                        for survs in these_surveys[key][keys]:
+                            if want_generated:
+                                survs_url = survs[0].split('/')
+                                survs_url.insert(-1, 'generated')
+                                survs_url = '/'.join(survs_url)
+                                survs_gen = [survs_url, survs[1], survs[2]]
+                                self.add_entry_to_results(*survs_gen)
+                                inf_url = self.inf_url(survs_gen)
+                            else:
+                                self.add_entry_to_results(*survs)
+                                inf_url = self.inf_url(survs)
+
+                            if self.want_inf:
+                                #inf_url = self.inf_url(survs)
+                                self.add_entry_to_results(
+                                    '{}.inf'.format(inf_url),
+                                    '{}.inf'.format(survs[1]),
+                                    'mb_inf'
+                                )
 
         if self.make_datalist:
             s_got = []
