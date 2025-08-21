@@ -7049,7 +7049,8 @@ class MBSParser(ElevationDataset):
         if self.src_srs is None:
             #self.src_srs = 'epsg:4326+3855'
             self.src_srs = 'epsg:4326'
-        
+
+            
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
         this_row = 0
@@ -7310,14 +7311,14 @@ class MBSParser(ElevationDataset):
             mb_date = self.mb_inf_data_date(src_inf)
             mb_perc = self.mb_inf_perc_good(src_inf)
             this_year = int(utils.this_year())
-            if mb_date is not None:
-                #this_weight = min(0.9, .5*(int(mb_date)-1900)/(2020-1900))
-                #this_weight = max(0.01, 1 - ((this_year - int(mb_date)) / (this_year - 1990)))
-                this_weight = min(0.99, max(0.01, 1 - ((2024 - int(mb_date))) / (2024 - 1980)))
-            else:
-                this_weight = 1
-
             if self.auto_weight:
+                if mb_date is not None:
+                    #this_weight = min(0.9, .5*(int(mb_date)-1900)/(2020-1900))
+                    #this_weight = max(0.01, 1 - ((this_year - int(mb_date)) / (this_year - 1990)))
+                    this_weight = min(0.99, max(0.01, 1 - ((2024 - int(mb_date))) / (2024 - 1980)))
+                else:
+                    this_weight = 1
+                    
                 self.weight *= this_weight
                 
             #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
@@ -8446,7 +8447,8 @@ class Fetcher(ElevationDataset):
             leave=self.verbose
         ) as pbar:
             for result in self.fetch_module.results:
-                self._reset_params()
+                ## mrl commented out to set params in sub-modules
+                #self._reset_params()
                 status = self.fetch_module.fetch_entry(
                     result, check_size=self.check_size
                 )
@@ -9306,13 +9308,14 @@ class MBSFetcher(Fetcher):
 
                                         
     def __init__(self, mb_exclude='A', want_binned=False,
-                 want_mbgrid=False, **kwargs):
+                 want_mbgrid=False, auto_weight=True, **kwargs):
         super().__init__(**kwargs)
         self.fetches_params['mb_exclude'] = mb_exclude
         self.fetches_params['want_binned'] = want_binned
         self.fetches_params['want_mbgrid'] = want_mbgrid
+        self.fetches_params['auto_weight'] = auto_weight
 
-                                        
+        
     def yield_ds(self, result):
         if not result['url'].endswith('.inf'):
             mb_infos = self.fetch_module.parse_entry_inf(
