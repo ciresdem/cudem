@@ -1182,7 +1182,7 @@ class RQOutlierZ(PointZOutlier):
         #utils.echo_msg(smoothed_depth)
         #smoothed_depth += smoothed_depth.flatten()
 
-        for x in raster:
+        for x in self.raster:
             x = None
             
         if len(smoothed_depth) == 0:
