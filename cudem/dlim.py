@@ -1155,7 +1155,7 @@ class RQOutlierZ(PointZOutlier):
                 raster = [gdalfun.sample_warp(
                     raster[0], None, self.xyinc[0], self.xyinc[1],
                     sample_alg='bilinear',
-                    verbose=True,
+                    verbose=False,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]]
 
