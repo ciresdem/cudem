@@ -1167,7 +1167,8 @@ class RQOutlierZ(PointZOutlier):
 
         return(raster)
 
-    
+
+    ## todo: allow for multiple rasters
     def point_residuals(self, points, percentage=True, res=50):
         if len(self.raster) == 0:
             return(None)
@@ -1180,6 +1181,9 @@ class RQOutlierZ(PointZOutlier):
         ).flatten()
         #utils.echo_msg(smoothed_depth)
         #smoothed_depth += smoothed_depth.flatten()
+
+        for x in raster:
+            x = None
             
         if len(smoothed_depth) == 0:
             return([])
