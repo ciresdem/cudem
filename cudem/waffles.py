@@ -4055,7 +4055,6 @@ class WafflesCUDEM(Waffle):
                 ## if not final or initial output, setup the configuration
                 ## for the pre-surface
                 if pre != self.pre_count:
-                    utils.echo_msg(pre)
                     pre_weight = self.weight_levels[pre]
                     _pre_name_plus = os.path.join(
                         self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1)
