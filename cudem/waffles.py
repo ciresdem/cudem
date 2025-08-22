@@ -4011,11 +4011,14 @@ class WafflesCUDEM(Waffle):
         pre_region = self.p_region.copy()
         pre_region.wmin = None
 
-        ## initial data to pass through surface (stack)
+        # _pre_name_minus = os.path.join(
+        #     self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre)
+        # )
+        # ## initial data to pass through surface (stack)
         stack_data_entry = (f'{self.stack},200:band_no=1:weight_mask=3:'
                             'uncertainty_mask=4:sample=average,1')
         pre_data = [stack_data_entry]
-        
+         
         ## generate coastline
         pre_clip = None
         if self.landmask:            
@@ -4046,9 +4049,13 @@ class WafflesCUDEM(Waffle):
                 xsample = self.inc_levels[pre-1] if pre != 0 else self.xinc
                 ysample = self.inc_levels[pre-1] if pre != 0 else self.yinc
 
+                ## initial data to pass through surface (stack)
+
+                
                 ## if not final or initial output, setup the configuration
                 ## for the pre-surface
                 if pre != self.pre_count:
+                    utils.echo_msg(pre)
                     pre_weight = self.weight_levels[pre]
                     _pre_name_plus = os.path.join(
                         self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1)
@@ -4058,8 +4065,19 @@ class WafflesCUDEM(Waffle):
                            else None
                     pre_data_entry = (f'{_pre_name_plus}.tif,200'
                                       f':uncertainty_mask={_pre_unc_name}'
-                                      f':sample=cubicspline:check_path=True,{pre_weight-.1}')
-                                      
+                                      f':sample=cubicspline:check_path=True'
+                                      f',{pre_weight-.1}')
+
+                    _pre_name_minus = os.path.join(
+                    #     self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1)
+                    # )
+                    # #rq_threshold = max(1, 5+(pre*2))
+                    # rq_threshold = 5
+                    # stack_data_entry = (f'{self.stack},200:band_no=1:weight_mask=3:'
+                    #                     'uncertainty_mask=4:sample=average'
+                    #                     f':pnt_fltrs="rq:threshold={rq_threshold}:raster={_pre_name_minus}.tif",1')
+                    # #pre_data = [stack_data_entry]
+                    
                     pre_data = [stack_data_entry, pre_data_entry]
                     pre_region.wmin = None#pre_weight
 

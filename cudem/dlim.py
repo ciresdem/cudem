@@ -827,7 +827,7 @@ class PointZ:
     the manipulated array
     """
 
-    def __init__(self, points=None, region=None, verbose=True, **kwargs):
+    def __init__(self, points=None, region=None, verbose=True, xyinc=None, **kwargs):
         # if isinstance(points, np.ndarray):
         #     self.points = np.rec.fromrecords(points, names='x, y, z')
         # elif isinstance(points, np.core.records.recarray):
@@ -840,6 +840,9 @@ class PointZ:
             self.region = self.init_region(region)
         else:
             self.region = region
+
+        if xyinc is not None:
+            self.xyinc = [utils.str2inc(x) for x in xyinc]
             
         self.verbose = verbose
         self.kwargs = kwargs
@@ -1146,8 +1149,16 @@ class RQOutlierZ(PointZOutlier):
         
     def init_raster(self, raster):
         if raster is None:
-            this_fetch = self.fetch_data('gmrt', self.region)
-            raster = [x[1] for x in this_fetch.results]            
+            this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+            raster = [x[1] for x in this_fetch.results]
+            if self.xyinc is not None:
+                raster = [gdalfun.sample_warp(
+                    raster[0], None, self.xyinc[0], self.xyinc[1],
+                    sample_alg='bilinear',
+                    verbose=True,
+                    co=["COMPRESS=DEFLATE", "TILED=YES"]
+                )[0]]
+
         elif os.path.exists(raster) and os.path.isfile(raster):
             raster = [raster]
         elif raster.split(':')[0] in self.fetches_modules:
@@ -1160,10 +1171,16 @@ class RQOutlierZ(PointZOutlier):
     def point_residuals(self, points, percentage=True, res=50):
         if len(self.raster) == 0:
             return(None)
-        
+
+        #smoothed_depth = []
+        #utils.echo_msg(self.raster)
+        #for r in self.raster:
         smoothed_depth = gdalfun.gdal_query(
             points, self.raster[0], 'g'
         ).flatten()
+        #utils.echo_msg(smoothed_depth)
+        #smoothed_depth += smoothed_depth.flatten()
+            
         if len(smoothed_depth) == 0:
             return([])
         
@@ -1179,6 +1196,7 @@ class RQOutlierZ(PointZOutlier):
         else:
             residuals = np.abs(points['z'] - smoothed_depth)
 
+        #utils.echo_msg(residuals)
         return(residuals)
 
     
@@ -3815,7 +3833,7 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, verbose=False
+                                    mod=f, points=points, verbose=False, xyinc=[self.x_inc, self.y_inc]
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
@@ -7318,8 +7336,9 @@ class MBSParser(ElevationDataset):
                     this_weight = min(0.99, max(0.01, 1 - ((2024 - int(mb_date))) / (2024 - 1980)))
                 else:
                     this_weight = 1
-                    
-                self.weight *= this_weight
+
+                if self.weight is not None:
+                    self.weight *= this_weight
                 
             #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
             for line in utils.yield_cmd(

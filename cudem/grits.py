@@ -1497,7 +1497,7 @@ class Weights(Grits):
                  remove_sw=False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
-        self.weight_threshold = utils.float_or(weight_threshold)
+        self.weight_threshold = utils.float_or(weight_threshold, 1)
         self.remove_sw = remove_sw
 
         

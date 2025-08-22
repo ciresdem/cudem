@@ -2253,13 +2253,13 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band=1):
                 if g != ds_nd:
                     d = z - g
                     m = z + g
-                    outs = []
-                    for i in out_form:
-                        outs.append(vars()[i])
+                outs = []
+                for i in out_form:
+                    outs.append(vars()[i])
 
-                    #print(g)
-                    #print(outs)
-                    yield(outs)
+                #print(g)
+                #print(outs)
+                yield(outs)
 
                     
 def gdal_query(src_xyz, src_gdal, out_form, band=1):
