@@ -157,7 +157,7 @@ def fn_ext(fn):
     return(ext)
 
 
-def make_temp_fn(fn, temp_dir = cudem_cache()):
+def make_temp_fn(fn, region=None, inc=None, temp_dir=cudem_cache()):
     """make a temporary unique filename"""
     
     if temp_dir is None:
@@ -167,13 +167,22 @@ def make_temp_fn(fn, temp_dir = cudem_cache()):
     fn_et = fn_ext(fn)
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
-                    
-    return(os.path.join(
-        temp_dir,
-        '{}_{}{}'.format(
-            fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S%f'),
-            '.{}'.format(fn_et) if fn_et is not None else '')
-    ))
+
+    if region is None:
+        return(os.path.join(
+            temp_dir,
+            '{}_{}{}'.format(
+                fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S%f'),
+                '.{}'.format(fn_et) if fn_et is not None else '')
+        ))
+    else:
+        return(os.path.join(
+            temp_dir,
+            '{}{}_{}{}'.format(
+                fn_bn, inc2str(inc),
+                region.format('fn'),
+                '.{}'.format(fn_et) if fn_et is not None else '')
+        ))
 
 
 def fn_url_p(fn):

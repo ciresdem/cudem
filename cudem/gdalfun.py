@@ -706,8 +706,9 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
                   dst_srs='epsg:4326', invert=True, verbose=True,
                   temp_dir=utils.cudem_cache()):
     dst_fn = utils.make_temp_fn(
-        '{}.tif'.format(mask_fn, temp_dir=temp_dir)
+        '{}.tif'.format(mask_fn), region=region, inc=x_inc, temp_dir=temp_dir
     )
+
     if os.path.exists(dst_fn):
         return(dst_fn)
     else:

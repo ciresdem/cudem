@@ -3893,7 +3893,7 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, region=self.region, xyinc=[self.x_inc, self.y_inc]
+                                    mod=f, points=points, region=self.region, xyinc=[self.x_inc, self.y_inc], cache_dir=self.cache_dir
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
