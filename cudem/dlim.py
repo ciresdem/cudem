@@ -5790,6 +5790,7 @@ class GDALFile(ElevationDataset):
             for srcwin in utils.yield_srcwin(
                     n_size=(self.src_ds.RasterYSize, self.src_ds.RasterXSize),
                     n_chunk=2000,
+                    msg=f'chunking {self.fn} @ {self.src_ds.RasterXSize}/{self.src_ds.RasterYSize}',
                     verbose=True
             ):                
                 band_data = band.ReadAsArray(*srcwin).astype(float)
@@ -5884,7 +5885,6 @@ class GDALFile(ElevationDataset):
             #######################################################################
             srcwin = self.get_srcwin(
                 gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize,
-                msg=f'chunking {self.fn} @ {self.src_ds.RasterXSize}/{self.src_ds.RasterYSize}',
                 node=self.node
             )
             for y in range(srcwin[1], (srcwin[1] + srcwin[3]), 1):
