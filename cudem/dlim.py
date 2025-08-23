@@ -5279,7 +5279,7 @@ class GDALFile(ElevationDataset):
                  remove_flat=False,
                  node=None,
                  resample_and_warp=True,
-                 yield_chunk=True,
+                 yield_chunk=False,
                  **kwargs):
         super().__init__(**kwargs)
         # associated raster file/band holding weight data
@@ -5789,7 +5789,7 @@ class GDALFile(ElevationDataset):
             #######################################################################
             for srcwin in utils.yield_srcwin(
                     n_size=(self.src_ds.RasterYSize, self.src_ds.RasterXSize),
-                    n_chunk=1000,
+                    n_chunk=2000,
                     verbose=True
             ):                
                 band_data = band.ReadAsArray(*srcwin).astype(float)
