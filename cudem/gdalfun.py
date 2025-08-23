@@ -2260,6 +2260,8 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band=1):
                 #print(g)
                 #print(outs)
                 yield(outs)
+                
+        tgrid = None
 
                     
 def gdal_query(src_xyz, src_gdal, out_form, band=1):

@@ -827,7 +827,7 @@ class PointZ:
     the manipulated array
     """
 
-    def __init__(self, points=None, region=None, verbose=True, xyinc=None, **kwargs):
+    def __init__(self, points=None, region=None, verbose=False, xyinc=None, cache_dir='.', **kwargs):
         # if isinstance(points, np.ndarray):
         #     self.points = np.rec.fromrecords(points, names='x, y, z')
         # elif isinstance(points, np.core.records.recarray):
@@ -845,7 +845,9 @@ class PointZ:
             self.xyinc = [utils.str2inc(x) for x in xyinc]
             
         self.verbose = verbose
+        self.cache_dir = cache_dir
         self.kwargs = kwargs
+        #utils.echo_msg(self.kwargs)
 
         
     def __call__(self):
@@ -926,6 +928,7 @@ class PointZ:
         layer.CreateField(fd)
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
         with tqdm(
+                total=len(self.points),
                 desc='vectorizing points dataset', leave=False
         ) as pbar:
             for index, this_row in enumerate(self.points):
@@ -947,13 +950,58 @@ class PointZVectorMask(PointZ):
     <mask:mask_fn=path:invert=False>
     """
     
-    def __init__(self, mask_fn=None, invert=False, **kwargs):
+    def __init__(self, mask_fn=None, invert=False, vectorize_points=False, **kwargs):
         super().__init__(**kwargs)
         self.mask_fn = mask_fn
         self.invert = invert
-
+        self.vectorize_points = vectorize_points
+        if self.xyinc is None:
+            self.vectorize_points = True
+        
         if self.verbose:
             utils.echo_msg(f'masking with {mask_fn}')
+
+    def mask_to_raster(self):
+        data_mask = gdalfun.ogr2gdal_mask(
+            self.mask_fn,
+            region=self.region,
+            x_inc=self.xyinc[0],
+            y_inc=self.xyinc[1],
+            #dst_srs=self.dst_srs,
+            #invert=True,
+            verbose=self.verbose,
+            temp_dir=self.cache_dir
+        )
+        
+        return(data_mask)
+
+            
+    def mask_points(self, points, invert=False):
+        """mask points by rasterizing the input vector mask
+        and querying that with the point data
+        """
+
+        if self.verbose:
+            utils.echo_msg(
+                f'using mask dataset: {self.mask_fn} to xyz'
+            )
+        ogr_or_gdal = gdalfun.ogr_or_gdal(self.mask_fn)
+        if ogr_or_gdal == 1:
+            mask_raster = self.mask_to_raster()
+        else:
+            mask_raster = self.mask_fn
+            
+        smoothed_depth = gdalfun.gdal_query(
+            points, mask_raster, 'g'
+        ).flatten()
+
+        outliers = smoothed_depth == 0
+
+        if invert:
+            return(points[outliers], outliers)
+        else:
+            return(points[~outliers], outliers)
+
         
     def filter_mask(self, points, invert = False):
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
@@ -989,13 +1037,14 @@ class PointZVectorMask(PointZ):
                             outliers[idx] = 1
 
                         points_layer.SetSpatialFilter(None)
-                        mask_ds = mask_layer = None
-                        ogr_ds = None
+                        ogr_ds = points_layer = None
                         
                     else:
                         utils.echo_warning_msg(
                             f'could not vectorize {len(self.points)} points for masking'
                         )
+                        
+                mask_ds = mask_layer = None
                 
             else:
                 utils.echo_warning_msg(
@@ -1020,9 +1069,15 @@ class PointZVectorMask(PointZ):
 
         
     def run(self):
-        self.points, outliers = self.filter_mask(
-            self.points, invert=self.invert
-        )
+        if self.vectorize_points:
+            self.points, outliers = self.filter_mask(
+                self.points, invert=self.invert
+            )
+
+        else:
+            self.points, outliers = self.mask_points(
+                self.points, invert=self.invert
+            )
 
         #return(self.points)
         return(outliers)
@@ -3838,7 +3893,7 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, verbose=False, xyinc=[self.x_inc, self.y_inc]
+                                    mod=f, points=points, region=self.region, xyinc=[self.x_inc, self.y_inc]
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
@@ -5734,7 +5789,7 @@ class GDALFile(ElevationDataset):
             #######################################################################
             for srcwin in utils.yield_srcwin(
                     n_size=(self.src_ds.RasterYSize, self.src_ds.RasterXSize),
-                    n_chunk=10000,
+                    n_chunk=1000,
                     verbose=True
             ):                
                 band_data = band.ReadAsArray(*srcwin).astype(float)
@@ -7410,11 +7465,12 @@ class MBSParser(ElevationDataset):
 
         if not self.fn.endswith('.inf'):
             mb_fn = os.path.join(self.fn)
-            xs = []
-            ys = []
-            zs = []
-            ws = []
-            us = []
+            #xs = []
+            #ys = []
+            #zs = []
+            #ws = []
+            #us = []
+            mb_points = []
             if self.region is not None:
                 mb_region = self.region.copy()
                 mb_region.buffer(pct=25)
@@ -7459,6 +7515,9 @@ class MBSParser(ElevationDataset):
                     verbose=False,
             ):
                 this_line = [float(x) for x in line.strip().split('\t')]
+                mb_points.append(this_line)
+                #this_line.append(1)
+                #this_line.append(0)
                 # if self.auto_weight or self.auto_uncertainty:
                 #     x = this_line[0]
                 #     y = this_line[1]
@@ -7498,31 +7557,22 @@ class MBSParser(ElevationDataset):
                 #         # w *= self.weight if self.weight is not None else 1
                 #         # ws.append(w)
                 # else:
-                x = this_line[0]
-                y = this_line[1]
-                z = this_line[2]
-                w = 1
-                u = 0
-                xs.append(x)
-                ys.append(y)
-                zs.append(z)
-                ws.append(w)
-                us.append(u)
+                # xs.append(this_line[0])
+                # ys.append(this_line[1])
+                # zs.append(this_line[2])
+                # ws.append(1)
+                # us.append(0)
 
-            if len(xs) > 0:
-                mb_points = np.column_stack((xs, ys, zs, ws, us))
-                xs = ys = zs = ws = us = None
+            if len(mb_points) > 0:
+                #mb_points = np.column_stack((xs, ys, zs, ws, us))
+                #xs = ys = zs = ws = us = None
+                _ = [x.extend([1,0]) for x in mb_points]
+                # for x in mb_points:
+                #     x.extend([1,0])
+
                 mb_points = np.rec.fromrecords(
                     mb_points, names='x, y, z, w, u'
                 )
-                # if self.want_binned:
-                #     point_filter = PointFilterFactory(
-                #         mod='bin_z:percentile=25:y_res=3:z_res=20',
-                #         points=mb_points
-                #     )._acquire_module()
-                #     if point_filter is not None:
-                #         mb_points = point_filter()
-
                 if mb_points is not None:
                     yield(mb_points)
 
