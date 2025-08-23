@@ -4067,6 +4067,7 @@ class WafflesCUDEM(Waffle):
                                       f':sample=cubicspline:check_path=True'
                                       f',{pre_weight-.1}')
 
+                    ## rq filter points to previous pre_surface
                     # _pre_name_minus = os.path.join(
                     #     self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1)
                     # )
