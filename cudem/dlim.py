@@ -1721,7 +1721,6 @@ class ElevationDataset:
         self.stack_node = stack_node # yield avg x/y data instead of center
         self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
         self._init_stack_mode()
-
         # self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal'] # options for input data mask
         # if self.mask is not None:
         #     if isinstance(self.mask, str):
@@ -1783,41 +1782,50 @@ class ElevationDataset:
             )
             self.stack_mode_name = 'mean'
         
-        # opts = self.stack_mode.split(':')
-        # self.stack_mode_name = opts[0]
-        # self.stack_mode_args = {}
-        # if self.stack_mode_name not in self.stack_modes:
-        #     self.stack_mode_name = 'mean'
-            
-        # elif len(opts) > 1:
-        #     self.stack_mode_args = factory.args2dict(
-        #         list(opts[1:]), self.stack_mode_args
-        #     )
-
         if 'mask_level' not in self.stack_mode_args.keys():
             self.stack_mode_args['mask_level'] = 0
 
             
-    def _init_mask(self):
-        if self.mask is not None:
-            if isinstance(self.mask, str):
-                self.mask = {'mask': self.mask}
+    def _init_mask(self, mask):
+        opts = factory.fmod2dict(mask, {})
+        if 'mask_fn' not in opts.keys():
+            if '_module' in opts.keys():
+                opts['mask_fn'] = opts['_module']
+            else:
+                utils.echo_error_msg(f'could not parse mask {self.mask}')
+                return(None)
+
+        if 'invert' not in opts.keys():
+            opts['invert'] = False
+            
+        if 'verbose' not in opts.keys():
+            opts['verbose'] = False
+
+        # mask is ogr, rasterize it
+        opts['ogr_or_gdal'] = gdalfun.ogr_or_gdal(opts['mask_fn'])
+        if opts['ogr_or_gdal'] == 1: 
+            if self.region is not None \
+               and self.x_inc is not None \
+               and self.y_inc is not None:
+                data_mask = gdalfun.ogr2gdal_mask(
+                    opts['mask_fn'],
+                    region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
+                    dst_srs=self.dst_srs,
+                    invert=True,
+                    verbose=False,
+                    temp_dir=self.cache_dir
+                )
+                opts['ogr_or_gdal'] = 0
                 
-            for kpam, kval in kwargs.items():
-                if kpam not in self.__dict__:
-                    self.mask[kpam] = kval
+            data_mask = opts['mask_fn']
+        else:
+            data_mask = opts['mask_fn']
 
-            for kpam, kval in self.mask.items():
-                if kpam in kwargs:
-                    del kwargs[kpam]
-
-            self.mask['ogr_or_gdal'] = gdalfun.ogr_or_gdal(
-                self.mask['mask']
-            )
-            for key in self.mask_keys:
-                if key not in self.mask.keys():
-                    self.mask[key] = None
-
+        opts['data_mask'] = data_mask
+        return(opts)
+        
                     
     def _set_params(self, **kwargs):
         metadata = copy.deepcopy(self.metadata)
@@ -3788,7 +3796,9 @@ class ElevationDataset:
         for this_entry in self.data_entries:
             yield(this_entry)
 
-            
+    ###########################################################################
+    ## yield points, where points are a numpy rec-array with 'xyzwu'
+    ###########################################################################
     def yield_points(self):
         """yield the numpy xyz rec array points from the dataset.
 
@@ -3907,7 +3917,13 @@ class ElevationDataset:
 
         self.transform['transformer'] = self.transform['vert_transformer'] = None
 
-        
+
+    ###########################################################################
+    ## mask and yield, mask the incoming data to the masks specified in
+    ## self.mask, which is a list of factory formatted strings, such as:
+    ## ['masks/cudem_masks.shp:verbose=True:invert=False',
+    ##  'mask_fn=usgs/OzetteLake.gpkg:verbose=True:invert=False']
+    ###########################################################################
     def mask_and_yield_array(self):
         """mask the incoming array from `self.yield_array` 
         and yield the results.
@@ -3922,44 +3938,15 @@ class ElevationDataset:
         mask_count = 0
         data_masks = []
         if self.mask is not None:
-            #utils.echo_msg(self.mask)
             for mask in self.mask:
-                opts = factory.fmod2dict(mask, {})
-                if 'mask_fn' not in opts.keys():
-                    if '_module' in opts.keys():
-                        opts['mask_fn'] = opts['_module']
-                    else:
-                        utils.echo_error_msg(f'could not parse mask {self.mask}')
-                        continue
-                
-                if 'invert' not in opts.keys():
-                    opts['invert'] = False
-
-                # mask is ogr, rasterize it
-                ogr_or_gdal = gdalfun.ogr_or_gdal(opts['mask_fn'])
-                if ogr_or_gdal == 1: 
-                    if self.region is not None \
-                       and self.x_inc is not None \
-                       and self.y_inc is not None:
-                        data_mask = gdalfun.ogr2gdal_mask(
-                            opts['mask_fn'],
-                            region=self.region,
-                            x_inc=self.x_inc,
-                            y_inc=self.y_inc,
-                            dst_srs=self.dst_srs,
-                            invert=True,# if not opts['invert'] else False,
-                            verbose=False,
-                            temp_dir=self.cache_dir
-                        )
-                else:
-                    data_mask = opts['mask_fn']
-
-                opts['data_mask'] = data_mask
+                opts = self._init_mask(mask)
                 data_masks.append(opts)
-                    
 
         for out_arrays, this_srcwin, this_gt in self.yield_array():
             for data_mask in data_masks:
+                if data_mask is None:
+                    continue
+                
                 if os.path.exists(data_mask['data_mask']):
                     if self.verbose:
                         utils.echo_msg(f'using mask dataset: {data_mask} to array')
@@ -4005,7 +3992,7 @@ class ElevationDataset:
                 
         #if data_mask is not None:
         #utils.remove_glob('{}*'.format(data_mask))
-        if self.mask is not None and self.verbose:
+        if self.mask is not None and self.verbose and mask_count > 0:
             utils.echo_msg_bold(
                 'masked {} data records from {}'.format(
                     mask_count, self.fn,
@@ -4029,37 +4016,7 @@ class ElevationDataset:
                 data_masks = []
                 mask_count = 0
                 for mask in this_entry.mask:
-                    opts = factory.fmod2dict(mask, {})
-                    if 'mask_fn' not in opts.keys():
-                        if '_module' in opts.keys():
-                            opts['mask_fn'] = opts['_module']
-                        else:
-                            utils.echo_error_msg(f'could not parse mask {this_entry.mask}')
-                            continue
-
-                    if 'invert' not in opts.keys():
-                        opts['invert'] = False
-
-                    opts['ogr_or_gdal'] = gdalfun.ogr_or_gdal(opts['mask_fn'])                    
-                    if opts['ogr_or_gdal'] == 1 and \
-                       self.region is not None and \
-                       self.x_inc is not None and \
-                       self.y_inc is not None:
-                        data_mask = gdalfun.ogr2gdal_mask(
-                            opts['mask_fn'],
-                            region=self.region,
-                            x_inc=self.x_inc,
-                            y_inc=self.y_inc,
-                            dst_srs=self.dst_srs,
-                            invert=True,
-                            verbose=self.verbose,
-                            temp_dir=self.cache_dir
-                        )
-                        opts['ogr_or_gdal'] = 0
-                    else:
-                        data_mask = opts['mask_fn']                
-                    
-                    opts['data_mask'] = data_mask
+                    opts = self._init_mask(mask)
                     data_masks.append(opts)
 
                 if self.verbose:
@@ -4069,7 +4026,9 @@ class ElevationDataset:
                 for this_xyz in this_entry.yield_xyz():
                     masked = False
                     for data_mask in data_masks:                
-
+                        if data_mask is None:
+                            continue
+                        
                         if data_mask['ogr_or_gdal'] == 0:
                             src_ds = gdal.Open(data_mask['data_mask'])
                             if src_ds is not None:
@@ -4138,7 +4097,11 @@ class ElevationDataset:
                         )       
                     src_ds = ds_band = None
 
-                                    
+
+    ###########################################################################
+    ## yield the data either as xyz or as binned arrays, the latter of which
+    ## depends on self.region, self.x_inc and self.y_inc to be set.
+    ###########################################################################
     def yield_xyz(self):
         """Yield the data as xyz points
 
@@ -4446,9 +4409,10 @@ class ElevationDataset:
                         
                     yield(out_xyz)
         sds.close()
-
-        
+ 
+    ###########################################################################       
     ## Data Dump/Export/Archive
+    ###########################################################################
     def dump_xyz(self, dst_port=sys.stdout, encode=False):
         """dump the XYZ data from the dataset.
 
@@ -4482,7 +4446,10 @@ class ElevationDataset:
                 precision=self.dump_precision
             )
 
-            
+
+    ###########################################################################
+    ## Data export and archiving
+    ###########################################################################
     def export_xyz_as_list(self, z_only = False):
         """return the XYZ data from the dataset as python list
 
@@ -4793,9 +4760,10 @@ class ElevationDataset:
         
         return(this_archive.inf())
 
-    
+    ###########################################################################    
     ## Fetching
     ## TODO: move these out of this class
+    ###########################################################################
     def fetch_water_temp(self):
         """fetch and return the average water temperature over the region"""
         
