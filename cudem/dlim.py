@@ -3920,13 +3920,13 @@ class ElevationDataset:
         mask_count = 0
         data_masks = []
         if self.mask is not None:
-            utils.echo_msg(self.mask)
+            #utils.echo_msg(self.mask)
             for mask in self.mask:
                 opts = factory.fmod2dict(mask, {})
                 if 'invert' not in opts.keys():
                     opts['invert'] = False
 
-                utils.echo_msg(opts)
+                #utils.echo_msg(opts)
                 # mask is ogr, rasterize it
                 ogr_or_gdal = gdalfun.ogr_or_gdal(opts['mask_fn'])
                 if ogr_or_gdal == 1: 
