@@ -806,7 +806,7 @@ def init_data(data_list,
             
         return(this_datalist)
     
-    except:
+    except Exception as e:
         #utils.echo_warning_msg('failed to parse datalist obs')
         utils.echo_error_msg(
             f'could not initialize data, {data_list}: {e}'
@@ -8582,7 +8582,12 @@ class Fetcher(ElevationDataset):
         self.wgs_srs = 'epsg:4326'
         if self.dst_srs is not None:
             self.wgs_region.warp(self.wgs_srs)
-        
+
+        if not os.path.exists(outdir):
+            os.makedirs(os.path.dirname(outdir))
+
+        outdir = os.path.abspath(outdir)
+            
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
             callback=callback, verbose=self.verbose,
