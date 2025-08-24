@@ -97,7 +97,7 @@ class Grits:
                 self.dst_dem = utils.make_temp_fn('{}_filtered.{}'.format(
                     utils.fn_basename2(self.src_dem),
                     utils.fn_ext(self.src_dem)
-                ), self.cache_dir)
+                ), temp_dir=self.cache_dir)
             else:
                 self.dst_dem = 'grits_filtered.tif'
 

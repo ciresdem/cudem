@@ -6383,18 +6383,28 @@ class OpenStreetMap(FetchModule):
                 ) if min_length is not None else ''
             )
 
-        # if self.q == 'place':
-        #     #self.h = '[maxsize:2000000000]'
-        #     self.h = '[timeout:3600]'
-        #     self.q = '''
-        #     nwr["name"=""];
-        #     (._;>;);
-        #     out meta;
-        #     '''.format(
-        #         '(if: length() > {})'.format(
-        #             min_length
-        #         ) if min_length is not None else ''
-        #     )       
+        if self.q == 'place2':
+            #self.h = '[maxsize:2000000000]'
+            self.h = '[timeout:3600]'
+            self.q = '''
+            nwr["place"="city"];
+            nwr["name"~"Paris",1]["type"="multipolygon"];
+            (._;>;);
+            out meta;
+            '''.format()
+
+        if self.q == 'place':
+            #self.h = '[maxsize:2000000000]'
+            self.h = '[timeout:3600]'
+            self.q = '''
+            area[name~"Paris", i];
+            //({{geocodeArea:Paris}})->.a;
+            //area(a)->boundary;
+            //(
+            //node["place"~"city|town|village"](area.searchArea);
+            //);
+            out meta;
+            '''.format()
             
             
         ## various OSM URLs
@@ -6412,6 +6422,8 @@ class OpenStreetMap(FetchModule):
                                         'Win64; x64; rv:89.0) Gecko/20100101 '
                                         'Firefox/89.0'),
                          'referer': 'https://lz4.overpass-api.de/' }
+
+        self.check_size=False
 
         
     def run(self):

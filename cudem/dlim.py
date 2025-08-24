@@ -5481,9 +5481,10 @@ class GDALFile(ElevationDataset):
                 cache_dir=self.cache_dir,
                 verbose=True
             )._acquire_module()
-            grits_filter()
-            self.fn = grits_filter.dst_dem
-            self.flat_removed = True
+            if grits_filter is not None:
+                grits_filter()                
+                self.fn = grits_filter.dst_dem
+                self.flat_removed = True
             
         ## resample/warp src gdal file to specified x/y inc/transformer respectively
         if self.resample_and_warp:
