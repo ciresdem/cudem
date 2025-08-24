@@ -102,12 +102,12 @@ from tqdm import tqdm
 import warnings
 import traceback
 
-import threading
-import multiprocessing as mp
-mp.set_start_method('spawn')
-try:
-   import Queue as queue
-except: import queue as queue
+# import threading
+# import multiprocessing as mp
+# mp.set_start_method('spawn')
+# try:
+#    import Queue as queue
+# except: import queue as queue
         
 import numpy as np
 # from scipy.spatial import ConvexHull
