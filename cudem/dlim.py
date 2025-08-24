@@ -3923,6 +3923,13 @@ class ElevationDataset:
             #utils.echo_msg(self.mask)
             for mask in self.mask:
                 opts = factory.fmod2dict(mask, {})
+                if 'mask_fn' not in opts.keys():
+                    if '_module' in opts.keys():
+                        opts['mask_fn'] = opts['_module']
+                    else:
+                        utils.echo_error_msg(f'could not parse mask {self.mask}')
+                        continue
+                
                 if 'invert' not in opts.keys():
                     opts['invert'] = False
 
