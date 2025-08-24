@@ -3933,7 +3933,6 @@ class ElevationDataset:
                 if 'invert' not in opts.keys():
                     opts['invert'] = False
 
-                #utils.echo_msg(opts)
                 # mask is ogr, rasterize it
                 ogr_or_gdal = gdalfun.ogr_or_gdal(opts['mask_fn'])
                 if ogr_or_gdal == 1: 
@@ -3960,8 +3959,10 @@ class ElevationDataset:
 
         for out_arrays, this_srcwin, this_gt in self.yield_array():
             for data_mask in data_masks:
-                if os.path.exists(data_mask['data_mask']):            
-                    utils.echo_msg(f'using mask dataset: {data_mask} to array')
+                if os.path.exists(data_mask['data_mask']):
+                    if self.verbose:
+                        utils.echo_msg(f'using mask dataset: {data_mask} to array')
+                        
                     src_mask = gdal.Open(data_mask['data_mask'])                    
                     mask_band = src_mask.GetRasterBand(1)
                     mask_infos = gdalfun.gdal_infos(src_mask)
@@ -4004,12 +4005,139 @@ class ElevationDataset:
                 
         #if data_mask is not None:
         #utils.remove_glob('{}*'.format(data_mask))
-        if self.mask is not None:
+        if self.mask is not None and self.verbose:
             utils.echo_msg_bold(
                 'masked {} data records from {}'.format(
                     mask_count, self.fn,
                 )
             )
+
+
+    def mask_and_yield_xyz(self):
+        """mask the incoming xyz data from `self.yield_xyz` and yield 
+        the results.
+        
+        the mask should be either an ogr supported vector or a gdal 
+        supported raster.
+        """
+
+        
+        for this_entry in self.parse():
+            if this_entry.mask is None:
+                for this_xyz in this_entry.yield_xyz():
+                    yield(this_xyz)
+            else:
+                data_masks = []
+                mask_count = 0
+                for mask in this_entry.mask:
+                    opts = factory.fmod2dict(mask, {})
+                    if 'mask_fn' not in opts.keys():
+                        if '_module' in opts.keys():
+                            opts['mask_fn'] = opts['_module']
+                        else:
+                            utils.echo_error_msg(f'could not parse mask {this_entry.mask}')
+                            continue
+
+                    if 'invert' not in opts.keys():
+                        opts['invert'] = False
+
+                    opts['ogr_or_gdal'] = gdalfun.ogr_or_gdal(opts['mask_fn'])                    
+                    if opts['ogr_or_gdal'] == 1 and \
+                       self.region is not None and \
+                       self.x_inc is not None and \
+                       self.y_inc is not None:
+                        data_mask = gdalfun.ogr2gdal_mask(
+                            opts['mask_fn'],
+                            region=self.region,
+                            x_inc=self.x_inc,
+                            y_inc=self.y_inc,
+                            dst_srs=self.dst_srs,
+                            invert=True,
+                            verbose=self.verbose,
+                            temp_dir=self.cache_dir
+                        )
+                        opts['ogr_or_gdal'] = 0
+                    else:
+                        data_mask = opts['mask_fn']                
+                    
+                    opts['data_mask'] = data_mask
+                    data_masks.append(opts)
+
+                if self.verbose:
+                    utils.echo_msg(
+                        f'using mask dataset: {data_masks} to xyz'
+                    )                    
+                for this_xyz in this_entry.yield_xyz():
+                    masked = False
+                    for data_mask in data_masks:                
+
+                        if data_mask['ogr_or_gdal'] == 0:
+                            src_ds = gdal.Open(data_mask['data_mask'])
+                            if src_ds is not None:
+                                ds_config = gdalfun.gdal_infos(src_ds)
+                                ds_band = src_ds.GetRasterBand(1)
+                                ds_gt = ds_config['geoT']
+                                ds_nd = ds_config['ndv']
+
+                                xpos, ypos = utils._geo2pixel(
+                                    this_xyz.x, this_xyz.y, ds_gt, node='pixel'
+                                )
+                                if xpos < ds_config['nx'] \
+                                   and ypos < ds_config['ny'] \
+                                   and xpos >=0 \
+                                   and ypos >=0:
+                                    tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
+                                    if tgrid is not None:
+                                        if not np.isnan(ds_config['ndv']):
+                                            tgrid[tgrid==ds_config['ndv']] = np.nan
+
+                                        if np.isnan(tgrid[0][0]):
+                                            if data_mask['invert']:
+                                                mask_count += 1
+                                                masked = True
+                                            else:
+                                                masked = False
+                                        else:
+                                            if not data_mask['invert']:
+                                                mask_count += 1
+                                                masked = True
+                                            else:
+                                                masked = False
+                        else:
+                            src_ds = ogr.Open(data_mask['data_mask'])
+                            if src_ds is not None:
+                                layer = src_ds.GetLayer()
+                                #utils.echo_msg(len(layer))
+
+                                geomcol = gdalfun.ogr_union_geom(layer, verbose=False)
+                                if not geomcol.IsValid():
+                                    geomcol = geomcol.Buffer(0)
+
+                                this_wkt = this_xyz.export_as_wkt()
+                                this_point = ogr.CreateGeometryFromWkt(this_wkt)
+                                if this_point.Within(geomcol):
+                                    if not data_mask['invert']:
+                                        masked = True
+                                        mask_count += 1
+                                    else:
+                                        masked = False
+                                else:
+                                    if not data_mask['invert']:
+                                        masked = False
+                                    else:
+                                        masked = True
+                                        mask_count += 1
+
+                                src_ds = layer = None
+
+                    if not masked:
+                        yield(this_xyz)
+
+                    if mask_count > 0 and self.verbose:
+                        utils.echo_msg_bold(
+                            f'masked {mask_count} data records from {self.fn}'
+                        )       
+                    src_ds = ds_band = None
 
             
     def mask_and_yield_array_(self):
@@ -4110,7 +4238,7 @@ class ElevationDataset:
             )
             
             
-    def mask_and_yield_xyz(self):
+    def mask_and_yield_xyz_(self):
         """mask the incoming xyz data from `self.yield_xyz` and yield 
         the results.
         
@@ -5900,7 +6028,7 @@ class GDALFile(ElevationDataset):
                     n_size=(self.src_ds.RasterYSize, self.src_ds.RasterXSize),
                     n_chunk=4000,
                     msg=f'chunking {self.fn} @ {self.src_ds.RasterXSize}/{self.src_ds.RasterYSize}',
-                    verbose=True
+                    verbose=self.verbose
             ):                
                 band_data = band.ReadAsArray(*srcwin).astype(float)
                 if ndv is not None and not np.isnan(ndv):
