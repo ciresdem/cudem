@@ -468,6 +468,7 @@ class VerticalTransform:
                 )._acquire_module()
                 _trans_in.initialize()
                 _trans_in.generate()
+                #if os.path.exists(_trans_in.fn):
                 ## extract the array from the gridded tidal datum grid
                 _trans_in_array, _trans_in_infos = gdalfun.gdal_get_array(_trans_in.fn)
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
@@ -478,6 +479,8 @@ class VerticalTransform:
                 #else:
                 for ofk in _trans_in.output_files.keys():
                     utils.remove_glob('{}*'.format(_trans_in.output_files[ofk]))
+                else:
+                    _trans_in = None
             else:
                 _trans_in = None
             
@@ -501,6 +504,7 @@ class VerticalTransform:
                 )._acquire_module()
                 _trans_out.initialize()
                 _trans_out.generate()
+                #if os.path.exists(_trans_out.fn):
                 ## extract the array from the gridded tidal datum grid
                 _trans_out_array, _trans_out_infos = gdalfun.gdal_get_array(_trans_out.fn)
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
@@ -511,6 +515,8 @@ class VerticalTransform:
                 for ofk in _trans_out.output_files.keys():
                     utils.remove_glob('{}*'.format(_trans_out.output_files[ofk]))
                     #utils.remove_glob('{}*'.format(_trans_out.fn))
+                # else:
+                #     _trans_out = None
             else:
                 _trans_out = None
 

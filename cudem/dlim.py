@@ -754,7 +754,7 @@ def init_data(data_list,
                     )._acquire_module()
                 )
             elif isinstance(dl, dict):
-                    
+
                 if dl['kwargs']['src_region'] is not None:
                     dl['kwargs']['src_region'] = regions.Region().from_list(
                         dl['kwargs']['src_region']
@@ -803,7 +803,7 @@ def init_data(data_list,
             this_datalist = xdls[0]
         else:
             this_datalist = None
-            
+
         return(this_datalist)
     
     except Exception as e:
@@ -8553,11 +8553,6 @@ class Fetcher(ElevationDataset):
         self.wgs_srs = 'epsg:4326'
         if self.dst_srs is not None:
             self.wgs_region.warp(self.wgs_srs)
-
-        if not os.path.exists(outdir):
-            os.makedirs(os.path.dirname(outdir))
-
-        outdir = os.path.abspath(outdir)
             
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
@@ -8576,6 +8571,10 @@ class Fetcher(ElevationDataset):
         # retain fetched data after processing
         self.keep_fetched_data = keep_fetched_data 
         self.outdir = self.fetch_module._outdir
+        if not os.path.exists(os.path.dirname(self.outdir)):
+            os.makedirs(os.path.dirname(self.outdir))
+
+        self.outdir = os.path.abspath(self.outdir)        
         self.cache_dir = self.outdir                
         try:
             self.fetch_module.run()
