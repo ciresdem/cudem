@@ -3895,7 +3895,9 @@ class ElevationDataset:
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = PointFilterFactory(
-                                    mod=f, points=points, region=self.region, xyinc=[self.x_inc, self.y_inc], cache_dir=self.cache_dir
+                                    mod=f, points=points, region=self.region,
+                                    xyinc=[self.x_inc, self.y_inc],
+                                    cache_dir=self.cache_dir
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
@@ -3949,7 +3951,6 @@ class ElevationDataset:
                             verbose=False,
                             temp_dir=self.cache_dir
                         )
-                        #self.mask['ogr_or_gdal'] = 0
                 else:
                     data_mask = opts['mask_fn']
 
@@ -3996,7 +3997,6 @@ class ElevationDataset:
                     mask_count += np.count_nonzero(~np.isnan(mask_data)) \
                         if data_mask['invert'] \
                            else np.count_nonzero(np.isnan(mask_data))
-                    #mask_count += np.count_nonzero(np.isnan(mask_data))
                     mask_data = None
                     
                 src_mask = mask_band = None
@@ -4020,7 +4020,6 @@ class ElevationDataset:
         the mask should be either an ogr supported vector or a gdal 
         supported raster.
         """
-
         
         for this_entry in self.parse():
             if this_entry.mask is None:
@@ -4139,179 +4138,7 @@ class ElevationDataset:
                         )       
                     src_ds = ds_band = None
 
-            
-    def mask_and_yield_array_(self):
-        """mask the incoming array from `self.yield_array` 
-        and yield the results.
-        
-        the mask should be either an ogr supported vector or a 
-        gdal supported raster.
-        """
-        
-        mask_band = None
-        mask_infos = None
-        data_mask = None
-        mask_count = 0
-        if self.mask is not None:
-            # mask is ogr, rasterize it
-            if self.mask['ogr_or_gdal'] == 1: 
-                if self.region is not None \
-                   and self.x_inc is not None \
-                   and self.y_inc is not None:
-                    data_mask = gdalfun.ogr2gdal_mask(
-                        self.mask['mask'],
-                        region=self.region,
-                        x_inc=self.x_inc,
-                        y_inc=self.y_inc,
-                        dst_srs=self.dst_srs,
-                        invert=True,
-                        verbose=False,
-                        temp_dir=self.cache_dir
-                    )
-                    #self.mask['ogr_or_gdal'] = 0
-            else:
-                data_mask = self.mask['mask']
-            
-            if os.path.exists(data_mask):            
-                utils.echo_msg(f'using mask dataset: {data_mask} to array')
-                if self.region is not None \
-                   and self.x_inc is not None \
-                   and self.y_inc is not None:
-                    src_mask = gdalfun.sample_warp(
-                        data_mask, None, self.x_inc, self.y_inc,
-                        src_region=self.region,
-                        sample_alg='nearest',
-                        dst_srs=self.transform['dst_horz_crs'] \
-                        if self.transform['dst_horz_crs'] is not None \
-                        else None,
-                        ndv=gdalfun.gdal_get_ndv(self.mask['mask']),
-                        verbose=True,
-                        co=["COMPRESS=DEFLATE", "TILED=YES"]
-                    )[0]
-                else:
-                    src_mask = gdal.Open(data_mask)
-                    
-                mask_band = src_mask.GetRasterBand(1)
-                mask_infos = gdalfun.gdal_infos(src_mask)
-            else:
-                utils.echo_warning_msg(f'could not load mask {data_mask}')
-
-        for out_arrays, this_srcwin, this_gt in self.yield_array():
-            #utils.echo_msg(mask_band)
-            if mask_band is not None:
-                ycount, xcount = out_arrays['z'].shape
-                this_region = regions.Region().from_geo_transform(
-                    this_gt, xcount, ycount
-                )
-                mask_data = mask_band.ReadAsArray(*this_srcwin)
-                if not np.isnan(mask_infos['ndv']):
-                    mask_data[mask_data==mask_infos['ndv']] = np.nan
-                               
-                for arr in out_arrays.keys():
-                    if out_arrays[arr] is not None:
-                        if self.mask['invert_mask']:
-                            if arr == 'count':
-                                out_arrays[arr][~np.isnan(mask_data)] = 0
-                            else:                            
-                                out_arrays[arr][~np.isnan(mask_data)] = np.nan
-
-                        else:
-                            if arr == 'count':
-                                out_arrays[arr][np.isnan(mask_data)] = 0
-                            else:
-                                out_arrays[arr][np.isnan(mask_data)] = np.nan
-
-                mask_count += np.count_nonzero(~np.isnan(mask_data)) \
-                    if self.mask['invert_mask'] \
-                       else np.count_nonzero(np.isnan(mask_data))
-                mask_data = None
-                
-            yield(out_arrays, this_srcwin, this_gt)
-        
-        src_mask = mask_band = None
-        if data_mask is not None:
-            utils.remove_glob('{}*'.format(data_mask))
-            utils.echo_msg_bold(
-                'masked {} data records from {}'.format(
-                    mask_count, self.fn,
-                )
-            )
-            
-            
-    def mask_and_yield_xyz_(self):
-        """mask the incoming xyz data from `self.yield_xyz` and yield 
-        the results.
-        
-        the mask should be either an ogr supported vector or a gdal 
-        supported raster.
-        """
-
-        for this_entry in self.parse():
-            if this_entry.mask is None:
-                for this_xyz in this_entry.yield_xyz():
-                    yield(this_xyz)
-            else:
-                utils.echo_msg(
-                    f'using mask dataset: {this_entry.mask["mask"]} to xyz'
-                )
-                if this_entry.mask['ogr_or_gdal'] == 0:
-                    src_ds = gdal.Open(this_entry.mask['mask'])
-                    if src_ds is not None:
-                        ds_config = gdalfun.gdal_infos(src_ds)
-                        ds_band = src_ds.GetRasterBand(1)
-                        ds_gt = ds_config['geoT']
-                        ds_nd = ds_config['ndv']
-
-                        mask_count = 0
-                        for this_xyz in this_entry.yield_xyz():
-                            xpos, ypos = utils._geo2pixel(
-                                this_xyz.x, this_xyz.y, ds_gt, node='pixel'
-                            )
-                            if xpos < ds_config['nx'] \
-                               and ypos < ds_config['ny'] \
-                               and xpos >=0 \
-                               and ypos >=0:
-                                tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
-                                if tgrid is not None:
-                                    if tgrid[0][0] == ds_nd:
-                                        if this_entry.mask['invert_mask']:
-                                            yield(this_xyz)
-                                            mask_count += 1
-                                    else:
-                                        if not this_entry.mask['invert_mask']:
-                                            yield(this_xyz)
-                                            mask_count += 1
-
-                        utils.echo_msg_bold(
-                            f'masked {mask_count} data records from {self.fn}'
-                        )       
-                        src_ds = ds_band = None
-                else:
-                    ## this is very slow! find another way.
-                    src_ds = ogr.Open(this_entry.mask['mask'])
-                    if src_ds is not None:
-                        layer = src_ds.GetLayer()
-                        #utils.echo_msg(len(layer))
-
-                        geomcol = gdalfun.ogr_union_geom(layer)
-                        if not geomcol.IsValid():
-                            geomcol = geomcol.Buffer(0)
-
-                        for this_xyz in this_entry.yield_xyz():
-                            this_wkt = this_xyz.export_as_wkt()
-                            this_point = ogr.CreateGeometryFromWkt(this_wkt)
-                            if this_point.Within(geomcol):
-                                if not this_entry.mask['invert_mask']:
-                                    yield(this_xyz)
-                            else:
-                                if not this_entry.mask['invert_mask']:
-                                    yield(this_xyz)
-
-                        src_ds = ds_band = None
-                    else:
-                        yield(this_xyz)
-
-                        
+                                    
     def yield_xyz(self):
         """Yield the data as xyz points
 
