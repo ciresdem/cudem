@@ -102,12 +102,12 @@ from tqdm import tqdm
 import warnings
 import traceback
 
-# import threading
-# import multiprocessing as mp
-# mp.set_start_method('spawn')
-# try:
-#    import Queue as queue
-# except: import queue as queue
+import threading
+import multiprocessing as mp
+mp.set_start_method('spawn')
+try:
+   import Queue as queue
+except: import queue as queue
         
 import numpy as np
 # from scipy.spatial import ConvexHull
@@ -1585,6 +1585,7 @@ class INF:
         except:
             pass
 
+        
 ###############################################################################
 ## ElevationDataset and sub-modules
 ###############################################################################
@@ -1720,25 +1721,26 @@ class ElevationDataset:
         self.stack_node = stack_node # yield avg x/y data instead of center
         self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
         self._init_stack_mode()
-        self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal'] # options for input data mask
-        if self.mask is not None:
-            if isinstance(self.mask, str):
-                self.mask = {'mask': self.mask}
+
+        # self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal'] # options for input data mask
+        # if self.mask is not None:
+        #     if isinstance(self.mask, str):
+        #         self.mask = {'mask': self.mask}
                 
-            for kpam, kval in kwargs.items():
-                if kpam not in self.__dict__:
-                    if kpam in self.mask_keys:
-                        self.mask[kpam] = kval
+        #     for kpam, kval in kwargs.items():
+        #         if kpam not in self.__dict__:
+        #             if kpam in self.mask_keys:
+        #                 self.mask[kpam] = kval
 
-            for kpam, kval in self.mask.items():
-                if kpam in kwargs:
-                    del kwargs[kpam]
+        #     for kpam, kval in self.mask.items():
+        #         if kpam in kwargs:
+        #             del kwargs[kpam]
 
-            self.mask['ogr_or_gdal'] \
-                = gdalfun.ogr_or_gdal(self.mask['mask'])
-            for key in self.mask_keys:
-                if key not in self.mask.keys():
-                    self.mask[key] = None
+        #     self.mask['ogr_or_gdal'] \
+        #         = gdalfun.ogr_or_gdal(self.mask['mask'])
+        #     for key in self.mask_keys:
+        #         if key not in self.mask.keys():
+        #             self.mask[key] = None
 
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
@@ -3916,6 +3918,104 @@ class ElevationDataset:
         mask_infos = None
         data_mask = None
         mask_count = 0
+        data_masks = []
+        if self.mask is not None:
+            utils.echo_msg(self.mask)
+            for mask in self.mask:
+                opts = factory.fmod2dict(mask, {})
+                if 'invert' not in opts.keys():
+                    opts['invert'] = False
+
+                utils.echo_msg(opts)
+                # mask is ogr, rasterize it
+                ogr_or_gdal = gdalfun.ogr_or_gdal(opts['mask_fn'])
+                if ogr_or_gdal == 1: 
+                    if self.region is not None \
+                       and self.x_inc is not None \
+                       and self.y_inc is not None:
+                        data_mask = gdalfun.ogr2gdal_mask(
+                            opts['mask_fn'],
+                            region=self.region,
+                            x_inc=self.x_inc,
+                            y_inc=self.y_inc,
+                            dst_srs=self.dst_srs,
+                            invert=True,# if not opts['invert'] else False,
+                            verbose=False,
+                            temp_dir=self.cache_dir
+                        )
+                        #self.mask['ogr_or_gdal'] = 0
+                else:
+                    data_mask = opts['mask_fn']
+
+                opts['data_mask'] = data_mask
+                data_masks.append(opts)
+                    
+
+        for out_arrays, this_srcwin, this_gt in self.yield_array():
+            for data_mask in data_masks:
+                if os.path.exists(data_mask['data_mask']):            
+                    utils.echo_msg(f'using mask dataset: {data_mask} to array')
+                    src_mask = gdal.Open(data_mask['data_mask'])                    
+                    mask_band = src_mask.GetRasterBand(1)
+                    mask_infos = gdalfun.gdal_infos(src_mask)
+                else:
+                    utils.echo_warning_msg(f'could not load mask {data_mask["data_mask"]}')
+
+                if mask_band is not None:
+                    ycount, xcount = out_arrays['z'].shape
+                    this_region = regions.Region().from_geo_transform(
+                        this_gt, xcount, ycount
+                    )
+                    mask_data = mask_band.ReadAsArray(*this_srcwin)
+                    if not np.isnan(mask_infos['ndv']):
+                        mask_data[mask_data==mask_infos['ndv']] = np.nan
+
+                    for arr in out_arrays.keys():
+                        if out_arrays[arr] is not None:
+
+                            if data_mask['invert']:
+                                if arr == 'count':
+                                    out_arrays[arr][~np.isnan(mask_data)] = 0
+                                else:                            
+                                    out_arrays[arr][~np.isnan(mask_data)] = np.nan
+
+                            else:
+                                if arr == 'count':
+                                    out_arrays[arr][np.isnan(mask_data)] = 0
+                                else:
+                                    out_arrays[arr][np.isnan(mask_data)] = np.nan
+
+                    mask_count += np.count_nonzero(~np.isnan(mask_data)) \
+                        if data_mask['invert'] \
+                           else np.count_nonzero(np.isnan(mask_data))
+                    #mask_count += np.count_nonzero(np.isnan(mask_data))
+                    mask_data = None
+                    
+                src_mask = mask_band = None
+                
+            yield(out_arrays, this_srcwin, this_gt)
+                
+        #if data_mask is not None:
+        #utils.remove_glob('{}*'.format(data_mask))
+        utils.echo_msg_bold(
+            'masked {} data records from {}'.format(
+                mask_count, self.fn,
+            )
+        )
+
+            
+    def mask_and_yield_array_(self):
+        """mask the incoming array from `self.yield_array` 
+        and yield the results.
+        
+        the mask should be either an ogr supported vector or a 
+        gdal supported raster.
+        """
+        
+        mask_band = None
+        mask_infos = None
+        data_mask = None
+        mask_count = 0
         if self.mask is not None:
             # mask is ogr, rasterize it
             if self.mask['ogr_or_gdal'] == 1: 
@@ -4000,7 +4100,7 @@ class ElevationDataset:
                     mask_count, self.fn,
                 )
             )
-
+            
             
     def mask_and_yield_xyz(self):
         """mask the incoming xyz data from `self.yield_xyz` and yield 
@@ -5279,7 +5379,7 @@ class GDALFile(ElevationDataset):
                  remove_flat=False,
                  node=None,
                  resample_and_warp=True,
-                 yield_chunk=False,
+                 yield_chunk=True,
                  **kwargs):
         super().__init__(**kwargs)
         # associated raster file/band holding weight data
@@ -5790,7 +5890,7 @@ class GDALFile(ElevationDataset):
             #######################################################################
             for srcwin in utils.yield_srcwin(
                     n_size=(self.src_ds.RasterYSize, self.src_ds.RasterXSize),
-                    n_chunk=2000,
+                    n_chunk=4000,
                     msg=f'chunking {self.fn} @ {self.src_ds.RasterXSize}/{self.src_ds.RasterYSize}',
                     verbose=True
             ):                

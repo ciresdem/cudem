@@ -6397,12 +6397,9 @@ class OpenStreetMap(FetchModule):
             #self.h = '[maxsize:2000000000]'
             self.h = '[timeout:3600]'
             self.q = '''
-            area[name~"Paris", i];
-            //({{geocodeArea:Paris}})->.a;
-            //area(a)->boundary;
-            //(
-            //node["place"~"city|town|village"](area.searchArea);
-            //);
+            area[boundary=administrative][name="Paris"];
+            wr[place~"^(sub|town|city|count|state)"](area);
+            (._;>;);
             out meta;
             '''.format()
             
