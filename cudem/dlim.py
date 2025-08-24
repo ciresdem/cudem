@@ -4004,11 +4004,12 @@ class ElevationDataset:
                 
         #if data_mask is not None:
         #utils.remove_glob('{}*'.format(data_mask))
-        utils.echo_msg_bold(
-            'masked {} data records from {}'.format(
-                mask_count, self.fn,
+        if self.mask is not None:
+            utils.echo_msg_bold(
+                'masked {} data records from {}'.format(
+                    mask_count, self.fn,
+                )
             )
-        )
 
             
     def mask_and_yield_array_(self):
