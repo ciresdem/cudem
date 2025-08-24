@@ -1803,6 +1803,7 @@ class ElevationDataset:
 
         # mask is ogr, rasterize it
         opts['ogr_or_gdal'] = gdalfun.ogr_or_gdal(opts['mask_fn'])
+        utils.echo_msg(opts)
         if opts['ogr_or_gdal'] == 1: 
             if self.region is not None \
                and self.x_inc is not None \
@@ -1814,12 +1815,12 @@ class ElevationDataset:
                     y_inc=self.y_inc,
                     dst_srs=self.dst_srs,
                     invert=True,
-                    verbose=False,
+                    verbose=True,
                     temp_dir=self.cache_dir
                 )
                 opts['ogr_or_gdal'] = 0
-                
-            data_mask = opts['mask_fn']
+            else:    
+                data_mask = opts['mask_fn']
         else:
             data_mask = opts['mask_fn']
 
@@ -4448,7 +4449,7 @@ class ElevationDataset:
 
 
     ###########################################################################
-    ## Data export and archiving
+    ## Data export 
     ###########################################################################
     def export_xyz_as_list(self, z_only = False):
         """return the XYZ data from the dataset as python list
@@ -4632,7 +4633,9 @@ class ElevationDataset:
 
         mask_dataset = None
 
-        
+    ###########################################################################
+    ## Data archive
+    ###########################################################################        
     def _archive_xyz_test(self, **kwargs):
         for this_entry in self.parse():
             utils.echo_msg(this_entry)
@@ -10915,22 +10918,22 @@ See `datalists_usage` for full cli options.
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
                 else:
-                    #try:
-                    # process and dump each dataset independently
-                    if want_separate: 
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else:
-                        # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #   utils.echo_error_msg('Killed by user')
-                    #   break
-                    # except BrokenPipeError:
-                    #   utils.echo_error_msg('Pipe Broken')
-                    #   break
-                    # except Exception as e:
-                    #   utils.echo_error_msg(e)
-                    #   print(traceback.format_exc())
+                    try:
+                        # process and dump each dataset independently
+                        if want_separate: 
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else:
+                            # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                      utils.echo_error_msg('Killed by user')
+                      break
+                    except BrokenPipeError:
+                      utils.echo_error_msg('Pipe Broken')
+                      break
+                    except Exception as e:
+                      utils.echo_error_msg(e)
+                      print(traceback.format_exc())
                       
 ### End
