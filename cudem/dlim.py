@@ -1185,7 +1185,7 @@ class RQOutlierZ(PointZOutlier):
     """
     
     def __init__(self, threshold=10, raster=None, scaled_percentile=False,
-                 resample_raster=False, **kwargs):
+                 resample_raster=True, **kwargs):
         if 'percentile' in kwargs.keys():
             del kwargs['percentile']
         if 'percentage' in kwargs.keys():
@@ -1206,16 +1206,43 @@ class RQOutlierZ(PointZOutlier):
         
     def init_raster(self, raster):
         if raster is None:
+            raster = []
+            # try cudem
+            this_fetch = self.fetch_data('CUDEM', self.region.copy().buffer(pct=1))
+            raster.extend([x[1] for x in this_fetch.results])
+
+            # try etopo
+            this_fetch = self.fetch_data('etopo:datatype=surface', self.region.copy().buffer(pct=1))
+            raster.extend([x[1] for x in this_fetch.results])
+            #raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
+            
+            # try gmrt swath
             this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
-            raster = [x[1] for x in this_fetch.results]
-            raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
-            if self.xyinc is not None and self.resample_raster:
+            raster_ = [x[1] for x in this_fetch.results]
+            raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
+
+            if (self.region is not None or self.xyinc is not None) and self.resample_raster:
+                # vrt_options = gdal.BuildVRTOptions(resampleAlg='cubic') # Example option
+                # vrt_ds = gdal.BuildVRT(output_vrt, raster, options=vrt_options)
+                
                 raster = [gdalfun.sample_warp(
-                    raster[0], None, self.xyinc[0], self.xyinc[1],
-                    sample_alg='bilinear',
+                    raster, None, self.xyinc[0], self.xyinc[1],
+                    sample_alg='cubic', src_region=self.region,
                     verbose=self.verbose,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]]
+
+        # elif raster is None:
+        #     this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+        #     raster = [x[1] for x in this_fetch.results]
+        #     raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
+        #     if self.xyinc is not None and self.resample_raster:
+        #         raster = [gdalfun.sample_warp(
+        #             raster[0], None, self.xyinc[0], self.xyinc[1],
+        #             sample_alg='bilinear',
+        #             verbose=self.verbose,
+        #             co=["COMPRESS=DEFLATE", "TILED=YES"]
+        #         )[0]]
 
         elif os.path.exists(raster) and os.path.isfile(raster):
             raster = [raster]
@@ -1227,7 +1254,7 @@ class RQOutlierZ(PointZOutlier):
             if self.xyinc is not None and self.resample_raster:
                 raster = [gdalfun.sample_warp(
                     raster, None, self.xyinc[0], self.xyinc[1],
-                    sample_alg='bilinear',src_region=self.region,
+                    sample_alg='bilinear', src_region=self.region,
                     verbose=self.verbose,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]]
@@ -9195,6 +9222,7 @@ class GMRTFetcher(Fetcher):
                 for v in swath_shps:
                     if '.shp' in v:
                         #swath_shp = v
+                        ## upate to new masking
                         swath_mask = {'mask': v, 'invert_mask': True}
                         break
                     

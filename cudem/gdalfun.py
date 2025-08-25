@@ -1859,7 +1859,7 @@ def sample_warp(
 
     if verbose:
         desc = 'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
-            os.path.basename(str(src_dem)),
+            src_dem,
             out_region,
             x_sample_inc,
             y_sample_inc,
@@ -2016,7 +2016,7 @@ def gmt_grd2gdal(src_grd, dst_fmt='GTiff', ndv=-9999, verbose=True):
     """
 
     dst_gdal = '{}.{}'.format(
-        os.path.basename(src_grd).split('.')[0], gdal_fext(dst_fmt)
+        src_grd.split('.')[0], gdal_fext(dst_fmt)
     )        
     grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
         src_grd, dst_gdal, ndv, dst_fmt
