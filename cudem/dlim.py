@@ -1226,13 +1226,13 @@ class RQOutlierZ(PointZOutlier):
             raster = [x[1] for x in this_fetch.results]
             if self.xyinc is not None and self.resample_raster:
                 raster = [gdalfun.sample_warp(
-                    raster[0], None, self.xyinc[0], self.xyinc[1],
+                    raster, None, self.xyinc[0], self.xyinc[1],
                     sample_alg='bilinear',src_region=self.region,
                     verbose=self.verbose,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]]
 
-        utils.echo_msg_bold(raster)
+        #utils.echo_msg_bold(raster)
         return(raster)
 
 
