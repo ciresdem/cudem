@@ -166,7 +166,12 @@ def make_temp_fn(fn, temp_dir=cudem_cache(), region=None, inc=None):
     fn_bn = fn_basename2(os.path.basename(fn))
     fn_et = fn_ext(fn)
     if not os.path.exists(temp_dir):
-        os.makedirs(temp_dir)
+        try:
+            os.makedirs(temp_dir)
+        except FileExistsError:
+            pass
+        except Exception as e:
+            utils.echo_error_msg(e)
 
     if region is None:
         return(os.path.join(

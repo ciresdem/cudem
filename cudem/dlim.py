@@ -1184,7 +1184,8 @@ class RQOutlierZ(PointZOutlier):
     <rq:threshold=5>
     """
     
-    def __init__(self, threshold=10, raster=None, scaled_percentile=False, resample_raster=False, **kwargs):
+    def __init__(self, threshold=10, raster=None, scaled_percentile=False,
+                 resample_raster=False, **kwargs):
         if 'percentile' in kwargs.keys():
             del kwargs['percentile']
         if 'percentage' in kwargs.keys():
@@ -1211,7 +1212,7 @@ class RQOutlierZ(PointZOutlier):
                 raster = [gdalfun.sample_warp(
                     raster[0], None, self.xyinc[0], self.xyinc[1],
                     sample_alg='bilinear',
-                    verbose=True,
+                    verbose=self.verbose,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]]
 
@@ -1803,7 +1804,6 @@ class ElevationDataset:
 
         # mask is ogr, rasterize it
         opts['ogr_or_gdal'] = gdalfun.ogr_or_gdal(opts['mask_fn'])
-        utils.echo_msg(opts)
         if opts['ogr_or_gdal'] == 1: 
             if self.region is not None \
                and self.x_inc is not None \
@@ -1939,6 +1939,9 @@ class ElevationDataset:
         #     self.pnt_fltrs = [x for y in self.pnt_fltrs for x in y.split('::')]
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
             self.pnt_fltrs = [self.pnt_fltrs]
+
+        if self.mask is not None and isinstance(self.mask, str):
+            self.mask = [self.mask]
             
         return(self)
 
