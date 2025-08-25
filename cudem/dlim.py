@@ -1220,7 +1220,7 @@ class RQOutlierZ(PointZOutlier):
         elif os.path.exists(raster) and os.path.isfile(raster):
             raster = [raster]
         elif any(raster in item for item in self.fetches_modules):
-            _raster = [item for item in self.fetches_modules if 'etopo' in item][0]
+            _raster = [item for item in self.fetches_modules if raster in item][0]
             #elif raster.split(':')[0] in self.fetches_modules:
             this_fetch = self.fetch_data(_raster, self.region)
             raster = [x[1] for x in this_fetch.results]
