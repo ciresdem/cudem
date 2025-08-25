@@ -1224,7 +1224,15 @@ class RQOutlierZ(PointZOutlier):
             #elif raster.split(':')[0] in self.fetches_modules:
             this_fetch = self.fetch_data(_raster, self.region)
             raster = [x[1] for x in this_fetch.results]
+            if self.xyinc is not None and self.resample_raster:
+                raster = [gdalfun.sample_warp(
+                    raster[0], None, self.xyinc[0], self.xyinc[1],
+                    sample_alg='bilinear',src_region=self.region,
+                    verbose=self.verbose,
+                    co=["COMPRESS=DEFLATE", "TILED=YES"]
+                )[0]]
 
+        utils.echo_msg_bold(raster)
         return(raster)
 
 
@@ -8643,7 +8651,7 @@ class Fetcher(ElevationDataset):
             data_format=self.fetch_module.data_format,
             src_srs=self.fetch_module.src_srs,
             cache_dir=self.fetch_module._outdir,
-            #remote=True,
+            remote=True,
             metadata=md,
             #parent=self,
         )
@@ -10418,8 +10426,9 @@ class DatasetFactory(factory.CUDEMFactory):
         else:
             if self.mod_name >= -2 \
                and os.path.dirname(self.kwargs['parent'].fn) \
-               != os.path.dirname(entry[0]) \
-                   and ':' not in entry[0]:
+               != os.path.dirname(entry[0]) and \
+                   ':' not in entry[0] and \
+                   self.kwargs['parent'].data_format >= -2:
                 self.kwargs['fn'] = os.path.join(
                     os.path.dirname(self.kwargs['parent'].fn), entry[0]
                 )
