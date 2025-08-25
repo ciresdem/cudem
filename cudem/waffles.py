@@ -1989,7 +1989,7 @@ class WafflesMBGrid(Waffle):
         """
 
         dst_gdal = '{}.{}'.format(
-            os.path.basename(src_grd).split('.')[0], galfun.gdal_fext(dst_fmt)
+            os.path.basename(src_grd).split('.')[0], gdalfun.gdal_fext(dst_fmt)
         )        
         grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
             src_grd, dst_gdal, self.ndv, dst_fmt
@@ -4096,7 +4096,7 @@ class WafflesCUDEM(Waffle):
 
                 last_fltr = [
                     (f'weights:stacks=True:weight_threshold={pre_weight}'
-                     ':buffer_cells=1:verbose=False')
+                     ':buffer_cells=4:verbose=False')
                      ]
                 waffles_mod = '{}:{}'.format(
                     self.pre_mode,
@@ -4133,7 +4133,8 @@ class WafflesCUDEM(Waffle):
                     #else self.stack_mode,
                     upper_limit=self.pre_upper_limit if pre != 0 else None,
                     keep_auxiliary=False,
-                    fltr=self.pre_smoothing if pre != 0 else None,#last_fltr,
+                    #fltr=self.pre_smoothing if pre != 0 else None,#last_fltr,
+                    fltr=last_fltr,
                     percentile_limit=self.flatten if pre == 0 else None
                 )._acquire_module()
                 pre_surface.initialize()

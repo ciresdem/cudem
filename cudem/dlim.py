@@ -1199,7 +1199,7 @@ class RQOutlierZ(PointZOutlier):
         )
         self.threshold = threshold
         self.resample_raster = resample_raster
-        self.fetches_modules = ['gmrt', 'CUDEM']
+        self.fetches_modules = ['gmrt', 'CUDEM', 'etopo:datatype=surface']
         self.raster = self.init_raster(raster)
         self.scaled_percentile = scaled_percentile
 
@@ -1208,6 +1208,7 @@ class RQOutlierZ(PointZOutlier):
         if raster is None:
             this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
             raster = [x[1] for x in this_fetch.results]
+            raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
             if self.xyinc is not None and self.resample_raster:
                 raster = [gdalfun.sample_warp(
                     raster[0], None, self.xyinc[0], self.xyinc[1],
@@ -1218,8 +1219,10 @@ class RQOutlierZ(PointZOutlier):
 
         elif os.path.exists(raster) and os.path.isfile(raster):
             raster = [raster]
-        elif raster.split(':')[0] in self.fetches_modules:
-            this_fetch = self.fetch_data(raster, self.region)
+        elif any(raster in item for item in self.fetches_modules):
+            _raster = [item for item in self.fetches_modules if 'etopo' in item][0]
+            #elif raster.split(':')[0] in self.fetches_modules:
+            this_fetch = self.fetch_data(_raster, self.region)
             raster = [x[1] for x in this_fetch.results]
 
         return(raster)
@@ -3955,9 +3958,12 @@ class ElevationDataset:
                     if self.verbose:
                         utils.echo_msg(f'using mask dataset: {data_mask} to array')
                         
-                    src_mask = gdal.Open(data_mask['data_mask'])                    
-                    mask_band = src_mask.GetRasterBand(1)
-                    mask_infos = gdalfun.gdal_infos(src_mask)
+                    src_mask = gdal.Open(data_mask['data_mask'])
+                    if src_mask is not None:
+                        mask_band = src_mask.GetRasterBand(1)
+                        mask_infos = gdalfun.gdal_infos(src_mask)
+                    else:
+                        mask_band = None
                 else:
                     utils.echo_warning_msg(f'could not load mask {data_mask["data_mask"]}')
 
@@ -3967,6 +3973,9 @@ class ElevationDataset:
                         this_gt, xcount, ycount
                     )
                     mask_data = mask_band.ReadAsArray(*this_srcwin)
+                    if mask_data is None or len(mask_data) == 0:
+                        continue
+                        
                     if not np.isnan(mask_infos['ndv']):
                         mask_data[mask_data==mask_infos['ndv']] = np.nan
 

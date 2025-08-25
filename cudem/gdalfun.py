@@ -2003,6 +2003,32 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None,
     else:
         return(None)
 
+
+def gmt_grd2gdal(src_grd, dst_fmt='GTiff', ndv=-9999, verbose=True):
+    """convert the grd file to tif using GMT
+
+    Args:
+      src_grd (str): a pathname to a grid file
+      dst_fmt (str): the output GDAL format string
+
+    Returns:
+      str: the gdal file name or None
+    """
+
+    dst_gdal = '{}.{}'.format(
+        os.path.basename(src_grd).split('.')[0], gdal_fext(dst_fmt)
+    )        
+    grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
+        src_grd, dst_gdal, ndv, dst_fmt
+    )
+    out, status = utils.run_cmd(
+        grd2gdal_cmd, verbose=verbose
+    )
+    if status == 0:
+        return(dst_gdal)
+    else:
+        return(None)
+
     
 def gdal_yield_srcwin(src_gdal, n_chunk=10, step=5, verbose=False):
     """yield source windows in n_chunks at step"""

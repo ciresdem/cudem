@@ -1130,7 +1130,7 @@ class GMRT(FetchModule):
     def __init__(
             self,
             res='default',
-            fmt='geotiff',
+            fmt='netcdf',
             layer='topo',
             want_swath=False,
             **kwargs
