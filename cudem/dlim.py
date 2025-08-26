@@ -1309,6 +1309,7 @@ class RQOutlierZ(PointZOutlier):
             #elif raster.split(':')[0] in self.fetches_modules:
             this_fetch = self.fetch_data(_raster, self.region)
             raster = [x[1] for x in this_fetch.results]
+            raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_]
             if self.xyinc is not None and self.resample_raster:
                 raster = [gdalfun.sample_warp(
                     raster, None, self.xyinc[0], self.xyinc[1],
