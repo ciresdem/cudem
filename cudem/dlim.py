@@ -1207,23 +1207,24 @@ class RQOutlierZ(PointZOutlier):
     def init_raster(self, raster):
         if raster is None:
             raster = []
-            # try cudem
-            this_fetch = self.fetch_data('CUDEM', self.region.copy().buffer(pct=1))
-            raster.extend([x[1] for x in this_fetch.results])
+            # try gmrt swath
+            this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+            raster_ = [x[1] for x in this_fetch.results]
+            raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
 
             # try etopo
             this_fetch = self.fetch_data('etopo:datatype=surface', self.region.copy().buffer(pct=1))
             raster.extend([x[1] for x in this_fetch.results])
             #raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
             
-            # try gmrt swath
-            this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
-            raster_ = [x[1] for x in this_fetch.results]
-            raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
+            # try cudem
+            this_fetch = self.fetch_data('CUDEM', self.region.copy().buffer(pct=1))
+            raster.extend([x[1] for x in this_fetch.results])        
 
+            utils.echo_msg_bold(raster)
             if (self.region is not None or self.xyinc is not None) and self.resample_raster:
                 # vrt_options = gdal.BuildVRTOptions(resampleAlg='cubic') # Example option
-                # vrt_ds = gdal.BuildVRT(output_vrt, raster, options=vrt_options)
+                # vrt_ds = gdal.BuildVRT('tmp.vrt', raster, options=vrt_options)
                 
                 raster = [gdalfun.sample_warp(
                     raster, None, self.xyinc[0], self.xyinc[1],
