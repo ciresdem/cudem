@@ -2016,7 +2016,7 @@ def gmt_grd2gdal(src_grd, dst_fmt='GTiff', ndv=-9999, verbose=True):
     """
 
     dst_gdal = '{}.{}'.format(
-        src_grd.split('.')[0], gdal_fext(dst_fmt)
+        '.'.join(src_grd.split('.')[:-1]), gdal_fext(dst_fmt)
     )        
     grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
         src_grd, dst_gdal, ndv, dst_fmt
