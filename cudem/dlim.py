@@ -943,6 +943,20 @@ class PointZ:
         return(ogr_ds)
 
 
+    def mask_to_raster(self):
+        data_mask = gdalfun.ogr2gdal_mask(
+            self.mask_fn,
+            region=self.region,
+            x_inc=self.xyinc[0],
+            y_inc=self.xyinc[1],
+            #dst_srs=self.dst_srs,
+            #invert=True,
+            verbose=self.verbose,
+            temp_dir=self.cache_dir
+        )
+        
+        return(data_mask)
+    
 ## check if regions overlap before vectorizing points
 class PointZVectorMask(PointZ):
     """Filter data using a vector mask
@@ -960,20 +974,6 @@ class PointZVectorMask(PointZ):
         
         if self.verbose:
             utils.echo_msg(f'masking with {mask_fn}')
-
-    def mask_to_raster(self):
-        data_mask = gdalfun.ogr2gdal_mask(
-            self.mask_fn,
-            region=self.region,
-            x_inc=self.xyinc[0],
-            y_inc=self.xyinc[1],
-            #dst_srs=self.dst_srs,
-            #invert=True,
-            verbose=self.verbose,
-            temp_dir=self.cache_dir
-        )
-        
-        return(data_mask)
 
             
     def mask_points(self, points, invert=False):
@@ -1203,24 +1203,79 @@ class RQOutlierZ(PointZOutlier):
         self.raster = self.init_raster(raster)
         self.scaled_percentile = scaled_percentile
 
+
+    def mask_gmrt(self, raster):
+        #this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+        this_fetch = fetches.FetchesFactory(
+            mod='gmrt',
+            src_region=self.region,
+            verbose=self.verbose,
+            callback=fetches.fetches_callback
+        )._acquire_module()        
+
+        swath_masks = []
+        if fetches.Fetch(
+                this_fetch._gmrt_swath_poly_url,
+                verbose=self.verbose
+        ).fetch_file(
+                os.path.join(
+                    this_fetch._outdir, 'gmrt_swath_polygons.zip'
+                )
+            ) == 0:
+                swath_shps = utils.p_unzip(
+                    os.path.join(
+                        this_fetch._outdir, 'gmrt_swath_polygons.zip'
+                    ),
+                    exts=['shp', 'shx', 'prj', 'dbf'],
+                    outdir=this_fetch._outdir,
+                    verbose=self.verbose
+                )
+
+                for v in swath_shps:
+                    if '.shp' in v:
+                        swath_masks.append(v)
+                        break
+                    
+        if len(swath_masks) > 0:
+            for swath_ply in swath_masks:
+                gdalfun.gdal_clip(raster, f'{raster}_swath.tif', src_ply=swath_ply, invert=True,
+                                  verbose=True, cache_dir=this_fetch._outdir)
+
+            return(f'{raster}_swath.tif')
+
+        return(None)
+                
         
     def init_raster(self, raster):
         if raster is None:
             raster = []
-            # try gmrt swath
+            # try gmrt all
             this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
             raster_ = [x[1] for x in this_fetch.results]
             raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
-
+            
             # try etopo
             this_fetch = self.fetch_data('etopo:datatype=surface', self.region.copy().buffer(pct=1))
             raster.extend([x[1] for x in this_fetch.results])
             #raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
-            
-            # try cudem
-            this_fetch = self.fetch_data('CUDEM', self.region.copy().buffer(pct=1))
+
+            # try gmrt swath
+            this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+            raster_ = [x[1] for x in this_fetch.results]
+            raster_ = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_]
+            gmrt_swath = self.mask_gmrt(raster_[0])
+            if gmrt_swath is not None:
+                raster.extend([gmrt_swath])
+
+            # try cudem 1/3
+            this_fetch = self.fetch_data('CUDEM:datatype=13', self.region.copy().buffer(pct=1))
             raster.extend([x[1] for x in this_fetch.results])        
 
+            # try cudem 1/9
+            this_fetch = self.fetch_data('CUDEM:datatype=19', self.region.copy().buffer(pct=1))
+            raster.extend([x[1] for x in this_fetch.results])        
+
+            
             utils.echo_msg_bold(raster)
             if (self.region is not None or self.xyinc is not None) and self.resample_raster:
                 # vrt_options = gdal.BuildVRTOptions(resampleAlg='cubic') # Example option
