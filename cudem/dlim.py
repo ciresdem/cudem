@@ -1206,6 +1206,9 @@ class RQOutlierZ(PointZOutlier):
 
     def mask_gmrt(self, raster):
         #this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+        if os.path.exists(f'{raster}_swath.tif'):
+            return(f'{raster}_swath.tif')
+
         this_fetch = fetches.FetchesFactory(
             mod='gmrt',
             src_region=self.region,
@@ -1274,7 +1277,6 @@ class RQOutlierZ(PointZOutlier):
             # try cudem 1/9
             this_fetch = self.fetch_data('CUDEM:datatype=19', self.region.copy().buffer(pct=1))
             raster.extend([x[1] for x in this_fetch.results])        
-
             
             utils.echo_msg_bold(raster)
             if (self.region is not None or self.xyinc is not None) and self.resample_raster:
