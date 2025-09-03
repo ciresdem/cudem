@@ -455,8 +455,8 @@ class Fetch:
                         params=params,
                         json=json,
                         tries=tries - 1,
-                        timeout=timeout + 1,
-                        read_timeout=read_timeout + 10
+                        timeout=timeout + 1 if timeout is not None else None,
+                        read_timeout=read_timeout + 10 if read_timeout is not None else None
                     )
 
             ## some unaccounted for return status code, report and exit.
