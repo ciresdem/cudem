@@ -1283,24 +1283,25 @@ class RQOutlierZ(PointZOutlier):
                 # vrt_options = gdal.BuildVRTOptions(resampleAlg='cubic') # Example option
                 # vrt_ds = gdal.BuildVRT('tmp.vrt', raster, options=vrt_options)
                 
-                raster = [gdalfun.sample_warp(
-                    raster, None, self.xyinc[0], self.xyinc[1],
-                    sample_alg='cubic', src_region=self.region,
-                    verbose=self.verbose,
-                    co=["COMPRESS=DEFLATE", "TILED=YES"]
-                )[0]]
-
-        # elif raster is None:
-        #     this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
-        #     raster = [x[1] for x in this_fetch.results]
-        #     raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
-        #     if self.xyinc is not None and self.resample_raster:
-        #         raster = [gdalfun.sample_warp(
-        #             raster[0], None, self.xyinc[0], self.xyinc[1],
-        #             sample_alg='bilinear',
-        #             verbose=self.verbose,
-        #             co=["COMPRESS=DEFLATE", "TILED=YES"]
-        #         )[0]]
+                try:
+                    raster = [gdalfun.sample_warp(
+                        raster, None, self.xyinc[0], self.xyinc[1],
+                        sample_alg='cubic', src_region=self.region,
+                        verbose=self.verbose,
+                        co=["COMPRESS=DEFLATE", "TILED=YES"]
+                    )[0]]
+                except Exception as e:
+                    utils.echo_warning_msg(f'failed to process stacked rasters, falling back to GMRT, {e}')
+                    this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+                    raster = [x[1] for x in this_fetch.results]
+                    raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
+                    if self.xyinc is not None and self.resample_raster:
+                        raster = [gdalfun.sample_warp(
+                            raster[0], None, self.xyinc[0], self.xyinc[1],
+                            sample_alg='bilinear',
+                            verbose=self.verbose,
+                            co=["COMPRESS=DEFLATE", "TILED=YES"]
+                        )[0]]
 
         elif os.path.exists(raster) and os.path.isfile(raster):
             raster = [raster]
@@ -4075,7 +4076,6 @@ class ElevationDataset:
 
                     for arr in out_arrays.keys():
                         if out_arrays[arr] is not None:
-
                             if data_mask['invert']:
                                 if arr == 'count':
                                     out_arrays[arr][~np.isnan(mask_data)] = 0
