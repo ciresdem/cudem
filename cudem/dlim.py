@@ -1271,14 +1271,14 @@ class RQOutlierZ(PointZOutlier):
                 raster.extend([gmrt_swath])
 
             # try cudem 1/3
-            this_fetch = self.fetch_data('CUDEM:datatype=13', self.region.copy().buffer(pct=1))
+            this_fetch = self.fetch_data('CUDEM:datatype=13:want_footprints=True:want_urllist=True', self.region.copy().buffer(pct=1))
             raster.extend([x[1] for x in this_fetch.results])        
 
             # try cudem 1/9
-            this_fetch = self.fetch_data('CUDEM:datatype=19', self.region.copy().buffer(pct=1))
+            this_fetch = self.fetch_data('CUDEM:datatype=19:want_footprints=True:want_urllist=True', self.region.copy().buffer(pct=1))
             raster.extend([x[1] for x in this_fetch.results])        
             
-            utils.echo_msg_bold(raster)
+            #utils.echo_msg_bold(raster)
             if (self.region is not None or self.xyinc is not None) and self.resample_raster:
                 # vrt_options = gdal.BuildVRTOptions(resampleAlg='cubic') # Example option
                 # vrt_ds = gdal.BuildVRT('tmp.vrt', raster, options=vrt_options)
@@ -6265,7 +6265,7 @@ class BAGFile(ElevationDataset):
         mt = gdal.Info(self.fn, format='json')['metadata']['']
         ds_infos = gdalfun.gdal_infos(self.fn)
         x_res = ds_infos['geoT'][1]
-        sub_weight = 3/x_res
+        sub_weight = (3 * (10 if x_res <=3 else 1))/x_res
         oo = []
         if self.data_region is not None and self.data_region.valid_p():
             oo.append('MINX={}'.format(self.data_region.xmin))
@@ -6298,7 +6298,7 @@ class BAGFile(ElevationDataset):
                         res = sub_dataset[-1].split(',')[-2:]
                         #utils.echo_msg(res)
                         res = [float(re.findall(r'\d+\.\d+|\d+', x)[0]) for x in res]
-                        sub_weight = 3/res[0]
+                        sub_weight = (3 * (10 if res[0] <=3 else 1))/res[0]
                         sub_ds = DatasetFactory(
                             **self._set_params(
                                 mod=sub_dataset[0],
@@ -6377,7 +6377,7 @@ class BAGFile(ElevationDataset):
         else:
             ds_infos = gdalfun.gdal_infos(self.fn)
             x_res = ds_infos['geoT'][1]
-            sub_weight = 3/x_res
+            sub_weight = (3 * (10 if x_res <=3 else 1))/x_res
             sub_ds = DatasetFactory(
                 **self._set_params(
                     mod=self.fn,

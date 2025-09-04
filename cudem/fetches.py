@@ -4526,6 +4526,7 @@ class DAV(FetchModule):
             layer=0,
             name='digital_coast',
             want_footprints=False,
+            want_urllist=False,
             footprints_only=False,
             **kwargs
     ):
@@ -4541,6 +4542,7 @@ class DAV(FetchModule):
 
         ## data formats vary
         self.data_format = None
+        self.want_urllist = want_urllist
         self.want_footprints = want_footprints
         self.footprints_only = footprints_only
         if self.footprints_only:
@@ -4635,7 +4637,9 @@ class DAV(FetchModule):
                                 index_zipurl = line.strip()
                                 break
 
-                    utils.remove_glob(urllist)
+                    if not self.want_urllist:
+                        utils.remove_glob(urllist)
+                        
                     if self.want_footprints:
                         self.add_entry_to_results(
                             index_zipurl,
@@ -4757,9 +4761,9 @@ class DAV(FetchModule):
                                 )
 
                         index_ds = index_layer = None
-                        #if not self.want_footprints:
-                        utils.remove_glob(index_zipfile, *index_shps)
-                        #utils.remove_glob(*index_shps)
+                        if not self.want_footprints:
+                            utils.remove_glob(index_zipfile, *index_shps)
+                            #utils.remove_glob(*index_shps)
 
                 # # spatial_metadata
                 # elif link['serviceID'] == 166 and self.datatype == 'sm': 
