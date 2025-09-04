@@ -1900,6 +1900,16 @@ class ElevationDataset:
         if 'verbose' not in opts.keys():
             opts['verbose'] = False
 
+        if 'min_z' not in opts.keys():
+            opts['min_z'] = None
+        else:
+            opts['min_z'] = utils.float_or(opts['min_z'])
+
+        if 'max_z' not in opts.keys():
+            opts['max_z'] = None
+        else:
+            opts['max_z'] = utils.float_or(opts['max_z'])
+            
         # mask is ogr, rasterize it
         opts['ogr_or_gdal'] = gdalfun.ogr_or_gdal(opts['mask_fn'])
         if opts['ogr_or_gdal'] == 1: 
@@ -4062,6 +4072,16 @@ class ElevationDataset:
                 else:
                     utils.echo_warning_msg(f'could not load mask {data_mask["data_mask"]}')
 
+                if data_mask['min_z'] is not None or data_mask['max_z'] is not None:
+                    if data_mask['min_z'] is not None and data_mask['max_z'] is not None:
+                        z_mask = ((out_arrays['z'] > data_mask['min_z']) & (out_arrays['z'] < data_mask['max_z']))
+                    elif data_mask['min_z'] is not None:
+                        z_mask = out_arrays['z'] > data_mask['min_z']
+                    else:
+                        z_mask = out_arrays['z'] < data_mask['max_z']
+                else:
+                    z_mask = np.full(out_arrays['z'].shape, True)
+
                 if mask_band is not None:
                     ycount, xcount = out_arrays['z'].shape
                     this_region = regions.Region().from_geo_transform(
@@ -4073,24 +4093,33 @@ class ElevationDataset:
                         
                     if not np.isnan(mask_infos['ndv']):
                         mask_data[mask_data==mask_infos['ndv']] = np.nan
-
+                        
+                    out_mask = ((np.isnan(mask_data)) & (z_mask))
+                        
                     for arr in out_arrays.keys():
-                        if out_arrays[arr] is not None:
+                        if out_arrays[arr] is not None:                                
                             if data_mask['invert']:
                                 if arr == 'count':
-                                    out_arrays[arr][~np.isnan(mask_data)] = 0
+                                    #out_arrays[arr][~np.isnan(mask_data)] = 0
+                                    out_arrays[arr][~out_mask] = 0
                                 else:                            
-                                    out_arrays[arr][~np.isnan(mask_data)] = np.nan
+                                    #out_arrays[arr][~np.isnan(mask_data)] = np.nan
+                                    out_arrays[arr][~out_mask] = np.nan
 
                             else:
                                 if arr == 'count':
-                                    out_arrays[arr][np.isnan(mask_data)] = 0
+                                    #out_arrays[arr][np.isnan(mask_data)] = 0
+                                    out_arrays[arr][out_mask] = 0
                                 else:
-                                    out_arrays[arr][np.isnan(mask_data)] = np.nan
+                                    #out_arrays[arr][np.isnan(mask_data)] = np.nan
+                                    out_arrays[arr][out_mask] = np.nan
 
-                    mask_count += np.count_nonzero(~np.isnan(mask_data)) \
+                    # mask_count += np.count_nonzero(~np.isnan(mask_data)) \
+                    #     if data_mask['invert'] \
+                    #        else np.count_nonzero(np.isnan(mask_data))
+                    mask_count += np.count_nonzero(~out_mask) \
                         if data_mask['invert'] \
-                           else np.count_nonzero(np.isnan(mask_data))
+                           else np.count_nonzero(out_mask)
                     mask_data = None
                     
                 src_mask = mask_band = None
@@ -4135,7 +4164,16 @@ class ElevationDataset:
                     for data_mask in data_masks:                
                         if data_mask is None:
                             continue
-                        
+
+                        z_masked = True
+                        if data_mask['min_z'] is not None or data_mask['max_z'] is not None:
+                            if data_mask['min_z'] is not None and data_mask['max_z'] is not None:
+                                z_masked = (this_xyz.z > data_mask['min_z'] & this_xyz.z < data_mask['mask_z'])
+                            elif data_mask['min_z'] is not None:
+                                z_masked = this_xyz.z > data_mask['min_z']
+                            else:
+                                z_masked = this_xyz.z < data_mask['max_z']
+
                         if data_mask['ogr_or_gdal'] == 0:
                             src_ds = gdal.Open(data_mask['data_mask'])
                             if src_ds is not None:
@@ -4159,13 +4197,13 @@ class ElevationDataset:
                                         if np.isnan(tgrid[0][0]):
                                             if data_mask['invert']:
                                                 mask_count += 1
-                                                masked = True
+                                                masked = (True & z_masked)
                                             else:
                                                 masked = False
                                         else:
                                             if not data_mask['invert']:
                                                 mask_count += 1
-                                                masked = True
+                                                masked = (True & z_masked)
                                             else:
                                                 masked = False
                         else:
@@ -4182,7 +4220,7 @@ class ElevationDataset:
                                 this_point = ogr.CreateGeometryFromWkt(this_wkt)
                                 if this_point.Within(geomcol):
                                     if not data_mask['invert']:
-                                        masked = True
+                                        masked = (True & z_masked)
                                         mask_count += 1
                                     else:
                                         masked = False
@@ -4190,7 +4228,7 @@ class ElevationDataset:
                                     if not data_mask['invert']:
                                         masked = False
                                     else:
-                                        masked = True
+                                        masked = (True & z_masked)
                                         mask_count += 1
 
                                 src_ds = layer = None
