@@ -1271,11 +1271,11 @@ class RQOutlierZ(PointZOutlier):
                 raster.extend([gmrt_swath])
 
             # try cudem 1/3
-            this_fetch = self.fetch_data('CUDEM:datatype=13:want_footprints=True:want_urllist=True', self.region.copy().buffer(pct=1))
+            this_fetch = self.fetch_data('CUDEM:datatype=13:want_footprints=True', self.region.copy().buffer(pct=1))
             raster.extend([x[1] for x in this_fetch.results])        
 
             # try cudem 1/9
-            this_fetch = self.fetch_data('CUDEM:datatype=19:want_footprints=True:want_urllist=True', self.region.copy().buffer(pct=1))
+            this_fetch = self.fetch_data('CUDEM:datatype=19:want_footprints=True', self.region.copy().buffer(pct=1))
             raster.extend([x[1] for x in this_fetch.results])        
             
             #utils.echo_msg_bold(raster)

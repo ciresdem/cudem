@@ -4526,7 +4526,8 @@ class DAV(FetchModule):
             layer=0,
             name='digital_coast',
             want_footprints=False,
-            want_urllist=False,
+            keep_footprints=False,
+            #want_urllist=False,
             footprints_only=False,
             **kwargs
     ):
@@ -4542,8 +4543,9 @@ class DAV(FetchModule):
 
         ## data formats vary
         self.data_format = None
-        self.want_urllist = want_urllist
+        #self.want_urllist = want_urllist
         self.want_footprints = want_footprints
+        self.keep_footprints = keep_footprints
         self.footprints_only = footprints_only
         if self.footprints_only:
             self.want_footprints = True
@@ -4614,13 +4616,16 @@ class DAV(FetchModule):
                         continue
                     
                     rows = page.xpath('//a[contains(@href, ".txt")]/@href')
+                    #urllist = None
                     for l in rows:
                         if 'urllist' in l:
                             urllist = l
                             break
 
-                    #utils.echo_msg(urllist)
-                        
+                    # if urllist is None:
+                    #     utils.echo_warning_msg(f'could not find urllist from {feature}')
+                    #     continue
+                    
                     if 'http' in urllist:
                         urllist_url = urllist
                     else:
@@ -4637,8 +4642,8 @@ class DAV(FetchModule):
                                 index_zipurl = line.strip()
                                 break
 
-                    if not self.want_urllist:
-                        utils.remove_glob(urllist)
+                    #if not self.want_urllist:
+                    utils.remove_glob(urllist)
                         
                     if self.want_footprints:
                         self.add_entry_to_results(
@@ -4761,7 +4766,7 @@ class DAV(FetchModule):
                                 )
 
                         index_ds = index_layer = None
-                        if not self.want_footprints:
+                        if not self.want_footprints and not self.keep_footprints:
                             utils.remove_glob(index_zipfile, *index_shps)
                             #utils.remove_glob(*index_shps)
 
