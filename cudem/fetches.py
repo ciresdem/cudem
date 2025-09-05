@@ -4612,20 +4612,26 @@ class DAV(FetchModule):
                     )
                     page = Fetch(index_urls[0], verbose=False).fetch_html()
                     if page is None:
-                        utils.echo_msg(index_urls)
+                        utils.echo_warning_msg(f'could not fetch {index_urls}')
                         continue
                     
                     rows = page.xpath('//a[contains(@href, ".txt")]/@href')
-                    #urllist = None
+                    #rows = page.xpath('//a[contains(@href, "u")]/@href')
+                    #utils.echo_msg_bold(page)
+                    #utils.echo_msg_bold(rows)
+                    urllist = None
                     for l in rows:
+                        #utils.echo_msg_bold(l)
                         if 'urllist' in l:
                             urllist = l
                             break
 
-                    # if urllist is None:
-                    #     utils.echo_warning_msg(f'could not find urllist from {feature}')
-                    #     continue
-                    
+                    if urllist is None:
+                        utils.echo_warning_msg(f'could not find urllist from {feature}')
+                        utils.echo_msg(index_urls)
+                        continue
+                     
+                    #utils.echo_msg_bold(urllist)
                     if 'http' in urllist:
                         urllist_url = urllist
                     else:
@@ -4643,8 +4649,7 @@ class DAV(FetchModule):
                                 break
 
                     #if not self.want_urllist:
-                    utils.remove_glob(urllist)
-                        
+                    utils.remove_glob(urllist)                        
                     if self.want_footprints:
                         self.add_entry_to_results(
                             index_zipurl,
@@ -4766,9 +4771,9 @@ class DAV(FetchModule):
                                 )
 
                         index_ds = index_layer = None
-                        if not self.want_footprints and not self.keep_footprints:
-                            utils.remove_glob(index_zipfile, *index_shps)
-                            #utils.remove_glob(*index_shps)
+                        #if not self.keep_footprints:
+                        utils.remove_glob(index_zipfile, *index_shps)
+                        #utils.remove_glob(*index_shps)
 
                 # # spatial_metadata
                 # elif link['serviceID'] == 166 and self.datatype == 'sm': 
