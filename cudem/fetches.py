@@ -4771,9 +4771,9 @@ class DAV(FetchModule):
                                 )
 
                         index_ds = index_layer = None
-                        if not self.keep_footprints:
-                            utils.remove_glob(index_zipfile, *index_shps)
-                            #utils.remove_glob(*index_shps)
+                        #if not self.keep_footprints:
+                        utils.remove_glob(index_zipfile, *index_shps)
+                        #utils.remove_glob(*index_shps)
 
                 # # spatial_metadata
                 # elif link['serviceID'] == 166 and self.datatype == 'sm': 
