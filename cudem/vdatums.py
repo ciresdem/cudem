@@ -477,10 +477,9 @@ class VerticalTransform:
                 if _trans_in_array is None:
                     _trans_in = None
                 #else:
-                for ofk in _trans_in.output_files.keys():
-                    utils.remove_glob('{}*'.format(_trans_in.output_files[ofk]))
-                else:
-                    _trans_in = None
+                if _trans_in is not None:
+                    for ofk in _trans_in.output_files.keys():
+                        utils.remove_glob('{}*'.format(_trans_in.output_files[ofk]))
             else:
                 _trans_in = None
             
@@ -512,9 +511,10 @@ class VerticalTransform:
                 if _trans_out_array is None:
                     _trans_out = None
                 #else:
-                for ofk in _trans_out.output_files.keys():
-                    utils.remove_glob('{}*'.format(_trans_out.output_files[ofk]))
-                    #utils.remove_glob('{}*'.format(_trans_out.fn))
+                if _trans_out is not None:
+                    for ofk in _trans_out.output_files.keys():
+                        utils.remove_glob('{}*'.format(_trans_out.output_files[ofk]))
+                        #utils.remove_glob('{}*'.format(_trans_out.fn))
                 # else:
                 #     _trans_out = None
             else:

@@ -1250,6 +1250,14 @@ class RQOutlierZ(PointZOutlier):
                 
         
     def init_raster(self, raster):
+        if (self.region is not None or self.xyinc is not None) and self.resample_raster:
+            _raster = utils.append_fn(f'rq_raster_{raster}', self.region, self.xyinc[0])
+            _raster = f'{_raster}.tif'
+
+        if os.path.exists(_raster) and os.path.isfile(_raster):
+            raster = [_raster]
+            return(raster)
+            
         if raster is None:
             raster = []
             # try gmrt all
@@ -1285,7 +1293,7 @@ class RQOutlierZ(PointZOutlier):
                 
                 try:
                     raster = [gdalfun.sample_warp(
-                        raster, None, self.xyinc[0], self.xyinc[1],
+                        raster, _raster, self.xyinc[0], self.xyinc[1],
                         sample_alg='cubic', src_region=self.region,
                         verbose=self.verbose,
                         co=["COMPRESS=DEFLATE", "TILED=YES"]
@@ -1297,7 +1305,7 @@ class RQOutlierZ(PointZOutlier):
                     raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
                     if self.xyinc is not None and self.resample_raster:
                         raster = [gdalfun.sample_warp(
-                            raster[0], None, self.xyinc[0], self.xyinc[1],
+                            raster[0], _raster, self.xyinc[0], self.xyinc[1],
                             sample_alg='bilinear',
                             verbose=self.verbose,
                             co=["COMPRESS=DEFLATE", "TILED=YES"]
@@ -1313,7 +1321,7 @@ class RQOutlierZ(PointZOutlier):
             raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
             if self.xyinc is not None and self.resample_raster:
                 raster = [gdalfun.sample_warp(
-                    raster, None, self.xyinc[0], self.xyinc[1],
+                    raster, _raster, self.xyinc[0], self.xyinc[1],
                     sample_alg='bilinear', src_region=self.region,
                     verbose=self.verbose,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
@@ -4060,8 +4068,8 @@ class ElevationDataset:
                     continue
                 
                 if os.path.exists(data_mask['data_mask']):
-                    if self.verbose:
-                        utils.echo_msg(f'using mask dataset: {data_mask} to array')
+                    # if self.verbose:
+                    #     utils.echo_msg(f'using mask dataset: {data_mask} to array')
                         
                     src_mask = gdal.Open(data_mask['data_mask'])
                     if src_mask is not None:
@@ -4155,10 +4163,10 @@ class ElevationDataset:
                     opts = self._init_mask(mask)
                     data_masks.append(opts)
 
-                if self.verbose:
-                    utils.echo_msg(
-                        f'using mask dataset: {data_masks} to xyz'
-                    )                    
+                # if self.verbose:
+                #     utils.echo_msg(
+                #         f'using mask dataset: {data_masks} to xyz'
+                #     )                    
                 for this_xyz in this_entry.yield_xyz():
                     masked = False
                     for data_mask in data_masks:                
@@ -5970,7 +5978,7 @@ class GDALFile(ElevationDataset):
                     n_size=(self.src_ds.RasterYSize, self.src_ds.RasterXSize),
                     n_chunk=4000,
                     msg=f'chunking {self.fn} @ {self.src_ds.RasterXSize}/{self.src_ds.RasterYSize}',
-                    verbose=self.verbose
+                    verbose=False
             ):                
                 band_data = band.ReadAsArray(*srcwin).astype(float)
                 if ndv is not None and not np.isnan(ndv):
@@ -6262,137 +6270,148 @@ class BAGFile(ElevationDataset):
         return(self.infos)
 
     def parse(self, resample=True):
-        mt = gdal.Info(self.fn, format='json')['metadata']['']
-        ds_infos = gdalfun.gdal_infos(self.fn)
-        x_res = ds_infos['geoT'][1]
-        sub_weight = (3 * (10 if x_res <=3 else 1))/x_res
-        oo = []
-        if self.data_region is not None and self.data_region.valid_p():
-            oo.append('MINX={}'.format(self.data_region.xmin))
-            oo.append('MAXX={}'.format(self.data_region.xmax))
-            oo.append('MINY={}'.format(self.data_region.ymin))
-            oo.append('MAXY={}'.format(self.data_region.ymax))
-                        
-        if ('HAS_SUPERGRIDS' in mt.keys() \
-            and mt['HAS_SUPERGRIDS'] == 'TRUE') \
-           or self.force_vr \
-           or 'MAX_RESOLUTION_X' in mt.keys() \
-           or 'MAX_RESOLUTION_Y' in mt.keys():
-            if self.explode:
-                min_res = float(mt['MIN_RESOLUTION_X'])
-                max_res = float(mt['MAX_RESOLUTION_X'])
-                oo.append("MODE=LIST_SUPERGRIDS")
-                src_ds = gdal.OpenEx(self.fn, open_options=oo)
-                sub_datasets = src_ds.GetSubDatasets()
-                src_ds = None
+        parse_entry_p = True
+        if self.region is not None:            
+            if not regions.regions_intersect_p(
+                    self.inf_region,
+                    self.region \
+                    if self.transform['trans_region'] is None \
+                    else self.transform['trans_region']
+            ):
+                parse_entry_p = False
 
-                utils.echo_msg(f'VRBAG min resolution is {min_res}')
-                utils.echo_msg(f'VRBAG max resolution is {max_res}')
-                with tqdm(
-                        total=len(sub_datasets),
-                        desc=f'parsing {len(sub_datasets)} supergrids from BAG file {self.fn}',
-                        leave=self.verbose
-                ) as pbar:                
-                    for sub_dataset in sub_datasets:
-                        pbar.update()
-                        res = sub_dataset[-1].split(',')[-2:]
-                        #utils.echo_msg(res)
-                        res = [float(re.findall(r'\d+\.\d+|\d+', x)[0]) for x in res]
-                        sub_weight = (3 * (10 if res[0] <=3 else 1))/res[0]
-                        sub_ds = DatasetFactory(
-                            **self._set_params(
-                                mod=sub_dataset[0],
-                                data_format=200,
-                                src_srs=self.src_srs,
-                                band_no=1,
-                                uncertainty_mask_to_meter=0.01,
-                                check_path=False,
-                                super_grid=True,
-                                #node='pixel',
-                                #weight_multiplier=sub_weight,
-                                weight=sub_weight*(self.weight if self.weight is not None else 1),
-                                uncertainty_mask=2,
-                            )
-                        )._acquire_module()
-                        self.data_entries.append(sub_ds)
-                        sub_ds.initialize()
-                        for gdal_ds in sub_ds.parse():
-                            yield(gdal_ds)
+        if parse_entry_p:
+            mt = gdal.Info(self.fn, format='json')['metadata']['']
+            ds_infos = gdalfun.gdal_infos(self.fn)
+            x_res = ds_infos['geoT'][1]
+            sub_weight = (3 * (10 if x_res <=3 else 1))/x_res
+            oo = []
+            if self.data_region is not None and self.data_region.valid_p():
+                oo.append('MINX={}'.format(self.data_region.xmin))
+                oo.append('MAXX={}'.format(self.data_region.xmax))
+                oo.append('MINY={}'.format(self.data_region.ymin))
+                oo.append('MAXY={}'.format(self.data_region.ymax))
 
-                            utils.remove_glob(f'{gdal_ds.fn}.inf')
-                            
+            if ('HAS_SUPERGRIDS' in mt.keys() \
+                and mt['HAS_SUPERGRIDS'] == 'TRUE') \
+               or self.force_vr \
+               or 'MAX_RESOLUTION_X' in mt.keys() \
+               or 'MAX_RESOLUTION_Y' in mt.keys():
+                if self.explode:
+                    min_res = float(mt['MIN_RESOLUTION_X'])
+                    max_res = float(mt['MAX_RESOLUTION_X'])
+                    oo.append("MODE=LIST_SUPERGRIDS")
+                    src_ds = gdal.OpenEx(self.fn, open_options=oo)
+                    sub_datasets = src_ds.GetSubDatasets()
+                    src_ds = None
 
-            elif self.vr_resampled_grid or self.vr_interpolate:
-                if self.vr_resampled_grid:
-                    oo.append("MODE=RESAMPLED_GRID")
-                elif self.vr_interpolate:
-                    oo.append("MODE=INTERPOLATED")
-                    
-                oo.append("RES_STRATEGY={}".format(self.vr_strategy))
+                    utils.echo_msg(f'VRBAG min resolution is {min_res}')
+                    utils.echo_msg(f'VRBAG max resolution is {max_res}')
+                    with tqdm(
+                            total=len(sub_datasets),
+                            desc=f'parsing {len(sub_datasets)} supergrids from BAG file {self.fn}',
+                            leave=True
+                    ) as pbar:                
+                        for sub_dataset in sub_datasets:
+                            pbar.update()
+                            res = sub_dataset[-1].split(',')[-2:]
+                            #utils.echo_msg(res)
+                            res = [float(re.findall(r'\d+\.\d+|\d+', x)[0]) for x in res]
+                            sub_weight = (3 * (10 if res[0] <=3 else 1))/res[0]
+                            sub_ds = DatasetFactory(
+                                **self._set_params(
+                                    mod=sub_dataset[0],
+                                    data_format=200,
+                                    src_srs=self.src_srs,
+                                    band_no=1,
+                                    uncertainty_mask_to_meter=0.01,
+                                    check_path=False,
+                                    super_grid=True,
+                                    #node='pixel',
+                                    #weight_multiplier=sub_weight,
+                                    weight=sub_weight*(self.weight if self.weight is not None else 1),
+                                    uncertainty_mask=2,
+                                )
+                            )._acquire_module()
+                            self.data_entries.append(sub_ds)
+                            sub_ds.initialize()
+                            for gdal_ds in sub_ds.parse():
+                                yield(gdal_ds)
+
+                                utils.remove_glob(f'{gdal_ds.fn}.inf')
+
+
+                elif self.vr_resampled_grid or self.vr_interpolate:
+                    if self.vr_resampled_grid:
+                        oo.append("MODE=RESAMPLED_GRID")
+                    elif self.vr_interpolate:
+                        oo.append("MODE=INTERPOLATED")
+
+                    oo.append("RES_STRATEGY={}".format(self.vr_strategy))
+                    sub_ds = DatasetFactory(
+                        **self._set_params(
+                            mod=self.fn,
+                            data_format=200,
+                            band_no=1,
+                            open_options=oo,
+                            weight=sub_weight*(self.weight if self.weight is not None else 1),
+                            uncertainty_mask=2,
+                            uncertainty_mask_to_meter=0.01,
+                        )
+                    )._acquire_module()
+                    self.data_entries.append(sub_ds)
+                    sub_ds.initialize()
+                    for gdal_ds in sub_ds.parse():
+                        yield(gdal_ds)
+                else: # use vrbag.py
+                    tmp_bag_as_tif = utils.make_temp_fn(
+                        '{}_tmp.tif'.format(utils.fn_basename2(self.fn))
+                    )
+                    # scale cellsize to meters,
+                    # todo: check if input is degress/meters/feet
+                    #self.x_inc * 111120 
+                    sr_cell_size = None
+                    vrbag.interpolate_vr_bag(
+                        self.fn, tmp_bag_as_tif,
+                        self.cache_dir, sr_cell_size=sr_cell_size,
+                        use_blocks=True,
+                        method='linear',
+                        nodata=3.4028234663852886e+38
+                    )
+                    sub_ds = DatasetFactory(
+                        **self._set_params(
+                            mod=tmp_bag_as_tif,
+                            data_format=200,
+                            band_no=1,
+                            weight=sub_weight*(self.weight if self.weight is not None else 1),
+                            uncertainty_mask=2,
+                            uncertainty_mask_to_meter=0.01,
+                        )
+                    )._acquire_module()
+                    self.data_entries.append(sub_ds)
+                    sub_ds.initialize()
+                    for gdal_ds in sub_ds.parse():
+                        yield(gdal_ds)
+
+            else:
+                ds_infos = gdalfun.gdal_infos(self.fn)
+                x_res = ds_infos['geoT'][1]
+                sub_weight = (3 * (10 if x_res <=3 else 1))/x_res
                 sub_ds = DatasetFactory(
                     **self._set_params(
                         mod=self.fn,
                         data_format=200,
                         band_no=1,
-                        open_options=oo,
-                        weight=sub_weight*(self.weight if self.weight is not None else 1),
                         uncertainty_mask=2,
                         uncertainty_mask_to_meter=0.01,
+                        weight=sub_weight*(self.weight if self.weight is not None else 1),
                     )
                 )._acquire_module()
                 self.data_entries.append(sub_ds)
                 sub_ds.initialize()
-                for gdal_ds in sub_ds.parse():
-                    yield(gdal_ds)
-            else: # use vrbag.py
-                tmp_bag_as_tif = utils.make_temp_fn(
-                    '{}_tmp.tif'.format(utils.fn_basename2(self.fn))
-                )
-                # scale cellsize to meters,
-                # todo: check if input is degress/meters/feet
-                #self.x_inc * 111120 
-                sr_cell_size = None
-                vrbag.interpolate_vr_bag(
-                    self.fn, tmp_bag_as_tif,
-                    self.cache_dir, sr_cell_size=sr_cell_size,
-                    use_blocks=True,
-                    method='linear',
-                    nodata=3.4028234663852886e+38
-                )
-                sub_ds = DatasetFactory(
-                    **self._set_params(
-                        mod=tmp_bag_as_tif,
-                        data_format=200,
-                        band_no=1,
-                        weight=sub_weight*(self.weight if self.weight is not None else 1),
-                        uncertainty_mask=2,
-                        uncertainty_mask_to_meter=0.01,
-                    )
-                )._acquire_module()
-                self.data_entries.append(sub_ds)
-                sub_ds.initialize()
-                for gdal_ds in sub_ds.parse():
-                    yield(gdal_ds)
-                
-        else:
-            ds_infos = gdalfun.gdal_infos(self.fn)
-            x_res = ds_infos['geoT'][1]
-            sub_weight = (3 * (10 if x_res <=3 else 1))/x_res
-            sub_ds = DatasetFactory(
-                **self._set_params(
-                    mod=self.fn,
-                    data_format=200,
-                    band_no=1,
-                    uncertainty_mask=2,
-                    uncertainty_mask_to_meter=0.01,
-                    weight=sub_weight*(self.weight if self.weight is not None else 1),
-                )
-            )._acquire_module()
-            self.data_entries.append(sub_ds)
-            sub_ds.initialize()
-            yield(sub_ds)
-            #for gdal_ds in sub_ds.parse():
-            #    yield(gdal_ds)
+                yield(sub_ds)
+                #for gdal_ds in sub_ds.parse():
+                #    yield(gdal_ds)
 
                 
 class CUDEMFile(ElevationDataset):
@@ -7404,7 +7423,7 @@ class MBSParser(ElevationDataset):
         if self.src_srs is None:
             #self.src_srs = 'epsg:4326+3855'
             self.src_srs = 'epsg:4326'
-
+            
             
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
@@ -7672,6 +7691,7 @@ class MBSParser(ElevationDataset):
                     #this_weight = min(0.9, .5*(int(mb_date)-1900)/(2020-1900))
                     #this_weight = max(0.01, 1 - ((this_year - int(mb_date)) / (this_year - 1990)))
                     this_weight = min(0.99, max(0.01, 1 - ((2024 - int(mb_date))) / (2024 - 1980)))
+                    #this_weight = 1
                 else:
                     this_weight = 1
 
@@ -7679,9 +7699,10 @@ class MBSParser(ElevationDataset):
                     self.weight *= this_weight
                 
             #'mblist -M{}{} -OXYZDSc -I{}{}'.format(
+            #                                       'mblist -M{}{} -OXYZ -I{}{}'.format(
             #                    'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
             for line in utils.yield_cmd(
-                    'mblist -M{}{} -OXYZ -I{}{}'.format(
+                    'mblist -M{}{} -OXYZD -I{}{}'.format(
                         self.mb_exclude, ' {}'.format(
                             mb_region.format('gmt') \
                             if mb_region is not None \
@@ -7694,9 +7715,29 @@ class MBSParser(ElevationDataset):
                     verbose=False,
             ):
                 this_line = [float(x) for x in line.strip().split('\t')]
-                mb_points.append(this_line)
-                #this_line.append(1)
-                #this_line.append(0)
+                x = this_line[0]
+                y = this_line[1]
+                z = this_line[2]
+                crosstrack_distance = this_line[3]
+                #speed = this_line[4]
+                #roll = this_line[5]
+                #utils.echo_msg(roll)
+                #z = roll
+                #u_depth = ((2+(0.02*(z*-1)))*0.51)
+                #u = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
+                if self.auto_weight:
+                    #w = max(.5, 1/(1 + .005*abs(crosstrack_distance)))
+                    u_depth = ((2+(0.02*(z*-1)))*0.51)
+                    u_cd = (1.25 + .005*abs(crosstrack_distance))
+                    u = math.sqrt(u_depth**2 + u_cd**2)
+                    w = 1/u
+                else:
+                    w = 1
+                    u = 0
+
+                #utils.echo_msg_bold()
+                out_line = [x,y,z,w,u]
+                mb_points.append(out_line)
                 # if self.auto_weight or self.auto_uncertainty:
                 #     x = this_line[0]
                 #     y = this_line[1]
@@ -7745,7 +7786,7 @@ class MBSParser(ElevationDataset):
             if len(mb_points) > 0:
                 #mb_points = np.column_stack((xs, ys, zs, ws, us))
                 #xs = ys = zs = ws = us = None
-                _ = [x.extend([1,0]) for x in mb_points]
+                ##_ = [x.extend([1,0]) for x in mb_points]
                 # for x in mb_points:
                 #     x.extend([1,0])
 
@@ -8131,7 +8172,7 @@ class Datalist(ElevationDataset):
     
     def __init__(self, fmt=None, **kwargs):
         super().__init__(**kwargs)
-
+        self.kwargs = kwargs
         
     def _init_datalist_vector(self):
         """initialize the datalist geojson vector.
@@ -8435,7 +8476,7 @@ class Datalist(ElevationDataset):
                 with tqdm(
                         total=count,
                         desc=f'parsing datalist {self.fn}...',
-                        leave=self.verbose
+                        leave=False
                 ) as pbar:
                     for l, this_line in enumerate(op):
                         pbar.update()
@@ -8449,15 +8490,22 @@ class Datalist(ElevationDataset):
                             )
 
                             ## generate the dataset object to yield
-                            data_set = DatasetFactory(
-                               **self._set_params(
-                                   mod=this_line,
-                                   metadata=md,
-                                   src_srs=self.src_srs,
-                                   parent=self,
-                                   fn=None
-                               )
-                            )._acquire_module()
+                            # ds_kwargs = self.kwargs.copy()
+                            # ds_kwargs['mod'] = this_line
+                            # ds_kwargs['metadata'] = md
+                            # ds_kwargs['src_srs'] = self.src_srs
+                            # ds_kwargs['parent'] = self
+                            # ds_kwargs['fn'] = None
+                            ds_params = self._set_params(
+                                #**ds_kwargs
+                                mod=this_line,
+                                metadata=md,
+                                src_srs=self.src_srs,
+                                parent=self,
+                                fn=None,
+                            )
+                            #utils.echo_msg_bold(ds_params)
+                            data_set = DatasetFactory(**ds_params)._acquire_module()
                             if data_set is not None and data_set.valid_p(
                                     fmts=DatasetFactory._modules[
                                         data_set.data_format
@@ -8700,7 +8748,7 @@ class Fetcher(ElevationDataset):
             
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
-            callback=callback, verbose=self.verbose,
+            callback=callback, verbose=False,
             outdir=outdir,
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
@@ -8800,7 +8848,7 @@ class Fetcher(ElevationDataset):
                 desc='parsing datasets from datalist fetches {} @ {}'.format(
                     self.fetch_module, self.weight
                 ),
-            leave=self.verbose
+            leave=False
         ) as pbar:
             for result in self.fetch_module.results:
                 ## mrl commented out to set params in sub-modules

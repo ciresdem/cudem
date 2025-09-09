@@ -1535,14 +1535,11 @@ class Weights(Grits):
             if src_ds is not None:
                 self.init_ds(src_ds)                
                 weight_band = self.init_weight(src_ds)
-                utils.echo_msg(
-                    f'buffering from weight {self.weight_threshold}'
-                )
                 for srcwin in utils.yield_srcwin(
                         (self.ds_config['ny'], self.ds_config['nx']),
-                        n_chunk = self.ds_config['ny']/4, verbose=self.verbose,
+                        n_chunk = self.ds_config['ny']/9, verbose=self.verbose,
                         start_at_edge=True,
-                        msg='parsing srcwin'
+                        msg=f'buffering around weights over {self.weight_threshold}'
                 ):
                     w_arr = weight_band.ReadAsArray(*srcwin)
                     w_arr[w_arr == self.ds_config['ndv']] = np.nan
