@@ -7860,7 +7860,7 @@ class MBSParser(ElevationDataset):
             #                                       'mblist -M{}{} -OXYZ -I{}{}'.format(
             #                    'mblist -M{}{} -OXYZDAGgFPpRrSCc -I{}{}'.format(
             for line in utils.yield_cmd(
-                    'mblist -M{}{} -OXYZD -I{}{}'.format(
+                    'mblist -M{}{} -OXYZDS -I{}{}'.format(
                         self.mb_exclude, ' {}'.format(
                             mb_region.format('gmt') \
                             if mb_region is not None \
@@ -7877,7 +7877,9 @@ class MBSParser(ElevationDataset):
                 y = this_line[1]
                 z = this_line[2]
                 crosstrack_distance = this_line[3]
-                #speed = this_line[4]
+                speed = this_line[4]
+                if speed == 0:
+                    continue
                 #roll = this_line[5]
                 #utils.echo_msg(roll)
                 #z = roll
@@ -7885,14 +7887,20 @@ class MBSParser(ElevationDataset):
                 #u = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
                 if self.auto_weight:
                     #w = max(.5, 1/(1 + .005*abs(crosstrack_distance)))
-                    u_depth = ((2+(0.02*(z*-1)))*0.51)
-                    u_cd = (1.25 + .005*abs(crosstrack_distance))
-                    u = math.sqrt(u_depth**2 + u_cd**2)
+                    u_depth = ((.25+(0.02*(z*-1)))*0.251)
+                    u_cd =  .005*abs(crosstrack_distance)
+                    #u_s = math.sqrt(1 + ((.51 * abs(speed))**2))
+                    tmp_speed = min(14, abs(speed - 14))
+                    u_s = 1 * (tmp_speed*.51)
+                    #u_s = 2 + (.5 * abs(tmp_speed)) if tmp_speed <=0 else 1 + (.005 * abs(tmp_speed))
+                    u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
                     w = 1/u
                 else:
                     w = 1
                     u = 0
 
+                #u = u_cd
+                #u = speed
                 #utils.echo_msg_bold()
                 out_line = [x,y,z,w,u]
                 mb_points.append(out_line)
