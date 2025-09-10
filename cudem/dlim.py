@@ -1252,7 +1252,7 @@ class RQOutlierZ(PointZOutlier):
     def init_raster(self, raster):
         if (self.region is not None or self.xyinc is not None) and self.resample_raster:
             _raster = utils.append_fn(f'rq_raster_{raster}', self.region, self.xyinc[0])
-            _raster = f'{_raster}.tif'
+            _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
 
         if os.path.exists(_raster) and os.path.isfile(_raster):
             raster = [_raster]
@@ -2713,8 +2713,7 @@ class ElevationDataset:
     ## todo: cleanup masking
     ## mask_level (int): the granularity of the mask, 0 is every file
     ###########################################################################
-    def _stacks(self, out_name=None, ndv=-9999, fmt='GTiff',
-    ):
+    def _stacks(self, out_name=None, ndv=-9999, fmt='GTiff'):
         """stack and mask incoming arrays (from `array_yield`) together
 
         -----------
@@ -2882,6 +2881,57 @@ class ElevationDataset:
                     utils.echo_msg(f'no bands found for {mask_fn}')
 
             return(msk_ds)
+
+        def average(weight_above, stacked_data, arrs):
+            ## average of incoming data with existing data above weight_threshold
+            # weight_above = (arrs['weight'] >= wt) \
+            #     & (arrs['weight'] >= tmp_stacked_weight) \
+            #     & (~weight_above_sup)
+            # if self.want_mask:
+            #     m_array[(weight_above) & (arrs['count'] != 0)] = 1
+            #     m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
+
+            stacked_data['count'][weight_above] += arrs['count'][weight_above]
+            stacked_data['z'][weight_above] \
+                += (arrs['z'][weight_above] * arrs['weight'][weight_above])
+            stacked_data['x'][weight_above] \
+                += (arrs['x'][weight_above] * arrs['weight'][weight_above])
+            stacked_data['y'][weight_above] \
+                += (arrs['y'][weight_above] * arrs['weight'][weight_above])
+            stacked_data['src_uncertainty'][weight_above] \
+                = np.sqrt(np.power(stacked_data['src_uncertainty'][weight_above], 2) \
+                          + np.power(arrs['uncertainty'][weight_above], 2))
+            stacked_data['weights'][weight_above] \
+                += arrs['weight'][weight_above]
+            ## accumulate variance * weight
+            stacked_data['uncertainty'][weight_above] \
+                += arrs['weight'][weight_above] \
+                * np.power((arrs['z'][weight_above] \
+                            - (stacked_data['z'][weight_above] \
+                               / stacked_data['weights'][weight_above])), 2)
+
+            return(stacked_data)
+
+        
+        def supercede(weight_above_sup, stacked_data, arrs, sup=True):
+            # supercede existing data below weight_threshold
+
+            stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
+            stacked_data['z'][weight_above_sup] \
+                = (arrs['z'][weight_above_sup] * arrs['weight'][weight_above_sup])
+            stacked_data['x'][weight_above_sup] \
+                = (arrs['x'][weight_above_sup] * arrs['weight'][weight_above_sup])
+            stacked_data['y'][weight_above_sup] \
+                = (arrs['y'][weight_above_sup] * arrs['weight'][weight_above_sup])
+            stacked_data['src_uncertainty'][weight_above_sup] \
+                = arrs['uncertainty'][weight_above_sup]
+            stacked_data['weights'][weight_above_sup] \
+                = arrs['weight'][weight_above_sup]
+            stacked_data['uncertainty'][weight_above_sup] \
+                = np.array(stacked_data['src_uncertainty'][weight_above_sup])
+
+            return(stacked_data)
+
         
         utils.set_cache(self.cache_dir)
         mode = self.stack_mode_name
@@ -3050,11 +3100,11 @@ class ElevationDataset:
                 if mode != 'mixed':
                     stacked_data['count'] += arrs['count']
 
-                ###############################################################
-                ## supercede based on weights, else do weighted mean
-                ## todo: do (weighted) mean on cells with same weight
-                ###############################################################
                 if mode == 'supercede':
+                    ###############################################################
+                    ## supercede based on weights, else do weighted mean
+                    ## todo: do (weighted) mean on cells with same weight
+                    ###############################################################
                     sup_mask = arrs['weight'] > (stacked_data['weights'] \
                                                  / stacked_data['count'])
                     if self.want_mask:
@@ -3079,15 +3129,122 @@ class ElevationDataset:
                     stacked_data['uncertainty'][(sup_mask)] \
                         = np.array(stacked_data['src_uncertainty'][(sup_mask)])
 
-                ###############################################################
-                ## mixed mode will mean data above and below the
-                ## weight_threshold and then the higher weighted meaned data
-                ## will supercede the lower weighted meaned data
-                ##
-                ## weights above threshold supercede weights below threshold,
-                ## otherwise meaned...
-                ###############################################################
                 elif mode == 'mixed':
+                    ###############################################################
+                    ## mixed mode will mean data above and below the
+                    ## weight_threshold and then the higher weighted meaned data
+                    ## will supercede the lower weighted meaned data
+                    ##
+                    ## weights above threshold supercede weights below threshold,
+                    ## otherwise meaned...
+                    ###############################################################
+                    wt = 1
+                    if 'weight_threshold' in self.stack_mode_args.keys():
+                        wts = [utils.float_or(x) for x in self.stack_mode_args['weight_threshold'].split('/')]
+                    else:
+                        wts = [wt]
+
+                    wts.sort()
+                    wt_masks = []
+
+                    wt_pairs = utils.range_pairs(wts)
+                    wt_pairs.reverse()
+                    # reset tmp_stacked_weight
+                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                    ## ABOVE
+                    ## all weights above max(wts) will supercede all weights below
+                    ## data in each weight range will be averaged
+                    # mask is above max(wts)
+                    weight_above_sup = (arrs['weight'] >= max(wts)) & (tmp_stacked_weight < max(wts))
+                    if self.want_mask:
+                        # remove the mask from superceded bands
+                        reset_mask_bands(
+                            m_ds, srcwin,
+                            except_band_name=m_band.GetDescription(),
+                            mask=weight_above_sup
+                        )
+                        m_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
+                        m_all_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
+
+                    stacked_data = supercede(weight_above_sup, stacked_data, arrs)
+
+                    # reset tmp_stacked_weight
+                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    
+                    weight_above = (arrs['weight'] >= max(wts)) \
+                        & (arrs['weight'] >= tmp_stacked_weight) \
+                        & (~weight_above_sup)
+                    
+                    if self.want_mask:
+                        m_array[(weight_above) & (arrs['count'] != 0)] = 1
+                        m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
+                    
+                    ## average
+                    stacked_data = average(weight_above, stacked_data, arrs)
+
+                    for wt_pair in wt_pairs:
+                        # mask is between wt_pair
+                        # reset tmp_stacked_weight
+                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        arrs_mask_sup = (arrs['weight'] >= min(wt_pair)) & (arrs['weight'] < max(wt_pair))
+                        #tsw_mask_sup = (tmp_stacked_weight < max(wt_pair)) & (tmp_stacked_weight > min(wt_pair))
+                        tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
+                        weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
+                        if self.want_mask:
+                            # remove the mask from superceded bands
+                            reset_mask_bands(
+                                m_ds, srcwin,
+                                except_band_name=m_band.GetDescription(),
+                                mask=weight_between_sup
+                            )
+                            m_array[(weight_between_sup) & (arrs['count'] != 0)] = 1
+                            m_all_array[(weight_between_sup) & (arrs['count'] != 0)] = 1
+                            
+                        stacked_data = supercede(weight_between_sup, stacked_data, arrs)
+
+                        # reset tmp_stacked_weight
+                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        arrs_mask = (arrs['weight'] >= min(wt_pair)) & (arrs['weight'] < max(wt_pair)) & (arrs['weight'] >= tmp_stacked_weight)
+                        #tsw_mask = (tmp_stacked_weight > min(wt_pair)) & (tmp_stacked_weight < max(wt_pair))
+                        #tsw_mask = (arrs['weight'] >= tmp_stacked_weight)
+                        #weight_below = (arrs['weight'] <= min(wt_pair)) & (tmp_stacked_weight < min(wt_pair))
+                        weight_between = (arrs_mask) & (~weight_between_sup)
+
+                        if self.want_mask:
+                            m_array[(weight_between) & (arrs['count'] != 0)] = 1
+                            m_all_array[(weight_between) & (arrs['count'] != 0)] = 1
+                        
+                        ## average
+                        stacked_data = average(weight_between, stacked_data, arrs)                        
+
+                    # reset tmp_stacked_weight
+                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    ## BELOW
+                    # mask is below max(wts)
+                    weight_below = (arrs['weight'] <= min(wts)) & (tmp_stacked_weight < min(wts))
+                    if self.want_mask:
+                        m_array[(weight_below) & (arrs['count'] != 0)] = 1
+                        m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
+
+                    stacked_data = average(weight_below, stacked_data, arrs)
+                    
+                elif mode == 'mixed_old':
+                    ###############################################################
+                    ## mixed mode will mean data above and below the
+                    ## weight_threshold and then the higher weighted meaned data
+                    ## will supercede the lower weighted meaned data
+                    ##
+                    ## weights above threshold supercede weights below threshold,
+                    ## otherwise meaned...
+                    ###############################################################
                     wt = 1
                     if 'weight_threshold' in self.stack_mode_args.keys():
                         wt = utils.float_or(self.stack_mode_args['weight_threshold'], 1)
@@ -3177,11 +3334,12 @@ class ElevationDataset:
                                     - (stacked_data['z'][weight_below] \
                                        / stacked_data['weights'][weight_below])), 2)
                     
-                ###############################################################
-                ## min/max mode will stack each cell with the minimum or
-                ## maximum value we encounter
-                ###############################################################
                 elif mode == 'min' or mode == 'max':
+                    ###############################################################
+                    ## min/max mode will stack each cell with the minimum or
+                    ## maximum value we encounter
+                    ###############################################################
+
                     ## set nodata values in stacked_data to whatever the
                     ## value is in arrs
                     if self.want_mask:
@@ -3224,11 +3382,11 @@ class ElevationDataset:
                         )
                     stacked_data['z'][mask] = arrs['z'][mask]
 
-                ###############################################################
-                ## mean mode will fill each cell with the accumulated
-                ## weighted-mean value of the incoming data
-                ###############################################################
                 elif mode == 'mean':
+                    ###############################################################
+                    ## mean mode will fill each cell with the accumulated
+                    ## weighted-mean value of the incoming data
+                    ###############################################################
                     if self.want_mask:
                         m_array[arrs['count'] != 0] = 1
                         m_all_array[arrs['count'] != 0] = 1

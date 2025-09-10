@@ -480,6 +480,30 @@ def str_or(instr, or_val=None, replace_quote=True):
     except:
         return(or_val)
 
+def range_pairs(lst):
+    range_pairs = []
+    for i in range(len(lst) - 1):
+        range_pairs.append((lst[i], lst[i+1]))
+        
+    return(range_pairs)
+
+    
+def ranges2(lst):
+    s = e = None
+    r = []
+    for i in sorted(lst):
+        if s is None:
+            s = e = i
+        elif i == e or i == e + 1:
+            e = i
+        else:
+            r.append((s, e))
+            s = e = i
+            
+    if s is not None:
+        r.append((s, e))
+        
+    return(r)
     
 def convert_size(size_bytes):
    if size_bytes == 0:
