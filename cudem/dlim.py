@@ -7887,7 +7887,7 @@ class MBSParser(ElevationDataset):
                 #u = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
                 if self.auto_weight:
                     #w = max(.5, 1/(1 + .005*abs(crosstrack_distance)))
-                    u_depth = ((.25+(0.02*(z*-1)))*0.251)
+                    u_depth = ((.25+(0.02*(z*-1)))*0.51)
                     u_cd =  .005*abs(crosstrack_distance)
                     #u_s = math.sqrt(1 + ((.51 * abs(speed))**2))
                     tmp_speed = min(14, abs(speed - 14))
