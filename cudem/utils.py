@@ -115,7 +115,6 @@ FIPS_TO_EPSG = {
 def append_fn(fn, src_region, inc, version=None, year=None,
               res=None, high_res=False):
     """append the src_region, inc and version to a string filename"""
-    
     return(
         '{}{}_{}_{}v{}'.format(
             fn,

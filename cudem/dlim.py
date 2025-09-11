@@ -1251,7 +1251,10 @@ class RQOutlierZ(PointZOutlier):
         
     def init_raster(self, raster):
         if (self.region is not None or self.xyinc is not None) and self.resample_raster:
-            _raster = utils.append_fn(f'rq_raster_{raster}', self.region, self.xyinc[0])
+            _raster = utils.append_fn(
+                f'rq_raster_{raster}', self.region,
+                self.xyinc[0], res=1 if not all(self.xyinc) else None
+            )
             _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
 
         if os.path.exists(_raster) and os.path.isfile(_raster):
