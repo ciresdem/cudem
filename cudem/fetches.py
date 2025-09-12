@@ -5904,7 +5904,7 @@ class HRDEM(FetchModule):
         ## hrdem URLs
         self._hrdem_footprints_url = ('ftp://ftp.maps.canada.ca/pub/elevation/'
                                       'dem_mne/highresolution_hauteresolution/'
-                                      'Datasets_Footprints.zip')
+                                      'Datasets_Footprints_new_units.zip')
         self._hrdem_info_url = ('https://open.canada.ca/data/en/dataset/'
                                 '957782bf-847c-4644-a757-e383c0057995#wb-auto-6')
 

@@ -4106,7 +4106,7 @@ class WafflesCUDEM(Waffle):
                      if pre != 0 \
                         else 'IDW'
                 utils.echo_msg(
-                    'cudem gridding surface {} @ {} {}/{} using {}...'.format(
+                    'cudem gridding surface {} @ {} {}/{} to using {}...'.format(
                         pre, pre_region, pre_xinc, pre_yinc, waffles_mod
                     )
                 )
