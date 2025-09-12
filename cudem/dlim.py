@@ -6372,7 +6372,7 @@ class BAGFile(ElevationDataset):
                  vr_resampled_grid = False,
                  vr_interpolate = True,
                  vr_strategy = 'MIN',
-                 min_weight = .4
+                 min_weight = .4,
                  **kwargs):
         super().__init__(**kwargs)
         self.explode = explode
