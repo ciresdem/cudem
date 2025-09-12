@@ -5188,7 +5188,7 @@ class ElevationDataset:
                 chunks=chunks,
             )
             this_cst.run()
-            fr = fetches.fetch_results(this_cst)
+            fr = fetches.fetch_results(this_cst, check_size=False)
             fr.daemon=True
             fr.start()
             fr.join()
@@ -6372,9 +6372,11 @@ class BAGFile(ElevationDataset):
                  vr_resampled_grid = False,
                  vr_interpolate = True,
                  vr_strategy = 'MIN',
+                 min_weight = .4
                  **kwargs):
         super().__init__(**kwargs)
         self.explode = explode
+        self.min_weight = utils.float_or(min_weight, .4)
         self.force_vr = force_vr
         self.vr_resampled_grid = vr_resampled_grid
         self.vr_interpolate = vr_interpolate
@@ -6445,7 +6447,7 @@ class BAGFile(ElevationDataset):
             mt = gdal.Info(self.fn, format='json')['metadata']['']
             ds_infos = gdalfun.gdal_infos(self.fn)
             x_res = ds_infos['geoT'][1]
-            sub_weight = (3 * (10 if x_res <=3 else 1))/x_res
+            sub_weight = max((3 * (10 if x_res <=3 else 1))/x_res, self.min_weight)
             oo = []
             if self.data_region is not None and self.data_region.valid_p():
                 oo.append('MINX={}'.format(self.data_region.xmin))
@@ -6478,7 +6480,7 @@ class BAGFile(ElevationDataset):
                             res = sub_dataset[-1].split(',')[-2:]
                             #utils.echo_msg(res)
                             res = [float(re.findall(r'\d+\.\d+|\d+', x)[0]) for x in res]
-                            sub_weight = (3 * (10 if res[0] <=3 else 1))/res[0]
+                            sub_weight = max((3 * (10 if res[0] <=3 else 1))/res[0], self.min_weight)
                             sub_ds = DatasetFactory(
                                 **self._set_params(
                                     mod=sub_dataset[0],
@@ -6557,7 +6559,7 @@ class BAGFile(ElevationDataset):
             else:
                 ds_infos = gdalfun.gdal_infos(self.fn)
                 x_res = ds_infos['geoT'][1]
-                sub_weight = (3 * (10 if x_res <=3 else 1))/x_res
+                sub_weight = max((3 * (10 if x_res <=3 else 1))/x_res, self.min_weight)
                 sub_ds = DatasetFactory(
                     **self._set_params(
                         mod=self.fn,
@@ -8899,6 +8901,8 @@ class Fetcher(ElevationDataset):
 
     def __init__(self,
                  keep_fetched_data=True,
+                 mask_coast=False,
+                 invert_coast=True,
                  outdir=None,
                  check_size=True,
                  want_single_metadata_name=False,
@@ -8914,7 +8918,7 @@ class Fetcher(ElevationDataset):
         self.wgs_srs = 'epsg:4326'
         if self.dst_srs is not None:
             self.wgs_region.warp(self.wgs_srs)
-            
+
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
             callback=callback, verbose=False,
@@ -8925,7 +8929,9 @@ class Fetcher(ElevationDataset):
                 f'fetches modules {self.fn} returned None'
             )
             pass
-        
+
+        self.mask_coast = mask_coast
+        self.invert_coast = invert_coast
         self.want_single_metadata_name = want_single_metadata_name
         # check the size of the fetched data
         self.check_size = check_size
@@ -8986,7 +8992,7 @@ class Fetcher(ElevationDataset):
         md['hdatum'] = self.fetch_module.hdatum
         md['vdatum'] = self.fetch_module.vdatum
         md['url'] = self.fetch_module.url
-
+        
         #self.fetches_params = self._set_params(**self.fetches_params)
         self.fetches_params = self._set_params(
             data_format=self.fetch_module.data_format,
@@ -8997,6 +9003,20 @@ class Fetcher(ElevationDataset):
             #parent=self,
         )
 
+        if self.mask is None and self.mask_coast:
+            coast_mask = self.process_coastline(
+                self.fetch_coastline(
+                    chunks=False, verbose=False
+                ),
+                return_geom=False,
+                landmask_is_watermask=True,
+                include_landmask=False,
+                line_buffer=0.00001,
+                verbose=True
+            )
+            if coast_mask is not None:
+                self.fetches_params['mask'] = f'mask_fn={coast_mask}:invert={self.invert_coast}'
+        
         
     def generate_inf(self):
         """generate a infos dictionary from the Fetches dataset"""
@@ -10033,6 +10053,24 @@ class GEDTM30Fetcher(Fetcher):
         self.fetches_params['data_format'] = 200            
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
+
+class HRDEMFetcher(Fetcher):
+    """GEDTM30 Data Fetcher
+    """
+    
+    __doc__ = '''{}
+    Fetches Module: <hrdem> - {}'''.format(
+        __doc__, fetches.HRDEM.__doc__
+    )
+
+                                        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        
+    def yield_ds(self, result):
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
+
                                         
 class eHydroFetcher(Fetcher):
     """USACE eHydro soundings
@@ -10594,11 +10632,11 @@ class DatasetFactory(factory.CUDEMFactory):
         -301: {'name': 'chs',
                'fmts': ['chs'],
                'description': 'The chs fetches module',
-               'call': Fetcher}, # chs is broken
+               'call': Fetcher}, 
         -302: {'name': 'hrdem',
                'fmts': ['hrdem'],
                'description': '	The hrdem fetches module',
-               'call': Fetcher},
+               'call': HRDEMFetcher},
         -303: {'name': 'arcticdem',
                'fmts': ['arcticdem'],
                'description': 'The arcticdem fetches module',
