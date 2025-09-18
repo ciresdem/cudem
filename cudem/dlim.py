@@ -3102,14 +3102,16 @@ class ElevationDataset:
                 ## add the count to the accumulated rasters
                 if mode != 'mixed':
                     stacked_data['count'] += arrs['count']
+                #arrs['weight'] = arrs['weight'] / arrs['count']
 
                 if mode == 'supercede':
                     ###############################################################
                     ## supercede based on weights, else do weighted mean
                     ## todo: do (weighted) mean on cells with same weight
                     ###############################################################
-                    sup_mask = arrs['weight'] > (stacked_data['weights'] \
-                                                 / stacked_data['count'])
+                    sup_mask = (arrs['weight'] / arrs['count']) > (stacked_data['weights'] \
+                                                                   / stacked_data['count'])
+                    #sup_mask = arrs['weight'] > (stacked_data['weights'])
                     if self.want_mask:
                         # remove the mask from superceded bands
                         reset_mask_bands(
@@ -3127,7 +3129,7 @@ class ElevationDataset:
                     stacked_data['y'][(sup_mask)] = arrs['y'][(sup_mask)]
                     stacked_data['src_uncertainty'][(sup_mask)] \
                         = arrs['uncertainty'][(sup_mask)]
-                    stacked_data['weights'][(sup_mask)] = arrs['weight'][(sup_mask)]
+                    stacked_data['weights'][(sup_mask)] = (arrs['weight'][(sup_mask)] / arrs['count'][(sup_mask)])
                     ## uncertainty is src_uncertainty, as only one point goes into a cell
                     stacked_data['uncertainty'][(sup_mask)] \
                         = np.array(stacked_data['src_uncertainty'][(sup_mask)])
@@ -3160,7 +3162,7 @@ class ElevationDataset:
                     ## all weights above max(wts) will supercede all weights below
                     ## data in each weight range will be averaged
                     # mask is above max(wts)
-                    weight_above_sup = (arrs['weight'] >= max(wts)) & (tmp_stacked_weight < max(wts))
+                    weight_above_sup = ((arrs['weight']/arrs['count']) >= max(wts)) & (tmp_stacked_weight < max(wts))
                     if self.want_mask:
                         # remove the mask from superceded bands
                         reset_mask_bands(
@@ -3177,8 +3179,8 @@ class ElevationDataset:
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     
-                    weight_above = (arrs['weight'] >= max(wts)) \
-                        & (arrs['weight'] >= tmp_stacked_weight) \
+                    weight_above = ((arrs['weight']//arrs['count']) >= max(wts)) \
+                        & ((arrs['weight']/arrs['count']) >= tmp_stacked_weight) \
                         & (~weight_above_sup)
                     
                     if self.want_mask:
@@ -3194,7 +3196,7 @@ class ElevationDataset:
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
-                        arrs_mask_sup = (arrs['weight'] >= min(wt_pair)) & (arrs['weight'] < max(wt_pair))
+                        arrs_mask_sup = ((arrs['weight']/arrs['count']) >= min(wt_pair)) & ((arrs['weight']/arrs['count']) < max(wt_pair))
                         #tsw_mask_sup = (tmp_stacked_weight < max(wt_pair)) & (tmp_stacked_weight > min(wt_pair))
                         tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
                         weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
@@ -3214,8 +3216,7 @@ class ElevationDataset:
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
-                        ## test >= to > tmp_stacked_weight
-                        arrs_mask = (arrs['weight'] >= min(wt_pair)) & (arrs['weight'] < max(wt_pair)) & (arrs['weight'] > tmp_stacked_weight)
+                        arrs_mask = ((arrs['weight']/arrs['count']) >= min(wt_pair)) & ((arrs['weight']/arrs['count']) < max(wt_pair)) & ((arrs['weight']/arrs['count']) >= tmp_stacked_weight)
                         #tsw_mask = (tmp_stacked_weight > min(wt_pair)) & (tmp_stacked_weight < max(wt_pair))
                         #tsw_mask = (arrs['weight'] >= tmp_stacked_weight)
                         #weight_below = (arrs['weight'] <= min(wt_pair)) & (tmp_stacked_weight < min(wt_pair))
@@ -3233,7 +3234,7 @@ class ElevationDataset:
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     ## BELOW
                     # mask is below max(wts)
-                    weight_below = (arrs['weight'] <= min(wts)) & (tmp_stacked_weight < min(wts))
+                    weight_below = ((arrs['weight']/arrs['count']) <= min(wts)) & (tmp_stacked_weight < min(wts))
                     if self.want_mask:
                         m_array[(weight_below) & (arrs['count'] != 0)] = 1
                         m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
@@ -3468,9 +3469,9 @@ class ElevationDataset:
                 )
                 stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-            stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
             stacked_data['weights'][stacked_data['weights'] == 0] = 1
             if mode != 'supercede':
+                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
                 if mode == 'mean' or mode == 'mixed':
                     ## average the accumulated arrays for finalization
                     ## x, y, z and u are weighted sums, so divide by weights
@@ -4584,7 +4585,9 @@ class ElevationDataset:
                     dup_stack_x = [np.mean(points_x[dup]) for dup in dup_idx]
                     dup_stack_y = [np.mean(points_y[dup]) for dup in dup_idx]
                     dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
-                    
+                    dup_w = [np.sum(pixel_w[dup]) for dup in dup_idx]
+
+                ww[cnt_msk] = dup_w
                 zz[cnt_msk] = dup_stack
                 #uu[cnt_msk] = np.sqrt(dup_stds)
                 uu[cnt_msk] = np.sqrt(
@@ -4612,7 +4615,8 @@ class ElevationDataset:
             
             out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
             out_arrays['weight'][:] = self.weight if self.weight is not None else 1
-            out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
+            #out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
+            out_arrays['weight'][unq[:,0], unq[:,1]] *= ww
             #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
             
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))

@@ -1537,7 +1537,7 @@ class Weights(Grits):
                 weight_band = self.init_weight(src_ds)
                 for srcwin in utils.yield_srcwin(
                         (self.ds_config['ny'], self.ds_config['nx']),
-                        n_chunk=self.ds_config['ny']/27, verbose=self.verbose,
+                        n_chunk=self.ds_config['ny']/9, verbose=self.verbose,
                         start_at_edge=True,
                         msg=f'buffering around weights over {self.weight_threshold}'
                 ):
