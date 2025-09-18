@@ -5140,6 +5140,8 @@ class TheNationalMap(FetchModule):
         self.q = q
         self.f = formats
         self.e = extents
+        self.extents = extents
+        self.formats = formats
         self.datasets = datasets
         self.date_type = date_type
         self.date_start = date_start

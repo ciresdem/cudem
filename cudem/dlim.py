@@ -964,13 +964,13 @@ class PointZVectorMask(PointZ):
     <mask:mask_fn=path:invert=False>
     """
     
-    def __init__(self, mask_fn=None, invert=False, vectorize_points=False, **kwargs):
+    def __init__(self, mask_fn=None, invert=False, **kwargs):
         super().__init__(**kwargs)
         self.mask_fn = mask_fn
         self.invert = invert
-        self.vectorize_points = vectorize_points
-        if self.xyinc is None:
-            self.vectorize_points = True
+        #self.vectorize_points = vectorize_points
+        #if self.xyinc is None:
+        #    self.vectorize_points = True
         
         if self.verbose:
             utils.echo_msg(f'masking with {mask_fn}')
@@ -1069,15 +1069,15 @@ class PointZVectorMask(PointZ):
 
         
     def run(self):
-        if self.vectorize_points:
-            self.points, outliers = self.filter_mask(
-                self.points, invert=self.invert
-            )
+        #if self.vectorize_points:
+        self.points, outliers = self.filter_mask(
+            self.points, invert=self.invert
+        )
 
-        else:
-            self.points, outliers = self.mask_points(
-                self.points, invert=self.invert
-            )
+        #else:
+        #    self.points, outliers = self.mask_points(
+        #        self.points, invert=self.invert
+        #    )
 
         #return(self.points)
         return(outliers)
@@ -3214,7 +3214,8 @@ class ElevationDataset:
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
-                        arrs_mask = (arrs['weight'] >= min(wt_pair)) & (arrs['weight'] < max(wt_pair)) & (arrs['weight'] >= tmp_stacked_weight)
+                        ## test >= to > tmp_stacked_weight
+                        arrs_mask = (arrs['weight'] >= min(wt_pair)) & (arrs['weight'] < max(wt_pair)) & (arrs['weight'] > tmp_stacked_weight)
                         #tsw_mask = (tmp_stacked_weight > min(wt_pair)) & (tmp_stacked_weight < max(wt_pair))
                         #tsw_mask = (arrs['weight'] >= tmp_stacked_weight)
                         #weight_below = (arrs['weight'] <= min(wt_pair)) & (tmp_stacked_weight < min(wt_pair))
@@ -3537,6 +3538,7 @@ class ElevationDataset:
                 weight_mask=3,
                 count_mask=2,
                 cache_dir=self.cache_dir,
+                verbose=True
             )._acquire_module()
             if grits_filter is not None:
                 grits_filter()
@@ -8903,6 +8905,7 @@ class Fetcher(ElevationDataset):
                  keep_fetched_data=True,
                  mask_coast=False,
                  invert_coast=True,
+                 coast_buffer=0.00001,
                  outdir=None,
                  check_size=True,
                  want_single_metadata_name=False,
@@ -8932,6 +8935,7 @@ class Fetcher(ElevationDataset):
 
         self.mask_coast = mask_coast
         self.invert_coast = invert_coast
+        self.coast_buffer = utils.float_or(coast_buffer, 0.00001)
         self.want_single_metadata_name = want_single_metadata_name
         # check the size of the fetched data
         self.check_size = check_size
@@ -9011,8 +9015,8 @@ class Fetcher(ElevationDataset):
                 return_geom=False,
                 landmask_is_watermask=True,
                 include_landmask=False,
-                line_buffer=0.00001,
-                verbose=True
+                line_buffer=self.coast_buffer,
+                verbose=False
             )
             if coast_mask is not None:
                 self.fetches_params['mask'] = f'mask_fn={coast_mask}:invert={self.invert_coast}'
