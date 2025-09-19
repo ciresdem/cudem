@@ -1554,7 +1554,6 @@ class Weights(Grits):
                     mask = (w_arr < self.weight_threshold) & expanded_w_arr
                     for b in range(1, dst_ds.RasterCount+1):
                         this_band = dst_ds.GetRasterBand(b)
-                        utils.echo_msg(this_band)
                         this_arr = this_band.ReadAsArray(*srcwin)
                         this_arr[mask] = self.ds_config['ndv']
                         this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
