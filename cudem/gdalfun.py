@@ -48,9 +48,9 @@ from cudem import regions
 from cudem import xyzfun
 
 gc = utils.config_check()
-gdal.DontUseExceptions()
-ogr.DontUseExceptions()
-osr.DontUseExceptions()
+#gdal.DontUseExceptions()
+#ogr.DontUseExceptions()
+#osr.DontUseExceptions()
 gdal.SetConfigOption(
     'CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null'
 ) 

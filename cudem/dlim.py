@@ -140,8 +140,8 @@ from cudem import cshelph
 
 ## Config info and setup
 gc = utils.config_check()
-gdal.DontUseExceptions()
-ogr.DontUseExceptions()
+#gdal.DontUseExceptions()
+#ogr.DontUseExceptions()
 gdal.SetConfigOption(
     'CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null'
 ) 
@@ -5366,7 +5366,9 @@ class XYZFile(ElevationDataset):
 
                     if self.rem:
                         points['x'] = np.fmod(points['x'] + 180, 360) - 180 
-                    
+
+                    points = points.view(np.recarray)
+                        
                     yield(points)
                     
                     if self.iter_rows is None or len(points) < self.iter_rows:
@@ -5452,7 +5454,7 @@ class XYZFile(ElevationDataset):
             points = np.rec.fromrecords(
                 dataset, names='x, y, z, w, u'
             )
-            
+
             yield(points)
 
             

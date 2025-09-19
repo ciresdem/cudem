@@ -1544,7 +1544,6 @@ class Weights(Grits):
                     w_arr = weight_band.ReadAsArray(*srcwin)
                     w_arr[w_arr == self.ds_config['ndv']] = np.nan
                     weights = np.unique(w_arr)[::-1]
-                    #utils.echo_msg(weights)
                     this_w_arr = w_arr.copy()
                     #this_w_arr[this_w_arr < 1] = np.nan
                     this_w_arr[this_w_arr < self.weight_threshold] = np.nan
@@ -1552,13 +1551,15 @@ class Weights(Grits):
                         this_w_arr >= self.weight_threshold,
                         shiftx=self.buffer_cells, shifty=self.buffer_cells
                     )
-                    mask = (w_arr < self.weight_threshold) & expanded_w_arr                    
+                    mask = (w_arr < self.weight_threshold) & expanded_w_arr
                     for b in range(1, dst_ds.RasterCount+1):
                         this_band = dst_ds.GetRasterBand(b)
+                        utils.echo_msg(this_band)
                         this_arr = this_band.ReadAsArray(*srcwin)
                         this_arr[mask] = self.ds_config['ndv']
                         this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
                         this_band.FlushCache()
+                        this_band = this_arr = None
 
                 if self.weight_is_fn:
                     weight_ds = None
