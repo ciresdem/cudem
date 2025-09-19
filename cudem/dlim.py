@@ -1028,15 +1028,15 @@ class PointZVectorMask(PointZ):
                 if regions.regions_intersect_p(points_region, mask_region):                
                     ogr_ds = self.vectorize_points()
                     if ogr_ds is not None:
-                        #for f in mask_layer:
-                        #mask_geom = f.geometry()                        
-                        points_layer = ogr_ds.GetLayer()
-                        points_layer.SetSpatialFilter(mask_geom)
-                        for f in points_layer:
-                            idx = f.GetField('index')
-                            outliers[idx] = 1
+                        for f in mask_layer:
+                            mask_geom = f.geometry()                        
+                            points_layer = ogr_ds.GetLayer()
+                            points_layer.SetSpatialFilter(mask_geom)
+                            for f in points_layer:
+                                idx = f.GetField('index')
+                                outliers[idx] = 1
 
-                        points_layer.SetSpatialFilter(None)
+                            points_layer.SetSpatialFilter(None)
                         ogr_ds = points_layer = None
                         
                     else:
@@ -3516,7 +3516,7 @@ class ElevationDataset:
 
         for key in stack_keys:
             stacked_bands[key].SetNoDataValue(ndv)
-                
+
         ## create a vector of the masks (spatial-metadata)
         if self.want_mask and self.want_sm:
             polygonize_mask_multibands(
@@ -3531,14 +3531,12 @@ class ElevationDataset:
         msk_ds = dst_ds = None
         if self.want_mask:
             #os.replace(mask_fn, os.path.basename(mask_fn))
-            os.replace(
-                mask_fn,
-                os.path.join(
-                    os.path.dirname(out_file),
-                    os.path.basename(mask_fn)
-                )
+            out_mask_fn = os.path.join(
+                os.path.dirname(out_file),
+                os.path.basename(mask_fn)
             )
-            
+            os.replace(mask_fn, out_mask_fn)
+
         ## apply any grits filters to the stack
         for f in self.stack_fltrs:
             utils.echo_msg(f'filtering stacks module with {f}')
@@ -3555,6 +3553,34 @@ class ElevationDataset:
                 grits_filter()
                 os.replace(grits_filter.dst_dem, out_file)
 
+        # if self.want_mask:
+        #     ## apply removed data from grits filter to mask
+        #     out_ds = gdal.Open(out_file)
+        #     out_ds_config = gdalfun.gdal_infos(out_ds)
+        #     out_band = out_ds.GetRasterBand(1)
+        #     srcwin = (0, 0, out_ds.RasterXSize, out_ds.RasterYSize)
+        #     msk_ds = gdal.Open(out_mask_fn)
+        #     with tqdm(
+        #             total=srcwin[1] + srcwin[3],
+        #             desc=f'applying filtered results to data mask',
+        #             leave=self.verbose
+        #     ) as pbar:
+        #         for y in range(
+        #                 srcwin[1], srcwin[1] + srcwin[3], 1
+        #         ):
+        #             pbar.update()
+        #             out_arr = out_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+        #             for b in range(1, msk_ds.RasterCount+1):
+        #                 this_band = msk_ds.GetRasterBand(b)
+        #                 this_arr = this_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+        #                 this_arr[out_arr == out_ds_config['ndv']] = 0
+        #                 this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
+        #                 #this_band.FlushCache()
+                        
+        #             out_arr = None
+
+        #         out_ds = out_band = mask_ds = None
+            
         if self.verbose:
             utils.echo_msg(
                 f'generated stack: {os.path.basename(out_file)}'

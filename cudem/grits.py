@@ -34,6 +34,7 @@ import sys
 import math
 import traceback
 from tqdm import trange
+from tqdm import tqdm
 
 import numpy as np
 import scipy
@@ -1535,12 +1536,28 @@ class Weights(Grits):
             if src_ds is not None:
                 self.init_ds(src_ds)                
                 weight_band = self.init_weight(src_ds)
+                # srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+                # with tqdm(
+                #         total=srcwin[1] + srcwin[3],
+                #         desc=f'buffering around weights over {self.weight_threshold}',
+                #         leave=self.verbose
+                # ) as pbar:
+                #     for y in range(
+                #             srcwin[1], srcwin[1] + srcwin[3], 1
+                #     ):
+                #         pbar.update()
+                #n_chunk=self.ds_config['nx']/9, step=self.ds_config['nx']/27
+                n_chunk = max(self.buffer_cells**2, self.ds_config['ny']/9)
+                n_step = max(self.buffer_cells, self.ds_config['ny']/27)
                 for srcwin in utils.yield_srcwin(
                         (self.ds_config['ny'], self.ds_config['nx']),
-                        n_chunk=self.ds_config['ny']/9, verbose=self.verbose,
-                        start_at_edge=True,
+                        n_chunk=n_chunk, step=n_step,
+                        #n_chunk=self.ds_config['ny']/9, step=self.ds_config['ny']/27,
+                        #n_chunk=self.buffer_cells**3, step=self.buffer_cells,
+                        verbose=self.verbose, start_at_edge=True,
                         msg=f'buffering around weights over {self.weight_threshold}'
                 ):
+                    #w_arr = weight_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
                     w_arr = weight_band.ReadAsArray(*srcwin)
                     w_arr[w_arr == self.ds_config['ndv']] = np.nan
                     weights = np.unique(w_arr)[::-1]
