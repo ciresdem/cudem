@@ -3553,33 +3553,35 @@ class ElevationDataset:
                 grits_filter()
                 os.replace(grits_filter.dst_dem, out_file)
 
-        # if self.want_mask:
-        #     ## apply removed data from grits filter to mask
-        #     out_ds = gdal.Open(out_file)
-        #     out_ds_config = gdalfun.gdal_infos(out_ds)
-        #     out_band = out_ds.GetRasterBand(1)
-        #     srcwin = (0, 0, out_ds.RasterXSize, out_ds.RasterYSize)
-        #     msk_ds = gdal.Open(out_mask_fn)
-        #     with tqdm(
-        #             total=srcwin[1] + srcwin[3],
-        #             desc=f'applying filtered results to data mask',
-        #             leave=self.verbose
-        #     ) as pbar:
-        #         for y in range(
-        #                 srcwin[1], srcwin[1] + srcwin[3], 1
-        #         ):
-        #             pbar.update()
-        #             out_arr = out_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-        #             for b in range(1, msk_ds.RasterCount+1):
-        #                 this_band = msk_ds.GetRasterBand(b)
-        #                 this_arr = this_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-        #                 this_arr[out_arr == out_ds_config['ndv']] = 0
-        #                 this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
-        #                 #this_band.FlushCache()
+        if self.want_mask:
+            ## apply removed data from grits filter to mask
+            out_ds = gdal.Open(out_file)
+            out_ds_config = gdalfun.gdal_infos(out_ds)
+            out_band = out_ds.GetRasterBand(1)
+            srcwin = (0, 0, out_ds.RasterXSize, out_ds.RasterYSize)
+            msk_ds = gdal.Open(out_mask_fn, 1)
+            with tqdm(
+                    total=srcwin[1] + srcwin[3],
+                    desc=f'applying filtered results to data mask',
+                    leave=self.verbose
+            ) as pbar:
+                for y in range(
+                        srcwin[1], srcwin[1] + srcwin[3], 1
+                ):
+                    pbar.update()
+                    out_arr = out_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                    mask = out_arr == out_ds_config['ndv']
+                    for b in range(1, msk_ds.RasterCount+1):
+                        this_band = msk_ds.GetRasterBand(b)
+                        this_arr = this_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                        this_arr[mask] = 0
+                        this_band.WriteArray(this_arr, srcwin[0], y)
+                        this_band.FlushCache()
+                        this_band = this_arr = None
                         
-        #             out_arr = None
+                    out_arr = None
 
-        #         out_ds = out_band = mask_ds = None
+                out_ds = out_band = mask_ds = None
             
         if self.verbose:
             utils.echo_msg(
