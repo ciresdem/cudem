@@ -1547,11 +1547,12 @@ class Weights(Grits):
                 #     ):
                 #         pbar.update()
                 #n_chunk=self.ds_config['nx']/9, step=self.ds_config['nx']/27
-                n_chunk = max(self.buffer_cells**2, self.ds_config['ny']/9)
-                n_step = max(self.buffer_cells, self.ds_config['ny']/27)
+                #n_chunk = max(self.buffer_cells**2, self.ds_config['ny']/9)
+                #n_step = max(self.buffer_cells, self.ds_config['ny']/27)
+                n_chunk = self.ds_config['ny']
                 for srcwin in utils.yield_srcwin(
                         (self.ds_config['ny'], self.ds_config['nx']),
-                        n_chunk=n_chunk, step=n_step,
+                        n_chunk=n_chunk, #step=n_step,
                         #n_chunk=self.ds_config['ny']/9, step=self.ds_config['ny']/27,
                         #n_chunk=self.buffer_cells**3, step=self.buffer_cells,
                         verbose=self.verbose, start_at_edge=True,
