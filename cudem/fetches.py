@@ -5958,12 +5958,15 @@ class HRDEM(FetchModule):
 class MRDEM(FetchModule):
     def __init__(self, **kwargs):
         super().__init__(name='mrdem', **kwargs)
-        self.mrdem_dtm_url = ('https://datacube-prod-data-public.s3.ca-central-1.'
-                              'amazonaws.com/store/elevation/mrdem/mrdem-30/'
-                              'mrdem-30-dtm.vrt')
-        self.mrdem_dsm_url = ('https://datacube-prod-data-public.s3.ca-central-1.'
-                              'amazonaws.com/store/elevation/mrdem/mrdem-30/'
-                              'mrdem-30-dsm.vrt')
+        # self.mrdem_dtm_url = ('https://datacube-prod-data-public.s3.ca-central-1.'
+        #                       'amazonaws.com/store/elevation/mrdem/mrdem-30/'
+        #                       'mrdem-30-dtm.vrt')
+        # self.mrdem_dsm_url = ('https://datacube-prod-data-public.s3.ca-central-1.'
+        #                       'amazonaws.com/store/elevation/mrdem/mrdem-30/'
+        #                       'mrdem-30-dsm.vrt')
+
+        self.mrdem_dtm_url = 'https://canelevation-dem.s3.ca-central-1.amazonaws.com/mrdem-30/mrdem-30-dtm.vrt'
+        self.mrdem_dsm_url = 'https://canelevation-dem.s3.ca-central-1.amazonaws.com/mrdem-30/mrdem-30-dsm.vrt'
 
         
     def run(self):
