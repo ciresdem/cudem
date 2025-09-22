@@ -5190,9 +5190,13 @@ class TheNationalMap(FetchModule):
 
             _req = Fetch(
                 self._tnm_api_products_url, verbose=self.verbose
-            ).fetch_req(params=_data)
-            if _req is not None:
-                features = _req.json()
+            ).fetch_req(params=_data, timeout=60, read_timeout=60)
+            if _req is not None and _req.status_code == 200:
+                response_text = _req.text
+                if response_text.startswith("{errorMessage"):
+                    continue
+                
+                features = _req.json()                
                 if 'total' in features.keys():
                     total = features['total']
                     for feature in features['items']:
