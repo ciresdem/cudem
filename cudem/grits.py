@@ -1593,8 +1593,6 @@ class Weights(Grits):
                         leave=self.verbose
                 ) as w_pbar:
                     for n, weight_threshold in enumerate(self.weight_thresholds):
-                        utils.echo_msg(weight_threshold)
-                        utils.echo_msg(self.buffer_sizes[n])
                         this_w_arr[this_w_arr < weight_threshold] = np.nan
                         if self.binary_dilation:
                             expanded_w_arr = scipy.ndimage.binary_dilation(this_w_arr >= weight_threshold, iterations=self.buffer_sizes[n])
