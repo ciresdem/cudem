@@ -1496,13 +1496,16 @@ class Weights(Grits):
     
     def __init__(self, buffer_cells=1, weight_threshold=None,
                  remove_sw=False, weight_thresholds=None, buffer_sizes=None,
-                 binary_dilation=False, **kwargs):
+                 weight_sizes=None, binary_dilation=False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
         self.remove_sw = remove_sw
         self.weight_thresholds = weight_thresholds
         self.buffer_sizes = buffer_sizes
+        if weight_sizes is not None:
+            self.buffer_sizes = weight_sizes
+            
         self.binary_dilation = binary_dilation
         self.init_thresholds()
 
@@ -1589,8 +1592,9 @@ class Weights(Grits):
                         desc=f'buffering around weights over {self.weight_thresholds}',
                         leave=self.verbose
                 ) as w_pbar:
-
                     for n, weight_threshold in enumerate(self.weight_thresholds):
+                        utils.echo_msg(weight_threshold)
+                        utils.echo_msg(self.buffer_sizes[n])
                         this_w_arr[this_w_arr < weight_threshold] = np.nan
                         if self.binary_dilation:
                             expanded_w_arr = scipy.ndimage.binary_dilation(this_w_arr >= weight_threshold, iterations=self.buffer_sizes[n])
