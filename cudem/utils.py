@@ -1177,7 +1177,8 @@ def expand_for(arr, shiftx=1, shifty=1):
                 i_min, i_max = max(i-shifty, 0), min(i+shifty+1, arr.shape[0])
                 j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
                 arr_b[i_min:i_max, j_min:j_max] = True
-    return arr_b
+                
+    return(arr_b)
 
 
 ###############################################################################
