@@ -1200,10 +1200,13 @@ class RQOutlierZ(PointZOutlier):
         self.threshold = threshold
         self.resample_raster = resample_raster
         self.fetches_modules = ['gmrt', 'CUDEM', 'etopo:datatype=surface']
-        self.raster = self.init_raster(raster)
+        self.raster = self.init_raster(raster)            
         self.scaled_percentile = scaled_percentile
 
-
+        
+    def __str__(self):
+        return(f'< rq >: {self.raster}')
+        
     def mask_gmrt(self, raster):
         #this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
         if os.path.exists(f'{raster}_swath.tif'):
@@ -1257,7 +1260,9 @@ class RQOutlierZ(PointZOutlier):
                 self.xyinc[0], res=1 if not all(self.xyinc) else None
             )
             _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
-
+            if not os.path.exists(os.path.dirname(_raster)):
+                os.makedirs(os.path.dirname(_raster))
+            
             if os.path.exists(_raster) and os.path.isfile(_raster):
                 return([_raster])
 
@@ -1266,12 +1271,23 @@ class RQOutlierZ(PointZOutlier):
         
     def init_raster(self, raster):
 
-        if raster is not None:
+        if raster is not None and isinstance(raster, str):
             if os.path.exists(raster) and os.path.isfile(raster):
                 return([raster])
             
         elif raster is None:
-            _raster = self.set_raster_fn(raster)
+            if (self.region is not None or self.xyinc is not None) and self.resample_raster:
+                _raster = utils.append_fn(
+                    f'rq_raster_{raster}', self.region,
+                    self.xyinc[0], res=1 if not all(self.xyinc) else None
+                )
+                _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
+                if not os.path.exists(os.path.dirname(_raster)):
+                    os.makedirs(os.path.dirname(_raster))
+
+                if os.path.exists(_raster) and os.path.isfile(_raster):
+                    return([_raster])
+                
             raster = []
             # try gmrt all
             this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
@@ -11393,5 +11409,5 @@ See `datalists_usage` for full cli options.
                     except Exception as e:
                       utils.echo_error_msg(e)
                       print(traceback.format_exc())
-                      
+                    
 ### End

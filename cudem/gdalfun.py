@@ -1840,17 +1840,18 @@ def sample_warp(
         else:
             trans_region = src_region
 
-        if x_sample_inc is None and y_sample_inc is None:
-            src_infos = gdal_infos(src_dem)
-            xcount, ycount, dst_gt = trans_region.geo_transform(
-                x_inc=src_infos['geoT'][1], y_inc=src_infos['geoT'][5]*-1, node='grid'
-            )
-        
-        if size and (xcount is None and ycount is None):
-            xcount, ycount, dst_gt = src_region.geo_transform(
-                x_inc=x_sample_inc, y_inc=y_sample_inc, node='grid'
-            )
-            x_sample_inc = y_sample_inc = None
+        if size:
+            if x_sample_inc is None and y_sample_inc is None:
+                src_infos = gdal_infos(src_dem)
+                xcount, ycount, dst_gt = trans_region.geo_transform(
+                    x_inc=src_infos['geoT'][1], y_inc=src_infos['geoT'][5]*-1, node='grid'
+                )
+
+            if size and (xcount is None and ycount is None):
+                xcount, ycount, dst_gt = src_region.geo_transform(
+                    x_inc=x_sample_inc, y_inc=y_sample_inc, node='grid'
+                )
+                x_sample_inc = y_sample_inc = None
         
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
