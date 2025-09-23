@@ -1250,6 +1250,11 @@ class RQOutlierZ(PointZOutlier):
                 
         
     def init_raster(self, raster):
+
+        if os.path.exists(raster) and os.path.isfile(raster):
+            return([raster])
+
+        ## raster is not a local file, create a unique name to use
         if (self.region is not None or self.xyinc is not None) and self.resample_raster:
             _raster = utils.append_fn(
                 f'rq_raster_{raster}', self.region,
@@ -1257,9 +1262,8 @@ class RQOutlierZ(PointZOutlier):
             )
             _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
 
-        if os.path.exists(_raster) and os.path.isfile(_raster):
-            raster = [_raster]
-            return(raster)
+            if os.path.exists(_raster) and os.path.isfile(_raster):
+                return([_raster])
             
         if raster is None:
             raster = []
@@ -1314,8 +1318,6 @@ class RQOutlierZ(PointZOutlier):
                             co=["COMPRESS=DEFLATE", "TILED=YES"]
                         )[0]]
 
-        elif os.path.exists(raster) and os.path.isfile(raster):
-            raster = [raster]
         elif any(raster in item for item in self.fetches_modules):
             _raster = [item for item in self.fetches_modules if raster in item][0]
             #elif raster.split(':')[0] in self.fetches_modules:
@@ -1329,6 +1331,9 @@ class RQOutlierZ(PointZOutlier):
                     verbose=self.verbose,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]]
+
+        else:
+            utils.echo_warning_msg(f'could not parse rq raster {raster}')
 
         #utils.echo_msg_bold(raster)
         return(raster)
@@ -1352,7 +1357,7 @@ class RQOutlierZ(PointZOutlier):
             x = None
             
         if len(smoothed_depth) == 0:
-            return([])
+            return(None)
         
         if percentage:
             if self.scaled_percentile:
