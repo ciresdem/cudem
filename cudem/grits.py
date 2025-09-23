@@ -1495,13 +1495,35 @@ class Weights(Grits):
     """
     
     def __init__(self, buffer_cells=1, weight_threshold=None,
-                 remove_sw=False, **kwargs):
+                 remove_sw=False, weight_thresholds=None, buffer_sizes=None,
+                 binary_dilation=False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
         self.remove_sw = remove_sw
+        self.weight_thresholds = weight_thresholds
+        self.buffer_sizes = buffer_sizes
+        self.binary_dilation = binary_dilation
+        self.init_thresholds()
 
-        
+
+    def init_thresholds(self):
+        if self.weight_thresholds is not None:
+            self.weight_thresholds = [float(x) for x in self.weight_thresholds.split('/')]
+
+            if self.buffer_sizes is not None:
+                self.buffer_sizes = [int(x) for x in self.buffer_sizes.split('/')]
+            else:
+                self.buffer_sizes = [self.buffer_cells]*len(self.weight_thresholds)
+        else:
+            self.weight_thresholds = [self.weight_threshold]
+            self.buffer_sizes = [self.buffer_cells]
+
+        if len(self.buffer_sizes) < len(self.weight_thresholds):
+            len_diff = len(self.weight_thresholds) - len(self.buffer_sizes)
+            self.buffer_sizes.extend([1] * len_diff)
+
+            
     def init_weight(self, src_ds=None):
         weight_band = None
         if self.weight_is_fn:
@@ -1549,33 +1571,49 @@ class Weights(Grits):
                 #n_chunk=self.ds_config['nx']/9, step=self.ds_config['nx']/27
                 #n_chunk = max(self.buffer_cells**2, self.ds_config['ny']/9)
                 #n_step = max(self.buffer_cells, self.ds_config['ny']/27)
-                n_chunk = self.ds_config['ny']
-                for srcwin in utils.yield_srcwin(
-                        (self.ds_config['ny'], self.ds_config['nx']),
-                        n_chunk=n_chunk, #step=n_step,
-                        verbose=self.verbose, start_at_edge=True,
-                        msg=f'buffering around weights over {self.weight_threshold}'
-                ):
-                    #w_arr = weight_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                    w_arr = weight_band.ReadAsArray(*srcwin)
-                    w_arr[w_arr == self.ds_config['ndv']] = np.nan
-                    weights = np.unique(w_arr)[::-1]
-                    this_w_arr = w_arr.copy()
-                    this_w_arr[this_w_arr < self.weight_threshold] = np.nan
-                    expanded_w_arr = utils.expand_for(
-                        this_w_arr >= self.weight_threshold,
-                        shiftx=self.buffer_cells, shifty=self.buffer_cells
-                    )
-                    mask = (w_arr < self.weight_threshold) & expanded_w_arr
+                # n_chunk = self.ds_config['ny']
+                # for srcwin in utils.yield_srcwin(
+                #         (self.ds_config['ny'], self.ds_config['nx']),
+                #         n_chunk=n_chunk, #step=n_step,
+                #         verbose=self.verbose, start_at_edge=True,
+                #         msg=f'buffering around weights over {self.weight_thresholds}'
+                # ):
+                #w_arr = weight_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                w_arr = weight_band.ReadAsArray()#*srcwin)
+                w_arr[w_arr == self.ds_config['ndv']] = np.nan
+                weights = np.unique(w_arr)[::-1]
+                this_w_arr = w_arr.copy()
 
-                    ## mask out any values in other bands of the input/output raster
-                    for b in range(1, dst_ds.RasterCount+1):
-                        this_band = dst_ds.GetRasterBand(b)
-                        this_arr = this_band.ReadAsArray(*srcwin)
-                        this_arr[mask] = self.ds_config['ndv']
-                        this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
-                        this_band.FlushCache()
-                        this_band = this_arr = None
+                with tqdm(
+                        total=len(self.weight_thresholds),
+                        desc=f'buffering around weights over {self.weight_thresholds}',
+                        leave=self.verbose
+                ) as w_pbar:
+
+                    for n, weight_threshold in enumerate(self.weight_thresholds):
+                        this_w_arr[this_w_arr < weight_threshold] = np.nan
+                        if self.binary_dilution:
+                            expanded_w_arr = scipy.ndimage.binary_dilation(this_w_arr >= weight_threshold, iterations=self.buffer_sizes[n])
+                        else:
+                            ## mrl use ndimage.binary_dilation rather than the slower expand_for below
+                            expanded_w_arr = utils.expand_for(
+                                this_w_arr >= weight_threshold,
+                                shiftx=self.buffer_sizes[n], shifty=self.buffer_sizes[n]
+                            )
+                            
+                        mask = (w_arr < weight_threshold) & expanded_w_arr
+                        this_w_arr = w_arr.copy()
+                        this_w_arr[mask] = np.nan
+                        ## mask out any values in other bands of the input/output raster
+                        for b in range(1, dst_ds.RasterCount+1):
+                            this_band = dst_ds.GetRasterBand(b)
+                            this_arr = this_band.ReadAsArray()#*srcwin)
+                            this_arr[mask] = self.ds_config['ndv']
+                            this_band.WriteArray(this_arr)#, srcwin[0], srcwin[1])
+                            this_band.FlushCache()
+                            this_band = this_arr = None
+
+                        w_pbar.update()
 
                 if self.weight_is_fn:
                     weight_ds = None
