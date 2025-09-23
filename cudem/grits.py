@@ -1553,8 +1553,6 @@ class Weights(Grits):
                 for srcwin in utils.yield_srcwin(
                         (self.ds_config['ny'], self.ds_config['nx']),
                         n_chunk=n_chunk, #step=n_step,
-                        #n_chunk=self.ds_config['ny']/9, step=self.ds_config['ny']/27,
-                        #n_chunk=self.buffer_cells**3, step=self.buffer_cells,
                         verbose=self.verbose, start_at_edge=True,
                         msg=f'buffering around weights over {self.weight_threshold}'
                 ):
@@ -1563,13 +1561,14 @@ class Weights(Grits):
                     w_arr[w_arr == self.ds_config['ndv']] = np.nan
                     weights = np.unique(w_arr)[::-1]
                     this_w_arr = w_arr.copy()
-                    #this_w_arr[this_w_arr < 1] = np.nan
                     this_w_arr[this_w_arr < self.weight_threshold] = np.nan
                     expanded_w_arr = utils.expand_for(
                         this_w_arr >= self.weight_threshold,
                         shiftx=self.buffer_cells, shifty=self.buffer_cells
                     )
                     mask = (w_arr < self.weight_threshold) & expanded_w_arr
+
+                    ## mask out any values in other bands of the input/output raster
                     for b in range(1, dst_ds.RasterCount+1):
                         this_band = dst_ds.GetRasterBand(b)
                         this_arr = this_band.ReadAsArray(*srcwin)

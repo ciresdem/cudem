@@ -2078,11 +2078,6 @@ class ElevationDataset:
         # if self.stack_fltrs is not None:
         #     self.stack_fltrs = [x for y in self.stack_fltrs for x in y.split('::')]
 
-        # if isinstance(self.pnt_fltrs, str):
-        #     self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
-
-        # if self.pnt_fltrs is not None:
-        #     self.pnt_fltrs = [x for y in self.pnt_fltrs for x in y.split('::')]
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
             self.pnt_fltrs = [self.pnt_fltrs]
 
@@ -3276,105 +3271,7 @@ class ElevationDataset:
                         m_array[(weight_below) & (arrs['count'] != 0)] = 1
                         m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
 
-                    stacked_data = average(weight_below, stacked_data, arrs)
-                    
-                elif mode == 'mixed_old':
-                    ###############################################################
-                    ## mixed mode will mean data above and below the
-                    ## weight_threshold and then the higher weighted meaned data
-                    ## will supercede the lower weighted meaned data
-                    ##
-                    ## weights above threshold supercede weights below threshold,
-                    ## otherwise meaned...
-                    ###############################################################
-                    wt = 1
-                    if 'weight_threshold' in self.stack_mode_args.keys():
-                        wt = utils.float_or(self.stack_mode_args['weight_threshold'], 1)
-
-                    ## above
-                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-
-                    # supercede existing data below weight_threshold
-                    weight_above_sup = (arrs['weight'] >= wt) & (tmp_stacked_weight < wt)
-                    if self.want_mask:
-                        # remove the mask from superceded bands
-                        reset_mask_bands(
-                            m_ds, srcwin,
-                            except_band_name=m_band.GetDescription(),
-                            mask=weight_above_sup
-                        )
-                        m_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
-                        m_all_array[(weight_above_sup) & (arrs['count'] != 0)] = 1
-
-                    stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
-                    stacked_data['z'][weight_above_sup] \
-                        = (arrs['z'][weight_above_sup] * arrs['weight'][weight_above_sup])
-                    stacked_data['x'][weight_above_sup] \
-                        = (arrs['x'][weight_above_sup] * arrs['weight'][weight_above_sup])
-                    stacked_data['y'][weight_above_sup] \
-                        = (arrs['y'][weight_above_sup] * arrs['weight'][weight_above_sup])
-                    stacked_data['src_uncertainty'][weight_above_sup] \
-                        = arrs['uncertainty'][weight_above_sup]
-                    stacked_data['weights'][weight_above_sup] \
-                        = arrs['weight'][weight_above_sup]
-                    stacked_data['uncertainty'][weight_above_sup] \
-                        = np.array(stacked_data['src_uncertainty'][weight_above_sup])
-                    
-                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                        
-                    ## average of incoming data with existing data above weight_threshold
-                    weight_above = (arrs['weight'] >= wt) \
-                        & (arrs['weight'] >= tmp_stacked_weight) \
-                        & (~weight_above_sup)
-                    if self.want_mask:
-                        m_array[(weight_above) & (arrs['count'] != 0)] = 1
-                        m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
-                        
-                    stacked_data['count'][weight_above] += arrs['count'][weight_above]
-                    stacked_data['z'][weight_above] \
-                        += (arrs['z'][weight_above] * arrs['weight'][weight_above])
-                    stacked_data['x'][weight_above] \
-                        += (arrs['x'][weight_above] * arrs['weight'][weight_above])
-                    stacked_data['y'][weight_above] \
-                        += (arrs['y'][weight_above] * arrs['weight'][weight_above])
-                    stacked_data['src_uncertainty'][weight_above] \
-                        = np.sqrt(np.power(stacked_data['src_uncertainty'][weight_above], 2) \
-                                  + np.power(arrs['uncertainty'][weight_above], 2))
-                    stacked_data['weights'][weight_above] \
-                        += arrs['weight'][weight_above]
-                    ## accumulate variance * weight
-                    stacked_data['uncertainty'][weight_above] \
-                        += arrs['weight'][weight_above] \
-                        * np.power((arrs['z'][weight_above] \
-                                    - (stacked_data['z'][weight_above] \
-                                       / stacked_data['weights'][weight_above])), 2)
-                    
-                    ## below
-                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    weight_below = (arrs['weight'] < wt) & (tmp_stacked_weight < wt)
-                    if self.want_mask:
-                        m_array[(weight_below) & (arrs['count'] != 0)] = 1
-                        m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
-                        
-                    stacked_data['count'][weight_below] += arrs['count'][weight_below]
-                    stacked_data['z'][weight_below] \
-                        += (arrs['z'][weight_below] * arrs['weight'][weight_below])
-                    stacked_data['x'][weight_below] \
-                        += (arrs['x'][weight_below] * arrs['weight'][weight_below])
-                    stacked_data['y'][weight_below] \
-                        += (arrs['y'][weight_below] * arrs['weight'][weight_below])
-                    stacked_data['src_uncertainty'][weight_below] \
-                        = np.sqrt(np.power(stacked_data['src_uncertainty'][weight_below], 2) \
-                                  + np.power(arrs['uncertainty'][weight_below], 2))
-                    stacked_data['weights'][weight_below] += arrs['weight'][weight_below]
-                    ## accumulate variance * weight
-                    stacked_data['uncertainty'][weight_below] += arrs['weight'][weight_below] \
-                        * np.power((arrs['z'][weight_below] \
-                                    - (stacked_data['z'][weight_below] \
-                                       / stacked_data['weights'][weight_below])), 2)
+                    stacked_data = average(weight_below, stacked_data, arrs)                    
                     
                 elif mode == 'min' or mode == 'max':
                     ###############################################################
