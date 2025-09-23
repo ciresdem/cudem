@@ -1247,26 +1247,31 @@ class RQOutlierZ(PointZOutlier):
             return(f'{raster}_swath.tif')
 
         return(None)
-                
+
+    
+    def set_raster_fn(self, raster):
+        ## raster is not a local file, create a unique name to use
+        if (self.region is not None or self.xyinc is not None) and self.resample_raster:
+            _raster = utils.append_fn(
+                f'rq_raster_{raster}', self.region,
+                self.xyinc[0], res=1 if not all(self.xyinc) else None
+            )
+            _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
+
+            if os.path.exists(_raster) and os.path.isfile(_raster):
+                return([_raster])
+
+        return(raster)                
+
         
     def init_raster(self, raster):
 
         if raster is not None:
             if os.path.exists(raster) and os.path.isfile(raster):
                 return([raster])
-
-            ## raster is not a local file, create a unique name to use
-            if (self.region is not None or self.xyinc is not None) and self.resample_raster:
-                _raster = utils.append_fn(
-                    f'rq_raster_{raster}', self.region,
-                    self.xyinc[0], res=1 if not all(self.xyinc) else None
-                )
-                _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
-
-                if os.path.exists(_raster) and os.path.isfile(_raster):
-                    return([_raster])
             
         elif raster is None:
+            _raster = self.set_raster_fn(raster)
             raster = []
             # try gmrt all
             this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
