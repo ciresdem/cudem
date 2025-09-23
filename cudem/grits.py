@@ -1592,7 +1592,7 @@ class Weights(Grits):
 
                     for n, weight_threshold in enumerate(self.weight_thresholds):
                         this_w_arr[this_w_arr < weight_threshold] = np.nan
-                        if self.binary_dilution:
+                        if self.binary_dilation:
                             expanded_w_arr = scipy.ndimage.binary_dilation(this_w_arr >= weight_threshold, iterations=self.buffer_sizes[n])
                         else:
                             ## mrl use ndimage.binary_dilation rather than the slower expand_for below
