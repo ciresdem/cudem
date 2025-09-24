@@ -6972,7 +6972,12 @@ class VDATUM(FetchModule):
         ## Search PROJ CDN for all other transformation grids:
         ## the PROJ CDN holds transformation grids from around the
         ## world, including global transformations such as EGM
-        cdn_index = 'proj_cdn_files.geojson'
+        ## put this in cacne
+        #cdn_index = 'proj_cdn_files.geojson'
+        cdn_index = utils.make_temp_fn('proj_cdn_files.geojson', cache_dir)
+        if os.path.exists(cdn_index):
+            utils.remove_glob(cdn_index)
+            
         try:
             status = Fetch(
                 self._proj_vdatum_index, callback=self.callback, verbose=self.verbose

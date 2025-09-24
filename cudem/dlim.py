@@ -2062,12 +2062,12 @@ class ElevationDataset:
                 
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                #try:
-                self.set_transform()
-                #except Exception as e:
-                #    utils.echo_error_msg(
-                #        f'could not set transformation on {self.fn}, {e}'
-                #    )
+                try:
+                    self.set_transform()
+                except Exception as e:
+                    utils.echo_error_msg(
+                        f'could not set transformation on {self.fn}, {e}'
+                    )
 
             self.set_yield()
 
