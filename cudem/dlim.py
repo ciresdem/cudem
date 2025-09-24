@@ -7080,6 +7080,7 @@ class IceSat2File(ElevationDataset):
                 )
                 return(None)
         else:
+            #utils.echo_msg(this_atlxx.results)
             if this_atlxx.fetch_entry(
                     this_atlxx.results[0], check_size=True
             ) == 0:
@@ -9474,7 +9475,9 @@ class IceSat2Fetcher(Fetcher):
             
         else:
             self.fetches_params['fn'] = icesat2_fn
-            yield(IceSat2File(**self.fetches_params)._acquire_module())        
+            self.fetches_params['data_format'] = 303
+            #yield(IceSat2File(**self.fetches_params)._acquire_module())
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
             
 class GMRTFetcher(Fetcher):

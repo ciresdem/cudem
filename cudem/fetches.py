@@ -6974,7 +6974,7 @@ class VDATUM(FetchModule):
         ## world, including global transformations such as EGM
         ## put this in cacne
         #cdn_index = 'proj_cdn_files.geojson'
-        cdn_index = utils.make_temp_fn('proj_cdn_files.geojson', cache_dir)
+        cdn_index = utils.make_temp_fn('proj_cdn_files.geojson', self._outdir)
         if os.path.exists(cdn_index):
             utils.remove_glob(cdn_index)
             
