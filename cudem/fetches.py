@@ -2632,7 +2632,7 @@ class NauticalCharts(FetchModule):
 class MBDB(FetchModule):
     """MBDB fetching. This is a test module and does not work."""
     
-    def __init__(self, where='1=1', layer=1, list_surveys=False, **kwargs):
+    def __init__(self, where='1=1', layer=1, list_surveys=False, want_inf=True, **kwargs):
         super().__init__(name='mbdb', **kwargs)
         self.where = where        
         self._mb_dynamic_url = ('https://gis.ngdc.noaa.gov/arcgis/rest/'
@@ -2649,6 +2649,7 @@ class MBDB(FetchModule):
         self._mb_features_query_url = '{0}/{1}/query?'.format(self._mb_features_url, layer)
 
         self.list_surveys = list_surveys
+        self.want_inf = want_inf
 
     def inf_parse(self, inf_text):
         this_row = 0
@@ -2696,7 +2697,7 @@ class MBDB(FetchModule):
             inf_region = self.inf_parse(inffile)
             inffile.close()
             
-        return(inf_region)
+        return(inf_url, inf_region)
         
         
     def run(self):
@@ -2747,15 +2748,22 @@ class MBDB(FetchModule):
 
                                 for mb in page_mb_links:
                                     if 'gz' in mb:
-                                        mb = '{}.fbt'.format(utils.fn_basename2(mb))
-                                        
+                                        mb = '{}.fbt'.format(utils.fn_basename2(mb))                                        
                                         #mb_inf = f'{mb[:-3]}.inf'
-                                    mb_inf_region = self.check_inf_region(mb)
+                                        
+                                    mb_inf, mb_inf_region = self.check_inf_region(mb)
                                     #utils.echo_msg(mb_inf)
                                     #utils.echo_msg(mb_inf_region)
                                     if mb_inf_region is not None:
                                         if regions.regions_intersect_ogr_p(mb_inf_region, self.region):
                                             self.add_entry_to_results(mb, os.path.join(self._outdir, os.path.basename(mb)),'mbs')
+                                            
+                                            if self.want_inf:
+                                                self.add_entry_to_results(
+                                                    '{}.inf'.format(mb_inf),
+                                                    '{}.inf'.format(os.path.join(self._outdir, os.path.basename(mb_inf))),
+                                                    'mb_inf'
+                                                )                                            
 
                                     pbar_inf.update()
                             # mbs = [f'{x[:-3]}.fbt' for x in page.xpath(f'//a[contains(@href, "/MB/")]/@href')]
