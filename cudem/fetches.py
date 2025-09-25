@@ -2872,7 +2872,6 @@ class R2R(FetchModule):
                                 for data in page_data:
                                     #print(data['datatype_name'])
                                     if data['datatype_name'] == 'Bathymetry':
-                                        utils.echo_msg(data)
                                         actual_url = data['actual_url']
                                         if actual_url is not None:
                                             self.add_entry_to_results(
