@@ -2785,10 +2785,10 @@ class R2R(FetchModule):
         self.r2r_api_manifest_url = 'https://service.rvdata.us/api/file_manifest/?'
         self.r2r_api_product_url = 'https://service.rvdata.us/api/product/?'
 
-        
+
     def inf_parse(self, inf_text):
         this_row = 0
-        minmax = []
+        minmax = [0,0,0,0,0,0]
         for il in inf_text:
             til = il.split()
             if len(til) > 1:
@@ -2806,13 +2806,17 @@ class R2R(FetchModule):
         mbs_region = regions.Region().from_list(minmax)
         return(mbs_region)
 
-    
+
     def check_inf_region(self, mb_url, keep_inf=False):
         src_mb = mb_url
         inf_url = '{}.inf'.format(utils.fn_basename2(src_mb))
         inf_region = None
         #try:
-        _req = Fetch(inf_url, callback=self.callback, verbose=True).fetch_req()
+        #utils.echo_msg(inf_url)
+        _req = Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
+        if _req is None:
+            inf_url = '{}.inf'.format(src_mb)
+            _req = Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
         #except:
         #    utils.echo_warning_msg('failed to fetch inf file: {}'.format(inf_url))
         #    status = -1
@@ -2822,9 +2826,13 @@ class R2R(FetchModule):
         #     utils.remove_glob(src_inf)
         if _req is not None:
             src_inf = _req.text
-            inf_region = self.inf_parse(src_inf)
+            inffile = StringIO(src_inf)
+            inffile.read()
+            inffile.seek(0)
+            inf_region = self.inf_parse(inffile)
+            inffile.close()
             
-        return(inf_region)
+        return(inf_url, inf_region)
 
     
     def run(self):
@@ -2837,6 +2845,7 @@ class R2R(FetchModule):
         ).fetch_req(params=_data)
         if _req is not None:
             features = _req.json()
+            #utils.echo_msg(features)
             #utils.echo_msg('found {} cruises'.format(len(features['data'])))
             with tqdm(
                     total=len(features['data']),
@@ -2853,21 +2862,24 @@ class R2R(FetchModule):
                         product_url = '{}cruise_id={}'.format(
                             self.r2r_api_product_url, cruise_id
                         )
-                        #print(product_url)
+                        #utils.echo_msg(product_url)
                         page = Fetch(product_url, verbose=True).fetch_req()
                         page_json = page.json()
+                        #utils.echo_msg(page_json)
                         if page_json is not None:
                             page_data = page_json['data']
                             if page_data is not None:
                                 for data in page_data:
                                     #print(data['datatype_name'])
                                     if data['datatype_name'] == 'Bathymetry':
-                                        #utils.echo_msg(data['actual_url'])
-                                        self.add_entry_to_results(
-                                            data['actual_url'],
-                                            os.path.basename(data['actual_url']),
-                                            'multibeam'
-                                        )
+                                        utils.echo_msg(data)
+                                        actual_url = data['actual_url']
+                                        if actual_url is not None:
+                                            self.add_entry_to_results(
+                                                actual_url,
+                                                os.path.basename(actual_url),
+                                                'multibeam'
+                                            )
 
                                         
 class Multibeam(FetchModule):
