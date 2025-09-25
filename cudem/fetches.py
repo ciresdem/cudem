@@ -2632,19 +2632,72 @@ class NauticalCharts(FetchModule):
 class MBDB(FetchModule):
     """MBDB fetching. This is a test module and does not work."""
     
-    def __init__(self, where='1=1', layer=0, **kwargs):
-        super().__init__(name='multibeam', **kwargs)
+    def __init__(self, where='1=1', layer=1, list_surveys=False, **kwargs):
+        super().__init__(name='mbdb', **kwargs)
         self.where = where        
         self._mb_dynamic_url = ('https://gis.ngdc.noaa.gov/arcgis/rest/'
-                                'services/multibeam_footprints/MapServer/0')
+                                'services/multibeam_footprints/MapServer')
         self._mb_features_url = ('https://gis.ngdc.noaa.gov/arcgis/rest/'
-                                 'services/multibeam_datasets/FeatureServer/')
-        self._mb_features_products_url = f'{self._mb_features_url}0'
-        self._mb_features_processed_url = f'{self._mb_features_url}1'
-        self._mb_features_raw_url = f'{self._mb_features_url}2'
+                                 'services/multibeam_datasets/FeatureServer')
+        self._mb_features_products_url = f'{self._mb_features_url}/0'
+        self._mb_features_processed_url = f'{self._mb_features_url}/1'
+        self._mb_features_raw_url = f'{self._mb_features_url}/2'
 
-        self._mb_query_url = '{0}/query?'.format(self._mb_dynamic_url)
+        self._mb_dynamic_processed_url = f'{self._mb_dynamic_url}1'
 
+        self._mb_dynamic_query_url = '{0}/{1}/query?'.format(self._mb_dynamic_url, layer)
+        self._mb_features_query_url = '{0}/{1}/query?'.format(self._mb_features_url, layer)
+
+        self.list_surveys = list_surveys
+
+    def inf_parse(self, inf_text):
+        this_row = 0
+        minmax = [0,0,0,0,0,0]
+        for il in inf_text:
+            til = il.split()
+            if len(til) > 1:
+                if til[0] == 'Minimum':
+                    if til[1] == 'Longitude:':
+                        minmax[0] = utils.float_or(til[2])
+                        minmax[1] = utils.float_or(til[5])
+                    elif til[1] == 'Latitude:':
+                        minmax[2] = utils.float_or(til[2])
+                        minmax[3] = utils.float_or(til[5])
+                    elif til[1] == 'Depth:':
+                        minmax[4] = utils.float_or(til[5]) * -1
+                        minmax[5] = utils.float_or(til[2]) * -1
+
+        mbs_region = regions.Region().from_list(minmax)
+        return(mbs_region)
+
+        
+    def check_inf_region(self, mb_url, keep_inf=False):
+        src_mb = mb_url
+        inf_url = '{}.inf'.format(utils.fn_basename2(src_mb))
+        inf_region = None
+        #try:
+        #utils.echo_msg(inf_url)
+        _req = Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
+        if _req is None:
+            inf_url = '{}.inf'.format(src_mb)
+            _req = Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
+        #except:
+        #    utils.echo_warning_msg('failed to fetch inf file: {}'.format(inf_url))
+        #    status = -1
+            
+        #if status == 0:
+        # if not keep_inf:
+        #     utils.remove_glob(src_inf)
+        if _req is not None:
+            src_inf = _req.text
+            inffile = StringIO(src_inf)
+            inffile.read()
+            inffile.seek(0)
+            inf_region = self.inf_parse(inffile)
+            inffile.close()
+            
+        return(inf_region)
+        
         
     def run(self):
         """Run the MBDB fetching module"""
@@ -2659,17 +2712,61 @@ class MBDB(FetchModule):
             'inSR':4326,
             'outSR':4326,
             'f':'pjson',
-            'returnGeometry':'False',
+            'returnGeometry':'false',
         }
         _req = Fetch(
-            self._mb_features_processed_url, verbose=self.verbose
+            self._mb_features_query_url, verbose=self.verbose
         ).fetch_req(params=_data)
         if _req is not None:
-            print(_req.url)
-            print(_req.text)
+            #print(_req.url)
+            #print(_req.text)
             features = _req.json()
-            for feature in features['features']:
-                print(feature)
+            with tqdm(
+                    total=len(features['features']),
+                    desc='parsing mb surveys..',
+                    leave=self.verbose
+            ) as pbar:
+                #for feature in features['data']:
+                for feature in features['features']:
+                    feature_set_url = feature['attributes']['DOWNLOAD_URL']
+                    if feature_set_url is not None:
+                        feature_set_id = feature['attributes']['SURVEY_ID']
+                        dataset_id = feature['attributes']['DATASET_ID']
+                        survey_name = feature['attributes']['SURVEY_NAME']
+
+                        if self.list_surveys:
+                            print(feature_set_url)
+                        else:
+                            page = Fetch(feature_set_url, verbose=True).fetch_html()
+                            page_mb_links = page.xpath(f'//a[contains(@href, "/MB/")]/@href')
+                            with tqdm(
+                                    total=len(page_mb_links),
+                                    desc='parsing mb survey datasets..',
+                                    leave=self.verbose
+                            ) as pbar_inf:
+
+                                for mb in page_mb_links:
+                                    if 'gz' in mb:
+                                        mb = '{}.fbt'.format(utils.fn_basename2(mb))
+                                        
+                                        #mb_inf = f'{mb[:-3]}.inf'
+                                    mb_inf_region = self.check_inf_region(mb)
+                                    #utils.echo_msg(mb_inf)
+                                    #utils.echo_msg(mb_inf_region)
+                                    if mb_inf_region is not None:
+                                        if regions.regions_intersect_ogr_p(mb_inf_region, self.region):
+                                            self.add_entry_to_results(mb, os.path.join(self._outdir, os.path.basename(mb)),'mbs')
+
+                                    pbar_inf.update()
+                            # mbs = [f'{x[:-3]}.fbt' for x in page.xpath(f'//a[contains(@href, "/MB/")]/@href')]
+                            # [self.check_inf_region(x) for x in mbs]
+                            # [self.add_entry_to_results(mb, os.path.join(self._outdir, os.path.basename(mb)),'mbs') for mb in mbs]
+                            #print(mbs)
+                        pbar.update()
+
+            
+            # for feature in features['features']:
+            #     print(feature)
 
                 
 class R2R(FetchModule):
@@ -7746,8 +7843,8 @@ class FetchesFactory(factory.CUDEMFactory):
         'SLR': {'call': SLR},
         'CoNED': {'call': CoNED},
         'CUDEM': {'call': CUDEM},
-        'multibeam': {'call': Multibeam}, # MBDB isn't working!
-        'mbdb': {'call': MBDB},
+        'multibeam': {'call': Multibeam}, 
+        'mbdb': {'call': MBDB}, # MBDB isn't working!
         'r2r': {'call': R2R},
         'MBDB': {'call': MBDB},# isn't working!
         'gebco': {'call': GEBCO},

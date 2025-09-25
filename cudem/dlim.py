@@ -7085,7 +7085,7 @@ class IceSat2File(ElevationDataset):
                     this_atlxx.results[0], check_size=True
             ) == 0:
                 return(os.path.join(
-                    this_atlxx._outdir, this_atlxx.results[0][1]
+                    this_atlxx._outdir, this_atlxx.results[0]['dst_fn']
                 ))
 
             
