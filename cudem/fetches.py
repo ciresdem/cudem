@@ -2891,7 +2891,7 @@ class Multibeam(FetchModule):
     def __init__(
             self, processed=True, survey_id=None, exclude_survey_id=None, ship_id=None,
             exclude_ship_id=None, min_year=None, max_year=None, exclude=None,
-            make_datalist=False, want_inf=True, want_vdatum=False, **kwargs
+            make_datalist=False, want_inf=True, want_vdatum=False, inf_only=False, **kwargs
     ):
         super().__init__(name='multibeam', **kwargs)
         self.processed_p = processed
@@ -2904,6 +2904,10 @@ class Multibeam(FetchModule):
         self.exclude = exclude
         self.make_datalist = make_datalist
         self.want_inf = want_inf
+        self.inf_only = inf_only
+        if self.inf_only:
+            self.want_inf = True
+            
         self.want_vdatum = want_vdatum
 
         ## various multibeam URLs
@@ -3083,10 +3087,14 @@ class Multibeam(FetchModule):
                                 v2_url.insert(-1, 'generated')
                                 v2_url = '/'.join(v2_url)
                                 v2_gen = [v2_url, v2[1], v2[2]]
-                                self.add_entry_to_results(*v2_gen)
+                                if not self.inf_only:
+                                    self.add_entry_to_results(*v2_gen)
+                                    
                                 inf_url = self.inf_url(v2_gen)
                             else:
-                                self.add_entry_to_results(*v2)
+                                if not self.inf_only:
+                                    self.add_entry_to_results(*v2)
+                                    
                                 inf_url = self.inf_url(v2)
 
                             if self.want_inf:
@@ -3103,10 +3111,14 @@ class Multibeam(FetchModule):
                                 v1_url.insert(-1, 'generated')
                                 v1_url = '/'.join(v1_url)
                                 v1_gen = [v1_url, v1[1], v1[2]]
-                                self.add_entry_to_results(*v1_gen)
+                                if not self.inf_only:
+                                    self.add_entry_to_results(*v1_gen)
+                                    
                                 inf_url = self.inf_url(v1_gen)
                             else:
-                                self.add_entry_to_results(*v1)
+                                if not self.inf_only:
+                                    self.add_entry_to_results(*v1)
+                                    
                                 inf_url = self.inf_url(v1)
 
                             if self.want_inf:
@@ -3125,10 +3137,14 @@ class Multibeam(FetchModule):
                                 survs_url.insert(-1, 'generated')
                                 survs_url = '/'.join(survs_url)
                                 survs_gen = [survs_url, survs[1], survs[2]]
-                                self.add_entry_to_results(*survs_gen)
+                                if not self.inf_only:
+                                    self.add_entry_to_results(*survs_gen)
+                                    
                                 inf_url = self.inf_url(survs_gen)
                             else:
-                                self.add_entry_to_results(*survs)
+                                if not self.inf_only:
+                                    self.add_entry_to_results(*survs)
+                                    
                                 inf_url = self.inf_url(survs)
 
                             if self.want_inf:
