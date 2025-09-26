@@ -9909,9 +9909,10 @@ class HydroNOSFetcher(Fetcher):
     )
 
                                         
-    def __init__(self, explode=False, **kwargs):
+    def __init__(self, explode=False, min_weight=0, **kwargs):
         super().__init__(**kwargs)
         self.explode=explode
+        self.min_weight = min_weight
 
                                         
     def yield_ds(self, result):
@@ -9955,6 +9956,7 @@ class HydroNOSFetcher(Fetcher):
                     self.fetches_params['data_format'] = 201
                     #self.fetches_params['src_srs'] = src_srs
                     self.fetches_params['explode'] = self.explode
+                    self.fetches_params['min_weight'] = self.min_weight
                     yield(DatasetFactory(
                         **self.fetches_params
                     )._acquire_module())

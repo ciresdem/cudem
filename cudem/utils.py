@@ -1171,8 +1171,11 @@ def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     return(int(x_origin), int(y_origin), int(x_size), int(y_size))
 
 
-def expand_for(arr, shiftx=1, shifty=1):
+def expand_for(arr, shiftx=1, shifty=1, revert=False):
     arr_b = arr.copy().astype(bool)
+    #if revert:
+    #    arr_b = np.invert(arr_b)
+        
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
             if(arr[i,j]):
@@ -1180,6 +1183,7 @@ def expand_for(arr, shiftx=1, shifty=1):
                 j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
                 arr_b[i_min:i_max, j_min:j_max] = True
                 
+    #return(arr_b if not revert else np.invert(arr_b))
     return(arr_b)
 
 
