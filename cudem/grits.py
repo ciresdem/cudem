@@ -1599,10 +1599,10 @@ class Weights(Grits):
                         this_w_arr[this_w_arr < weight_threshold] = np.nan
                         if self.binary_dilation:
                             iters = self.buffer_sizes[n] if not self.revert else self.buffer_sizes[n] * self.revert_multiplier
-                            expanded_w_arr = scipy.ndimage.binary_dilation(this_w_arr >= weight_threshold, iterations=int(iters))
+                            expanded_w_arr = scipy.ndimage.binary_dilation(this_w_arr >= weight_threshold, iterations=int(iters), border_value=1)
                             if self.revert:
                                 iters -= self.buffer_sizes[n]
-                                contracted_w_arr = scipy.ndimage.binary_erosion(expanded_w_arr, iterations=int(iters))
+                                contracted_w_arr = scipy.ndimage.binary_erosion(expanded_w_arr, iterations=int(iters), border_value=1)
                                 expanded_w_arr = contracted_w_arr.copy()
                                 
                         else:
