@@ -5279,6 +5279,8 @@ class XYZFile(ElevationDataset):
                 or self.z_scale != 1 \
                     or self.x_offset != 0 \
                         or self.y_offset != 0 else False
+
+
         self.field_names  = [x for x in ['x' if self.xpos is not None else None,
                                          'y' if self.ypos is not None else None,
                                          'z' if self.zpos is not None else None,
@@ -9973,6 +9975,38 @@ class CSBFetcher(Fetcher):
     def yield_ds(self, result):
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
+
+class R2RFetcher(Fetcher):
+    """R2R Bathymetry data fetcher
+    """
+    
+    __doc__ = '''{}
+    Fetches Module: <r2r> - {}'''.format(__doc__, fetches.R2R.__doc__)
+
+                                        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+                                        
+    def yield_ds(self, result):
+        #utils.echo_msg_bold(result)
+        r2r_fns = utils.p_untar(
+            os.path.join(self.fetch_module._outdir, result['dst_fn']),
+            exts=['geoCSV'],
+            outdir=os.path.dirname(
+                os.path.join(self.fetch_module._outdir, result['dst_fn'])
+            ),
+            verbose=self.verbose
+        )
+        #utils.echo_msg_bold(r2r_fns)
+        for r2r_fn in r2r_fns:
+            self.fetches_params['mod'] = r2r_fn
+            self.fetches_params['data_format'] \
+                = ('168:skip=16:xpos=1:ypos=2'
+                   ':zpos=3:z_scale=-1:delim=,')
+            self.fetches_params['src_srs'] = 'epsg:4326'
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
+
                                         
 class EMODNetFetcher(Fetcher):
     """EMODNet Data Fetcher
@@ -10598,7 +10632,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -217: {'name': 'r2r',
                'fmts': ['r2r'],
                'description': 'The r2r fetches module',
-               'call': MBSFetcher},
+               'call': R2RFetcher},
         -300: {'name': 'emodnet',
                'fmts': ['emodnet'],
                'description': 'The emodnet fetches module',

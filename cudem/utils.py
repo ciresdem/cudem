@@ -899,7 +899,7 @@ def gunzip(gz_file, outdir='./'):
     return(guz_file)
 
 
-def p_untar(tar_file, exts=None, outdir='./'):
+def p_untar(tar_file, exts=[], outdir='./', verbose=True):
     src_procs = []
     with tarfile.open(tar_file, 'r') as tar:
         tar_fns = tar.getnames()
@@ -911,7 +911,9 @@ def p_untar(tar_file, exts=None, outdir='./'):
                     ext_tfn = os.path.join(outdir, os.path.basename(tfn))
                     src_procs.append(ext_tfn)
                     if not os.path.exists(ext_tfn):
-                        echo_msg('Extracting {}'.format(ext_tfn))
+                        if verbose:
+                            echo_msg('Extracting {}'.format(ext_tfn))
+                            
                         t = tar.extractfile(tfn)
                         with open(ext_tfn, 'wb') as f:
                             f.write(t.read())

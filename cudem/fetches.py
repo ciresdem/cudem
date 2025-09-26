@@ -2859,25 +2859,27 @@ class R2R(FetchModule):
                         feature_set_id = feature['fileset_id']
                         cruise_id = feature['cruise_id']
                         
+                        #product_url = '{}cruise_id={}?datatype=Bathymetry'.format(
                         product_url = '{}cruise_id={}'.format(
                             self.r2r_api_product_url, cruise_id
                         )
                         #utils.echo_msg(product_url)
                         page = Fetch(product_url, verbose=True).fetch_req()
                         page_json = page.json()
-                        #utils.echo_msg(page_json)
                         if page_json is not None:
                             page_data = page_json['data']
                             if page_data is not None:
                                 for data in page_data:
                                     #print(data['datatype_name'])
                                     if data['datatype_name'] == 'Bathymetry':
+                                        #utils.echo_msg(data)
+                                        #utils.echo_msg(page_json)
                                         actual_url = data['actual_url']
                                         if actual_url is not None:
                                             self.add_entry_to_results(
                                                 actual_url,
                                                 os.path.basename(actual_url),
-                                                'multibeam'
+                                                'r2rBathymetry'
                                             )
 
                                         
