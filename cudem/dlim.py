@@ -1920,7 +1920,7 @@ class ElevationDataset:
             self.stack_mode_name = 'mean'
         
         if 'mask_level' not in self.stack_mode_args.keys():
-            self.stack_mode_args['mask_level'] = 0
+            self.stack_mode_args['mask_level'] = -1
 
             
     def _init_mask(self, mask):

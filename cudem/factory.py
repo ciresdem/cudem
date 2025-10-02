@@ -536,22 +536,22 @@ class CUDEMFactory:
                 del self.mod_args[k]
                 
         if self.mod_name is not None:
-            #try:
-            m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
-            mm = m(self.mod_args, self.kwargs)
+            try:
+                m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
+                mm = m(self.mod_args, self.kwargs)
 
-            for mod_arg in self.mod_args.keys():
-                if mod_arg not in list(_get_all_keys(mm.__dict__)):
-                    utils.echo_warning_msg(
-                        f'{mod_arg} is not a valid parameter...'
-                    )
+                for mod_arg in self.mod_args.keys():
+                    if mod_arg not in list(_get_all_keys(mm.__dict__)):
+                        utils.echo_warning_msg(
+                            f'{mod_arg} is not a valid parameter...'
+                        )
 
-            #return(m(self.mod_args, self.kwargs))
-            return(mm)
-            # except Exception as e:
-            #     utils.echo_error_msg(
-            #         f'could not acquire module {self.mod_name}, {e}'
-            #     )
+                #return(m(self.mod_args, self.kwargs))
+                return(mm)
+            except Exception as e:
+                utils.echo_error_msg(
+                    f'could not acquire module {self.mod_name}, {e}'
+                )
         else:
             return(None)
         

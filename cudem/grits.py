@@ -1497,7 +1497,7 @@ class Weights(Grits):
     def __init__(self, buffer_cells=1, weight_threshold=None,
                  remove_sw=False, weight_thresholds=None, buffer_sizes=None,
                  weight_sizes=None, binary_dilation=False, revert=False,
-                 revert_multiplier=2, **kwargs):
+                 revert_multiplier=2, fill_holes=False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
@@ -1508,6 +1508,7 @@ class Weights(Grits):
             self.buffer_sizes = weight_sizes
             
         self.binary_dilation = binary_dilation
+        self.fill_holes = fill_holes
         self.revert = revert
         self.revert_multiplier = utils.int_or(revert_multiplier, 2)
         self.init_thresholds()
@@ -1551,7 +1552,25 @@ class Weights(Grits):
 
         return(weight_band)
 
-    
+
+    def binary_closed_dilation(self, arr, iterations=1, closing_iterations=1):
+        closed_and_dilated_arr = arr.copy()
+        for i in range(closing_iterations):
+            struct_ = scipy.ndimage.generate_binary_structure(2, 2)        
+            closed_and_dilated_arr = scipy.ndimage.binary_dilation(
+                closed_and_dilated_arr, iterations=1, structure=struct_
+            )
+            closed_and_dilated_arr = scipy.ndimage.binary_erosion(
+                closed_and_dilated_arr, iterations=1, border_value=1, structure=struct_
+            )
+
+        closed_and_dilated_arr = scipy.ndimage.binary_dilation(
+            closed_and_dilated_arr, iterations=iterations, structure=struct_
+        )
+            
+        return(closed_and_dilated_arr)
+
+                               
     def run(self):
         if self.weight_mask is None:
             return(self.src_dem, -1)
@@ -1598,12 +1617,23 @@ class Weights(Grits):
                     for n, weight_threshold in enumerate(self.weight_thresholds):
                         this_w_arr[this_w_arr < weight_threshold] = np.nan
                         if self.binary_dilation:
-                            iters = self.buffer_sizes[n] if not self.revert else self.buffer_sizes[n] * self.revert_multiplier
-                            expanded_w_arr = scipy.ndimage.binary_dilation(this_w_arr >= weight_threshold, iterations=int(iters), border_value=1)
-                            if self.revert:
-                                iters -= self.buffer_sizes[n]
-                                contracted_w_arr = scipy.ndimage.binary_erosion(expanded_w_arr, iterations=int(iters), border_value=1)
-                                expanded_w_arr = contracted_w_arr.copy()
+                            weight_mask = this_w_arr >= weight_threshold
+                            expanded_w_arr = self.binary_closed_dilation(
+                                weight_mask, iterations=self.buffer_sizes[n],
+                                closing_iterations=self.buffer_sizes[n]*4
+                            )
+                            # struct_ = scipy.ndimage.generate_binary_structure(2, 2)
+                            
+                            # iters = self.buffer_sizes[n] if not self.revert else self.buffer_sizes[n] * self.revert_multiplier
+                            # expanded_w_arr = scipy.ndimage.binary_dilation(
+                            #     this_w_arr >= weight_threshold, iterations=int(iters), structure=struct_
+                            # )
+                            # if self.revert:
+                            #     iters -= self.buffer_sizes[n]
+                            #     contracted_w_arr = scipy.ndimage.binary_erosion(
+                            #         expanded_w_arr, iterations=int(iters), border_value=1, structure=struct_
+                            #     )
+                            #     expanded_w_arr = contracted_w_arr.copy()
                                 
                         else:
                             ## mrl use ndimage.binary_dilation rather than the slower expand_for below
@@ -1624,6 +1654,9 @@ class Weights(Grits):
                                     shiftx=int(shiftx), shifty=int(shifty),
                                 ))
                                 expanded_w_arr = contracted_w_arr.copy()
+
+                        if self.fill_holes:
+                            expanded_w_arr = scipy.ndimage.binary_fill_holes(expanded_w_arr)
                             
                         mask = (w_arr < weight_threshold) & expanded_w_arr
                         this_w_arr = w_arr.copy()

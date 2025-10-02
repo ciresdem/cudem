@@ -3227,8 +3227,14 @@ class WafflesCoastline(Waffle):
             weight_arr[np.isnan(weight_arr)] = 0
             srcwin = this_arr[1]
             data_arr[np.isnan(data_arr)] = 0
-            data_arr[data_arr > 0] = 1
-            data_arr[data_arr < 0] = -1
+            data_mask = data_arr >= 0
+            data_mask = scipy.ndimage.binary_fill_holes(data_mask)
+
+            data_arr = np.ones(data_arr.shape)
+            #data_arr[data_mask] = 1
+            data_arr[~data_mask] = -1
+            #data_arr[data_arr > 0] = 1
+            #data_arr[data_arr < 0] = -1
 
             # #expanded_arr = scipy.ndimage.binary_dilation(data_arr >= 0, iterations=1, structure=np.ones((12,12)))
             # #contracted_arr = scipy.ndimage.binary_erosion(expanded_arr, iterations=12, structure=np.ones((12,12)))

@@ -1187,6 +1187,19 @@ def expand_for(arr, shiftx=1, shifty=1, revert=False):
     return(arr_b)
 
 
+def fill_for(arr, iterations=3):
+    filled_arr = np.copy(arr)
+    for _ in range(iterations):
+        for i in range(1, arr.shape[0] - 1):
+            for j in range(1, arr.shape[1] - 1):
+                if not filled_arr[i, j]:
+                    if (filled_arr[i-1, j] or filled_arr[i+1, j] or
+                        filled_arr[i, j-1] or filled_arr[i, j+1]):
+                        filled_arr[i, j] = True
+                        
+    return(filled_arr_iter)
+
+
 ###############################################################################
 ##
 ## MB-System functions
