@@ -1497,7 +1497,7 @@ class Weights(Grits):
     def __init__(self, buffer_cells=1, weight_threshold=None,
                  remove_sw=False, weight_thresholds=None, buffer_sizes=None,
                  weight_sizes=None, binary_dilation=False, revert=False,
-                 revert_multiplier=2, fill_holes=False, **kwargs):
+                 revert_multiplier=10, fill_holes=False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
