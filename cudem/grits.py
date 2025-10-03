@@ -1484,7 +1484,7 @@ class Flats(Grits):
 
     
 class Weights(Grits):
-    """Create a nodata buffer around data above `weight_threshold`
+    """Create a nodata buffer around data at and above `weight_threshold`
 
     You must supply a weight-mask raster along with the DEM to filter.
 
@@ -1492,18 +1492,19 @@ class Weights(Grits):
 
     weight_thresholds(float) - the weight threshold; separate levels with slash '/'
     buffer_sizes(int) - the number of cells to buffer; separate levels with slash '/'
-    gap_fill_sizes(int) - the number of cells to gap-fill; ; separate levels with slash '/'
-    fill_holes(bool) - fill holes in the weight mask
+    gap_fill_sizes(int) - the number of cells to gap-fill; separate levels with slash '/'
+    fill_holes(bool) - fill holes in the weight level mask
+
+    <weights:weight_thresholds=2/20:buffer_sizes=4/2:gap_fill_sizes=10/8>
     """
     
     def __init__(self, buffer_cells=1, weight_threshold=None,
-                 remove_sw=False, weight_thresholds=None, buffer_sizes=None,
+                 weight_thresholds=None, buffer_sizes=None,
                  weight_sizes=None, binary_dilation=True, binary_pulse=False,
                  gap_fill_sizes=None, fill_holes=False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
-        self.remove_sw = remove_sw
         self.weight_thresholds = weight_thresholds
         self.buffer_sizes = buffer_sizes
         if weight_sizes is not None:
