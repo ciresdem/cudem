@@ -1501,7 +1501,7 @@ class Weights(Grits):
     def __init__(self, buffer_cells=1, weight_threshold=None,
                  weight_thresholds=None, buffer_sizes=None,
                  weight_sizes=None, binary_dilation=True, binary_pulse=False,
-                 gap_fill_sizes=None, fill_holes=False, revert=False, **kwargs):
+                 gap_fill_sizes=None, fill_holes=False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
@@ -1514,7 +1514,6 @@ class Weights(Grits):
         self.binary_pulse = binary_pulse
         self.gap_fill_sizes = gap_fill_sizes
         self.fill_holes = fill_holes
-        self.revert = revert
         self.init_thresholds()
 
 
@@ -1666,17 +1665,17 @@ class Weights(Grits):
                                 )
                         else:
                             ## mrl use ndimage.binary_dilation rather than the slower expand_for below
-                            shiftx = self.buffer_sizes[n] if not self.revert else self.gap_fill_sizes[n]#self.buffer_sizes[n] * self.revert_multiplier
-                            shifty = self.buffer_sizes[n] if not self.revert else self.gap_fill_sizes[n]#self.buffer_sizes[n] * self.revert_multiplier
+                            shiftx = self.buffer_sizes[n] + self.gap_fill_sizes[n]#self.buffer_sizes[n] * self.revert_multiplier
+                            shifty = self.buffer_sizes[n] + self.gap_fill_sizes[n]#self.buffer_sizes[n] * self.revert_multiplier
                             utils.echo_msg([shiftx, shifty])
                             expanded_w_arr = utils.expand_for(
                                 this_w_arr >= weight_threshold,
                                 shiftx=int(shiftx), shifty=int(shifty)
                             )
 
-                            if self.revert:
-                                shiftx -= self.buffer_sizes[n]
-                                shifty -= self.buffer_sizes[n] 
+                            shiftx = max(0, shiftx - self.buffer_sizes[n])
+                            shifty = max(0, shifty - self.buffer_sizes[n])
+                            if shiftx > 0 and shifty > 0:
                                 utils.echo_msg([shiftx, shifty])
                                 contracted_w_arr = np.invert(utils.expand_for(
                                     np.invert(expanded_w_arr),
