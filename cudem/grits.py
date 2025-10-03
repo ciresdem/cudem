@@ -1496,8 +1496,8 @@ class Weights(Grits):
     
     def __init__(self, buffer_cells=1, weight_threshold=None,
                  remove_sw=False, weight_thresholds=None, buffer_sizes=None,
-                 weight_sizes=None, binary_dilation=False, revert=False,
-                 revert_multiplier=10, fill_holes=False, **kwargs):
+                 weight_sizes=None, binary_dilation=True, binary_pulse=False,
+                 gap_fill_sizes=None, fill_holes=False, **kwargs):
         super().__init__(**kwargs)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
@@ -1508,9 +1508,9 @@ class Weights(Grits):
             self.buffer_sizes = weight_sizes
             
         self.binary_dilation = binary_dilation
+        self.binary_pulse = binary_pulse
+        self.gap_fill_sizes = gap_fill_sizes
         self.fill_holes = fill_holes
-        self.revert = revert
-        self.revert_multiplier = utils.int_or(revert_multiplier, 2)
         self.init_thresholds()
 
 
@@ -1522,6 +1522,12 @@ class Weights(Grits):
                 self.buffer_sizes = [int(x) for x in self.buffer_sizes.split('/')]
             else:
                 self.buffer_sizes = [self.buffer_cells]*len(self.weight_thresholds)
+
+            if self.gap_fill_sizes is not None:
+                self.gap_fill_sizes = [int(x) for x in self.gap_fill_sizes.split('/')]
+            else:
+                self.gap_fill_sizes = [0]*len(self.weight_thresholds)
+                
         else:
             self.weight_thresholds = [self.weight_threshold]
             self.buffer_sizes = [self.buffer_cells]
@@ -1529,6 +1535,12 @@ class Weights(Grits):
         if len(self.buffer_sizes) < len(self.weight_thresholds):
             len_diff = len(self.weight_thresholds) - len(self.buffer_sizes)
             self.buffer_sizes.extend([1] * len_diff)
+            
+        if len(self.gap_fill_sizes) < len(self.weight_thresholds):
+            len_diff = len(self.weight_thresholds) - len(self.gap_fill_sizes)
+            self.gap_fill_sizes.extend([0] * len_diff)
+
+        utils.echo_msg([self.weight_thresholds, self.buffer_sizes, self.gap_fill_sizes])
 
             
     def init_weight(self, src_ds=None):
@@ -1570,7 +1582,24 @@ class Weights(Grits):
             
         return(closed_and_dilated_arr)
 
-                               
+
+    def binary_reversion(self, arr, iterations, closing_iterations):
+        reversion_arr = arr.copy()
+        closing_iterations += iterations
+            
+        struct_ = scipy.ndimage.generate_binary_structure(2, 2)
+        reversion_arr = scipy.ndimage.binary_dilation(
+            reversion_arr, iterations=closing_iterations, structure=struct_
+        )
+        erosion_iterations = max(closing_iterations-iterations, 0)
+        if erosion_iterations > 0:
+            reversion_arr = scipy.ndimage.binary_erosion(
+                reversion_arr, iterations=erosion_iterations, border_value=1, structure=struct_
+            )
+
+        return(reversion_arr)
+
+        
     def run(self):
         if self.weight_mask is None:
             return(self.src_dem, -1)
@@ -1617,28 +1646,24 @@ class Weights(Grits):
                     for n, weight_threshold in enumerate(self.weight_thresholds):
                         this_w_arr[this_w_arr < weight_threshold] = np.nan
                         if self.binary_dilation:
-                            weight_mask = this_w_arr >= weight_threshold
-                            expanded_w_arr = self.binary_closed_dilation(
-                                weight_mask, iterations=self.buffer_sizes[n],
-                                closing_iterations=self.buffer_sizes[n]*4
-                            )
-                            # struct_ = scipy.ndimage.generate_binary_structure(2, 2)
                             
-                            # iters = self.buffer_sizes[n] if not self.revert else self.buffer_sizes[n] * self.revert_multiplier
-                            # expanded_w_arr = scipy.ndimage.binary_dilation(
-                            #     this_w_arr >= weight_threshold, iterations=int(iters), structure=struct_
-                            # )
-                            # if self.revert:
-                            #     iters -= self.buffer_sizes[n]
-                            #     contracted_w_arr = scipy.ndimage.binary_erosion(
-                            #         expanded_w_arr, iterations=int(iters), border_value=1, structure=struct_
-                            #     )
-                            #     expanded_w_arr = contracted_w_arr.copy()
-                                
+                            if self.binary_pulse:
+                                weight_mask = this_w_arr >= weight_threshold
+                                expanded_w_arr = self.binary_closed_dilation(
+                                    weight_mask, iterations=self.buffer_sizes[n],
+                                    closing_iterations=self.gap_fill_sizes[n]
+                                )
+                            
+                            else:
+                                weight_mask = this_w_arr >= weight_threshold
+                                expanded_w_arr = self.binary_reversion(
+                                    weight_mask, self.buffer_sizes[n],
+                                    self.gap_fill_sizes[n]
+                                )
                         else:
                             ## mrl use ndimage.binary_dilation rather than the slower expand_for below
-                            shiftx = self.buffer_sizes[n] if not self.revert else self.buffer_sizes[n] * self.revert_multiplier
-                            shifty = self.buffer_sizes[n] if not self.revert else self.buffer_sizes[n] * self.revert_multiplier
+                            shiftx = self.buffer_sizes[n] if not self.revert else self.gap_fill_sizes[n]#self.buffer_sizes[n] * self.revert_multiplier
+                            shifty = self.buffer_sizes[n] if not self.revert else self.gap_fill_sizes[n]#self.buffer_sizes[n] * self.revert_multiplier
                             utils.echo_msg([shiftx, shifty])
                             expanded_w_arr = utils.expand_for(
                                 this_w_arr >= weight_threshold,
