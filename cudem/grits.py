@@ -1490,8 +1490,10 @@ class Weights(Grits):
 
     Parameters:
 
-    buffer_cells(int) - the number of cells to buffer
-    weight_threshold(float) - the weight threshold
+    weight_thresholds(float) - the weight threshold; separate levels with slash '/'
+    buffer_sizes(int) - the number of cells to buffer; separate levels with slash '/'
+    gap_fill_sizes(int) - the number of cells to gap-fill; ; separate levels with slash '/'
+    fill_holes(bool) - fill holes in the weight mask
     """
     
     def __init__(self, buffer_cells=1, weight_threshold=None,
