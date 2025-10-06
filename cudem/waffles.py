@@ -6330,7 +6330,7 @@ class WaffleDEM:
 
                     if self.verbose:
                         utils.echo_msg(
-                            f'set percentile interpolation limit to {min_percentile}.'
+                            f'set percentile interpolation limit to {mn_percentile}.'
                         )
                 else:
                     if self.verbose:
