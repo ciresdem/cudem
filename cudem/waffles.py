@@ -2035,7 +2035,7 @@ class WafflesMBGrid(Waffle):
     def stack2mbdatalist(self):
         mb_datalist_fn = os.path.join(self.cache_dir, '_tmp_mb.datalist')
         mb_stack_xyz = os.path.join(
-            self.cache_dir, '{}.xyz'.format(utils.fn_basename2(self.stack))
+            self.cache_dir, '{}.xyz'.format(os.path.basename(utils.fn_basename2(self.stack)))
         )
         with open(mb_datalist_fn, 'w') as dl:
             dl.write('{} 168 1'.format(mb_stack_xyz))
@@ -3841,6 +3841,7 @@ class WafflesCUDEM(Waffle):
             pre_verbose=False,
             final_mode='IDW',
             keep_pre_surfaces=False,
+            buffer_pre_surfaces=False,
             **kwargs
     ):
         self.valid_modes = [
@@ -3922,7 +3923,7 @@ class WafflesCUDEM(Waffle):
         self.want_weight = True
         self.pre_verbose = pre_verbose
         self.keep_pre_surfaces = keep_pre_surfaces
-
+        self.buffer_pre_surfaces = buffer_pre_surfaces
         
     ## todo: remove coastline after processing...
     def generate_coastline(self, pre_data=None):
@@ -4132,7 +4133,7 @@ class WafflesCUDEM(Waffle):
 
                 last_fltr = [
                     (f'weights:stacks=True:weight_threshold={pre_weight}'
-                     ':buffer_cells=1:verbose=False')
+                     ':buffer_cells=1:gap_fill_cells=4:verbose=False')
                      ]
                 waffles_mod = '{}:{}'.format(
                     self.pre_mode,
@@ -4170,8 +4171,10 @@ class WafflesCUDEM(Waffle):
                     upper_limit=self.pre_upper_limit if pre != 0 else None,
                     keep_auxiliary=False,
                     fltr=self.pre_smoothing if pre != 0 else None,
+                    #fltr=self.pre_smoothing if pre != 0 else None if not self.buffer_pre_surfaces else last_fltr,
                     #fltr=last_fltr,
                     percentile_limit=self.flatten if pre == 0 else None,
+                    cache_dir=self.cache_dir,
                 )._acquire_module()
                 pre_surface.initialize()
                 pre_surface.generate()
