@@ -1535,6 +1535,7 @@ class Weights(Grits):
         else:
             self.weight_thresholds = [self.weight_threshold]
             self.buffer_sizes = [self.buffer_cells]
+            self.gap_fill_sizes = [self.gap_fill_cells]
 
         if len(self.buffer_sizes) < len(self.weight_thresholds):
             len_diff = len(self.weight_thresholds) - len(self.buffer_sizes)
