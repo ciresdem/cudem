@@ -3220,39 +3220,51 @@ class WafflesCoastline(Waffle):
         
     def _load_data(self):
         """load data from user datalist and amend coast_array"""
-        
         for this_arr in self.stack_ds.yield_array():
             data_arr = this_arr[0]['z']
             weight_arr = this_arr[0]['weight']
             weight_arr[np.isnan(weight_arr)] = 0
             srcwin = this_arr[1]
             data_arr[np.isnan(data_arr)] = 0
-            data_mask = data_arr >= 0
-            data_mask = scipy.ndimage.binary_fill_holes(data_mask)
-
-            data_arr = np.ones(data_arr.shape)
-            #data_arr[data_mask] = 1
-            data_arr[~data_mask] = -1
-            #data_arr[data_arr > 0] = 1
-            #data_arr[data_arr < 0] = -1
-
-            # #expanded_arr = scipy.ndimage.binary_dilation(data_arr >= 0, iterations=1, structure=np.ones((12,12)))
-            # #contracted_arr = scipy.ndimage.binary_erosion(expanded_arr, iterations=12, structure=np.ones((12,12)))
-            # expanded_arr = utils.expand_for(data_arr > 0, shiftx=12, shifty=12)
-            # contracted_arr = np.invert(utils.expand_for(np.invert(expanded_arr), shiftx=12, shifty=12))
-            
-            # #data_arr[np.isnan(data_arr)] = 0
-            # data_arr[contracted_arr] = 1
-            # data_arr[~contracted_arr] = -1
-            # weight_arr[contracted_arr & np.isnan(weight_arr)] = 10
-            # weight_arr[contracted_arr] = 10
-
-            # utils.echo_msg_bold(contracted_arr)
-            # utils.echo_msg_bold(data_arr)
+            data_arr[data_arr > 0] = 1
+            data_arr[data_arr < 0] = -1
             self.coast_array[
                 srcwin[1]:srcwin[1]+srcwin[3],
                 srcwin[0]:srcwin[0]+srcwin[2]
             ] += (data_arr*weight_arr)
+            
+        # for this_arr in self.stack_ds.yield_array():
+        #     data_arr = this_arr[0]['z']
+        #     weight_arr = this_arr[0]['weight']
+        #     weight_arr[np.isnan(weight_arr)] = 0
+        #     srcwin = this_arr[1]
+        #     data_arr[np.isnan(data_arr)] = 0
+        #     data_mask = data_arr >= 0
+        #     data_mask = scipy.ndimage.binary_fill_holes(data_mask)
+
+        #     data_arr = np.ones(data_arr.shape)
+        #     #data_arr[data_mask] = 1
+        #     data_arr[~data_mask] = -1
+        #     #data_arr[data_arr > 0] = 1
+        #     #data_arr[data_arr < 0] = -1
+
+        #     # #expanded_arr = scipy.ndimage.binary_dilation(data_arr >= 0, iterations=1, structure=np.ones((12,12)))
+        #     # #contracted_arr = scipy.ndimage.binary_erosion(expanded_arr, iterations=12, structure=np.ones((12,12)))
+        #     # expanded_arr = utils.expand_for(data_arr > 0, shiftx=12, shifty=12)
+        #     # contracted_arr = np.invert(utils.expand_for(np.invert(expanded_arr), shiftx=12, shifty=12))
+            
+        #     # #data_arr[np.isnan(data_arr)] = 0
+        #     # data_arr[contracted_arr] = 1
+        #     # data_arr[~contracted_arr] = -1
+        #     # weight_arr[contracted_arr & np.isnan(weight_arr)] = 10
+        #     # weight_arr[contracted_arr] = 10
+
+        #     # utils.echo_msg_bold(contracted_arr)
+        #     # utils.echo_msg_bold(data_arr)
+        #     self.coast_array[
+        #         srcwin[1]:srcwin[1]+srcwin[3],
+        #         srcwin[0]:srcwin[0]+srcwin[2]
+        #     ] += (data_arr*weight_arr)
 
             
     def _write_coast_array(self):

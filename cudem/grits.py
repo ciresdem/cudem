@@ -1498,21 +1498,22 @@ class Weights(Grits):
     <weights:weight_thresholds=2/20:buffer_sizes=4/2:gap_fill_sizes=10/8>
     """
     
-    def __init__(self, buffer_cells=1, weight_threshold=None,
-                 weight_thresholds=None, buffer_sizes=None,
-                 weight_sizes=None, binary_dilation=True, binary_pulse=False,
-                 gap_fill_sizes=None, fill_holes=False, **kwargs):
+    def __init__(self,  weight_threshold=None, buffer_cells=1, gap_fill_cells=None,
+                 weight_thresholds=None, buffer_sizes=None, gap_fill_sizes=None,
+                 binary_dilation=True, binary_pulse=False,
+                 fill_holes=False, **kwargs):
         super().__init__(**kwargs)
-        self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
+        self.buffer_cells = utils.int_or(buffer_cells, 1)
+        self.gap_fill_cells = utils.int_or(gap_fill_cells, 0)
+        
         self.weight_thresholds = weight_thresholds
         self.buffer_sizes = buffer_sizes
-        if weight_sizes is not None:
-            self.buffer_sizes = weight_sizes
-            
+        self.gap_fill_sizes = gap_fill_sizes
+        
         self.binary_dilation = binary_dilation
         self.binary_pulse = binary_pulse
-        self.gap_fill_sizes = gap_fill_sizes
+        
         self.fill_holes = fill_holes
         self.init_thresholds()
 
@@ -1529,7 +1530,7 @@ class Weights(Grits):
             if self.gap_fill_sizes is not None:
                 self.gap_fill_sizes = [int(x) for x in self.gap_fill_sizes.split('/')]
             else:
-                self.gap_fill_sizes = [0]*len(self.weight_thresholds)
+                self.gap_fill_sizes = [self.gap_fill_cells]*len(self.weight_thresholds)
                 
         else:
             self.weight_thresholds = [self.weight_threshold]
@@ -1570,8 +1571,8 @@ class Weights(Grits):
 
     def binary_closed_dilation(self, arr, iterations=1, closing_iterations=1):
         closed_and_dilated_arr = arr.copy()
+        struct_ = scipy.ndimage.generate_binary_structure(2, 2)
         for i in range(closing_iterations):
-            struct_ = scipy.ndimage.generate_binary_structure(2, 2)        
             closed_and_dilated_arr = scipy.ndimage.binary_dilation(
                 closed_and_dilated_arr, iterations=1, structure=struct_
             )
