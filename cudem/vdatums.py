@@ -358,8 +358,8 @@ class VerticalTransform:
     """
     
     def __init__(self, mode, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
-                 geoid_in=None, geoid_out='g2018', node='pixel', verbose=True,
-                 wm = None, cache_dir=None):
+                 geoid_in = None, geoid_out = 'g2018', node = 'pixel', verbose = True,
+                 wm = None, cache_dir = None):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
@@ -468,6 +468,7 @@ class VerticalTransform:
                 )._acquire_module()
                 _trans_in.initialize()
                 _trans_in.generate()
+                #if os.path.exists(_trans_in.fn):
                 ## extract the array from the gridded tidal datum grid
                 _trans_in_array, _trans_in_infos = gdalfun.gdal_get_array(_trans_in.fn)
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
@@ -476,8 +477,9 @@ class VerticalTransform:
                 if _trans_in_array is None:
                     _trans_in = None
                 #else:
-                for ofk in _trans_in.output_files.keys():
-                    utils.remove_glob('{}*'.format(_trans_in.output_files[ofk]))
+                if _trans_in is not None:
+                    for ofk in _trans_in.output_files.keys():
+                        utils.remove_glob('{}*'.format(_trans_in.output_files[ofk]))
             else:
                 _trans_in = None
             
@@ -501,6 +503,7 @@ class VerticalTransform:
                 )._acquire_module()
                 _trans_out.initialize()
                 _trans_out.generate()
+                #if os.path.exists(_trans_out.fn):
                 ## extract the array from the gridded tidal datum grid
                 _trans_out_array, _trans_out_infos = gdalfun.gdal_get_array(_trans_out.fn)
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
@@ -508,9 +511,12 @@ class VerticalTransform:
                 if _trans_out_array is None:
                     _trans_out = None
                 #else:
-                for ofk in _trans_out.output_files.keys():
-                    utils.remove_glob('{}*'.format(_trans_out.output_files[ofk]))
-                    #utils.remove_glob('{}*'.format(_trans_out.fn))
+                if _trans_out is not None:
+                    for ofk in _trans_out.output_files.keys():
+                        utils.remove_glob('{}*'.format(_trans_out.output_files[ofk]))
+                        #utils.remove_glob('{}*'.format(_trans_out.fn))
+                # else:
+                #     _trans_out = None
             else:
                 _trans_out = None
 
@@ -1077,7 +1083,8 @@ def vdatums_cli(argv = sys.argv):
         # utils.echo_msg('trans region: {}'.format(trans_region))
         # utils.echo_msg('input inf: {}'.format(src_infos))
         
-        vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, wm=wm, cache_dir=cache_dir)
+        vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc,
+                               vdatum_in, vdatum_out, wm=wm, cache_dir=cache_dir)
         _trans_grid, _trans_grid_unc = vt.run()
         out_trans_grid = utils.make_temp_fn('_trans_grid.tif', cache_dir)
         
@@ -1131,8 +1138,15 @@ def vdatums_cli(argv = sys.argv):
             gdalfun.gdal_set_srs(dst_grid.replace(' ', '\ '), out_src_srs.ExportToWkt())
             
         else:
-            utils.echo_error_msg('could not parse input/output vertical datums: {} -> {}; check spelling, etc'.format(vdatum_in, vdatum_out))
-
+            utils.echo_error_msg(
+                (
+                    'could not parse input/output vertical datums: '
+                    '{} -> {}; check spelling, etc'.format(
+                        vdatum_in, vdatum_out
+                    )
+                )
+            )
+            
         #if not keep_cache:
         #    utils.remove_glob(cache_dir)
             

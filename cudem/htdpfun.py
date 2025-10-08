@@ -1,6 +1,6 @@
 ### htdp.py
 ##
-## Copyright (c) 2022 - 2024  Regents of the University of Colorado
+## Copyright (c) 2022 - 2025  Regents of the University of Colorado
 ##
 ## htdp.py is part of CUDEM
 ##
@@ -11,14 +11,17 @@
 ## of the Software, and to permit persons to whom the Software is furnished to do so, 
 ## subject to the following conditions:
 ##
-## The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
 ##
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
 ## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
 ## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
-## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
 ##
+###############################################################################
 ### Commentary:
 ##
 ## wrapper and functions for using the htdp program
@@ -27,7 +30,7 @@
 ## version 3.3.0
 ##  1...NAD_83(2011/CORS96/2007)  (North American plate fixed) 
 ##  2...NAD_83(PA11/PACP00)       (Pacific plate fixed) 
-##  3...NAD_83(MA11/MARP00)       (Mariana plate fixed)                                                  
+##  3...NAD_83(MA11/MARP00)       (Mariana plate fixed)
 ##  5...WGS_84(original) (NAD_83(2011) used) 15...ITRF91 
 ##  6...WGS_84(G730) (ITRF91 used)           16...ITRF92 
 ##  7...WGS_84(G873) (ITRF94 used)           17...ITRF93 
@@ -65,18 +68,21 @@ import sys
 import numpy as np
 from cudem import utils
 
-## =============================================================================
-## HTDP
-## =============================================================================
 
+###############################################################################
+## HTDP
+###############################################################################
 class HTDP:
     def __init__(self, htdp_bin='htdp', verbose=True):
         self.htdp_bin = htdp_bin
         self.verbose=verbose
 
         if utils.config_check()['HTDP'] is None:
-            utils.echo_error_msg('you must have HTDP installed to perform vertical transformations')
-        
+            utils.echo_error_msg(
+                'you must have HTDP installed to perform vertical transformations'
+            )
+
+            
     def _next_point(self, fd):
         line = fd.readline().strip()
         while line != '' and line.find('PNT_') == -1:
@@ -95,6 +101,7 @@ class HTDP:
                 int(name_tokens[2].strip('"')),
                 lat_dst, lon_dst, eht_dst))
 
+    
     def _read_grid(self, filename, shape):
         """read grid created by `_create_grid`"""
         
@@ -118,10 +125,11 @@ class HTDP:
             sys.exit(1)
 
         return(grid)
-        
+
+    
     def _new_create_grid(self, griddef):
-        """This function creates a regular grid of lat/long values with one
-        "band" for latitude, and one for longitude.
+        """This function creates a regular grid of lat/long values 
+        with one "band" for latitude, and one for longitude.
         """
 
         lon_start = -1 * griddef[0]
@@ -154,18 +162,24 @@ class HTDP:
         t = np.array([lon_band, lat_band])
         return(t)
 
+    
     def _write_grid(self, grid, out_filename):
-        """This function writes a grid out in form suitable to use as input to the
-        # htdp program.
+        """This function writes a grid out in form suitable to use 
+        as input to the htdp program.
         """
         
         fd_out = open(out_filename, 'w')
 
         for i in range(grid.shape[2]):
             for j in range(grid.shape[1]):
-                fd_out.write('{} {} 0 "PNT_{}_{}"\n'.format(grid[1,j,i], grid[0,j,i], i, j))
+                fd_out.write(
+                    '{} {} 0 "PNT_{}_{}"\n'.format(
+                        grid[1,j,i], grid[0,j,i], i, j
+                    )
+                )
                 
         fd_out.close()
+
         
     def _write_control(self, control_fn, out_grid_fn,
                       in_grid_fn, src_crs_id, src_crs_date,
@@ -190,13 +204,24 @@ class HTDP:
            dst_date=dst_crs_date, in_grid=in_grid_fn)
         
         open(control_fn,'w').write(control_template)
+
         
     def run(self, htdp_control):
 
         if utils.config_check()['HTDP'] is not None:
             if utils.config_check()['platform'] == 'win32':
-                os.system('cat {} | {}'.format(htdp_control, self.htdp_bin))
+                os.system(
+                    'cat {} | {}'.format(
+                        htdp_control, self.htdp_bin
+                    )
+                )
             else:
-                utils.run_cmd('{} < {}'.format(self.htdp_bin, htdp_control), verbose=self.verbose)
-        
+                utils.run_cmd(
+                    '{} < {}'.format(
+                        self.htdp_bin, htdp_control
+                    ),
+                    verbose=self.verbose
+                )
+
+                
 ### End

@@ -11,14 +11,17 @@
 ## of the Software, and to permit persons to whom the Software is furnished to do so, 
 ## subject to the following conditions:
 ##
-## The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
 ##
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
 ## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
 ## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
-## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
 ##
+###############################################################################
 ### Commentary:
 ## General utility functions and classes used in other modules...
 ## includes, generic gdal functions, fetching classes, progress indicators,
@@ -55,11 +58,11 @@ except: import queue as queue
 import numpy as np
 import cudem
 
-## ==============================================
+###############################################################################
 ##
 ## General Utility Functions, definitions, etc.
 ##
-## ==============================================
+###############################################################################
 
 ## Cahce directory, for use in dlim/waffles/fetches
 this_dir, this_filename = os.path.split(__file__)
@@ -109,9 +112,9 @@ FIPS_TO_EPSG = {
 }
 
 ## General file-name helper functions
-def append_fn(fn, src_region, inc, version=None, year=None, res=None, high_res=False):
+def append_fn(fn, src_region, inc, version=None, year=None,
+              res=None, high_res=False):
     """append the src_region, inc and version to a string filename"""
-    
     return(
         '{}{}_{}_{}v{}'.format(
             fn,
@@ -122,6 +125,7 @@ def append_fn(fn, src_region, inc, version=None, year=None, res=None, high_res=F
         )
     )
 
+
 def fn_basename(fn, ext):
     """return the basename of fn based on ext"""
     
@@ -130,6 +134,7 @@ def fn_basename(fn, ext):
     else:
         return(fn[:-(len(ext)+1)])
 
+    
 def fn_basename2(fn):
     """return the basename of fn"""
     
@@ -139,6 +144,7 @@ def fn_basename2(fn):
     else:
         return(fn)
 
+    
 def fn_ext(fn):
     """return the extension of fn"""
 
@@ -149,7 +155,8 @@ def fn_ext(fn):
 
     return(ext)
 
-def make_temp_fn(fn, temp_dir = cudem_cache()):
+
+def make_temp_fn(fn, temp_dir=cudem_cache(), region=None, inc=None):
     """make a temporary unique filename"""
     
     if temp_dir is None:
@@ -158,14 +165,29 @@ def make_temp_fn(fn, temp_dir = cudem_cache()):
     fn_bn = fn_basename2(os.path.basename(fn))
     fn_et = fn_ext(fn)
     if not os.path.exists(temp_dir):
-        os.makedirs(temp_dir)
-                    
-    return(os.path.join(
-        temp_dir,
-        '{}_{}{}'.format(
-            fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S%f'),
-            '.{}'.format(fn_et) if fn_et is not None else '')
-    ))
+        try:
+            os.makedirs(temp_dir)
+        except FileExistsError:
+            pass
+        except Exception as e:
+            utils.echo_error_msg(e)
+
+    if region is None:
+        return(os.path.join(
+            temp_dir,
+            '{}_{}{}'.format(
+                fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S%f'),
+                '.{}'.format(fn_et) if fn_et is not None else '')
+        ))
+    else:
+        return(os.path.join(
+            temp_dir,
+            '{}{}_{}{}'.format(
+                fn_bn, inc2str(inc) if inc is not None else '0',
+                region.format('fn_full'),
+                '.{}'.format(fn_et) if fn_et is not None else '')
+        ))
+
 
 def fn_url_p(fn):
     """check if fn is a url"""
@@ -180,8 +202,10 @@ def fn_url_p(fn):
         
     return(False)
 
+
 def inc2str(inc):
-    """convert a WGS84 geographic increment to a str_inc (e.g. 0.0000925 ==> `13`)
+    """convert a WGS84 geographic increment to a str_inc 
+    (e.g. 0.0000925 ==> `13`)
 
     Args:
       inc (float): a gridding increment
@@ -196,6 +220,7 @@ def inc2str(inc):
             fractions.Fraction(str(inc * 3600)).limit_denominator(10)
         ).replace('/', '')
     )
+
 
 def str2inc(inc_str):
     """convert a GMT-style `inc_str` (e.g. 6s) to geographic units
@@ -229,10 +254,13 @@ def str2inc(inc_str):
         try:
             inc = float_or(inc_str)            
         except ValueError as e:
-            echo_error_msg('could not parse increment {}, {}'.format(inc_str, e))
+            echo_error_msg(
+                f'could not parse increment {inc_str}, {e}'
+            )
             return(None)
         
     return(float(inc))
+
 
 def this_date():
     """get current data
@@ -243,6 +271,7 @@ def this_date():
     
     return(datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
 
+
 def this_year():
     """get the current year
     
@@ -251,6 +280,7 @@ def this_year():
     """
     
     return(datetime.datetime.now().strftime('%Y'))
+
 
 def dl_hash(fn, sha1=False):
     """calculate a hash of a file
@@ -277,6 +307,7 @@ def dl_hash(fn, sha1=False):
             
     return(this_hash.hexdigest())
 
+
 def args2dict(args, dict_args={}):
     """convert list of arg strings to dict.
     
@@ -289,25 +320,28 @@ def args2dict(args, dict_args={}):
     """
     
     for arg in args:
-        #this_entry = re.findall(r'[^"\s]\S*|".+?"', arg)
         p_arg = arg.split('=')
         if len(p_arg) > 1:
-            dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else \
-                True if p_arg[1].lower() == 'true' else \
-                None if p_arg[1].lower() == 'none' else \
-                '='.join(p_arg[1:]) if len(p_arg) > 2 else \
-                p_arg[1]
+            dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' \
+                else True if p_arg[1].lower() == 'true' \
+                     else None if p_arg[1].lower() == 'none' \
+                          else '='.join(p_arg[1:]) if len(p_arg) > 2 \
+                               else p_arg[1]
         
     return(dict_args)
+
 
 def dict2args(in_dict):
     """convert a dictionary to an args string"""
     
     out_args = ''
     for i, key in enumerate(in_dict.keys()):
-        out_args += '{}={}{}'.format(key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else '')
+        out_args += '{}={}{}'.format(
+            key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else ''
+        )
     return(out_args)
-    
+
+
 def remove_glob(*args):
     """glob `glob_str` and os.remove results, pass if error
     
@@ -335,6 +369,7 @@ def remove_glob(*args):
        
     return(0)
 
+
 def slugify(value, allow_unicode=False):
     """Taken from https://github.com/django/django/blob/master/django/utils/text.py
     Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
@@ -355,6 +390,7 @@ def slugify(value, allow_unicode=False):
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return(re.sub(r'[-\s]+', '-', value).strip('-_'))
 
+
 def flatten_recursive(nested_list):
     flat_list = []
     for item in nested_list:
@@ -364,6 +400,38 @@ def flatten_recursive(nested_list):
             flat_list.append(item)
             
     return(flat_list)
+
+
+def dict_path2abspath(d = {}, except_keys = []):
+    for key in d.keys():
+        if key in except_keys:
+            continue
+        
+        if isinstance(d[key], dict):
+            d[key] = dict_path2abspath(d[key])
+        elif isinstance(d[key], str):
+            # if len(factory.fmod2dict(d[key])) > 1:
+            #     dd = factory.fmod2dict(d[key])
+            #     dd = dict_path2abspath(dd)
+            #     d[key] = factory.dict2fmod(dd)            
+            if os.path.exists(d[key]):
+                d[key] = os.path.abspath(d[key])
+                
+        # elif isinstance(d[key], list):
+        #     d_list = []
+        #     for dd in d[key]:
+        #         if isinstance(dd, str):
+        #             if len(factory.fmod2dict(dd)) > 1:
+        #                 dd = factory.fmod2dict(dd)
+        #                 dd = dict_path2abspath(dd)
+        #                 dd = factory.dict2fmod(dd)            
+        #             elif os.path.exists(d[key]):
+        #                 dd = os.path.abspath(dd)
+        #         d_list.append(dd)
+        #     d[key] = d_list
+            
+    return(d)
+                
 
 def int_or(val, or_val=None):
     """return val if val is integer
@@ -380,6 +448,7 @@ def int_or(val, or_val=None):
         return(int(float_or(val)))
     except: return(or_val)
 
+    
 def float_or(val, or_val=None):
     """return val if val is integer
 
@@ -395,6 +464,7 @@ def float_or(val, or_val=None):
         return(float(val))
     except: return(or_val)
 
+    
 def str_or(instr, or_val=None, replace_quote=True):
     """return instr if instr is a string, else or_val"""
 
@@ -409,6 +479,31 @@ def str_or(instr, or_val=None, replace_quote=True):
     except:
         return(or_val)
 
+def range_pairs(lst):
+    range_pairs = []
+    for i in range(len(lst) - 1):
+        range_pairs.append((lst[i], lst[i+1]))
+        
+    return(range_pairs)
+
+    
+def ranges2(lst):
+    s = e = None
+    r = []
+    for i in sorted(lst):
+        if s is None:
+            s = e = i
+        elif i == e or i == e + 1:
+            e = i
+        else:
+            r.append((s, e))
+            s = e = i
+            
+    if s is not None:
+        r.append((s, e))
+        
+    return(r)
+    
 def convert_size(size_bytes):
    if size_bytes == 0:
        return('0B')
@@ -417,8 +512,9 @@ def convert_size(size_bytes):
    i = int(math.floor(math.log(size_bytes, 1024)))
    p = math.pow(1024, i)
    s = round(size_bytes / p, 2)
-   return('{} {}'.format(s, size_name[i]))
-    
+   return(f'{s} {size_name[i]}')
+
+
 def euc_dst(pnt0, pnt1):
     """return the distance between pnt0 and pnt1,
     using the euclidean formula.
@@ -436,7 +532,8 @@ def euc_dst(pnt0, pnt1):
     rad_m = 637100
     distance = math.sqrt(sum([(a-b) ** 2 for a, b in zip(pnt0, pnt1)]))
     return(rad_m * distance)
-    
+
+
 def hav_dst(pnt0, pnt1):
     """return the distance between pnt0 and pnt1,
     using the haversine formula.
@@ -462,12 +559,14 @@ def hav_dst(pnt0, pnt1):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a)) 
     return(rad_m*c)
 
+
 def wgs_inc2meter(src_inc):
     """return a wgs increment as meters"""
     
     gds_equator = 111321.543
     degree_to_radian = lambda d: math.pi * (d / 180)
     return(math.cos(degree_to_radian(src_inc)) * (gds_equator * src_inc))
+
 
 def lll(src_lat):
     """return the lon/lat length in meters"""
@@ -479,6 +578,7 @@ def lll(src_lat):
     latl_ = gds_equator
     return(lonl_, latl_)
 
+
 def touch(fname, times = None):
     """touch a file to make sure it exists"""
     
@@ -486,6 +586,7 @@ def touch(fname, times = None):
         os.utime(fname, times)
         
     return(fname)
+
 
 def get_username():
     username = ''
@@ -501,23 +602,30 @@ def get_username():
         
     return username
 
+
 def get_password():
     password = ''
     while not password:
         password = getpass('password: ')
+        
     return password
 
-def get_outliers(in_array: any, percentile: float = 75, k: float = 1.5, verbose: bool = False):
+
+def get_outliers(
+        in_array: any,
+        percentile: float = 75,
+        k: float = 1.5,
+        verbose: bool = False
+):
     """get the outliers from in_array based on the percentile
 
     https://en.wikipedia.org/wiki/Interquartile_range
     """
 
     if verbose:
-        utils.echo_msg('input percentile: {}'.format(percentile))
-
-    # if np.isnan(percentile):
-    #     percentile = 75
+        utils.echo_msg(
+            f'input percentile: {percentile}'
+        )
 
     if percentile < 0:
         percentile = 0
@@ -526,14 +634,15 @@ def get_outliers(in_array: any, percentile: float = 75, k: float = 1.5, verbose:
         percentile = 100
 
     max_percentile = percentile
-    #min_percentile = 100 - percentile
     min_percentile = percentile-50
 
     if min_percentile < 0:
         min_percentile = 0
 
     if verbose:
-        utils.echo_msg('percentiles: {}>>{}'.format(min_percentile, max_percentile))
+        utils.echo_msg(
+            f'percentiles: {min_percentile}>>{max_percentile}'
+        )
 
     if np.all(np.isnan(in_array)):
         upper_limit = np.nan
@@ -547,13 +656,15 @@ def get_outliers(in_array: any, percentile: float = 75, k: float = 1.5, verbose:
 
     return(upper_limit, lower_limit)
 
+
 ## ==============================================
 ##
 ## Geotransform functions
 ##
 ## ==============================================
 def _geo2pixel(geo_x, geo_y, geo_transform, node='grid'):
-    """convert a geographic x,y value to a pixel location of geoTransform
+    """convert a geographic x,y value to a pixel location of 
+    geoTransform
 
     Args:
       geo_x (float): geographic x coordinate
@@ -587,6 +698,7 @@ def _geo2pixel(geo_x, geo_y, geo_transform, node='grid'):
         
     return(int(pixel_x), int(pixel_y))
 
+
 def __geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
     """convert a geographic x,y value to a pixel location of geoTransform
 
@@ -609,7 +721,9 @@ def __geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
     
     return(pixel_x, pixel_y)
 
-def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel', x_precision=None, y_precision=None):
+
+def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel',
+               x_precision=None, y_precision=None):
     """convert a pixel location to geographic coordinates given geoTransform
 
     Args:
@@ -635,6 +749,7 @@ def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel', x_precision=None, 
         else:
             return(round(geo_x, x_precision), round(geo_y, y_precision))
 
+        
 def _apply_gt(in_x, in_y, geo_transform, node='pixel'):
     """apply geotransform to in_x,in_y
     
@@ -655,6 +770,7 @@ def _apply_gt(in_x, in_y, geo_transform, node='pixel'):
         out_y = geo_transform[3] + in_x * geo_transform[4] + in_y * geo_transform[5]
 
     return(out_x, out_y)
+
 
 def _invert_gt(geo_transform):
     """invert the geo_transform
@@ -679,6 +795,7 @@ def _invert_gt(geo_transform):
     out_geo_Transform[3] = (-geo_transform[1] * geo_transform[3] + geo_transform[0] * geo_transform[4]) * inv_det
     return(outGeoTransform)
 
+
 def x360(x):
     if x == 0:
         return(-180)
@@ -686,12 +803,13 @@ def x360(x):
         return(180)
     else:
         return(((x + 180) % 360) - 180)
-    
-## ==============================================
+
+
+###############################################################################
 ##
 ## Archives (zip/gzip/etc.)
 ##
-## ==============================================
+###############################################################################
 def unbz2(bz2_file, outdir='./', overwrite=False):
 
     newfilepath = '.'.join(bz2_file.split('.')[:-1])
@@ -702,6 +820,7 @@ def unbz2(bz2_file, outdir='./', overwrite=False):
             for data in iter(lambda : file.read(100 * 1024), b''):
                 new_file.write(data)
     return(newfilepath)
+
 
 def zip_list(zip_file):
     try:
@@ -714,8 +833,9 @@ def zip_list(zip_file):
         echo_error_msg(e)
 
         return(None)
-        
-def unzip(zip_file, outdir = './', overwrite = False, verbose = True):
+
+    
+def unzip(zip_file, outdir='./', overwrite=False, verbose=True):
     """unzip (extract) `zip_file`
 
     Args:
@@ -732,7 +852,9 @@ def unzip(zip_file, outdir = './', overwrite = False, verbose = True):
             for fn in zip_files:
                 if not os.path.exists(os.path.join(outdir, fn)):
                     if verbose:
-                        echo_msg('Extracting {}'.format(os.path.join(outdir, fn)))
+                        echo_msg(
+                            'Extracting {}'.format(os.path.join(outdir, fn))
+                        )
                         
                     zip_ref.extract(fn, outdir)
         else:
@@ -750,6 +872,7 @@ def unzip(zip_file, outdir = './', overwrite = False, verbose = True):
         
         return(None)
 
+    
 def gunzip(gz_file, outdir='./'):
     """gunzip `gz_file`
 
@@ -775,7 +898,8 @@ def gunzip(gz_file, outdir='./'):
         
     return(guz_file)
 
-def p_untar(tar_file, exts=None, outdir='./'):
+
+def p_untar(tar_file, exts=[], outdir='./', verbose=True):
     src_procs = []
     with tarfile.open(tar_file, 'r') as tar:
         tar_fns = tar.getnames()
@@ -787,11 +911,14 @@ def p_untar(tar_file, exts=None, outdir='./'):
                     ext_tfn = os.path.join(outdir, os.path.basename(tfn))
                     src_procs.append(ext_tfn)
                     if not os.path.exists(ext_tfn):
-                        echo_msg('Extracting {}'.format(ext_tfn))
+                        if verbose:
+                            echo_msg('Extracting {}'.format(ext_tfn))
+                            
                         t = tar.extractfile(tfn)
                         with open(ext_tfn, 'wb') as f:
                             f.write(t.read())
     return(src_procs)
+
 
 def gdb_unzip(src_zip, outdir='./', verbose=True):
     src_gdb = None
@@ -817,6 +944,7 @@ def gdb_unzip(src_zip, outdir='./', verbose=True):
                     src_gdb = ext_zf
 
     return(src_gdb)
+
 
 def p_unzip(src_file, exts=None, outdir='./', verbose=True):
     """unzip/gunzip src_file based on `exts`
@@ -850,9 +978,11 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
                                     f.write(z.read(zf))
 
                                 if verbose:
-                                    echo_msg('Extracted {}'.format(ext_zf))
+                                    echo_msg(f'Extracted {ext_zf}')
         except Exception as e:
-            echo_error_msg('could not process ZIP file {}, {}'.format(src_file, e))
+            echo_error_msg(
+                f'could not process ZIP file {src_file}, {e}'
+            )
             return([])
                                 
     elif src_file.split('.')[-1] == 'gz':
@@ -860,7 +990,7 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
             tmp_proc = gunzip(src_file, outdir=outdir)
         except:
             if verbose:
-                echo_error_msg('unable to gunzip {}'.format(src_file))
+                echo_error_msg(f'unable to gunzip {src_file}')
                 
             tmp_proc = None
 
@@ -881,7 +1011,8 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
             
     return(src_procs)
 
-def p_f_unzip(src_file, fns = None, outdir = './', tmp_fn = False, verbose = True):
+
+def p_f_unzip(src_file, fns=None, outdir='./', tmp_fn=False, verbose=True):
     """unzip/gunzip src_file based on `fn`
     
     Args:
@@ -914,7 +1045,7 @@ def p_f_unzip(src_file, fns = None, outdir = './', tmp_fn = False, verbose = Tru
         try:
             tmp_proc = gunzip(src_file)
         except:
-            echo_error_msg('unable to gunzip {}'.format(src_file))
+            echo_error_msg(f'unable to gunzip {src_file}')
             tmp_proc = None
             
         if tmp_proc is not None:
@@ -931,11 +1062,12 @@ def p_f_unzip(src_file, fns = None, outdir = './', tmp_fn = False, verbose = Tru
             
     return(src_procs)
 
-## ==============================================
+
+###############################################################################
 ##
 ## srcwin functions
 ##
-## ==============================================
+###############################################################################
 def fix_srcwin(srcwin, xcount, ycount):
     ## geo_transform is considered in grid-node to properly capture the region
 
@@ -952,9 +1084,15 @@ def fix_srcwin(srcwin, xcount, ycount):
 def chunk_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     return([s for s in yield_srcwin(n_size, n_chunk, step, verbose)])
 
+
 def yield_srcwin(
-        n_size = (), n_chunk = 10, step = None, msg = 'chunking srcwin', end_msg = 'chunked srcwin',
-        start_at_edge = True, verbose = True
+        n_size=(),
+        n_chunk=10,
+        step=None,
+        msg='chunking srcwin',
+        end_msg='chunked srcwin',
+        start_at_edge=True,
+        verbose=True
 ):
     """yield source windows in n_chunks at step"""
     
@@ -970,12 +1108,14 @@ def yield_srcwin(
 
     assert step > 0    
     with tqdm(
-            total=(math.ceil((n_size[0] + (n_chunk-n_edge)) / step) * math.ceil((n_size[1] +  (n_chunk-n_edge)) / step)),
-            desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, int_or(n_chunk), int_or(step)),
+            total=(math.ceil((n_size[0] + (n_chunk-n_edge)) / step) \
+                   * math.ceil((n_size[1] +  (n_chunk-n_edge)) / step)),
+            desc='{}: {} @ chunk:{}/step:{}...'.format(
+                _command_name(), msg, int_or(n_chunk), int_or(step)
+            ),
             leave=verbose
     ) as pbar:
         while True:
-            #pbar.update()
             y_chunk = n_edge
             #y_chunk = step
             while True:
@@ -1005,7 +1145,8 @@ def yield_srcwin(
             else:
                 x_chunk += step
                 x_i_chunk += 1
-            
+
+                
 def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     """yield source windows in n_chunks at step"""
 
@@ -1029,21 +1170,41 @@ def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     
     return(int(x_origin), int(y_origin), int(x_size), int(y_size))
 
-def expand_for(arr, shiftx=1, shifty=1):
+
+def expand_for(arr, shiftx=1, shifty=1, revert=False):
     arr_b = arr.copy().astype(bool)
+    #if revert:
+    #    arr_b = np.invert(arr_b)
+        
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
             if(arr[i,j]):
                 i_min, i_max = max(i-shifty, 0), min(i+shifty+1, arr.shape[0])
                 j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
                 arr_b[i_min:i_max, j_min:j_max] = True
-    return arr_b
+                
+    #return(arr_b if not revert else np.invert(arr_b))
+    return(arr_b)
 
-## ==============================================
+
+def fill_for(arr, iterations=3):
+    filled_arr = np.copy(arr)
+    for _ in range(iterations):
+        for i in range(1, arr.shape[0] - 1):
+            for j in range(1, arr.shape[1] - 1):
+                if not filled_arr[i, j]:
+                    if (filled_arr[i-1, j] or filled_arr[i+1, j] or
+                        filled_arr[i, j-1] or filled_arr[i, j+1]):
+                        filled_arr[i, j] = True
+                        
+    return(filled_arr_iter)
+
+
+###############################################################################
 ##
 ## MB-System functions
 ##
-## ==============================================
+###############################################################################
 def mb_inf(src_xyz, src_fmt=168):
     """generate an info (.inf) file from a src_xyz file using MBSystem.
 
@@ -1058,7 +1219,8 @@ def mb_inf(src_xyz, src_fmt=168):
     run_cmd('mbdatalist -O -F{} -I{}'.format(src_fmt, src_xyz.name), verbose=False)
     return(mb_inf_parse('{}.inf'.format(src_xyz.name)))
 
-## ==============================================
+
+###############################################################################
 ##
 ## system cmd verification and configs.
 ##
@@ -1068,10 +1230,12 @@ def mb_inf(src_xyz, src_fmt=168):
 ## yield_cmd - run a system command as a subprocess
 ## and yield the output
 ##
-## ==============================================
-cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) for path in os.environ['PATH'].split(os.pathsep))
+###############################################################################
+cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) \
+                           for path in os.environ['PATH'].split(os.pathsep))
 
-def run_cmd(cmd, data_fun=None, verbose=False):
+
+def run_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
     """Run a system command while optionally passing data.
 
     `data_fun` should be a function to write to a file-port:
@@ -1098,9 +1262,11 @@ def run_cmd(cmd, data_fun=None, verbose=False):
         else:
             pipe_stdin = None
 
+        #encoding='utf-8',
+        #, universal_newlines=True, bufsize=1,
         p = subprocess.Popen(
-            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, #encoding='utf-8',
-            stderr=subprocess.PIPE, close_fds=True#, universal_newlines=True, bufsize=1,
+            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, close_fds=True, cwd=cwd
         )
 
         if data_fun is not None:
@@ -1124,7 +1290,11 @@ def run_cmd(cmd, data_fun=None, verbose=False):
         p.stderr.close()
         p.stdout.close()
         if verbose:
-            echo_msg('ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode))
+            echo_msg(
+                'ran cmd {} and returned {}'.format(
+                    cmd.rstrip(), p.returncode
+                )
+            )
 
         ## todo update so no crash if cmd doesn't exist!
         #if p.returncode != 0:
@@ -1132,7 +1302,8 @@ def run_cmd(cmd, data_fun=None, verbose=False):
         
     return(out, p.returncode)
 
-def yield_cmd(cmd, data_fun=None, verbose=False):
+
+def yield_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
     """Run a system command while optionally passing data.
 
     `data_fun` should be a function to write to a file-port:
@@ -1152,7 +1323,8 @@ def yield_cmd(cmd, data_fun=None, verbose=False):
         pipe_stdin = subprocess.PIPE
     else: pipe_stdin = None
     p = subprocess.Popen(
-        cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True
+        cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE,
+        close_fds=True, cwd=cwd
     )
     
     if data_fun is not None:
@@ -1170,8 +1342,12 @@ def yield_cmd(cmd, data_fun=None, verbose=False):
     line = p.stdout.read().decode('utf-8')
     p.stdout.close()
     if verbose:
-        echo_msg('ran cmd: {} and returned {}.'.format(cmd.rstrip(), p.returncode))
+        echo_msg(
+            'ran cmd: {} and returned {}.'.format(
+                cmd.rstrip(), p.returncode)
+        )
 
+        
 def cmd_check(cmd_str, cmd_vers_str):
     """check system for availability of 'cmd_str' 
 
@@ -1190,7 +1366,9 @@ def cmd_check(cmd_str, cmd_vers_str):
     else:
         return("0".encode())
 
-def config_check(chk_config_file=True, chk_vdatum=False, generate_config_file=True, verbose=False):
+    
+def config_check(chk_config_file=True, chk_vdatum=False,
+                 generate_config_file=True, verbose=False):
     """check for needed waffles external software.
 
     waffles external software: gdal, gmt, mbsystem
@@ -1224,12 +1402,27 @@ def config_check(chk_config_file=True, chk_vdatum=False, generate_config_file=Tr
 
         #if chk_vdatum: _waff_co['VDATUM'] = vdatum(verbose=verbose).vdatum_path
         #_waff_co['GDAL'] = cmd_check('gdal_grid{}'.format(ae), 'gdal-config --version').decode()
-        _waff_co['GDAL'] = cmd_check('gdal_grid{}'.format(ae), 'gdal_translate --version').decode()
-        _waff_co['GMT'] = cmd_check('gmt{}'.format(ae), 'gmt --version').decode()
-        _waff_co['MBGRID'] = cmd_check('mbgrid{}'.format(ae), 'mbgrid -version 2>&1 | grep Version').decode()
-        _waff_co['LASZIP'] = cmd_check('laszip{}'.format(ae), 'laszip -version 2>&1 | awk \'{print $5}\'').decode()
-        _waff_co['HTDP'] = cmd_check('htdp{}'.format(ae), 'echo 0 | htdp 2>&1' if host_os == 'win32' else 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\'').decode()
-        _waff_co['ImageMagick'] = cmd_check('mogrify{}'.format(ae), 'mogrify --version | grep Version | awk \'{print $3}\'').decode()
+        _waff_co['GDAL'] = cmd_check(
+            'gdal_grid{}'.format(ae), 'gdal_translate --version'
+        ).decode()
+        _waff_co['GMT'] = cmd_check(
+            'gmt{}'.format(ae), 'gmt --version'
+        ).decode()
+        _waff_co['MBGRID'] = cmd_check(
+            'mbgrid{}'.format(ae), 'mbgrid -version 2>&1 | grep Version'
+        ).decode()
+        _waff_co['LASZIP'] = cmd_check(
+            'laszip{}'.format(ae), 'laszip -version 2>&1 | awk \'{print $5}\''
+        ).decode()
+        _waff_co['HTDP'] = cmd_check(
+            'htdp{}'.format(ae),
+            'echo 0 | htdp 2>&1' \
+            if host_os == 'win32' \
+            else 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\''
+        ).decode()
+        _waff_co['ImageMagick'] = cmd_check(
+            'mogrify{}'.format(ae), 'mogrify --version | grep Version | awk \'{print $3}\''
+        ).decode()
         _waff_co['CUDEM'] = str(cudem.__version__)
         _waff_co['conda'] = os.environ.get('CONDA_DEFAULT_ENV', None)
 
@@ -1242,13 +1435,15 @@ def config_check(chk_config_file=True, chk_vdatum=False, generate_config_file=Tr
                 ccc.write(json.dumps(_waff_co, indent=4, sort_keys=True))
             
     return(_waff_co)
-    
-## ==============================================
+
+
+###############################################################################
 ##
 ## verbosity functions
 ##
 ## TODO: add threading and verbosity
-## ==============================================
+##
+###############################################################################
 def _terminal_width():
     #cols = 40
     #try:
@@ -1263,6 +1458,7 @@ def _terminal_width():
     cols = get_terminal_size_stderr()[0]
     return(cols)
 
+
 def get_terminal_size_stderr(fallback=(80, 24)):
     """
     Unlike shutil.get_terminal_size, which looks at stdout, this looks at stderr.
@@ -1274,7 +1470,8 @@ def get_terminal_size_stderr(fallback=(80, 24)):
         size = os.terminal_size(fallback)
         
     return(size)
-    
+
+
 def _init_msg2(msg, prefix_len, buff_len=6):
     width = int(_terminal_width()) - (prefix_len+buff_len)
     msg_len = len(msg)
@@ -1284,11 +1481,12 @@ def _init_msg2(msg, prefix_len, buff_len=6):
             msg_end = msg[-1*int(msg_len / 3):]
             msg_len = len(msg_beg + msg_end)
 
-        msg = '{}...{}'.format(msg_beg, msg_end)
+        msg = f'{msg_beg}...{msg_end}'
         return(msg)
     else:
-        return('{}'.format(msg))
+        return(f'{msg}')
 
+    
 def _init_msg(msg, prefix_len, buff_len=6):
     width = int(_terminal_width()) - (prefix_len+buff_len)
     try:
@@ -1298,8 +1496,9 @@ def _init_msg(msg, prefix_len, buff_len=6):
             return('{}'.format(msg))
     except:
         return('{}'.format(msg))
+
     
-def echo_warning_msg2(msg, prefix = 'waffles'):
+def echo_warning_msg2(msg, prefix='cudem'):
     """echo warning msg to stderr using `prefix`
 
     >> echo_warning_msg2('message', 'test')
@@ -1315,10 +1514,14 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
     sys.stderr.write('\x1b[2K\r')
     #msg = _init_msg(msg, len(prefix))
     #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
-    tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg), file=sys.stderr)
+    tqdm.write(
+        '{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg),
+        file=sys.stderr
+    )
     sys.stderr.flush()
 
-def echo_error_msg2(msg, prefix = 'waffles'):
+    
+def echo_error_msg2(msg, prefix='cudem'):
     """echo error msg to stderr using `prefix`
 
     >> echo_error_msg2('message', 'test')
@@ -1334,11 +1537,15 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     sys.stderr.write('\x1b[2K\r')
     #msg = _init_msg(msg, len(prefix))
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
-    tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg), file=sys.stderr)
+    tqdm.write(
+        '{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg),
+        file=sys.stderr
+    )
     #tqdm.write(traceback.format_exc())
     sys.stderr.flush()
+
     
-def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
+def echo_msg2(msg, prefix='cudem', nl=True, bold=False):
     """echo `msg` to stderr using `prefix`
 
     >> echo_msg2('message', 'test')
@@ -1356,29 +1563,41 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
     #msg = _init_msg(msg, len(prefix))
     if bold:
         #sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
-        tqdm.write('{}: \033[1m{}\033[m'.format(prefix, msg), file=sys.stderr)
+        tqdm.write(
+            '{}: \033[1m{}\033[m'.format(prefix, msg),
+            file=sys.stderr
+        )
     else:
         #sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
-        tqdm.write('{}: {}'.format(prefix, msg), file=sys.stderr)
+        tqdm.write(
+            '{}: {}'.format(prefix, msg),
+            file=sys.stderr
+        )
     sys.stderr.flush()
-    
-## ==============================================
+
+
+###############################################################################    
+##
 ## echo message `m` to sys.stderr using
 ## auto-generated prefix
 ## lambda runs: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
-## ==============================================
+##
+###############################################################################
 echo_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
 echo_msg_bold = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), bold = True)
 echo_msg_inline = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), nl = False)
 
-## ==============================================
+###############################################################################
+##
 ## echo error message `m` to sys.stderr using
 ## auto-generated prefix
-## ==============================================
+##
+###############################################################################
 echo_error_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv[0]))
 echo_warning_msg = lambda m: echo_warning_msg2(m, prefix = os.path.basename(sys.argv[0]))
 
-## ==============================================
+###############################################################################
+##
 ## echo cudem module options
 ## modules are a dictionary with the module name
 ## as the key and at least a 'class' key which
@@ -1387,7 +1606,8 @@ echo_warning_msg = lambda m: echo_warning_msg2(m, prefix = os.path.basename(sys.
 ##
 ## e.g.
 ## _cudem_module_long_desc({'module_name': {'class': MyClass}})
-## ==============================================
+##
+###############################################################################
 _cudem_module_short_desc = lambda m: ', '.join(
     ['{}'.format(key) for key in m])
 _cudem_module_name_short_desc = lambda m: ',  '.join(
@@ -1396,6 +1616,7 @@ _cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:k
     ['\033[1m{:14}\033[0m{}\n'.format(str(key), m[key]['call'].__doc__) for key in m]) + '\n'
 
 _cudem_module_md_table = lambda m: '\n'.join(['| {:14} | {}'.format(str(key), m[key]['call'].__doc__) for key in m])
+
 
 def echo_modules(module_dict, key):
     if key is None:
@@ -1409,19 +1630,23 @@ def echo_modules(module_dict, key):
                 )
             )
         else:
-            sys.stderr.write('Invalid Module Key: {}\nValid Modules: {}\n'.format(key, _cudem_module_short_desc(module_dict)))
+            sys.stderr.write(
+                'Invalid Module Key: {}\nValid Modules: {}\n'.format(
+                    key, _cudem_module_short_desc(module_dict)
+                )
+            )
 
     sys.stderr.flush()
 
 _command_name = lambda: os.path.basename(sys.argv[0])
-    
-## ==============================================
+
+###############################################################################
 ##
 ## Progress indicator...
 ##
 ## Depreciated, just using tqdm now...
 ##
-## ==============================================
+###############################################################################
 class CliProgress():
     """Cudem Absolute Minimum Progress Indicator
 
@@ -1451,7 +1676,8 @@ class CliProgress():
     True
     """
 
-    def __init__(self, message = None, end_message = None, total = 0, sleep = 2, verbose = True): 
+    def __init__(self, message=None, end_message=None, total=0,
+                 sleep=2, verbose=True): 
         self.thread = threading.Thread(target=self.updates)
         self.thread_is_alive = False
         self.tw = 7
@@ -1484,14 +1710,18 @@ class CliProgress():
         
         if self.opm is not None and self.verbose:
             self._clear_stderr()
-            sys.stderr.write('\r {}  {}\n'.format(" " * (self.tw - 1), self.opm))
+            sys.stderr.write(
+                '\r {}  {}\n'.format(" " * (self.tw - 1), self.opm)
+            )
 
+            
     def updates(self):
         while self.thread_is_alive:
             if self.sleep is not None:
                 time.sleep(self.sleep)
                 self.update(p=None)
 
+                
     def __enter__(self):
         if self.verbose:
             try:
@@ -1509,29 +1739,37 @@ class CliProgress():
         else:
             return(self)
 
+        
     def __exit__(self, exc_type, exc_value, exc_traceback):
         
         if self.verbose:
             self.thread_is_alive = False
             self.thread.join()
-            return(self.end(status=exc_value, exc_type=exc_type, exc_value=exc_value, exc_traceback=exc_traceback))
+            return(self.end(status=exc_value,
+                            exc_type=exc_type,
+                            exc_value=exc_value,
+                            exc_traceback=exc_traceback))
         else:
             return(True)
 
     def write(self, msg, nl=True, bold=False):
         sys.stderr.write('\x1b[2K\r')
         if bold:
-            sys.stderr.write('\033[1m{}\033[m{}'.format(msg, '\n' if nl else ''))
+            sys.stderr.write(
+                '\033[1m{}\033[m{}'.format(msg, '\n' if nl else '')
+            )
         else:
             sys.stderr.write('{}{}'.format(msg, '\n' if nl else ''))
         sys.stderr.flush()
-                    
+
+        
     def _init_opm(self):
         self.width = int(self._terminal_width()) - (self.tw+6)
         if len(self.message) > self.width:
             self.opm = '{}...'.format(self.message[:self.width])
         else:
             self.opm = '{}'.format(self.message)
+
             
     def _terminal_width(self):
         cols = 40
@@ -1544,13 +1782,16 @@ class CliProgress():
                 curses.endwin()
                 
         return(cols)
-                    
+
+    
     def _switch_way(self):
         self.spin_way = self.sub_one if self.spin_way == self.add_one else self.add_one
 
+        
     def _clear_stderr(self, slen = 79):
         sys.stderr.write('\x1b[2K\r')
         sys.stderr.flush()
+
         
     def update(self, p=1, msg=None):
         if self.verbose:
@@ -1576,8 +1817,10 @@ class CliProgress():
             if self.count == 0: self.spin_way = self.add_one
             self.count = self.spin_way(self.count)
             sys.stderr.flush()
-    
-    def end(self, status = 0, message = None, exc_type = None, exc_value = None, exc_traceback = None):
+
+            
+    def end(self, status=0, message=None, exc_type=None,
+            exc_value=None, exc_traceback=None):
         self._init_opm()
         self._clear_stderr()
         if message is None:
@@ -1599,6 +1842,7 @@ class CliProgress():
 
         return(True)
 
+    
 def physical_cpu_count():
     """On this machine, get the number of physical cores.
 
@@ -1621,12 +1865,14 @@ def physical_cpu_count():
 
     elif sys.platform == "darwin":
         # On a mac
-        # TODO: Flesh this out from https://stackoverflow.com/questions/12902008/python-how-to-find-out-whether-hyperthreading-is-enabled
+        # TODO: Flesh this out from https://stackoverflow.com/questions/
+        # 12902008/python-how-to-find-out-whether-hyperthreading-is-enabled
         return mp.cpu_count()
 
     elif sys.platform == "win32" or sys.platform == "win64" or sys.platform == "cygwin":
         # On a windows machine.
-        # TODO: Flesh this out from https://stackoverflow.com/questions/12902008/python-how-to-find-out-whether-hyperthreading-is-enabled
+        # TODO: Flesh this out from https://stackoverflow.com/questions/
+        # 12902008/python-how-to-find-out-whether-hyperthreading-is-enabled
         return mp.cpu_count()
 
     else:
@@ -1659,10 +1905,13 @@ dtypes_dict = {np.int8:    'b',
                np.dtype('float32'): 'f',
                np.dtype('float64'): 'd'}
 
+
 ## test
 def _err_fit_plot(
-        xdata, ydata, out, fitfunc, bins_final, std_final, sampling_den, max_int_dist,
-                  dst_name = 'unc', xa = 'distance'):
+        xdata, ydata, out, fitfunc, bins_final, std_final,
+        sampling_den, max_int_dist, dst_name='unc',
+        xa='distance'
+):
     """plot a best fit plot with matplotlib
 
     Args:
@@ -1682,7 +1931,15 @@ def _err_fit_plot(
     fig = plt.figure()
     ax = plt.subplot(111)
 
-    plt_data=ax.scatter(bins_final, std_final, zorder=1, label='Error St. Dev.', marker="o", color="black", s=30)
+    plt_data=ax.scatter(
+        bins_final,
+        std_final,
+        zorder=1,
+        label='Error St. Dev.',
+        marker="o",
+        color="black",
+        s=30
+    )
     #plt_best_fit,=ax.plot(xdata,ydata, zorder=1, linewidth=2.0)
     plt_best_fit,=ax.plot(xdata, fitfunc(out, xdata), '-')
 
@@ -1702,7 +1959,8 @@ def _err_fit_plot(
 
     anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$ "%(out[1],out[2]), loc=1)
     #add r2 value using below
-    #anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$      $r^2=%g$ "%(coeff1,coeff2,rsquared), loc=1)
+    #anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$
+    #$r^2=%g$ "%(coeff1,coeff2,rsquared), loc=1)
     anchored_text2.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
     ax.add_artist(anchored_text2)
 
@@ -1711,7 +1969,15 @@ def _err_fit_plot(
     anchored_text3.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
     ax.add_artist(anchored_text3)
 
-    plt.legend([plt_data, plt_best_fit], ['Interpolation Error St Dev', 'Best-Fit Line'], loc='upper center', bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True, ncol=2, fontsize=14)
+    plt.legend(
+        [plt_data, plt_best_fit],
+        ['Interpolation Error St Dev', 'Best-Fit Line'],
+        loc='upper center',
+        bbox_to_anchor=(0.5, 1.15),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+        fontsize=14)
 
     plt.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -1738,8 +2004,10 @@ def _err_fit_plot(
 
     #except: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
 
-def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist, bins_orig, sampling_den,
-                      dst_name = 'unc', xa = 'distance'):
+    
+def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist,
+                      bins_orig, sampling_den, dst_name='unc',
+                      xa='distance'):
     """plot a scatter plot with matplotlib
 
     Args:
@@ -1758,7 +2026,15 @@ def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist, bins_orig, s
 
     fig = plt.figure()
     ax = plt.subplot(111)
-    plt_data=ax.scatter(dist_arr, error_arr, zorder=1, label="Measurements", marker=".", color="black", s=20)
+    plt_data=ax.scatter(
+        dist_arr,
+        error_arr,
+        zorder=1,
+        label="Measurements",
+        marker=".",
+        color="black",
+        s=20
+    )
     plt_data_uncert=ax.errorbar(bins_orig, mean, yerr=std, fmt='r-', linewidth=3)
     box = ax.get_position()
     ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
@@ -1779,7 +2055,16 @@ def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist, bins_orig, s
     anchored_text3.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
     ax.add_artist(anchored_text3)
 
-    plt.legend([plt_data, plt_data_uncert], ["Interpolation Error", "Mean +/- St. Deviation"], loc="upper center", bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True, ncol=2, fontsize=14)
+    plt.legend(
+        [plt_data, plt_data_uncert],
+        ["Interpolation Error", "Mean +/- St. Deviation"],
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.15),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+        fontsize=14
+    )
     plt.xlabel("Distance from Measurement (cells)", fontsize=14)
     plt.ylabel("Interpolation Error (m)", fontsize=14)
     plt.xlim(xmin=0)
@@ -1793,7 +2078,8 @@ def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist, bins_orig, s
 
     #xcept: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
 
-def _errbin(err_arr, nbins = 10):
+    
+def _errbin(err_arr, nbins=10):
     """calculate and plot the error coefficient given err_arr which is 
     a 2 col array with `err dist
 
@@ -1829,8 +2115,10 @@ def _errbin(err_arr, nbins = 10):
     #    ydata = np.append(ydata, 0)
 
     return(xdata, ydata)
-    
-def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'unc', xa = 'distance', plots = False):
+
+
+def _err2coeff(err_arr, sampling_den, coeff_guess=[0, 0.1, 0.2],
+               dst_name='unc', xa='distance', plots=False):
     """calculate and plot the error coefficient given err_arr which is 
     a 2 col array with `err dist
 
@@ -1885,11 +2173,35 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
     if plots:
         try:
             utils.echo_msg('plotting error data')
-            _err_fit_plot(xdata, ydata, out, fitfunc, bins_orig, std, sampling_den, max_int_dist, dst_name, xa)
-            _err_scatter_plot(error, distance, mean, std, max_int_dist, bins_orig, sampling_den, dst_name, xa)
-        except:
-           echo_error_msg('unable to generate error plots, please check configs.')
+            _err_fit_plot(
+                xdata,
+                ydata,
+                out,
+                fitfunc,
+                bins_orig,
+                std,
+                sampling_den,
+                max_int_dist,
+                dst_name,
+                xa
+            )
+            _err_scatter_plot(
+                error,
+                distance,
+                mean,
+                std,
+                max_int_dist,
+                bins_orig,
+                sampling_den,
+                dst_name,
+                xa
+            )
+        except Exception as e:
+           echo_error_msg(
+               f'unable to generate error plots, please check configs. {e}'
+           )
 
     return(out)
+
 
 ### End

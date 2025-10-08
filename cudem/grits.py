@@ -9,19 +9,23 @@
 ## of the Software, and to permit persons to whom the Software is furnished to do so, 
 ## subject to the following conditions:
 ##
-## The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+## The above copyright notice and this permission notice shall be included in all copies or
+## substantial portions of the Software.
 ##
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
 ## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
 ## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
-## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
 ##
+###############################################################################
 ### Commentary:
 ##
 ## filter grids using various methods
 ##
-## Grits modules are sub-classes of the Grits class. Define a new sub-class to create a new DEM filter.
+## Grits modules are sub-classes of the Grits class.
+## Define a new sub-class to create a new DEM filter.
 ##
 ### Code:
 
@@ -30,6 +34,7 @@ import sys
 import math
 import traceback
 from tqdm import trange
+from tqdm import tqdm
 
 import numpy as np
 import scipy
@@ -47,6 +52,7 @@ from cudem import gdalfun
 from cudem import regions
 from cudem import factory
 
+
 class Grits:
     """DEM Filtering.
 
@@ -56,9 +62,21 @@ class Grits:
     """
     
     def __init__(
-            self, src_dem: str = None, dst_dem: str = None, band: int = 1, min_z: float = None, max_z: float = None,
-            min_weight: float = None, max_weight: float = None, count_mask: any = None, weight_mask: any = None,
-            uncertainty_mask: any = None, cache_dir: str = './', verbose: bool = True, params: dict = {}, **kwargs: any
+            self,
+            src_dem: str = None,
+            dst_dem: str = None,
+            band: int = 1,
+            min_z: float = None,
+            max_z: float = None,
+            min_weight: float = None,
+            max_weight: float = None,
+            count_mask: any = None,
+            weight_mask: any = None,
+            uncertainty_mask: any = None,
+            cache_dir: str = './',
+            verbose: bool = True,
+            params: dict = {},
+            **kwargs: any
     ):
         self.src_dem = src_dem
         self.dst_dem = dst_dem
@@ -78,14 +96,17 @@ class Grits:
         if self.dst_dem is None:
             if self.src_dem is not None:
                 self.dst_dem = utils.make_temp_fn('{}_filtered.{}'.format(
-                    utils.fn_basename2(self.src_dem), utils.fn_ext(self.src_dem)
-                ), self.cache_dir)
+                    utils.fn_basename2(self.src_dem),
+                    utils.fn_ext(self.src_dem)
+                ), temp_dir=self.cache_dir)
             else:
                 self.dst_dem = 'grits_filtered.tif'
-        
+
+                
     def __call__(self):
         return(self.generate())
 
+    
     def init_ds(self, src_ds: any = None):
         self.ds_config = gdalfun.gdal_infos(src_ds)
         self.ds_band = src_ds.GetRasterBand(self.band)
@@ -133,19 +154,24 @@ class Grits:
                 self.cnt_is_fn = True
             else:
                 self.count_mask = None
+
                 
     def generate(self):
         if self.verbose:
-            utils.echo_msg('filtering {} using {}'.format(self.src_dem, self))
+            utils.echo_msg(
+                f'filtering {self.src_dem} using {self}'
+            )
             
         self.run()
         self.split_by_z()
         self.split_by_weight()
         return(self)        
-        
+
+    
     def run(self):
         raise(NotImplementedError)
 
+    
     def copy_src_dem(self):
         with gdalfun.gdal_datasource(
                 self.src_dem, update=False
@@ -153,28 +179,36 @@ class Grits:
             if src_ds is not None:
                 src_infos = gdalfun.gdal_infos(src_ds)
                 driver = gdal.GetDriverByName(src_infos['fmt'])
-                copy_ds = driver.CreateCopy(self.dst_dem, src_ds, 1, options=['COMPRESS=DEFLATE'])
+                copy_ds = driver.CreateCopy(
+                    self.dst_dem, src_ds, 1, options=['COMPRESS=DEFLATE']
+                )
             else:
                 copy_ds = None
                 
         return(copy_ds)
 
+    
     def _density(self, src_arr):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
         dd = nonzero / src_arr.size
         
         return(dd)
+
     
     def split_by_z(self):
         """Split the filtered DEM by z-value"""
 
         if self.max_z is not None or self.min_z is not None:
-            utils.echo_msg('split by z:{} {}'.format(self.min_z, self.max_z))
+            utils.echo_msg(
+                f'split by z:{self.min_z} {self.max_z}'
+            )
             with gdalfun.gdal_datasource(self.src_dem) as src_ds:
                 if src_ds is not None:
                     self.init_ds(src_ds)
                     elev_array = self.ds_band.ReadAsArray()
-                    mask_array = np.zeros((self.ds_config['ny'], self.ds_config['nx']))                
+                    mask_array = np.zeros(
+                        (self.ds_config['ny'], self.ds_config['nx'])
+                    )
                     mask_array[elev_array == self.ds_config['ndv']] = np.nan
                     if self.min_z is not None:
                         mask_array[elev_array > self.min_z] = 1
@@ -198,14 +232,19 @@ class Grits:
                             smoothed_array = s_array + elev_array
                             elev_array = None
                             s_band.WriteArray(smoothed_array)
+                            
         return(self)
 
+    
     def split_by_weight(self):
         """Split the filtered DEM by z-value"""
 
-        if self.max_weight is not None or self.min_weight is not None:
+        if self.max_weight is not None \
+           or self.min_weight is not None:
             if self.weight_mask is not None:
-                utils.echo_msg('split by weight: {} {}'.format(self.min_weight, self.max_weight))
+                utils.echo_msg(
+                    f'split by weight: {self.min_weight} {self.max_weight}'
+                )
                 with gdalfun.gdal_datasource(self.src_dem) as src_ds:
                     if src_ds is not None:
                         self.init_ds(src_ds)
@@ -223,7 +262,9 @@ class Grits:
                             weight_array = weight_band.ReadAsArray()
                             weight_array[(weight_array == self.ds_config['ndv'])] = 0
 
-                        mask_array = np.zeros((self.ds_config['ny'], self.ds_config['nx']))                
+                        mask_array = np.zeros(
+                            (self.ds_config['ny'], self.ds_config['nx'])
+                        )
                         mask_array[elev_array == self.ds_config['ndv']] = np.nan
                         mask_array[weight_array == self.ds_config['ndv']] = np.nan
 
@@ -240,7 +281,9 @@ class Grits:
                         elev_array[mask_array == 1] = 0
 
                         ## todo: all bands
-                        with gdalfun.gdal_datasource(self.dst_dem, update=True) as s_ds:
+                        with gdalfun.gdal_datasource(
+                                self.dst_dem, update=True
+                        ) as s_ds:
                             if s_ds is not None:
                                 s_band = s_ds.GetRasterBand(1)
                                 s_array = s_band.ReadAsArray()
@@ -249,15 +292,19 @@ class Grits:
                                 elev_array = None
                                 s_band.WriteArray(smoothed_array)
         return(self)
+
     
-    def get_outliers(self, in_array: any, percentile: float = 75, k: float = 1.5, verbose: bool = False):
+    def get_outliers(self, in_array: any, percentile: float = 75,
+                     k: float = 1.5, verbose: bool = False):
         """get the outliers from in_array based on the percentile
 
         https://en.wikipedia.org/wiki/Interquartile_range
         """
 
         if verbose:
-            utils.echo_msg('input percentile: {}'.format(percentile))
+            utils.echo_msg(
+                f'input percentile: {percentile}'
+            )
 
         # if np.isnan(percentile):
         #     percentile = 75
@@ -276,7 +323,9 @@ class Grits:
             min_percentile = 0
 
         if verbose:
-            utils.echo_msg('percentiles: {}>>{}'.format(min_percentile, max_percentile))
+            utils.echo_msg(
+                f'percentiles: {min_percentile}>>{max_percentile}'
+            )
 
         if np.all(np.isnan(in_array)):
             upper_limit = np.nan
@@ -290,6 +339,7 @@ class Grits:
 
         return(upper_limit, lower_limit)
 
+    
 class Blur(Grits):
     """Blur DEM values using a Gaussian Blur
 
@@ -302,6 +352,7 @@ class Blur(Grits):
         super().__init__(**kwargs)
         self.blur_factor = utils.float_or(blur_factor, 1)
 
+        
     def np_gaussian_blur(self, in_array: any, size: float):
         """blur an array using fftconvolve from scipy.signal
         size is the blurring scale-factor.
@@ -317,7 +368,8 @@ class Blur(Grits):
         out_array = fftconvolve(padded_array, g, mode = 'valid')
         
         return(out_array)
-        
+
+    
     def run(self):
         """gaussian blur on src_dem using a smooth-factor of `sf`
         runs np_gaussian_blur(ds.Array, sf)
@@ -332,14 +384,18 @@ class Blur(Grits):
                 self.init_ds(src_ds)
                 #ds_config = gdalfun.gdal_infos(src_ds)
                 ## original array
-                ds_array = self.ds_band.ReadAsArray(0, 0, self.ds_config['nx'], self.ds_config['ny'])
+                ds_array = self.ds_band.ReadAsArray(
+                    0, 0, self.ds_config['nx'], self.ds_config['ny']
+                )
                 ## copy original array as data mask
                 msk_array = np.array(ds_array)
                 ## set mask to 1/0
                 msk_array[msk_array == self.ds_config['ndv']] = np.nan
                 msk_array[~np.isnan(msk_array)] = 1
                 ds_array[np.isnan(msk_array)] = 0
-                smooth_array = self.np_gaussian_blur(ds_array, utils.int_or(self.blur_factor, 1))
+                smooth_array = self.np_gaussian_blur(
+                    ds_array, utils.int_or(self.blur_factor, 1)
+                )
                 smooth_array = smooth_array * msk_array
                 mask_array = ds_array = None
                 smooth_array[np.isnan(smooth_array)] = self.ds_config['ndv']
@@ -350,6 +406,7 @@ class Blur(Grits):
         dst_ds = None
         return(self.dst_dem, 0)
 
+    
 class GMTgrdfilter(Grits):
     """Filter a DEM through GMT's `grdfilter`; see `gmt grdfilter --help`
 
@@ -361,12 +418,14 @@ class GMTgrdfilter(Grits):
     node(str) - Either 'grid' or 'pixel'
     """
     
-    def __init__(self, filter_type: str = 'c3s', dist: any = '1', node: str = 'pixel', **kwargs: any):
+    def __init__(self, filter_type: str = 'c3s', dist: any = '1',
+                 node: str = 'pixel', **kwargs: any):
         super().__init__(**kwargs)
         self.filter_type = filter_type
         self.dist = dist
         self.node = node
 
+        
     def run(self):
         """filter `src_dem` using GMT grdfilter"""
 
@@ -379,7 +438,11 @@ class GMTgrdfilter(Grits):
 
         ft_cmd1 = (
             'gmt grdfilter -V {} -G{}=gd:GTiff -F{} -D1{}'.format(
-                self.src_dem, tmp_dst_dem, self.filter_type, self.dist, ' -rp' if self.node == 'pixel' else ''
+                self.src_dem,
+                tmp_dst_dem,
+                self.filter_type,
+                self.dist,
+                ' -rp' if self.node == 'pixel' else ''
             )
         )
 
@@ -392,34 +455,46 @@ class GMTgrdfilter(Grits):
         
         return(self.dst_dem, 0)
 
+    
 class LSPOutliers(Grits):
     """Discover and remove outliers from the input DEM.
 
-    Uses various LSPs as well as elevation and uncertainty to discover possible outliers and remove 
-    data cells where there are outliers of calculated outliers.
+    Uses various LSPs as well as elevation and uncertainty to discover 
+    possible outliers and remove data cells where there are outliers 
+    of calculated outliers.
 
-    Outliers are calculated using the `Tukey's fences` method, where outliers are outside the range:
+    Outliers are calculated using the `Tukey's fences` method, 
+    where outliers are outside the range:
     [Q1 - k(Q3 - Q1), Q3 + k(Q3 - Q1)]
 
-    In general, k=1.5 for general outliers and k=3 for 'far out' outliers. Since this is fairly arbitrary,
-    k can be set to any positive number, when auto-generated it will fall between 0 and 4.5
+    In general, k=1.5 for general outliers and k=3 for 'far out' outliers. 
+    Since this is fairly arbitrary, k can be set to any positive number, 
+    when auto-generated it will fall between 0 and 4.5
 
-    Q1 and Q3 above are generally defined as the 25th and 75th percentile, respectively.
+    Q1 and Q3 above are generally defined as the 25th and 75th percentile, 
+    respectively.
 
-    If `percentile` is not set, we will calculate a reasonable value to use in both the gathering of the sub-regional LSP outliers
-    as well as the final removal of the outliers of the outliers.
+    If `percentile` is not set, we will calculate a reasonable value to 
+    use in both the gathering of the sub-regional LSP outliers as well as 
+    the final removal of the outliers of the outliers.
 
-    if `chunk_size` is not set, we calculate the inital moving window size to be about 5000 meters squared, plus or minus depending
-    on the density of the input raster.
+    if `chunk_size` is not set, we calculate the inital moving window size 
+    to be about 5000 meters squared, plus or minus depending on the density 
+    of the input raster.
 
-    Using multipass, we can scan the data at multiple scales to get a better representation of possible features in the data.
-    multipass will increase the moving window size and outlier percentile on each pass from `chunk_size` to `max_chunk` and 
-    `percentile` to `max_percentile`, respectively. By default, multipass will pass through the data at varying scales and 
-    continually accumulate outlier scores and calculate the final outliers to remove based on the accumulated outlier mask. 
-    If `accumulate` is set to `False`, we will instead calculate and remove the final outliers at each pass.
+    Using multipass, we can scan the data at multiple scales to get a better 
+    representation of possible features in the data. multipass will increase 
+    the moving window size and outlier percentile on each pass from `chunk_size` 
+    to `max_chunk` and `percentile` to `max_percentile`, respectively. By default, 
+    multipass will pass through the data at varying scales and  continually 
+    accumulate outlier scores and calculate the final outliers to remove based 
+    on the accumulated outlier mask. 
+
+    If `accumulate` is set to `False`, we will instead calculate and remove the 
+    final outliers at each pass.
     
-    Most datasets should be fine with using only the default parameters, however, closer refinement of the parameters may
-    yield more acceptable results.
+    Most datasets should be fine with using only the default parameters, however, 
+    closer refinement of the parameters may yield more acceptable results.
 
     Parameters:
 
@@ -427,26 +502,32 @@ class LSPOutliers(Grits):
     k(float) - the outlier factor ( Q1 - k(iqr), Q3 + k(iqr) )
     chunk_size(int) - the moving window size in pixels (append `m` to set the size in meters)
     chunk_step(int) - the moving window step in pixels (append `m` to set the size in meters)
-    interpolation(str) - interpolation method to use for neighborhood calculations (None, `linear`, `cubic` or `nearest`)
+    interpolation(str) - interpolation method to use for neighborhood calculations 
+                         (None, `linear`, `cubic` or `nearest`)
     multipass(int) - pass through the data at multiple `chunk_size/step`s, `percentiles` and `k`s, 
                      set the number of passes here
     max_percentile(float) - the maximum percentile to use to define Q1 and Q3 (multipass)
     max_k(float) - the maximum outlier factor ( Q1 - k(iqr), Q3 + k(iqr) ) (multipass)
-    max_chunk(int) - the maximum moving window size in pixels (multipass) (append `m` to set the size in meters)
-    max_step(int) - the maximum moving window step in pixels (multipass) (append `m` to set the size in meters)
-    acuumulate(bool) - accumulate outliers with multipass, set to `False` to remove outliers after each pass in multipass
+    max_chunk(int) - the maximum moving window size in pixels (multipass) 
+                     (append `m` to set the size in meters)
+    max_step(int) - the maximum moving window step in pixels (multipass) 
+                    (append `m` to set the size in meters)
+    acuumulate(bool) - accumulate outliers with multipass, set to `False` to remove 
+                       outliers after each pass in multipass
     return_mask(bool) - save the generated outlier mask
-    size_is_step(bool) - the chunk_step and max_step will be set to the chunk_size and chunk_step, respectively
+    size_is_step(bool) - the chunk_step and max_step will be set to the chunk_size 
+                         and chunk_step, respectively
     mode(str) - the mode to use when calculating the outliers (average, scaled, None)
     """
     
-    def __init__(self, percentile = None, max_percentile = None, outlier_percenitle = None, chunk_size = None,
-                 chunk_step = None, max_chunk = None, max_step = None, k = None, max_k = None,
-                 outlier_k = None, return_mask = False, elevation_weight = 1, curvature_weight = 1,
-                 slope_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1, tri_weight = 1,
-                 count_weight = 0, multipass = 1, accumulate = False, interpolation = 'nearest', aggressive = True,
-                 units_are_degrees = True, size_is_step = True, mode = 'scaled', fill_removed_data = False,
-                 **kwargs):
+    def __init__(self, percentile=None, max_percentile=None, outlier_percenitle=None,
+                 chunk_size=None, chunk_step=None, max_chunk=None, max_step=None,
+                 k=None, max_k=None, outlier_k=None, return_mask=False,
+                 elevation_weight=1, curvature_weight=1, slope_weight=1,
+                 tpi_weight=1, unc_weight=1, rough_weight=1, tri_weight=1,
+                 count_weight=0, multipass=1, accumulate=False, interpolation='nearest',
+                 aggressive=True, units_are_degrees=True, size_is_step=True,
+                 mode='scaled', fill_removed_data=False, **kwargs):
         
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile)
@@ -475,7 +556,8 @@ class LSPOutliers(Grits):
         self.mode = mode
         self.fill_removed_data = fill_removed_data
 
-    def init_percentiles(self, src_ds = None):
+        
+    def init_percentiles(self, src_ds=None):
         if self.percentile is None or self.k is None:
             p, k, pp = self.rough_q(src_ds)
             if self.percentile is None:
@@ -492,25 +574,39 @@ class LSPOutliers(Grits):
         if self.percentile is None or np.isnan(self.percentile):
             self.percentile = 75
         
-        self.max_percentile = utils.float_or(self.max_percentile, ((100 - self.percentile) / 2) + self.percentile)
+        self.max_percentile = utils.float_or(
+            self.max_percentile, ((100 - self.percentile) / 2) + self.percentile
+        )
         if self.k is None:
             self.k = 1.5
 
         self.max_k = utils.float_or(self.max_k, self.k**2)
         if self.verbose:
-            utils.echo_msg('outlier percentiles: {} {} < {} {}'.format(self.percentile, self.k, self.max_percentile, self.max_k))
-            utils.echo_msg('[Q1 - k(iqr), Q3 + k(iqr)]; Q1:{q1} Q3:{q3} k:{k}'.format(q1=100-self.percentile, q3=self.percentile, k=self.k))
+            utils.echo_msg(
+                'outlier percentiles: {} {} < {} {}'.format(
+                    self.percentile, self.k, self.max_percentile, self.max_k
+                )
+            )
+            utils.echo_msg(
+                '[Q1 - k(iqr), Q3 + k(iqr)]; Q1:{q1} Q3:{q3} k:{k}'.format(
+                    q1=100-self.percentile, q3=self.percentile, k=self.k
+                )
+            )
 
-    def init_chunks(self, src_ds = None):
+            
+    def init_chunks(self, src_ds=None):
         src_arr, src_den = self.gdal_density(src_ds)
         self._chunks(src_arr)
         src_arr = src_den = None
-    
+
+        
     def _chunks(self, src_arr):
         n_den = self._density(src_arr)
         cell_size = self.ds_config['geoT'][1]
         if self.units_are_degrees:
-            cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
+            # scale cellsize to meters,
+            # todo: check if input is degress/meters/feet
+            cell_size *= 111120 
 
         m_size = 1000
         mm_size = 10000
@@ -536,8 +632,12 @@ class LSPOutliers(Grits):
                 mm_step = utils.int_or(self.max_step[:-1])
                 cm_step = mm_step / cell_size
 
-        self.n_chunk = utils.int_or(self.chunk_size, ((m_size * (1/n_den)) / cell_size))
-        self.max_chunk = utils.int_or(self.max_chunk, ((mm_size * (1/n_den)) / cell_size))
+        self.n_chunk = utils.int_or(
+            self.chunk_size, ((m_size * (1/n_den)) / cell_size)
+        )
+        self.max_chunk = utils.int_or(
+            self.max_chunk, ((mm_size * (1/n_den)) / cell_size)
+        )
         if self.n_chunk < 15:
             self.n_chunk = 15
         if self.max_chunk < 15:
@@ -555,23 +655,27 @@ class LSPOutliers(Grits):
         if self.verbose:
             utils.echo_msg(
                 'outlier chunks ({} {}): {} {} < {} {}'.format(
-                    n_den, src_arr.shape, self.n_chunk, self.n_step, self.max_chunk, self.max_step
+                    n_den, src_arr.shape, self.n_chunk, self.n_step,
+                    self.max_chunk, self.max_step
                 )
             )
-        
+
+            
     def _density(self, src_arr):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
         dd = nonzero / src_arr.size
         
         return(dd)
-        
-    def gdal_density(self, src_ds = None):
+
+    
+    def gdal_density(self, src_ds=None):
         src_arr, src_config = gdalfun.gdal_get_array(src_ds)
         src_arr[src_arr == src_config['ndv']] = np.nan
 
         return(src_arr, self._density(src_arr))
+
     
-    def _generate_mask_ds(self, src_ds = None):
+    def _generate_mask_ds(self, src_ds=None):
         ## to hold the mask data
         self.mask_mask_fn = '{}{}'.format(utils.fn_basename2(self.src_dem), '_outliers.tif')
         mask_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
@@ -582,8 +686,17 @@ class LSPOutliers(Grits):
             if status != 0:
                 utils.remove_glob('{}*'.format(self.mask_mask_fn))
         
-        self.mask_mask_ds = driver.Create(self.mask_mask_fn, self.ds_config['nx'], self.ds_config['ny'], 2, gdal.GDT_Float32,
-                                          options=['COMPRESS=DEFLATE', 'PREDICTOR=1', 'TILED=YES', 'BIGTIFF=YES'])
+        self.mask_mask_ds = driver.Create(
+            self.mask_mask_fn,
+            self.ds_config['nx'],
+            self.ds_config['ny'],
+            2,
+            gdal.GDT_Float32,
+            options=['COMPRESS=DEFLATE',
+                     'PREDICTOR=1',
+                     'TILED=YES',
+                     'BIGTIFF=YES']
+        )
         self.mask_mask_ds.SetGeoTransform(self.ds_config['geoT'])
         self.mask_mask_band = self.mask_mask_ds.GetRasterBand(1)
         self.mask_count_band = self.mask_mask_ds.GetRasterBand(2)
@@ -592,10 +705,13 @@ class LSPOutliers(Grits):
         self.mask_mask_band.WriteArray(mask_mask)
         self.mask_count_band.WriteArray(mask_mask)
         mask_mask = None
+
         
-    def generate_mask_ds(self, src_ds = None):
+    def generate_mask_ds(self, src_ds=None):
         ## to hold the mask data
-        self.mask_mask_fn = '{}{}'.format(utils.fn_basename2(self.src_dem), '_outliers.tif')
+        self.mask_mask_fn = '{}{}'.format(
+            utils.fn_basename2(self.src_dem), '_outliers.tif'
+        )
         mask_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
         mask_count = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
         driver = gdal.GetDriverByName('GTiff')
@@ -605,8 +721,17 @@ class LSPOutliers(Grits):
             if status != 0:
                 utils.remove_glob('{}*'.format(self.mask_mask_fn))
         
-        self.mask_mask_ds = driver.Create(self.mask_mask_fn, self.ds_config['nx'], self.ds_config['ny'], 2, gdal.GDT_Float32,
-                                          options=['COMPRESS=DEFLATE', 'PREDICTOR=1', 'TILED=YES', 'BIGTIFF=YES'])
+        self.mask_mask_ds = driver.Create(
+            self.mask_mask_fn,
+            self.ds_config['nx'],
+            self.ds_config['ny'],
+            2,
+            gdal.GDT_Float32,
+            options=['COMPRESS=DEFLATE',
+                     'PREDICTOR=1',
+                     'TILED=YES',
+                     'BIGTIFF=YES']
+        )
         self.mask_mask_ds.SetGeoTransform(self.ds_config['geoT'])
         self.mask_mask_band = self.mask_mask_ds.GetRasterBand(1)
         self.mask_count_band = self.mask_mask_ds.GetRasterBand(2)
@@ -665,14 +790,16 @@ class LSPOutliers(Grits):
         self.mask_mask_band.WriteArray(mask_mask)
         self.mask_count_band.WriteArray(mask_count)
         mask_mask = mask_count = None
-                
-    def generate_mem_ds(self, band_data = None, srcwin = None, return_array = False):
+
+        
+    def generate_mem_ds(self, band_data=None, srcwin=None, return_array=False):
         tmp_band_data = band_data
         if np.all(np.isnan(tmp_band_data)):
             return(None)
 
         ## interpolate the srcwin for neighborhood calculations
-        if self.interpolation is not None and self.interpolation in ['nearest', 'linear', 'cubic']:
+        if self.interpolation is not None \
+           and self.interpolation in ['nearest', 'linear', 'cubic']:
             if np.any(np.isnan(band_data)):                        
                 point_indices = np.nonzero(~np.isnan(tmp_band_data))
                 if len(point_indices[0]):
@@ -694,10 +821,27 @@ class LSPOutliers(Grits):
             return(tmp_band_data)
         else:                
             ## generate a mem datasource to feed into gdal.DEMProcessing
-            dst_gt = (self.gt[0] + (srcwin[0] * self.gt[1]), self.gt[1], 0., self.gt[3] + (srcwin[1] * self.gt[5]), 0., self.gt[5])
-            srcwin_config = gdalfun.gdal_set_infos(srcwin[2], srcwin[3], srcwin[2]*srcwin[3], dst_gt, self.ds_config['proj'],
-                                                    self.ds_band.DataType, self.ds_config['ndv'], 'GTiff', {}, 1)
-            srcwin_ds = gdalfun.gdal_mem_ds(srcwin_config, name='MEM', bands=1, src_srs=None)
+            dst_gt = (self.gt[0] + (srcwin[0] * self.gt[1]),
+                      self.gt[1],
+                      0.,
+                      self.gt[3] + (srcwin[1] * self.gt[5]),
+                      0.,
+                      self.gt[5])
+            srcwin_config = gdalfun.gdal_set_infos(
+                srcwin[2],
+                srcwin[3],
+                srcwin[2]*srcwin[3],
+                dst_gt,
+                self.ds_config['proj'],
+                self.ds_band.DataType,
+                self.ds_config['ndv'],
+                'GTiff',
+                {},
+                1
+            )
+            srcwin_ds = gdalfun.gdal_mem_ds(
+                srcwin_config, name='MEM', bands=1, src_srs=None
+            )
             srcwin_band = srcwin_ds.GetRasterBand(1)
             srcwin_band.SetNoDataValue(self.ds_config['ndv'])
             tmp_band_data[np.isnan(tmp_band_data)] = self.ds_config['ndv']
@@ -706,8 +850,9 @@ class LSPOutliers(Grits):
             tmp_band_data = None
 
             return(srcwin_ds)
-                
-    def gdal_dem(self, input_ds = None, var = None):
+
+        
+    def gdal_dem(self, input_ds=None, var=None):
         """use gdal to generate various LSPs"""
         
         if var == 'curvature':
@@ -717,12 +862,17 @@ class LSPOutliers(Grits):
         elif var == 'northerliness':
             return(self.gdal_dem_northerliness(input_ds=input_ds))
         
-        tmp_ = utils.make_temp_fn('gdaldem_{}.tif'.format(var), self.cache_dir)
-        tmp_ds = gdal.DEMProcessing(tmp_, input_ds, var, computeEdges=True, scale=111120)
+        tmp_ = utils.make_temp_fn(
+            f'gdaldem_{var}.tif', self.cache_dir
+        )
+        tmp_ds = gdal.DEMProcessing(
+            tmp_, input_ds, var, computeEdges=True, scale=111120
+        )
 
         return(tmp_ds, tmp_)
+
     
-    def gdal_dem_curvature(self, input_ds = None):
+    def gdal_dem_curvature(self, input_ds=None):
         slp_ds, slp_fn = self.gdal_dem(input_ds=input_ds, var='slope')
         curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
         slp_ds = None
@@ -730,7 +880,8 @@ class LSPOutliers(Grits):
         
         return(curv_ds, curv_fn)
 
-    def gdal_dem_easterliness(self, input_ds = None):
+    
+    def gdal_dem_easterliness(self, input_ds=None):
         ee_ds, ee_fn = self.gdal_dem(input_ds=input_ds, var='aspect')
         with gdalfun.gdal_datasource(ee_ds, update=True) as src_ds:
             b = src_ds.GetRasterBand(1)
@@ -742,7 +893,8 @@ class LSPOutliers(Grits):
         
         return(ee_ds, ee_fn)
 
-    def gdal_dem_northerliness(self, input_ds = None):
+    
+    def gdal_dem_northerliness(self, input_ds=None):
         nn_ds, nn_fn = self.gdal_dem(input_ds=input_ds, var='aspect')
         with gdalfun.gdal_datasource(nn_ds, update=True) as src_ds:
             b = src_ds.GetRasterBand(1)
@@ -754,13 +906,17 @@ class LSPOutliers(Grits):
         
         return(nn_ds, nn_fn)
 
+    
     def mask_outliers(
-            self, src_data=None, mask_data=None, count_data=None, percentile=75, upper_only=False,
-            src_weight=1, k=1.5, verbose=False, other_data=None, mask_clumps=False
+            self, src_data=None, mask_data=None, count_data=None,
+            percentile=75, upper_only=False, src_weight=1, k=1.5,
+            verbose=False, other_data=None, mask_clumps=False
     ):
         """mask outliers and assign an outlier 'score' to each affected cell.
 
-        outlier scores are normalized to UL*2 and LL*2 and combined with existing outlier scores using the root sum squared.
+        outlier scores are normalized to UL*2 and LL*2 and combined with 
+        existing outlier scores using the root sum squared.
+
         outlier counts are adjusted to the respective `src_weight`.
 
         `percentile` and `k` can be adjusted to modify the outlier calculations.
@@ -768,9 +924,15 @@ class LSPOutliers(Grits):
         Set `upper_only` to True to only mask data which falls above the UL.
         """
         #mask_clumps=True
-        if src_data is not None and mask_data is not None and count_data is not None:
-            src_data[((np.isnan(src_data)) | (np.isinf(src_data)) | (src_data == self.ds_config['ndv']))] = np.nan
-            upper_limit, lower_limit = self.get_outliers(src_data, percentile, k)
+        if src_data is not None \
+           and mask_data is not None \
+           and count_data is not None:
+            src_data[((np.isnan(src_data)) \
+                      | (np.isinf(src_data)) \
+                      | (src_data == self.ds_config['ndv']))] = np.nan
+            upper_limit, lower_limit = self.get_outliers(
+                src_data, percentile, k
+            )
             # if np.isnan(upper_limit) or np.isnan(lower_limit):
             #upper_limit = np.nanpercentile(src_data, percentile)
             #lower_limit = np.nanpercentile(src_data, 100-percentile)
@@ -778,7 +940,7 @@ class LSPOutliers(Grits):
             src_size = src_data.size
                 
             if verbose:
-                utils.echo_msg('{} {}'.format(upper_limit, lower_limit))
+                utils.echo_msg(f'{upper_limit} {lower_limit}')
 
             src_upper = src_data[src_data > upper_limit]
             src_upper_mask = (src_data > upper_limit)
@@ -866,16 +1028,20 @@ class LSPOutliers(Grits):
                             pass
                         except Exception as e:
                             raise(e)
+
                         
     def mask_gdal_dem_outliers(
-            self, srcwin_ds = None, band_data = None, mask_mask_data = None, mask_count_data = None,
-            var = None, percentile = 75, upper_only = False, src_weight = None, k = 1.5
+            self, srcwin_ds=None, band_data=None, mask_mask_data=None,
+            mask_count_data=None, var=None, percentile=75, upper_only=False,
+            src_weight=None, k=1.5
     ):
         """Generate an LSP with gdal DEMProcessing and send the result to `mask_outliers()`"""
 
         tmp_ds, tmp_fn = self.gdal_dem(input_ds=srcwin_ds, var=var)
         tmp_data = tmp_ds.GetRasterBand(1).ReadAsArray()
-        tmp_data[((np.isnan(band_data)) | (np.isinf(band_data)) | (tmp_data == self.ds_config['ndv']))] = np.nan
+        tmp_data[((np.isnan(band_data)) \
+                  | (np.isinf(band_data)) \
+                  | (tmp_data == self.ds_config['ndv']))] = np.nan
         self.mask_outliers(
             src_data=tmp_data, mask_data=mask_mask_data, count_data=mask_count_data,
             percentile=percentile, upper_only=upper_only, src_weight=src_weight, k = k
@@ -884,6 +1050,7 @@ class LSPOutliers(Grits):
         utils.remove_glob(tmp_fn)
         return(0)
 
+    
     def get_pk(self, src_ds, var='roughness', invert=True):
         if var == 'elevation':
             ds_ds = src_ds
@@ -924,6 +1091,7 @@ class LSPOutliers(Grits):
 
         return(pp, k, p)
 
+    
     def rough_q(self, src_ds):
         rp,rk,rpp = self.get_pk(src_ds, var='roughness')
         #print('rough', rp,rk,rpp)
@@ -944,15 +1112,16 @@ class LSPOutliers(Grits):
             return(p, k, pp)
         except:
             return(np.nan, np.nan, np.nan)
-    
+
+        
     def apply_mask(self, perc=75, src_ds=None):
         """apply the generated outlier mask to the source DEM data.
 
         This will calculate the outliers in the outlier mask and remove the corresponding data
         from the input source DEM.
 
-        set perc to adjust the outlier calculations. k in this function is automatically generated based on 
-        the roughness of the outlier mask.
+        set perc to adjust the outlier calculations. k in this function is automatically 
+        generated based on the roughness of the outlier mask.
         """
 
         src_data = self.ds_band.ReadAsArray()
@@ -994,9 +1163,14 @@ class LSPOutliers(Grits):
         #    mask_upper_limit = np.nanpercentile(mask_mask_data, perc)
         #    #outlier_mask = (mask_mask_data > mask_upper_limit)
         #else:
-        count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=False)
-        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=False)            
-        outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
+        count_upper_limit, count_lower_limit = self.get_outliers(
+            mask_count_data, perc, k=self.k, verbose=False
+        )
+        mask_upper_limit, mask_lower_limit = self.get_outliers(
+            mask_mask_data, perc, k=self.k, verbose=False
+        )
+        outlier_mask = ((mask_mask_data > mask_upper_limit) \
+                        & (mask_count_data > count_upper_limit))
 
         ## expand the outliers by a cell in each direction
         #outlier_mask = utils.expand_for(outlier_mask, shiftx=1, shifty=1)
@@ -1007,9 +1181,10 @@ class LSPOutliers(Grits):
             src_data[src_data == self.ds_config['ndv']] = np.nan
 
             for srcwin in utils.yield_srcwin(
-                    (self.ds_config['ny'], self.ds_config['nx']), n_chunk=self.ds_config['nx']/4,
+                    (self.ds_config['ny'], self.ds_config['nx']),
+                    n_chunk=self.ds_config['nx']/4,
                     step=None, verbose=self.verbose, start_at_edge=True,
-                    msg='filling removed outliers with {}'.format(self.interpolation),
+                    msg=f'filling removed outliers with {self.interpolation}'
             ):
                 srcwin_src_data = src_data[srcwin[1]:srcwin[1]+srcwin[3],
                                            srcwin[0]:srcwin[0]+srcwin[2]]
@@ -1017,7 +1192,12 @@ class LSPOutliers(Grits):
                                                srcwin[0]:srcwin[0]+srcwin[2]]
 
                 #interp_data = self.generate_mem_ds(band_data=srcwin_src_data, srcwin=srcwin, return_array=True)
-                interp_data = gdalfun.generate_mem_ds(self.ds_config, band_data=srcwin_src_data, srcwin=srcwin, return_array=True)
+                interp_data = gdalfun.generate_mem_ds(
+                    self.ds_config,
+                    band_data=srcwin_src_data,
+                    srcwin=srcwin,
+                    return_array=True
+                )
                 srcwin_src_data[srcwin_outliers] = interp_data[srcwin_outliers]
 
                 src_data[srcwin[1]:srcwin[1]+srcwin[3],
@@ -1047,15 +1227,19 @@ class LSPOutliers(Grits):
         
         if self.verbose:
             utils.echo_msg_bold('removed {} outliers @ <{}:{}>{}:{}.'.format(
-                np.count_nonzero(outlier_mask), perc, self.k, mask_upper_limit, count_upper_limit
+                np.count_nonzero(outlier_mask), perc, self.k,
+                mask_upper_limit, count_upper_limit
             ))
         self.ds_band.SetNoDataValue(self.ds_config['ndv'])
         src_data = mask_mask_data = mask_count_data = None
 
         return(np.count_nonzero(outlier_mask))
-        
+
+    
     def run(self):
-        """Run the outlier module and scan a source DEM file for outliers and remove them."""
+        """Run the outlier module and scan a source DEM file for 
+        outliers and remove them.
+        """
 
         src_ds = self.copy_src_dem()
         if src_ds is not None:
@@ -1106,12 +1290,19 @@ class LSPOutliers(Grits):
                         continue
 
                     ## read in the mask data for the srcwin
-                    mask_mask_data = self.mask_mask_band.ReadAsArray(*srcwin) # read in the mask id data
-                    mask_count_data = self.mask_count_band.ReadAsArray(*srcwin) # read in the count data
+                    # read in the mask id data
+                    mask_mask_data = self.mask_mask_band.ReadAsArray(*srcwin)
+                    # read in the count data
+                    mask_count_data = self.mask_count_band.ReadAsArray(*srcwin) 
                         
                     ## generate a mem datasource to feed into gdal.DEMProcessing
                     #srcwin_ds = self.generate_mem_ds(band_data=band_data, srcwin=srcwin) # possibly interpolated
-                    srcwin_ds = gdalfun.generate_mem_ds(self.ds_config, band_data=band_data, srcwin=srcwin, return_array=False)
+                    srcwin_ds = gdalfun.generate_mem_ds(
+                        self.ds_config,
+                        band_data=band_data,
+                        srcwin=srcwin,
+                        return_array=False
+                    )
                     if srcwin_ds is None:
                         band_data = None
                         continue
@@ -1128,19 +1319,39 @@ class LSPOutliers(Grits):
                     ## apply elevation outliers
                     #perc,k,p = self.get_pk(srcwin_ds, var='elevation')
                     self.mask_outliers(
-                        src_data=band_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=perc, 
-                        src_weight=elevation_weight, k=k
+                        src_data=band_data,
+                        mask_data=mask_mask_data,
+                        count_data=mask_count_data,
+                        percentile=perc, 
+                        src_weight=elevation_weight,
+                        k=k
                     )                    
                     ## apply slope outliers
                     #perc,k,p = self.get_pk(srcwin_ds, var='slope')                    
-                    self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc, 
-                                                upper_only=False, src_weight=slope_weight, var='slope', k=k)
+                    self.mask_gdal_dem_outliers(
+                        srcwin_ds=srcwin_ds,
+                        band_data=band_data,
+                        mask_mask_data=mask_mask_data,
+                        mask_count_data=mask_count_data,
+                        percentile=perc, 
+                        upper_only=False,
+                        src_weight=slope_weight,
+                        var='slope',
+                        k=k
+                    )
                     ## apply tri outliers
                     #perc,k,p = self.get_pk(srcwin_ds, var='tri')                    
-                    self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc,
-                                                upper_only=False, src_weight=tri_weight, var='TRI', k=k)
+                    self.mask_gdal_dem_outliers(
+                        srcwin_ds=srcwin_ds,
+                        band_data=band_data,
+                        mask_mask_data=mask_mask_data,
+                        mask_count_data=mask_count_data,
+                        percentile=perc,
+                        upper_only=False,
+                        src_weight=tri_weight,
+                        var='TRI',
+                        k=k
+                    )
                     ## apply curvature outliers ## tmp
                     #perc,k,p = self.get_pk(slp_ds, var='slope')
                     # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
@@ -1148,9 +1359,17 @@ class LSPOutliers(Grits):
                     #                             upper_only=True, src_weight=curvature_weight, var='curvature', k=k)
                     ## apply roughness outliers
                     #perc,k,p = self.get_pk(srcwin_ds, var='roughness')                    
-                    self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc,
-                                                upper_only=False, src_weight=rough_weight, var='roughness', k=k)
+                    self.mask_gdal_dem_outliers(
+                        srcwin_ds=srcwin_ds,
+                        band_data=band_data,
+                        mask_mask_data=mask_mask_data,
+                        mask_count_data=mask_count_data,
+                        percentile=perc,
+                        upper_only=False,
+                        src_weight=rough_weight,
+                        var='roughness',
+                        k=k
+                    )
                     ## apply TPI outliers ## tmp
                     # self.mask_gdal_dem_outliers(srcwin_ds=curv_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                     #                             mask_count_data=mask_count_data, percentile=perc,
@@ -1159,20 +1378,40 @@ class LSPOutliers(Grits):
                     #                             mask_count_data=mask_count_data, percentile=perc,
                     #                             upper_only=False, src_weight=rough_weight, var='TPI', k=k)
                     #perc,k,p = self.get_pk(slp_ds, var='elevation')                    
-                    self.mask_gdal_dem_outliers(srcwin_ds=slp_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc,
-                                                upper_only=False, src_weight=slope_weight, var='TPI', k=k)
+                    self.mask_gdal_dem_outliers(
+                        srcwin_ds=slp_ds,
+                        band_data=band_data,
+                        mask_mask_data=mask_mask_data,
+                        mask_count_data=mask_count_data,
+                        percentile=perc,
+                        upper_only=False,
+                        src_weight=slope_weight,
+                        var='TPI',
+                        k=k
+                    )
                     #perc,k,p = self.get_pk(srcwin_ds, var='TPI')                    
-                    self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc,
-                                                upper_only=False, src_weight=tpi_weight, var='TPI', k=k)
+                    self.mask_gdal_dem_outliers(
+                        srcwin_ds=srcwin_ds,
+                        band_data=band_data,
+                        mask_mask_data=mask_mask_data,
+                        mask_count_data=mask_count_data,
+                        percentile=perc,
+                        upper_only=False,
+                        src_weight=tpi_weight,
+                        var='TPI',
+                        k=k
+                    )
 
                     srcwin_ds = slp_ds = rough_ds = None
                     utils.remove_glob(slp_fn, rough_fn)
 
                     ## write the mask data to file
-                    self.mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
-                    self.mask_count_band.WriteArray(mask_count_data, srcwin[0], srcwin[1])
+                    self.mask_mask_band.WriteArray(
+                        mask_mask_data, srcwin[0], srcwin[1]
+                    )
+                    self.mask_count_band.WriteArray(
+                        mask_count_data, srcwin[0], srcwin[1]
+                    )
                     band_data = mask_mask_data = mask_count_data = None
 
                 if not self.accumulate:
@@ -1193,6 +1432,7 @@ class LSPOutliers(Grits):
             return(self.dst_dem, 0)
         else:
             return(None, -1)
+
         
 class Flats(Grits):
     """Remove flat areas from the input DEM
@@ -1203,10 +1443,11 @@ class Flats(Grits):
     n_chunk(int) - the moving window size in pixels
     """
     
-    def __init__(self, size_threshold = None, n_chunk = None, **kwargs):
+    def __init__(self, size_threshold=None, n_chunk=None, **kwargs):
         super().__init__(**kwargs)
         self.size_threshold = utils.int_or(size_threshold)
         self.n_chunk = utils.int_or(n_chunk)
+
         
     def run(self):
         """Discover and remove flat zones"""
@@ -1220,7 +1461,8 @@ class Flats(Grits):
                     self.n_chunk = self.ds_config['nb']
 
                 for srcwin in gdalfun.gdal_yield_srcwin(
-                        src_ds, n_chunk=self.n_chunk, step=self.n_chunk, verbose=True
+                        src_ds, n_chunk=self.n_chunk,
+                        step=self.n_chunk, verbose=True
                 ):
                     src_arr = self.ds_band.ReadAsArray(*srcwin).astype(float)
                     uv, uv_counts = np.unique(src_arr, return_counts=True)
@@ -1237,42 +1479,131 @@ class Flats(Grits):
                     dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
                 
         dst_ds = None
-        utils.echo_msg('removed {} flats.'.format(count))
+        utils.echo_msg(f'removed {count} flats.')
         return(self.dst_dem, 0)
 
+    
 class Weights(Grits):
-    """Create a nodata buffer around data above `weight_threshold`
+    """Create a nodata buffer around data at and above `weight_threshold`
 
     You must supply a weight-mask raster along with the DEM to filter.
 
     Parameters:
 
-    buffer_cells(int) - the number of cells to buffer
-    weight_threshold(float) - the weight threshold
+    weight_thresholds(float) - the weight threshold; separate levels with slash '/'
+    buffer_sizes(int) - the number of cells to buffer; separate levels with slash '/'
+    gap_fill_sizes(int) - the number of cells to gap-fill; separate levels with slash '/'
+    fill_holes(bool) - fill holes in the weight level mask
+
+    <weights:weight_thresholds=2/20:buffer_sizes=4/2:gap_fill_sizes=10/8>
     """
     
-    def __init__(self, buffer_cells = 1, weight_threshold = None, remove_sw = False, **kwargs):
+    def __init__(self,  weight_threshold=None, buffer_cells=1, gap_fill_cells=None,
+                 weight_thresholds=None, buffer_sizes=None, gap_fill_sizes=None,
+                 binary_dilation=True, binary_pulse=False,
+                 fill_holes=False, **kwargs):
         super().__init__(**kwargs)
+        self.weight_threshold = utils.float_or(weight_threshold, 1)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
-        self.weight_threshold = utils.float_or(weight_threshold)
-        self.remove_sw = remove_sw
+        self.gap_fill_cells = utils.int_or(gap_fill_cells, 0)
         
-    def init_weight(self, src_ds = None):
+        self.weight_thresholds = weight_thresholds
+        self.buffer_sizes = buffer_sizes
+        self.gap_fill_sizes = gap_fill_sizes
+        
+        self.binary_dilation = binary_dilation
+        self.binary_pulse = binary_pulse
+        
+        self.fill_holes = fill_holes
+        self.init_thresholds()
+
+
+    def init_thresholds(self):
+        if self.weight_thresholds is not None:
+            self.weight_thresholds = [float(x) for x in self.weight_thresholds.split('/')]
+
+            if self.buffer_sizes is not None:
+                self.buffer_sizes = [int(x) for x in self.buffer_sizes.split('/')]
+            else:
+                self.buffer_sizes = [self.buffer_cells]*len(self.weight_thresholds)
+
+            if self.gap_fill_sizes is not None:
+                self.gap_fill_sizes = [int(x) for x in self.gap_fill_sizes.split('/')]
+            else:
+                self.gap_fill_sizes = [self.gap_fill_cells]*len(self.weight_thresholds)
+                
+        else:
+            self.weight_thresholds = [self.weight_threshold]
+            self.buffer_sizes = [self.buffer_cells]
+            self.gap_fill_sizes = [self.gap_fill_cells]
+
+        if len(self.buffer_sizes) < len(self.weight_thresholds):
+            len_diff = len(self.weight_thresholds) - len(self.buffer_sizes)
+            self.buffer_sizes.extend([1] * len_diff)
+            
+        if len(self.gap_fill_sizes) < len(self.weight_thresholds):
+            len_diff = len(self.weight_thresholds) - len(self.gap_fill_sizes)
+            self.gap_fill_sizes.extend([0] * len_diff)
+
+        utils.echo_msg([self.weight_thresholds, self.buffer_sizes, self.gap_fill_sizes])
+
+            
+    def init_weight(self, src_ds=None):
         weight_band = None
         if self.weight_is_fn:
             if self.weight_threshold is None:
-                self.weight_threshold = gdalfun.gdal_percentile(self.weight_mask, perc=75)
+                self.weight_threshold = gdalfun.gdal_percentile(
+                    self.weight_mask, perc=75
+                )
 
             weight_ds = gdal.Open(self.weight_mask)
             weight_band = weight_ds.GetRasterBand(1)
 
         elif self.weight_is_band and src_ds is not None:
             if self.weight_threshold is None:
-                self.weight_threshold = gdalfun.gdal_percentile(self.src_dem, perc=50, band=self.weight_mask)
+                self.weight_threshold = gdalfun.gdal_percentile(
+                    self.src_dem, perc=50, band=self.weight_mask
+                )
 
             weight_band = src_ds.GetRasterBand(self.weight_mask)
 
         return(weight_band)
+
+
+    def binary_closed_dilation(self, arr, iterations=1, closing_iterations=1):
+        closed_and_dilated_arr = arr.copy()
+        struct_ = scipy.ndimage.generate_binary_structure(2, 2)
+        for i in range(closing_iterations):
+            closed_and_dilated_arr = scipy.ndimage.binary_dilation(
+                closed_and_dilated_arr, iterations=1, structure=struct_
+            )
+            closed_and_dilated_arr = scipy.ndimage.binary_erosion(
+                closed_and_dilated_arr, iterations=1, border_value=1, structure=struct_
+            )
+
+        closed_and_dilated_arr = scipy.ndimage.binary_dilation(
+            closed_and_dilated_arr, iterations=iterations, structure=struct_
+        )
+            
+        return(closed_and_dilated_arr)
+
+
+    def binary_reversion(self, arr, iterations, closing_iterations):
+        reversion_arr = arr.copy()
+        closing_iterations += iterations
+            
+        struct_ = scipy.ndimage.generate_binary_structure(2, 2)
+        reversion_arr = scipy.ndimage.binary_dilation(
+            reversion_arr, iterations=closing_iterations, structure=struct_
+        )
+        erosion_iterations = max(closing_iterations-iterations, 0)
+        if erosion_iterations > 0:
+            reversion_arr = scipy.ndimage.binary_erosion(
+                reversion_arr, iterations=erosion_iterations, border_value=1, structure=struct_
+            )
+
+        return(reversion_arr)
+
         
     def run(self):
         if self.weight_mask is None:
@@ -1286,31 +1617,90 @@ class Weights(Grits):
             if src_ds is not None:
                 self.init_ds(src_ds)                
                 weight_band = self.init_weight(src_ds)
-                utils.echo_msg('buffering from weight {}'.format(self.weight_threshold))                    
-                for srcwin in utils.yield_srcwin(
-                        (self.ds_config['ny'], self.ds_config['nx']),
-                        n_chunk = self.ds_config['ny']/4, verbose=self.verbose,
-                        start_at_edge=True,
-                        msg='parsing srcwin'
-                ):
-                    w_arr = weight_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                    w_arr[w_arr == self.ds_config['ndv']] = np.nan
-                    weights = np.unique(w_arr)[::-1]
-                    #utils.echo_msg(weights)
-                    this_w_arr = w_arr.copy()
-                    #this_w_arr[this_w_arr < 1] = np.nan
-                    this_w_arr[this_w_arr < self.weight_threshold] = np.nan
-                    expanded_w_arr = utils.expand_for(
-                        this_w_arr >= self.weight_threshold,
-                        shiftx=self.buffer_cells, shifty=self.buffer_cells
-                    )
-                    mask = (w_arr < self.weight_threshold) & expanded_w_arr                    
-                    for b in range(1, dst_ds.RasterCount+1):
-                        this_band = dst_ds.GetRasterBand(b)
-                        this_arr = this_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                        this_arr[mask] = self.ds_config['ndv']
-                        this_band.WriteArray(this_arr, srcwin[0], srcwin[1])
-                        this_band.FlushCache()
+                # srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+                # with tqdm(
+                #         total=srcwin[1] + srcwin[3],
+                #         desc=f'buffering around weights over {self.weight_threshold}',
+                #         leave=self.verbose
+                # ) as pbar:
+                #     for y in range(
+                #             srcwin[1], srcwin[1] + srcwin[3], 1
+                #     ):
+                #         pbar.update()
+                #n_chunk=self.ds_config['nx']/9, step=self.ds_config['nx']/27
+                #n_chunk = max(self.buffer_cells**2, self.ds_config['ny']/9)
+                #n_step = max(self.buffer_cells, self.ds_config['ny']/27)
+                # n_chunk = self.ds_config['ny']
+                # for srcwin in utils.yield_srcwin(
+                #         (self.ds_config['ny'], self.ds_config['nx']),
+                #         n_chunk=n_chunk, #step=n_step,
+                #         verbose=self.verbose, start_at_edge=True,
+                #         msg=f'buffering around weights over {self.weight_thresholds}'
+                # ):
+                #w_arr = weight_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                w_arr = weight_band.ReadAsArray()#*srcwin)
+                w_arr[w_arr == self.ds_config['ndv']] = np.nan
+                weights = np.unique(w_arr)[::-1]
+                this_w_arr = w_arr.copy()
+
+                with tqdm(
+                        total=len(self.weight_thresholds),
+                        desc=f'buffering around weights over {self.weight_thresholds}',
+                        leave=self.verbose
+                ) as w_pbar:
+                    for n, weight_threshold in enumerate(self.weight_thresholds):
+                        this_w_arr[this_w_arr < weight_threshold] = np.nan
+                        if self.binary_dilation:
+                            
+                            if self.binary_pulse:
+                                weight_mask = this_w_arr >= weight_threshold
+                                expanded_w_arr = self.binary_closed_dilation(
+                                    weight_mask, iterations=self.buffer_sizes[n],
+                                    closing_iterations=self.gap_fill_sizes[n]
+                                )
+                            
+                            else:
+                                weight_mask = this_w_arr >= weight_threshold
+                                expanded_w_arr = self.binary_reversion(
+                                    weight_mask, self.buffer_sizes[n],
+                                    self.gap_fill_sizes[n]
+                                )
+                        else:
+                            ## mrl use ndimage.binary_dilation rather than the slower expand_for below
+                            shiftx = self.buffer_sizes[n] + self.gap_fill_sizes[n]#self.buffer_sizes[n] * self.revert_multiplier
+                            shifty = self.buffer_sizes[n] + self.gap_fill_sizes[n]#self.buffer_sizes[n] * self.revert_multiplier
+                            utils.echo_msg([shiftx, shifty])
+                            expanded_w_arr = utils.expand_for(
+                                this_w_arr >= weight_threshold,
+                                shiftx=int(shiftx), shifty=int(shifty)
+                            )
+
+                            shiftx = max(0, shiftx - self.buffer_sizes[n])
+                            shifty = max(0, shifty - self.buffer_sizes[n])
+                            if shiftx > 0 and shifty > 0:
+                                utils.echo_msg([shiftx, shifty])
+                                contracted_w_arr = np.invert(utils.expand_for(
+                                    np.invert(expanded_w_arr),
+                                    shiftx=int(shiftx), shifty=int(shifty),
+                                ))
+                                expanded_w_arr = contracted_w_arr.copy()
+
+                        if self.fill_holes:
+                            expanded_w_arr = scipy.ndimage.binary_fill_holes(expanded_w_arr)
+                            
+                        mask = (w_arr < weight_threshold) & expanded_w_arr
+                        this_w_arr = w_arr.copy()
+                        this_w_arr[mask] = np.nan
+                        ## mask out any values in other bands of the input/output raster
+                        for b in range(1, dst_ds.RasterCount+1):
+                            this_band = dst_ds.GetRasterBand(b)
+                            this_arr = this_band.ReadAsArray()#*srcwin)
+                            this_arr[mask] = self.ds_config['ndv']
+                            this_band.WriteArray(this_arr)#, srcwin[0], srcwin[1])
+                            this_band.FlushCache()
+                            this_band = this_arr = None
+
+                        w_pbar.update()
 
                 if self.weight_is_fn:
                     weight_ds = None
@@ -1323,11 +1713,13 @@ class Weights(Grits):
         dst_ds = None        
         return(self.dst_dem, 0)
 
+    
 ## uses way too much memory on large dems
 class WeightZones(Weights):
-    def __init__(self, size_threshold = None, **kwargs):
+    def __init__(self, size_threshold=None, **kwargs):
         super().__init__(**kwargs)
         self.size_threshold = utils.float_or(size_threshold)
+
         
     def run(self):
         if self.weight_mask is None:
@@ -1345,7 +1737,9 @@ class WeightZones(Weights):
                 n_den = self._density(this_w_arr)
                 cell_size = self.ds_config['geoT'][1]
                 #if self.units_are_degrees:
-                cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
+                # scale cellsize to meters,
+                # todo: check if input is degress/meters/feet
+                cell_size *= 111120 
 
                 m_size = 25000
                 utils.echo_msg([m_size, n_den, cell_size])
@@ -1362,7 +1756,9 @@ class WeightZones(Weights):
                 l, n = scipy.ndimage.label(this_w_arr)
                 
                 ## get the total number of cells in each group
-                mn = scipy.ndimage.sum_labels(this_w_arr, labels=l, index=np.arange(1, n+1))
+                mn = scipy.ndimage.sum_labels(
+                    this_w_arr, labels=l, index=np.arange(1, n+1)
+                )
                 utils.echo_msg(mn)
                 #utils.echo_msg(self.ds_config['nb'])
                 #size_threshold = np.nanpercentile(mn, 99)
@@ -1393,7 +1789,8 @@ class WeightZones(Weights):
 
         dst_ds = None        
         return(self.dst_dem, 0)
-            
+
+    
 class GritsFactory(factory.CUDEMFactory):
     """Grits Factory Settings and Generator
     
@@ -1437,16 +1834,18 @@ class GritsFactory(factory.CUDEMFactory):
             'call': WeightZones
         },
     }
+
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-## ==============================================
+
+###############################################################################        
 ## Command-line Interface (CLI)
 ## $ grits
 ##
 ## grits cli
-## ==============================================
+###############################################################################
 grits_cli_usage = """{cmd} ({version}): grits; GRId filTerS
 
 usage: {cmd} [ -hvCMNUWX [ args ] ] DEM ...
@@ -1501,7 +1900,8 @@ def grits_cli(argv = sys.argv):
             if module.split(':')[0] not in GritsFactory()._modules.keys():
                 utils.echo_warning_msg(
                     '''{} is not a valid grits module, available modules are: {}'''.format(
-                        module.split(':')[0], factory._cudem_module_short_desc(GritsFactory._modules)
+                        module.split(':')[0],
+                        factory._cudem_module_short_desc(GritsFactory._modules)
                     )
                 )
             else:
@@ -1513,7 +1913,8 @@ def grits_cli(argv = sys.argv):
             if module.split(':')[0] not in GritsFactory()._modules.keys():
                 utils.echo_warning_msg(
                     '''{} is not a valid grits module, available modules are: {}'''.format(
-                        module.split(':')[0], factory._cudem_module_short_desc(GritsFactory._modules)
+                        module.split(':')[0],
+                        factory._cudem_module_short_desc(GritsFactory._modules)
                     )
                 )
             else:
@@ -1559,7 +1960,9 @@ def grits_cli(argv = sys.argv):
             dst_dem = arg[2:]
         
         elif arg == '--modules' or arg == '-m':
-            factory.echo_modules(GritsFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
+            factory.echo_modules(
+                GritsFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1]
+            )
             sys.exit(0)            
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(grits_cli_usage)
@@ -1569,7 +1972,9 @@ def grits_cli(argv = sys.argv):
             sys.exit(0)
         elif arg[0] == '-':
             sys.stdout.write(grits_cli_usage)
-            utils.echo_error_msg('{} is not a valid grits cli switch'.format(arg))
+            utils.echo_error_msg(
+                f'{arg} is not a valid grits cli switch'
+            )
             sys.exit(0)
         else:
             wg_user = arg
@@ -1607,13 +2012,14 @@ def grits_cli(argv = sys.argv):
         else:
             sys.stderr.write(grits_cli_usage)
             utils.echo_error_msg(
-                'specified waffles config file/DEM does not exist, {}'.format(wg_user)
+                f'specified waffles config file/DEM does not exist, {wg_user}'
             )
             sys.exit(-1)
     else:
         sys.stderr.write(grits_cli_usage)
         utils.echo_error_msg(
-            'you must supply a waffles config file or an existing DEM; see waffles --help for more information.'
+            ('you must supply a waffles config file or an existing DEM; '
+             'see waffles --help for more information.')
         )
         sys.exit(-1)
 
@@ -1633,17 +2039,27 @@ def grits_cli(argv = sys.argv):
             continue
         
         this_grits = GritsFactory(
-            mod=module, src_dem=src_dem, min_z=min_z, max_z=max_z, min_weight=min_weight, max_weight=max_weight,
-            uncertainty_mask=uncertainty_mask, weight_mask=weight_mask, count_mask=count_mask, dst_dem=dst_dem
+            mod=module,
+            src_dem=src_dem,
+            min_z=min_z,
+            max_z=max_z,
+            min_weight=min_weight,
+            max_weight=max_weight,
+            uncertainty_mask=uncertainty_mask,
+            weight_mask=weight_mask,
+            count_mask=count_mask,
+            dst_dem=dst_dem
         )
         try:
             this_grits_module = this_grits._acquire_module()
             if this_grits_module is not None:
                 out_dem = this_grits_module()
-                utils.echo_msg('filtered DEM to {}'.format(out_dem.dst_dem))
+                utils.echo_msg(f'filtered DEM to {out_dem.dst_dem}')
                 #os.replace(out_dem.dst_dem, src_dem)
             else:
-                utils.echo_error_msg('could not acquire grits module {}'.format(module))
+                utils.echo_error_msg(
+                    f'could not acquire grits module {module}'
+                )
                 
         except KeyboardInterrupt:
             utils.echo_error_msg('Killed by user')
@@ -1651,5 +2067,6 @@ def grits_cli(argv = sys.argv):
         except Exception as e:
             utils.echo_error_msg(e)
             print(traceback.format_exc())
-        
+
+            
 ### End
