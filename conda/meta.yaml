@@ -1,4 +1,4 @@
-{% set version = "2.4.6" %}
+{% set version = "2.5.0" %}
 
 package:
   name: cudem
