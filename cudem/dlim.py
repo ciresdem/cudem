@@ -1962,7 +1962,7 @@ class ElevationDataset:
                     dst_srs=self.dst_srs,
                     invert=True,
                     verbose=True,
-                    temp_dir=self.cache_dir
+                    temp_dir=self.cache_dir,
                 )
                 opts['ogr_or_gdal'] = 0
             else:    
@@ -2907,22 +2907,16 @@ class ElevationDataset:
 
             return(msk_ds)
 
+        ## average and supercede funcs are for 'mixed mode'
         def average(weight_above, stacked_data, arrs):
             ## average of incoming data with existing data above weight_threshold
-            # weight_above = (arrs['weight'] >= wt) \
-            #     & (arrs['weight'] >= tmp_stacked_weight) \
-            #     & (~weight_above_sup)
-            # if self.want_mask:
-            #     m_array[(weight_above) & (arrs['count'] != 0)] = 1
-            #     m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
-
             stacked_data['count'][weight_above] += arrs['count'][weight_above]
             stacked_data['z'][weight_above] \
-                += (arrs['z'][weight_above] * arrs['weight'][weight_above])
+                += arrs['z'][weight_above]# * arrs['weight'][weight_above])
             stacked_data['x'][weight_above] \
-                += (arrs['x'][weight_above] * arrs['weight'][weight_above])
+                += arrs['x'][weight_above]# * arrs['weight'][weight_above])
             stacked_data['y'][weight_above] \
-                += (arrs['y'][weight_above] * arrs['weight'][weight_above])
+                += arrs['y'][weight_above]# * arrs['weight'][weight_above])
             stacked_data['src_uncertainty'][weight_above] \
                 = np.sqrt(np.power(stacked_data['src_uncertainty'][weight_above], 2) \
                           + np.power(arrs['uncertainty'][weight_above], 2))
@@ -2931,23 +2925,23 @@ class ElevationDataset:
             ## accumulate variance * weight
             stacked_data['uncertainty'][weight_above] \
                 += arrs['weight'][weight_above] \
-                * np.power((arrs['z'][weight_above] \
-                            - (stacked_data['z'][weight_above] \
-                               / stacked_data['weights'][weight_above])), 2)
+                * np.power(
+                    (((arrs['z'][weight_above] / arrs['weight'][weight_above]) \
+                      / arrs['count'][weight_above])\
+                     - ((stacked_data['z'][weight_above] / stacked_data['weights'][weight_above]) \
+                        / stacked_data['count'][weight_above])), 2)
 
             return(stacked_data)
 
         
         def supercede(weight_above_sup, stacked_data, arrs, sup=True):
-            # supercede existing data below weight_threshold
-
             stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
             stacked_data['z'][weight_above_sup] \
-                = (arrs['z'][weight_above_sup] * arrs['weight'][weight_above_sup])
+                = arrs['z'][weight_above_sup]# * arrs['weight'][weight_above_sup])
             stacked_data['x'][weight_above_sup] \
-                = (arrs['x'][weight_above_sup] * arrs['weight'][weight_above_sup])
+                = arrs['x'][weight_above_sup]# * arrs['weight'][weight_above_sup])
             stacked_data['y'][weight_above_sup] \
-                = (arrs['y'][weight_above_sup] * arrs['weight'][weight_above_sup])
+                = arrs['y'][weight_above_sup]# * arrs['weight'][weight_above_sup])
             stacked_data['src_uncertainty'][weight_above_sup] \
                 = arrs['uncertainty'][weight_above_sup]
             stacked_data['weights'][weight_above_sup] \
@@ -2955,6 +2949,7 @@ class ElevationDataset:
             stacked_data['uncertainty'][weight_above_sup] \
                 = np.array(stacked_data['src_uncertainty'][weight_above_sup])
 
+                    
             return(stacked_data)
 
 
@@ -3137,11 +3132,11 @@ class ElevationDataset:
                     #stacked_data['count'] = arrs['count']
                     #tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     
-                    tmp_stacked_weight = stacked_data['weights']
+                    tmp_stacked_weight = stacked_data['weights'].copy()
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    #sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
                     sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
                     
-                    #sup_mask = arrs['weight'] > (stacked_data['weights'])
                     if self.want_mask:
                         # remove the mask from superceded bands
                         reset_mask_bands(
@@ -3154,7 +3149,6 @@ class ElevationDataset:
                     
                     ## higher weight supercedes lower weight
                     ## (first come first served atm)
-
                     stacked_data['count'][(sup_mask)] = arrs['count'][(sup_mask)]
                     stacked_data['z'][(sup_mask)] = arrs['z'][(sup_mask)]
                     stacked_data['weights'][(sup_mask)] = tmp_arrs_weight[(sup_mask)]
@@ -3180,7 +3174,7 @@ class ElevationDataset:
                         wts = [utils.float_or(x) for x in self.stack_mode_args['weight_threshold'].split('/')]
                     else:
                         wts = [wt]
-
+                    
                     wts.sort()
                     wt_masks = []
 
@@ -3188,12 +3182,14 @@ class ElevationDataset:
                     wt_pairs.reverse()
                     # reset tmp_stacked_weight
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    #tmp_stacked_weight = stacked_data['weights'].copy()
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
                     ## ABOVE
                     ## all weights above max(wts) will supercede all weights below
                     ## data in each weight range will be averaged
-                    # mask is above max(wts)
+                    ## mask is above max(wts)
+                    #utils.echo_msg_bold(arrs['weight'])
                     weight_above_sup = (tmp_arrs_weight >= max(wts)) & \
                         (tmp_stacked_weight < max(wts))
                     if self.want_mask:
@@ -3223,9 +3219,9 @@ class ElevationDataset:
                     ## average
                     stacked_data = average(weight_above, stacked_data, arrs)
 
+                    ## mask is between wt_pair
                     for wt_pair in wt_pairs:
-                        # mask is between wt_pair
-                        # reset tmp_stacked_weight
+                        ## reset tmp_stacked_weight
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
@@ -3247,11 +3243,11 @@ class ElevationDataset:
                             
                         stacked_data = supercede(weight_between_sup, stacked_data, arrs)
 
-                        # reset tmp_stacked_weight
+                        ## reset tmp_stacked_weight
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
-                        arrs_mask = (tmp_arrs_weight >= min(wt_pair)) & \
+                        arrs_weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
                             (tmp_arrs_weight < max(wt_pair)) & \
                             (tmp_arrs_weight >= tmp_stacked_weight)
                         #tsw_mask = (tmp_stacked_weight > min(wt_pair)) & \
@@ -3259,7 +3255,7 @@ class ElevationDataset:
                         #tsw_mask = (arrs['weight'] >= tmp_stacked_weight)
                         #weight_below = (arrs['weight'] <= min(wt_pair)) & \
                         #    (tmp_stacked_weight < min(wt_pair))
-                        weight_between = (arrs_mask) & (~weight_between_sup)
+                        weight_between = (arrs_weight_between) & (~weight_between_sup)
 
                         if self.want_mask:
                             m_array[(weight_between) & (arrs['count'] != 0)] = 1
@@ -3268,9 +3264,10 @@ class ElevationDataset:
                         ## average
                         stacked_data = average(weight_between, stacked_data, arrs)
 
-                    # reset tmp_stacked_weight
+                    ## reset tmp_stacked_weight
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    
                     ## BELOW
                     # mask is below max(wts)
                     weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
@@ -3338,9 +3335,12 @@ class ElevationDataset:
                         m_all_array[arrs['count'] != 0] = 1
                     
                     ## accumulate incoming z*weight and uu*weight
-                    stacked_data['z'] += (arrs['z'] * arrs['weight'])
-                    stacked_data['x'] += (arrs['x'] * arrs['weight'])
-                    stacked_data['y'] += (arrs['y'] * arrs['weight'])
+                    # stacked_data['z'] += (arrs['z'] * arrs['weight'])
+                    # stacked_data['x'] += (arrs['x'] * arrs['weight'])
+                    # stacked_data['y'] += (arrs['y'] * arrs['weight'])
+                    stacked_data['z'] += arrs['z']
+                    stacked_data['x'] += arrs['x']
+                    stacked_data['y'] += arrs['y']
                     stacked_data['src_uncertainty'] \
                         = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) \
                                   + np.power(arrs['uncertainty'], 2))
@@ -3353,9 +3353,12 @@ class ElevationDataset:
                     ## accumulate variance * weight
                     stacked_data['uncertainty'] += arrs['weight'] \
                         * np.power(
-                            (arrs['z'] \
+                            ((arrs['z'] \
+                              / arrs['weight'] \
+                              / arrs['count']) \
                              - (stacked_data['z'] \
-                                / stacked_data['weights'])),
+                                / stacked_data['weights'] \
+                                / stacked_data['count'])),
                             2
                         )
 
@@ -3398,7 +3401,10 @@ class ElevationDataset:
             #msk_ds = remove_empty_mask_bands(m_ds)
             ###################################################################
             m_ds = None
-            
+
+        #######################################################################
+        ## finalize the stacked_data weighted sums
+        #######################################################################
         ## by scan-line
         srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
         for y in range(
@@ -3543,6 +3549,7 @@ class ElevationDataset:
                 f'generated stack: {os.path.basename(out_file)}'
             )
             if self.want_mask:
+
                 utils.echo_msg(
                     f'generated mask: {os.path.basename(mask_fn)}'
                 )
@@ -4571,7 +4578,7 @@ class ElevationDataset:
                 points_u = points['u']
             except:
                 points_u = np.zeros(points['z'].shape)
-
+                
             points_u = np.sqrt(
                 points_u**2 \
                 + (self.uncertainty if self.uncertainty is not None else 0)**2
@@ -4594,7 +4601,7 @@ class ElevationDataset:
             )
 
         
-    def yield_array(self):
+    def yield_array(self, want_sums=True):
         """Yield the data as an array which coincides with the desired 
         region, x_inc and y_inc
 
@@ -4608,6 +4615,13 @@ class ElevationDataset:
         the default value from `self.uncertainty`, otherwise the incoming 
         uncertainty values will be caluculated by 
         `np.sqrt(u**2 + self.uncertainty**2)`
+
+        output arrays are weighted sums; get the actual values with:
+        weight = weight / count
+        z = (z / weight) / count
+        x = (z / weight) / count
+        y = (z / weight) / count
+
         """
         
         out_arrays = {
@@ -4620,19 +4634,21 @@ class ElevationDataset:
             'y': None
         }
         count = 0
+        this_weight = self.weight if self.weight is not None else 1
         for points in self.transform_and_yield_points():
             xcount, ycount, dst_gt = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
+            ###################################################################
             ## convert the points to pixels based on the geotransform
             ## and calculate the local srcwin of the points
-            pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
-            pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
-            # points_x = dst_gt[0] + (pixel_x+0.5) * dst_gt[1] + (pixel_y+0.5) * dst_gt[2]
-            # points_y = dst_gt[3] + (pixel_x+0.5) * dst_gt[4] + (pixel_y+0.5) * dst_gt[5]
+            ## pixel_x and pixel_y are the location of the points_* of the srcwin
+            ###################################################################
             points_x = np.array(points['x'])
             points_y = np.array(points['y'])
             
+            pixel_x = np.floor((points_x - dst_gt[0]) / dst_gt[1]).astype(int)
+            pixel_y = np.floor((points_y - dst_gt[3]) / dst_gt[5]).astype(int)
             pixel_z = np.array(points['z'])
             try:
                 pixel_w = np.array(points['w'])
@@ -4643,8 +4659,10 @@ class ElevationDataset:
                 pixel_u = np.array(points['u'])
             except:
                 pixel_u = np.zeros(pixel_z.shape)
-                
+
+            ###################################################################
             ## remove pixels that will break the srcwin
+            ###################################################################
             out_idx = np.nonzero(
                 (pixel_x >= xcount) \
                 | (pixel_x < 0) \
@@ -4665,19 +4683,27 @@ class ElevationDataset:
             pixel_w[np.isnan(pixel_w)] = 1
             pixel_u[np.isnan(pixel_u)] = 0
             
+            ###################################################################
             ## set the srcwin of the incoming points
+            ###################################################################
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
                            int(max(pixel_x) - min(pixel_x))+1,
                            int(max(pixel_y) - min(pixel_y))+1)
             count += len(pixel_x)
 
+            ###################################################################
             ## adjust the pixels to the srcwin and stack together
+            ###################################################################
             pixel_x = pixel_x - this_srcwin[0]
             pixel_y = pixel_y - this_srcwin[1]
             pixel_xy = np.vstack((pixel_y, pixel_x)).T
-            
-            ## find the non-unique x/y points and mean/min/max their z values together
-            ## while calculating the std for uncertainty
+
+            ###################################################################
+            ## find the non-unique x/y points and mean/min/max their z values
+            ## together while calculating the std for uncertainty
+            ## dup_idx are the indices of duplicate values (points in the same
+            ## cell). unq_idx are the indices of the unique values.
+            ###################################################################
             unq, unq_idx, unq_inv, unq_cnt = np.unique(
                 pixel_xy, axis=0, return_inverse=True,
                 return_index=True, return_counts=True
@@ -4690,33 +4716,55 @@ class ElevationDataset:
             dup_idx = np.split(
                 idx_idx[srt_idx], np.cumsum(unq_cnt[cnt_msk])[:-1]
             )
-            zz = pixel_z[unq_idx]
-            ww = pixel_w[unq_idx]
+
+            ###################################################################
+            ## set the output arrays; set to the target grid
+            ## arrays will hold weighted-sums
+            ###################################################################
+            ww = pixel_w[unq_idx] * this_weight
+            zz = pixel_z[unq_idx] * ww 
             uu = pixel_u[unq_idx]
-            xx = points_x[unq_idx]
-            yy = points_y[unq_idx]
-            #u = np.zeros(zz.shape)
+            xx = points_x[unq_idx] * ww
+            yy = points_y[unq_idx] * ww
+
+            ###################################################################
+            ## min/max/sum the duplicates (values in the same cell)
+            ## min and max get the count reset to 1, the count is accumulated
+            ## in mean, mixed
+            ###################################################################
             if np.any([len(dup) for dup in dup_idx]):
                 if self.stack_mode == 'min':
                     dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
                     dup_stds = np.zeros(dup_stack.shape)
+                    dup_stack_x = [np.min(pixel_x[dup]) for dup in dup_idx]
+                    dup_stack_y = [np.min(pixel_y[dup]) for dup in dup_idx]
+                    dup_counts = [1 for dup in dup_idx]
                 elif self.stack_mode == 'max':
                     dup_stack = [np.max(pixel_z[dup]) for dup in dup_idx]
                     dup_stds = np.zeros(dup_stack.shape)
+                    dup_stack_x = [np.max(pixel_x[dup]) for dup in dup_idx]
+                    dup_stack_y = [np.max(pixel_y[dup]) for dup in dup_idx]
+                    dup_counts = [1 for dup in dup_idx]
                 else:
-                    dup_stack = [np.mean(pixel_z[dup]) for dup in dup_idx]
-                    dup_stack_x = [np.mean(points_x[dup]) for dup in dup_idx]
-                    dup_stack_y = [np.mean(points_y[dup]) for dup in dup_idx]
+                    dup_stack = [np.sum((pixel_z[dup] * (pixel_w[dup] * this_weight))) \
+                                 for dup in dup_idx]
+                    dup_stack_x = [np.sum((points_x[dup] * (pixel_w[dup] * this_weight))) \
+                                   for dup in dup_idx]
+                    dup_stack_y = [np.sum((points_y[dup] * (pixel_w[dup] * this_weight))) \
+                                   for dup in dup_idx]
                     dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
-                    dup_w = [np.sum(pixel_w[dup]) for dup in dup_idx]
-
+                    dup_w = [np.sum((pixel_w[dup] * this_weight)) for dup in dup_idx]
+                    #dup_counts = [np.sum(unq_cnt[dup]) for dup in dup_idx]
+                    
                 ww[cnt_msk] = dup_w
                 zz[cnt_msk] = dup_stack
-                #uu[cnt_msk] = np.sqrt(dup_stds)
+                yy[cnt_msk] = dup_stack_y
+                xx[cnt_msk] = dup_stack_x
                 uu[cnt_msk] = np.sqrt(
-                    np.power(uu[cnt_msk],2) + np.power(dup_stds,2)
+                    np.power(uu[cnt_msk], 2) + np.power(dup_stds, 2)
                 )
-                
+                #cc[cnt_msk] = dup_counts
+
             ## make the output arrays to yield
             out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_x[unq[:,0], unq[:,1]] = xx
@@ -4735,35 +4783,24 @@ class ElevationDataset:
             
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
-            
-            out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
-            out_arrays['weight'][:] = self.weight if self.weight is not None else 1
+
+            out_w = np.ones((this_srcwin[3], this_srcwin[2]))
+            out_w[unq[:,0], unq[:,1]] = ww #* this_weight)
+            out_arrays['weight'] = out_w            
+            #out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
+            #out_arrays['weight'][unq[:,0], unq[:,1]] = (ww * this_weight)
+            #out_arrays['weight'][:] = self.weight if self.weight is not None else 1
             #out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
-            out_arrays['weight'][unq[:,0], unq[:,1]] *= ww
+            #out_arrays['weight'][unq[:,0], unq[:,1]] *= ww
             #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
             
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-            #out_arrays['uncertainty'][:] = self.uncertainty if
-            #self.uncertainty is not None else 0
             out_arrays['uncertainty'][unq[:,0], unq[:,1]] \
                 = np.sqrt(
                     uu**2 \
                     + (self.uncertainty if self.uncertainty is not None else 0)**2
                 )
-
-            ## by scan-line for h5
-            # for y in range(0, this_srcwin[3], 1):
-            #     scanline_arrays = {}
-            #     scanline_srcwin = (this_srcwin[0], this_srcwin[1]+y, this_srcwin[2], 1)
-            #     for key in out_arrays.keys():
-            #         if out_arrays[key] is not None:                        
-            #             scanline_arrays[key] = out_arrays[key][y:y+1, 0:this_srcwin[2]]
-            #         else:
-            #             scanline_arrays[key] = out_arrays[key]
-
-            #     yield(scanline_arrays, scanline_srcwin, dst_gt)
-                        
-            ## for gdal
+            
             yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
@@ -11489,22 +11526,22 @@ See `datalists_usage` for full cli options.
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
                 else:
-                    #try:
-                    # process and dump each dataset independently
-                    if want_separate: 
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else:
-                        # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #   utils.echo_error_msg('Killed by user')
-                    #   break
-                    # except BrokenPipeError:
-                    #   utils.echo_error_msg('Pipe Broken')
-                    #   break
-                    # except Exception as e:
-                    #   utils.echo_error_msg(e)
-                    #   print(traceback.format_exc())
+                    try:
+                        # process and dump each dataset independently
+                        if want_separate: 
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else:
+                            # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                      utils.echo_error_msg('Killed by user')
+                      break
+                    except BrokenPipeError:
+                      utils.echo_error_msg('Pipe Broken')
+                      break
+                    except Exception as e:
+                      utils.echo_error_msg(e)
+                      print(traceback.format_exc())
                     
 ### End
