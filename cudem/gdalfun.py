@@ -1557,10 +1557,9 @@ def gdal_clip(src_gdal, dst_gdal, src_ply=None, invert=False,
     g_region = regions.Region().from_geo_transform(
         geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny']
     )
-    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', temp_dir=cache_dir)
-    
+    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', temp_dir=cache_dir)    
     out, status = utils.run_cmd(
-        'ogr2ogr {} {} -clipsrc {} -nlt MULTIPOLYGON -skipfailures -makevalid'.format(
+        'ogr2ogr {} {} -clipsrc {} -nlt POLYGON -skipfailures -makevalid'.format(
             tmp_ply, src_ply, g_region.format('ul_lr')
         ),
         verbose=verbose

@@ -5305,7 +5305,7 @@ class TheNationalMap(FetchModule):
                         f'could not parse datasets: {datasets}, {e}'
                     )
                     _data['datasets'] = "National Elevation Dataset (NED) 1 arc-second"
-                
+
             if self.q is not None: _data['q'] = str(self.q)
             if self.f is not None: _data['prodFormats'] = ','.join(self.f.split('/'))
             if self.e is not None: _data['prodExtents'] = ','.join(self.e.split('/'))
@@ -5326,6 +5326,7 @@ class TheNationalMap(FetchModule):
                 self._tnm_api_products_url, verbose=self.verbose
             ).fetch_req(params=_data, timeout=60, read_timeout=60)
             if _req is not None and _req.status_code == 200:
+                utils.echo_msg(_req.url)
                 response_text = _req.text
                 if response_text.startswith("{errorMessage"):
                     continue

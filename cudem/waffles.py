@@ -1005,8 +1005,9 @@ class WafflesStacks(Waffle):
         z_band = z_ds.GetRasterBand(1)
         z_band.SetNoDataValue(self.ndv)
         for arrs, srcwin, gt in self.stack_ds.yield_array():
-            arrs['z'][np.isnan(arrs['z'])] = self.ndv
-            z_band.WriteArray(arrs['z'], srcwin[0], srcwin[1])
+            out_z = (arrs['z'] / arrs['weight']) / arrs['count']
+            out_z[np.isnan(out_z)] = self.ndv
+            z_band.WriteArray(out_z, srcwin[0], srcwin[1])
             
         z_ds = None
         if self.verbose:
@@ -3948,6 +3949,7 @@ class WafflesCUDEM(Waffle):
             dst_srs=self.dst_srs,
             srs_transform=self.srs_transform,
             clobber=True,
+            cache_dir=self.cache_dir,
             verbose=True)._acquire_module()
         coastline.initialize()
         coastline.generate()
@@ -4172,6 +4174,7 @@ class WafflesCUDEM(Waffle):
                     fltr=self.pre_smoothing if pre != 0 else None,
                     #fltr=last_fltr,
                     percentile_limit=self.flatten if pre == 0 else None,
+                    cache_dir=self.cache_dir,
                 )._acquire_module()
                 pre_surface.initialize()
                 pre_surface.generate()
@@ -6160,6 +6163,7 @@ class WaffleDEM:
                     dst_srs=self.dst_srs,
                     srs_transform=self.srs_transform,
                     clobber=True,
+                    cache_dir=self.cache_dir,
                     verbose=self.verbose
                 )._acquire_module()
                 self.coast.initialize()
@@ -6179,6 +6183,10 @@ class WaffleDEM:
                     )
                     if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
                         os.replace(tmp_clip, self.fn)
+                        if self.verbose:
+                            utils.echo_msg(
+                                f'{tmp_clip} -> {self.fn}'
+                            )
                         self.initialize()
                         if self.verbose:
                             utils.echo_msg(
