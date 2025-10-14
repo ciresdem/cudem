@@ -4061,12 +4061,7 @@ class WafflesCUDEM(Waffle):
         if self.landmask:            
             if isinstance(self.landmask, str):
                 if os.path.exists(self.landmask.split(':')[0]):
-<<<<<<< HEAD
-                    pre_clip = '{}:invert={}'.format(self.landmask, self.invert_landmask) # todo: update to make 'invert' an option
-=======
-                    # todo: update to make 'invert' an option
                     pre_clip = '{}:invert={}'.format(self.landmask, self.invert_landmask) 
->>>>>>> dev
 
             if pre_clip is None:
                 coast_data = [
