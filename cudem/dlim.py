@@ -11222,6 +11222,8 @@ class DatasetFactory(factory.CUDEMFactory):
         if self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
         else:
+            utils.echo_msg(self.kwargs['parent'])
+            utils.echo_msg(self.kwargs['parent'].fn)
             if self.mod_name >= -2 \
                and os.path.dirname(self.kwargs['parent'].fn) \
                != os.path.dirname(entry[0]) and \

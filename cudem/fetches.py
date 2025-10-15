@@ -7249,7 +7249,7 @@ class EarthData(FetchModule):
     """
 
     def __init__(self, short_name='ATL03', provider='', time_start='', time_end='',
-                 version='', filename_filter=None, egi=False, **kwargs):
+                 version='', filename_filter=None, subset=False, **kwargs):
         super().__init__(name='cmr', **kwargs)
         self.short_name = short_name
         self.provider = provider
@@ -7257,12 +7257,11 @@ class EarthData(FetchModule):
         self.time_end = time_end
         self.version = version
         self.filename_filter = filename_filter
-        self.egi = egi
+        self.subset = subset
 
         ## The various EarthData URLs
         self._cmr_url = 'https://cmr.earthdata.nasa.gov/search/granules.json?'
-        self._egi_url = 'https://n5eil02u.ecs.nsidc.org/egi/request?'
-        self._egi_zip_url = 'https://n5eil02u.ecs.nsidc.org/esir/'
+        self._harmony_url = f'https://harmony.earthdata.nasa.gov/ogc-api-edr/1.1.0/collections/{short_name}/cube?'
 
         ## Set up the earthdata credentials, and add it to our headers
         credentials = get_credentials(None)
@@ -7306,45 +7305,61 @@ class EarthData(FetchModule):
             for filename_filter in filename_filters:
                 _data['producer_granule_id'] = self.add_wildcards_to_str(filename_filter)
 
-        if self.egi:
-            _egi_data = {
-                'email': 'no',
-                'short_name': self.short_name,
+        if self.subset:
+            _harmony_data = {
                 'bbox': self.region.format('bbox'),
-                'page_size': 10,
-                'page_num': 1,
             }
             ## add time if specified
             if self.time_start != '' or self.time_end != '':
-                _egi_data['temporal'] = f'{self.time_start}, {self.time_end}'
+                start_time = datetime.datetime.fromisoformat(self.time_start).isoformat() + 'Z' if self.time_start != '' else '..'
+                end_time = datetime.datetime.fromisoformat(self.time_end).isoformat() + 'Z' if self.time_end != '' else '..'
+                _harmony_data['datetime'] = f'{start_time}/{end_time}'
                 #'time': f'{self.time_start}, {self.time_end}',
 
             utils.echo_msg('requesting data subsets, please wait...')
-            while True:
-                _req = Fetch(
-                    self._egi_url
-                ).fetch_req(
-                    params=_egi_data, timeout=None, read_timeout=None
-                )
-                if _req is not None and _req.status_code == 200:
-                    if 'Content-Disposition' in _req.headers.keys():
-                        zip_attach = _req.headers['Content-Disposition'].split('=')[-1].strip('/"')
-                        zip_url = '{}{}'.format(self._egi_zip_url, zip_attach)
+            #utils.echo_msg(self._harmony_url)
+            #utils.echo_msg(_harmony_data)
+            status_url = None
+            _req = Fetch(
+                self._harmony_url
+            ).fetch_req(
+                params=_harmony_data, timeout=None, read_timeout=None
+            )
+            if _req is not None and _req.status_code == 200:
+                status_json = _req.json()
+                utils.echo_msg(status_json['message'])
+                for link in status_json['links']:
+                    if link['title'] == 'Job Status' or link['title'] == 'The current page':
+                        status_url = link['href']
 
-                        ## NSIDC sometimes returns a url for a single
-                        ## processed h5 granule. This file apparently doesn't
-                        ## exist and would result ins a failed fetch, so we
-                        ## skip non zip-files here to bypass that.
-                        if zip_url.endswith('.zip'):
-                            self.add_entry_to_results(
-                                zip_url,
-                                zip_attach,
-                                '{}_processed_zip'.format(self.short_name)
-                            )
-                            
-                        _egi_data['page_num'] += 1
-                else:
-                    break    
+                if status_url is not None:                
+                    with tqdm(
+                            total=100,
+                            desc='processing IceSat2 data',
+                            leave=self.verbose
+                    ) as pbar:
+                    
+                        while True:
+                            _req = Fetch(status_url).fetch_req(timeout=None, read_timeout=None)
+                            if _req is not None and _req.status_code == 200:
+                                status = _req.json()
+                                pbar.n = status['progress']
+                                pbar.refresh()
+                                if status['status'] == 'successful':
+                                    for link in status['links']:
+                                        if link['href'].endswith('.h5'):
+                                            self.add_entry_to_results(
+                                                link['href'],
+                                                os.path.basename(link['href']),
+                                                f'{self.short_name} subset'
+                                            )
+
+                                    break
+                                elif status['status'] == 'running':
+                                    time.sleep(10)
+                            else:
+                                break    
+            
         else:
             _req = Fetch(self._cmr_url).fetch_req(params=_data)
             if _req is not None:
@@ -7400,11 +7415,12 @@ class IceSat2(EarthData):
                 )
                 short_name = 'ATL03'
                 
-        super().__init__(short_name=short_name, egi=subset, **kwargs)
+        super().__init__(short_name=short_name, subset=subset, **kwargs)
 
         ## for dlim
         self.data_format = 303
         self.src_srs = 'epsg:4326+3855'
+        #self.subset = subset
 
         
 ## SWOT from EarthData
