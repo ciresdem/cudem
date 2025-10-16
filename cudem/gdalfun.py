@@ -1625,6 +1625,7 @@ def crop(src_gdal, dst_gdal):
             ds_config['nb'] = int(ds_config['nx'] * ds_config['ny'])
             status = gdal_write(dst_arr, dst_gdal, ds_config)
         else:
+            utils.echo_warning_msg(f'could not load gdal file {src_gdal}')
             return(None, status)
 
     return(status)
