@@ -993,7 +993,9 @@ def gdal_infos(src_gdal, region=None, scan=False, band=1):
                 utils.echo_warning_msg(
                     f'invalid band {band} for data source {src_gdal}'
                 )
-
+        else:
+            utils.echo_warning_msg(f'could not load gdal file {src_gdal}')
+                
     return(ds_config)
 
 
@@ -1625,7 +1627,6 @@ def crop(src_gdal, dst_gdal):
             ds_config['nb'] = int(ds_config['nx'] * ds_config['ny'])
             status = gdal_write(dst_arr, dst_gdal, ds_config)
         else:
-            utils.echo_warning_msg(f'could not load gdal file {src_gdal}')
             return(None, status)
 
     return(status)
