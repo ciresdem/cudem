@@ -5911,6 +5911,8 @@ class GDALFile(ElevationDataset):
         #inf_region = regions.Region().from_string(self.infos.wkt)
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
+        utils.echo_msg_bold(self.dem_infos)
+        
         if self.node is None:
             self.node = gdalfun.gdal_get_node(self.fn, 'pixel')
             
