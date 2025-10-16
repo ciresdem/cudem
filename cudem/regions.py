@@ -1108,6 +1108,7 @@ def ogr_wkts(src_ds):
     """return the wkt(s) of the ogr dataset"""
     
     these_regions = []
+    f_no_geom = 0
     src_s = src_ds.split(':')
     if os.path.exists(src_s[0]):
         poly = ogr.Open(src_s[0])
@@ -1126,8 +1127,13 @@ def ogr_wkts(src_ds):
                         if len(src_r) > 3:  r.wmax = utils.float_or(src_r[3])
 
                     these_regions.append(r)
+                else:
+                    f_no_geom += 1
 
         poly = None
+
+    if f_no_geom > 0:
+        utils.echo_warning_msg(f'{f_no_geom} features had no geometry')
         
     return(these_regions)
 
