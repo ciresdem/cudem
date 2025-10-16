@@ -1115,16 +1115,17 @@ def ogr_wkts(src_ds):
             p_layer = poly.GetLayer(0)
             for pf in p_layer:
                 pgeom = pf.GetGeometryRef()
-                pwkt = pgeom.ExportToWkt()
-                r = Region().from_string(pwkt)
-                if len(src_s) > 1:
-                    src_r = src_s[1].split('/')
-                    if len(src_r) > 0: r.zmin = utils.float_or(src_r[0])
-                    if len(src_r) > 1: r.zmax = utils.float_or(src_r[1])
-                    if len(src_r) > 2: r.wmin = utils.float_or(src_r[2])
-                    if len(src_r) > 3:  r.wmax = utils.float_or(src_r[3])
-                    
-                these_regions.append(r)
+                if pgeom is not None:
+                    pwkt = pgeom.ExportToWkt()
+                    r = Region().from_string(pwkt)
+                    if len(src_s) > 1:
+                        src_r = src_s[1].split('/')
+                        if len(src_r) > 0: r.zmin = utils.float_or(src_r[0])
+                        if len(src_r) > 1: r.zmax = utils.float_or(src_r[1])
+                        if len(src_r) > 2: r.wmin = utils.float_or(src_r[2])
+                        if len(src_r) > 3:  r.wmax = utils.float_or(src_r[3])
+
+                    these_regions.append(r)
 
         poly = None
         
