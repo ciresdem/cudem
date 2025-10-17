@@ -12,7 +12,7 @@ from cudem import dlim
 from cudem import regions
 from cudem import utils
 
-gfr_version = 0.2
+gfr_version = 0.3
 
 def Usage():
     print('Usage: gdal_polygonize_mask.py src_mask [opts]')
@@ -28,6 +28,7 @@ if __name__ == "__main__":
     want_footprint = False
     xy_inc = [None, None]
     region = None
+    outfn = None
     
     i = 1
     while i < len(sys.argv):
@@ -44,6 +45,11 @@ if __name__ == "__main__":
         elif arg[:2] == '-R':
             region = str(arg[2:])
 
+        elif arg == '--outfile' or arg == '-O':
+            outfn = str(sys.argv[i + 1])
+            i = i + 1
+        elif arg[:2] == '-O':
+            outfn = str(arg[2:])
             
         elif arg == '--mask_level' or arg == '-mask_level':
             mask_level = utils.int_or(sys.argv[i+1], 0)
@@ -93,6 +99,6 @@ if __name__ == "__main__":
         if has_gdal_footprint and want_footprint:
             sm_files, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True, mask_level=mask_level)
         else:
-            sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True, mask_level=mask_level)
+            sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True, mask_level=mask_level, output=outfn)
 
 #--END

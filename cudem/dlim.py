@@ -405,7 +405,7 @@ def polygonize_mask_multibands(
     ds = driver.CreateDataSource(dst_vector)
     if ds is not None: 
         layer = ds.CreateLayer(
-            'footprints', srs, ogr.wkbMultiPolygon
+            dst_layer, srs, ogr.wkbMultiPolygon
         )
         [layer.SetFeature(feature) for feature in layer]
     else:
@@ -496,7 +496,7 @@ def polygonize_mask_multibands(
     ds = ogr.Open(dst_vector, 1)
     field_names_to_delete = ['DN', 'Name', 'Uncertainty']
     for fnd in field_names_to_delete:
-        ds.ExecuteSQL(f'ALTER TABLE footprints DROP COLUMN {fnd}')
+        ds.ExecuteSQL(f'ALTER TABLE {dst_layer} DROP COLUMN {fnd}')
 
     ds = None
 
@@ -7479,7 +7479,8 @@ class IceSat2File(ElevationDataset):
             verbose=self.verbose,
             outdir=self.cache_dir,
             short_name=short_name,
-            filename_filter=atlxx_filter
+            filename_filter=atlxx_filter,
+            subset=True if 'subset' in self.fn else False,
         )
         this_atlxx.run()
         if len(this_atlxx.results) == 0:
