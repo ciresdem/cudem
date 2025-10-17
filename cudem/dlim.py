@@ -415,6 +415,8 @@ def polygonize_mask_multibands(
     layer.StartTransaction()
     defn = None
 
+    #field_names_to_delete = ['DN', 'Name', 'Uncertainty']
+    
     with tqdm(
             desc='polygonizing mask bands.',
             total=src_ds.RasterCount,
@@ -429,8 +431,6 @@ def polygonize_mask_multibands(
             field_names = [field.name for field in layer.schema]
             this_band_md = {k.title():v for k,v in this_band_md.items()}            
             for k in this_band_md.keys():
-                # if k[:9] not in field_names:
-                #     layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
                 if k not in field_names:
                     layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
 
@@ -449,7 +449,6 @@ def polygonize_mask_multibands(
                     tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
                     tmp_name = str(this_band_name)                                    
                     for k in this_band_md.keys():
-                        #tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
                         tmp_layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
 
                     if 'Title' not in this_band_md.keys():
@@ -478,7 +477,6 @@ def polygonize_mask_multibands(
                         ) as feat_pbar:
                             for k in this_band_md.keys():
                                 feat_pbar.update()
-                                #out_feat.SetField(k[:9], this_band_md[k])
                                 out_feat.SetField(k, this_band_md[k])
 
                             if 'Title' not in this_band_md.keys():
@@ -487,13 +485,21 @@ def polygonize_mask_multibands(
                             out_feat.SetField('DN', b)
                             status = layer.CreateFeature(out_feat)
                             #layer.SetFeature(out_feat)
-
+                
                 # if verbose:
                 #     utils.echo_msg('polygonized {}'.format(this_band_name))
                 tmp_ds = tmp_layer = None
                 
-    layer.CommitTransaction()            
+    layer.CommitTransaction()
     ds = src_ds = None
+    
+    ds = ogr.Open(dst_vector, 1)
+    field_names_to_delete = ['DN', 'Name', 'Uncertainty']
+    for fnd in field_names_to_delete:
+        ds.ExecuteSQL(f'ALTER TABLE footprints DROP COLUMN {fnd}')
+
+    ds = None
+
     return(dst_layer, ogr_format)
 
 
