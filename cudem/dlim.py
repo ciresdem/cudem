@@ -429,8 +429,10 @@ def polygonize_mask_multibands(
             field_names = [field.name for field in layer.schema]
             this_band_md = {k.title():v for k,v in this_band_md.items()}            
             for k in this_band_md.keys():
-                if k[:9] not in field_names:
-                    layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+                # if k[:9] not in field_names:
+                #     layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+                if k not in field_names:
+                    layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
 
             if 'Title' not in this_band_md.keys():
                 if 'Title' not in field_names:
@@ -447,7 +449,8 @@ def polygonize_mask_multibands(
                     tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
                     tmp_name = str(this_band_name)                                    
                     for k in this_band_md.keys():
-                        tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+                        #tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+                        tmp_layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
 
                     if 'Title' not in this_band_md.keys():
                         tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
@@ -475,7 +478,8 @@ def polygonize_mask_multibands(
                         ) as feat_pbar:
                             for k in this_band_md.keys():
                                 feat_pbar.update()
-                                out_feat.SetField(k[:9], this_band_md[k])
+                                #out_feat.SetField(k[:9], this_band_md[k])
+                                out_feat.SetField(k, this_band_md[k])
 
                             if 'Title' not in this_band_md.keys():
                                 out_feat.SetField('Title', tmp_name)
@@ -6111,8 +6115,9 @@ class GDALFile(ElevationDataset):
         if x/y incs are set, will warp raster to that resolution.
         """
 
-        if self.check_path and not os.path.exists(self.fn):
-            return(None)
+        if self.fn is None or (self.check_path and not os.path.exists(self.fn)):
+            utils.echo_warning_msg(f'{self.fn} doesn\'t exist!')
+            return(None)    
 
         ## apply any open_options that are specified
         try:
