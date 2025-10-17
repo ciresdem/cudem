@@ -5896,7 +5896,8 @@ class GDALFile(ElevationDataset):
         if x/y incs are set, will warp raster to that resolution.
         """
 
-        if self.check_path and not os.path.exists(self.fn):
+        if self.fn is None or (self.check_path and not os.path.exists(self.fn)):
+            utils.echo_warning_msg(f'{self.fn} doesn\'t exist!')
             return(None)
 
         ## apply any open_options that are specified
@@ -5911,7 +5912,6 @@ class GDALFile(ElevationDataset):
         #inf_region = regions.Region().from_string(self.infos.wkt)
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
-        utils.echo_msg_bold(self.dem_infos)
         
         if self.node is None:
             self.node = gdalfun.gdal_get_node(self.fn, 'pixel')
