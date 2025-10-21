@@ -1730,6 +1730,7 @@ class GMTSurface(Waffle):
     convergence=[val/None] - gridding convergence
     blockmean=[True/False] - pipe the data through gmt blockmean before gridding
     geographic=[True/Faslse] - data/grid are geographic
+    pixel_node=[True/False] - grid in pixel-node
 
     < gmt-surface:tension=.35:relaxation=1:max_radius=None:aspect=None:breakline=None:convergence=None:blockmean=False:geographic=True >
     """
@@ -1756,6 +1757,7 @@ class GMTSurface(Waffle):
         self.geographic = geographic
         self.pixel_node = pixel_node
 
+        self.gc = utils.config_check(chk_config_file=False))
         
     def run(self):
         if self.gc['GMT'] is None:
