@@ -1757,7 +1757,7 @@ class GMTSurface(Waffle):
         self.geographic = geographic
         self.pixel_node = pixel_node
 
-        self.gc = utils.config_check(chk_config_file=False))
+        self.gc = utils.config_check(chk_config_file=False)
         
     def run(self):
         if self.gc['GMT'] is None:

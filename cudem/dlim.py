@@ -7333,13 +7333,14 @@ class IceSat2File(ElevationDataset):
                 )
                 self.atl08_f.close()
 
-        if self.atl24_fn is not None and os.path.exists(self.atl24_fn):
-            self.atl24_f = h5.File(self.atl24_fn, 'r')
-            if 'short_name' not in self.atl24_f.attrs.keys():
-                utils.echo_warning_msg(
-                    f'{self.atl24_fn} does not appear to be an ATL file'
-                )
-                self.atl24_f.close()
+        ## atl24 doesn't have the short_name attr
+        # if self.atl24_fn is not None and os.path.exists(self.atl24_fn):
+        #     self.atl24_f = h5.File(self.atl24_fn, 'r')
+        #     if 'short_name' not in self.atl24_f.attrs.keys():
+        #         utils.echo_warning_msg(
+        #             f'{self.atl24_fn} does not appear to be an ATL file'
+        #         )
+        #         self.atl24_f.close()
                 
         if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
             self.atl13_f = h5.File(self.atl13_fn, 'r')
