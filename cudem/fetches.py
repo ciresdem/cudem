@@ -42,6 +42,8 @@ import json
 import re
 import requests
 import urllib
+# import certifi
+# import urllib3
 import lxml.etree
 import lxml.html as lh
 from tqdm import tqdm
@@ -97,6 +99,11 @@ thredds_namespaces = {
     'th': 'http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0',
 }
 
+
+# http = urllib3.PoolManager(
+#     cert_reqs="CERT_REQUIRED",
+#     ca_certs=certifi.where()
+# )
 
 ## callback for use in fetches. currently, only the coastline and hydrolakes modules use
 ## fetches processes...Change this function to better handle failed fetches. `r` is the
@@ -825,7 +832,8 @@ def fetch_queue(q, c = True):
     """
 
     ## temporary bypass of ssl for certain modules...
-    no_verify = ['tnm', 'mar_grav', 'srtm_plus']
+    #no_verify = ['tnm', 'mar_grav', 'srtm_plus']
+    no_verify = ['mar_grav', 'srtm_plus']
     while True:
         fetch_args = q.get()
         if not os.path.exists(os.path.dirname(fetch_args[1])):
@@ -5283,7 +5291,7 @@ class TheNationalMap(FetchModule):
         
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_api_products_url = 'http://tnmaccess.nationalmap.gov/api/v1/products?'
-        self.headers['Host'] = 	'tnmaccess.nationalmap.gov'
+        #self.headers['Host'] = 	'tnmaccess.nationalmap.gov'
 
         
     def run(self):
@@ -7358,7 +7366,9 @@ class EarthData(FetchModule):
                                 elif status['status'] == 'running':
                                     time.sleep(10)
                             else:
-                                break    
+                                break
+            else:
+                utils.echo_warning_msg(f'failed to make subset request: {_req.status_code}')
             
         else:
             _req = Fetch(self._cmr_url).fetch_req(params=_data)

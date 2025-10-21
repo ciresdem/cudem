@@ -1736,7 +1736,8 @@ class GMTSurface(Waffle):
     
     def __init__(self, tension=1, relaxation=1, max_radius=None,
                  aspect=None, breakline=None, convergence=None,
-                 blockmean=False, geographic=True, **kwargs):
+                 blockmean=False, geographic=True, pixel_node=False,
+                 **kwargs):
         super().__init__(**kwargs)
         if utils.float_or(tension) is not None:
             if utils.float_or(tension) > 1:
@@ -1753,6 +1754,7 @@ class GMTSurface(Waffle):
         self.aspect = aspect
         self.blockmean = blockmean
         self.geographic = geographic
+        self.pixel_node = pixel_node
 
         
     def run(self):
@@ -1772,17 +1774,21 @@ class GMTSurface(Waffle):
         dem_surf_cmd = ('')
         if self.blockmean:
             dem_surf_cmd = (
-                'gmt blockmean {} -I{:.16f}/{:.16f}+e{}{} -V |'.format(
-                    self.ps_region.format('gmt'), self.xinc, self.yinc,
-                    ' -W' if self.want_weight else '', ' -fg' if self.geographic else ''
+                'gmt blockmean {} -I{:.16f}/{:.16f}+e{}{}{} -V |'.format(
+                    self.ps_region.format('gmt') if not self.pixel_node else self.p_region.format('gmt'),
+                    self.xinc, self.yinc,
+                    ' -W' if self.want_weight else '',
+                    ' -fg' if self.geographic else '',
+                    ' -rp' if self.pixel_node else '',
                 )
             )
 
         ## mrl: removed -rp and switched p_region to ps_region
         ## (pre 6.5.0 will shift the grid otherwise)
         dem_surf_cmd += (
-            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}{}'.format(
-                self.ps_region.format('gmt'), self.xinc, self.yinc,
+            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}{}{}'.format(
+                self.ps_region.format('gmt') if not self.pixel_node else self.p_region.format('gmt'),
+                self.xinc, self.yinc,
                 self.name, self.ndv, self.tension, self.relaxation,
                 ' -Qr' if self.gc['GMT'] >= '6.5.0' else '',
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
@@ -1790,6 +1796,7 @@ class GMTSurface(Waffle):
                 ' -C{}'.format(self.convergence) if self.convergence is not None else '',
                 ' -A{}'.format(self.aspect) if self.aspect is not None else '',
                 ' -fg' if self.geographic else '',
+                ' -rp' if self.pixel_node else '',
             )
         )
 

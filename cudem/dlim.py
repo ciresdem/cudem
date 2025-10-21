@@ -7310,7 +7310,7 @@ class IceSat2File(ElevationDataset):
             self.atl03_f = h5.File(self.atl03_fn, 'r')            
             if 'short_name' not in self.atl03_f.attrs.keys():
                 raise UnboundLocalError(
-                    'this file does not appear to be an ATL03 file'
+                    f'{self.atl03_fn} does not appear to be an ATL03 file'
                 )
         
             if self.reject_failed_qa:
@@ -7329,7 +7329,7 @@ class IceSat2File(ElevationDataset):
             self.atl08_f = h5.File(self.atl08_fn, 'r')
             if 'short_name' not in self.atl08_f.attrs.keys():
                 utils.echo_warning_msg(
-                    'this file does not appear to be an ATL file'
+                    f'{self.atl08_fn} does not appear to be an ATL file'
                 )
                 self.atl08_f.close()
 
@@ -7337,7 +7337,7 @@ class IceSat2File(ElevationDataset):
             self.atl24_f = h5.File(self.atl24_fn, 'r')
             if 'short_name' not in self.atl24_f.attrs.keys():
                 utils.echo_warning_msg(
-                    'this file does not appear to be an ATL file'
+                    f'{self.atl24_fn} does not appear to be an ATL file'
                 )
                 self.atl24_f.close()
                 
@@ -7345,7 +7345,7 @@ class IceSat2File(ElevationDataset):
             self.atl13_f = h5.File(self.atl13_fn, 'r')
             if 'short_name' not in self.atl13_f.attrs.keys():
                 utils.echo_warning_msg(
-                    'this file does not appear to be an ATL file'
+                    f'{self.atl13_fn} does not appear to be an ATL file'
                 )
                 self.atl13_f.close()                
 
@@ -7473,14 +7473,17 @@ class IceSat2File(ElevationDataset):
         """fetch an associated ATLxx file"""
 
         #utils.echo_msg(self.atl03_fn)
-        atlxx_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
+        #utils.echo_msg(f'searching for {short_name}')
+        #atlxx_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
+        atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1])
+        #utils.echo_msg(f'using fn filter: {atlxx_filter}')
         this_atlxx = fetches.IceSat2(
             src_region=None,
-            verbose=self.verbose,
+            verbose=True,
             outdir=self.cache_dir,
             short_name=short_name,
             filename_filter=atlxx_filter,
-            subset=True if 'subset' in self.fn else False,
+            #subset=True if 'subset' in self.fn else False,
         )
         this_atlxx.run()
         if len(this_atlxx.results) == 0:
@@ -7489,10 +7492,10 @@ class IceSat2File(ElevationDataset):
             )
             this_atlxx = fetches.IceSat2(
                 src_region=None,
-                verbose=self.verbose,
+                verbose=True,
                 outdir=self.cache_dir,
                 short_name=short_name,
-                filename_filter=atlxx_filter
+                filename_filter=atlxx_filter,
             )
             this_atlxx.run()
             if len(this_atlxx.results) == 0:
