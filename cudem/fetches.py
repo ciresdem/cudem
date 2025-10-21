@@ -825,7 +825,8 @@ def fetch_queue(q, c = True):
     """
 
     ## temporary bypass of ssl for certain modules...
-    no_verify = ['tnm', 'mar_grav', 'srtm_plus']
+    #no_verify = ['tnm', 'mar_grav', 'srtm_plus']
+    no_verify = ['mar_grav', 'srtm_plus']
     while True:
         fetch_args = q.get()
         if not os.path.exists(os.path.dirname(fetch_args[1])):
@@ -5283,7 +5284,7 @@ class TheNationalMap(FetchModule):
         
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_api_products_url = 'http://tnmaccess.nationalmap.gov/api/v1/products?'
-        self.headers['Host'] = 	'tnmaccess.nationalmap.gov'
+        #self.headers['Host'] = 	'tnmaccess.nationalmap.gov'
 
         
     def run(self):
