@@ -7421,51 +7421,52 @@ class IceSat2File(ElevationDataset):
 
         ## parse through the icesat2 file by laser number
         for i in range(1, 4):
-            #try:
-            dataset = self.read_atl_data('{}'.format(i))
-            if dataset is None or len(dataset) == 0:
-                continue
+            for orient in range(2):
+                #try:
+                dataset = self.read_atl_data('{}'.format(i), orientation=orient)
+                if dataset is None or len(dataset) == 0:
+                    continue
 
-            ## keep only photons with confidence levels mentioned
-            ## in `self.confidence_levels`
-            if len(self.confidence_levels) > 0:
-                dataset = dataset[
-                    (np.isin(dataset['confidence'], self.confidence_levels))
-                ]
+                ## keep only photons with confidence levels mentioned
+                ## in `self.confidence_levels`
+                if len(self.confidence_levels) > 0:
+                    dataset = dataset[
+                        (np.isin(dataset['confidence'], self.confidence_levels))
+                    ]
 
-            if dataset is None or len(dataset) == 0:
-                continue
+                if dataset is None or len(dataset) == 0:
+                    continue
 
-            ## re-classify photons based on buildings/watermask/bathymetry
-            if self.want_buildings and this_bing is not None:
-                dataset = self.classify_buildings(dataset, this_bing)
+                ## re-classify photons based on buildings/watermask/bathymetry
+                if self.want_buildings and this_bing is not None:
+                    dataset = self.classify_buildings(dataset, this_bing)
 
-            if self.want_watermask and this_wm is not None:
-                dataset = self.classify_water(dataset, this_wm)
+                if self.want_watermask and this_wm is not None:
+                    dataset = self.classify_water(dataset, this_wm)
 
-            # if self.want_bathymetry:
-            #     dataset = self.classify_bathymetry(dataset)
-                
-            if dataset is None or len(dataset) == 0:
-                continue
+                # if self.want_bathymetry:
+                #     dataset = self.classify_bathymetry(dataset)
 
-            ## keep only photons with a classification mentioned in `self.classes`
-            if len(self.classes) > 0:
-                dataset = dataset[
-                    (np.isin(dataset['ph_h_classed'], self.classes))
-                ]
-                
-            if dataset is None or len(dataset) == 0:
-                continue
+                if dataset is None or len(dataset) == 0:
+                    continue
 
-            ## rename the x,y,z columns for `transform_and_yield_points`
-            dataset.rename(
-                columns={
-                    'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'
-                },
-                inplace=True
-            )
-            yield(dataset)
+                ## keep only photons with a classification mentioned in `self.classes`
+                if len(self.classes) > 0:
+                    dataset = dataset[
+                        (np.isin(dataset['ph_h_classed'], self.classes))
+                    ]
+
+                if dataset is None or len(dataset) == 0:
+                    continue
+
+                ## rename the x,y,z columns for `transform_and_yield_points`
+                dataset.rename(
+                    columns={
+                        'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'
+                    },
+                    inplace=True
+                )
+                yield(dataset)
 
         self.close_atl_h5()
 
