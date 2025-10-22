@@ -5476,7 +5476,7 @@ class ElevationDataset:
                 
             this_bldg = fetches.BingBFP(
                 src_region=this_region,
-                verbose=self.verbose,
+                verbose=verbose,
                 outdir=self.cache_dir
             )
             this_bldg.run()
@@ -9879,7 +9879,7 @@ class IceSat2Fetcher(Fetcher):
         )
         if self.fetches_params['classify_buildings']:
             self.fetches_params['classify_buildings'] \
-                = self.process_buildings(self.fetch_buildings(verbose=True))
+                = self.process_buildings(self.fetch_buildings(verbose=False), verbose=False)
 
         if self.fetches_params['classify_water']:
             self.fetches_params['classify_water'] = self.process_coastline(
