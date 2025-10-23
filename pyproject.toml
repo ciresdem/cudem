@@ -35,6 +35,11 @@ classifiers = [
 
 #[project.entry-points."cudem"]
 [project.scripts]
+regions = 'cudem.regions:regions_cli'
+dlim = 'cudem.dlim:dlim_cli'
+waffles = 'cudem.waffles:waffles_cli'
+fetches = 'cudem.fetches:fetches_cli'
+vdatums = 'cudem.vdatums:vdatums_cli'
 perspecto = 'cudem.perspecto.perspecto_factory:perspecto_cli'
 grits = 'cudem.grits.grits_factory:grits_cli'
 	    
