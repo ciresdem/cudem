@@ -32,11 +32,10 @@
 ##
 ### Code:
 
-from cudem.perspecto import perspecto
 from cudem import utils
+from cudem import fetches
 import numpy as np
 import pygmt
-
 
 ## CPT          
 def scale_el__(value, gmin, gmax, tr):
