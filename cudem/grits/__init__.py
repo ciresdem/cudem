@@ -20,18 +20,16 @@
 ###############################################################################
 ### Code:
 
-from . import perspecto
-from . import hillshade
-from . import gmtimage
-from . import colorbar
-from . import povray
-from . import sphere
-from . import perspective
-from . import figure1
-from . import perspecto_factory
-
 __version__ = "0.0.1"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
+
+from . import grits
+from . import blur
+from . import lspoutliers
+from . import weights
+from . import flats
+from . import gmtfilter
+from . import grits_factory
 
 ### End

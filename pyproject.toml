@@ -36,5 +36,6 @@ classifiers = [
 #[project.entry-points."cudem"]
 [project.scripts]
 perspecto = 'cudem.perspecto.perspecto_factory:perspecto_cli'
+grits = 'cudem.grits.grits_factory:grits_cli'
 	    
 
