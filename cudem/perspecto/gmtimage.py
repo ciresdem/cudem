@@ -1,4 +1,6 @@
-## Copyright (c) 2012 - 2025 Regents of the University of Colorado
+### gmtimage.py 
+##
+## Copyright (c) 2023 - 2025 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -18,52 +20,30 @@
 ## SOFTWARE.
 ##
 ###############################################################################
+### Commentary:
+##
+##
 ### Code:
 
-__version__ = "2.6.0"
-__author__ = "Matthew Love"
-__credits__ = "CIRES"
+from cudem.perspecto import perspecto
+from cudem import utils
+import pygmt
 
-## Windows support
-
-import os
-import sys
-from osgeo import gdal
-from . import utils
-from . import regions
-from . import xyzfun
-from . import gdalfun
-from . import factory
-from . import vdatums
-from . import fetches
-from . import grits
-from . import vrbag
-from . import waffles
-from . import dlim
-from . import htdpfun
-from . import perspecto
-from . import srsfun
-
-gc = utils.config_check() # cudem config file holding foriegn programs and versions
-if gc['platform'] == 'linux':
-    #gdal.SetConfigOption('CPL_LOG', '/dev/null') # supress gdal warnings in linux
-    pass
-else:
-    os.system("") # ansi in windows
-    gdal.SetConfigOption('CPL_LOG', 'NUL') # supress gdal warnings in windows
-
-__all__ = ['utils', 'regions', 'xyzfun', 'gdalfun', 'factory', 'vdatums',
-           'fetches', 'grits', 'vrbag', 'waffles', 'dlim', 'htdpfun',
-           'perspecto', 'srsfun']
+class GMTImage(perspecto.Perspecto):
+    """Use GMTImage with pygmt"""
     
-## user module
-sys.path.append(os.path.expanduser('~'))
-try:
-    import cudemrc
-    __all__.append('cudemrc')
-except:
-    pass
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-#from archook import locate_arcgis, get_arcpy
+        if self.dem_infos['fmt'] != 'NetCDF':
+            utils.run_cmd(
+                'gmt grdconvert {} {}.nc'.format(
+                    self.src_dem, utils.fn_basename2(self.src_dem)
+                )
+            )
+            self.src_dem = '{}.nc'.format(utils.fn_basename2(self.src_dem))
+        
+        self.grid = pygmt.load_dataarray(self.src_dem)
+        self.makecpt(self.cpt, output=None)
 
 ### End

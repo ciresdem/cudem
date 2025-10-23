@@ -1,4 +1,6 @@
-## Copyright (c) 2012 - 2025 Regents of the University of Colorado
+### povray.py 
+##
+## Copyright (c) 2023 - 2025 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -18,52 +20,31 @@
 ## SOFTWARE.
 ##
 ###############################################################################
+### Commentary:
+##
+##
 ### Code:
 
-__version__ = "2.6.0"
-__author__ = "Matthew Love"
-__credits__ = "CIRES"
+from cudem.perspecto import perspecto
+from cudem import utils
 
-## Windows support
+class POVRay(perspecto.Perspecto):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.cpt_no_slash()
+        
+        self.rgb_image = '{}_rgb.png'.format(utils.fn_basename2(self.src_dem))
+        self.dem_image = '{}_16bit.png'.format(utils.fn_basename2(self.src_dem))
 
-import os
-import sys
-from osgeo import gdal
-from . import utils
-from . import regions
-from . import xyzfun
-from . import gdalfun
-from . import factory
-from . import vdatums
-from . import fetches
-from . import grits
-from . import vrbag
-from . import waffles
-from . import dlim
-from . import htdpfun
-from . import perspecto
-from . import srsfun
+        #if not os.path.exists(self.rgb_image) or not os.path.exists(self.dem_image):
+        self.export_as_png()            
+        self.output_pov = '{}.pov'.format(utils.fn_basename2(self.src_dem))
 
-gc = utils.config_check() # cudem config file holding foriegn programs and versions
-if gc['platform'] == 'linux':
-    #gdal.SetConfigOption('CPL_LOG', '/dev/null') # supress gdal warnings in linux
-    pass
-else:
-    os.system("") # ansi in windows
-    gdal.SetConfigOption('CPL_LOG', 'NUL') # supress gdal warnings in windows
-
-__all__ = ['utils', 'regions', 'xyzfun', 'gdalfun', 'factory', 'vdatums',
-           'fetches', 'grits', 'vrbag', 'waffles', 'dlim', 'htdpfun',
-           'perspecto', 'srsfun']
-    
-## user module
-sys.path.append(os.path.expanduser('~'))
-try:
-    import cudemrc
-    __all__.append('cudemrc')
-except:
-    pass
-
-#from archook import locate_arcgis, get_arcpy
+        
+    def run_povray(self, src_pov_template, pov_width=800, pov_height=800):
+        utils.run_cmd(
+            'povray {} +W{} +H{} -D'.format(src_pov_template, pov_width, pov_height),
+            verbose=True
+        )
 
 ### End

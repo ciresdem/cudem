@@ -20,50 +20,19 @@
 ###############################################################################
 ### Code:
 
-__version__ = "2.6.0"
+from . import perspecto
+from . import hillshade
+from . import gmtimage
+from . import colorbar
+from . import povray
+from . import sphere
+from . import perspective
+from . import figure1
+from . import perspecto_factory
+
+__version__ = "0.0.1"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
-## Windows support
-
-import os
-import sys
-from osgeo import gdal
-from . import utils
-from . import regions
-from . import xyzfun
-from . import gdalfun
-from . import factory
-from . import vdatums
-from . import fetches
-from . import grits
-from . import vrbag
-from . import waffles
-from . import dlim
-from . import htdpfun
-from . import perspecto
-from . import srsfun
-
-gc = utils.config_check() # cudem config file holding foriegn programs and versions
-if gc['platform'] == 'linux':
-    #gdal.SetConfigOption('CPL_LOG', '/dev/null') # supress gdal warnings in linux
-    pass
-else:
-    os.system("") # ansi in windows
-    gdal.SetConfigOption('CPL_LOG', 'NUL') # supress gdal warnings in windows
-
-__all__ = ['utils', 'regions', 'xyzfun', 'gdalfun', 'factory', 'vdatums',
-           'fetches', 'grits', 'vrbag', 'waffles', 'dlim', 'htdpfun',
-           'perspecto', 'srsfun']
-    
-## user module
-sys.path.append(os.path.expanduser('~'))
-try:
-    import cudemrc
-    __all__.append('cudemrc')
-except:
-    pass
-
-#from archook import locate_arcgis, get_arcpy
 
 ### End

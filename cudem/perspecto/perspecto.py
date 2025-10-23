@@ -34,25 +34,11 @@
 
 import os
 import math
-import sys
-
-from osgeo import gdal
-from osgeo_utils import gdal_calc
-import numpy as np
-from tqdm import tqdm
-import colorsys
 
 from cudem import utils
 from cudem import gdalfun
 from cudem import regions
-from cudem import fetches
-from cudem import factory
-
-try:
-    import pygmt
-    has_pygmt = True
-except ImportError as e:
-    has_pygmt = False
+from cudem.perspecto import cpt
 
     
 ## lll
@@ -64,7 +50,6 @@ def lll(src_lat):
     latl_ = gds_equator
 
     return(lonl_, latl_)
-                    
 
 class Perspecto:
     def __init__(
@@ -117,7 +102,7 @@ class Perspecto:
             #     'etopo1',
             #     output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem))
             # )
-            self.cpt = generate_etopo_cpt(min_z, max_z)
+            self.cpt = cpt.generate_etopo_cpt(min_z, max_z)
         #else:
         #self.cpt = process_cpt(self.cpt, min_z, max_z)
         elif os.path.exists(self.cpt):
@@ -129,12 +114,12 @@ class Perspecto:
                     self.cpt, want_gdal, self.split_cpt
                 )
             )
-            self.cpt = process_cpt(
+            self.cpt = cpt.process_cpt(
                 self.cpt, min_z, max_z, gdal=want_gdal, split_cpt=self.split_cpt
             )
         else:
-            self.cpt = process_cpt(
-                fetch_cpt_city(q=self.cpt),
+            self.cpt = cpt.process_cpt(
+                cpt.fetch_cpt_city(q=self.cpt),
                 min_z,
                 max_z,
                 gdal=want_gdal,
@@ -145,16 +130,7 @@ class Perspecto:
     def makecpt(self, cmap='etopo1', color_model='r', output=None):
         min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
         max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
-        pygmt.makecpt(
-            cmap=cmap,
-            color_model='{}'.format(color_model),
-            output=output,
-            series=[min_z, max_z,50],
-            no_bg=True,
-            #continuous=True,
-            #truncate=[min_z, max_z],
-        )
-        self.cpt = output
+        self.cpt = cpt.makecpt(cmap = cmap, color_model = color_model, output = output, min_z = min_z, max_z = max_z)
 
         
     def cpt_no_slash(self):
@@ -202,12 +178,6 @@ class Perspecto:
             
         if rgb:
             self.init_cpt(want_gdal=True)
-            #cr_fn = utils.make_temp_fn('gdaldem_cr.tif', self.outdir)
-            # gdal.DEMProcessing(
-            #     cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt,
-            #     computeEdges=True, addAlpha=self.alpha
-            # )
-            
             utils.run_cmd(
                 'gdaldem color-relief {} {} _rgb_temp.tif -alpha'.format(
                     self.src_dem, self.cpt
@@ -227,6 +197,6 @@ class Perspecto:
             
     def run(self):
         raise(NotImplementedError)
-             
+            
 ### End
     
