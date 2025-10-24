@@ -28,6 +28,7 @@
 ### Code:
 
 import os
+import time
 import datetime
 from tqdm import tqdm
 from osgeo import ogr
@@ -196,10 +197,15 @@ class EarthData(fetches.FetchModule):
             )
             if _req is not None and _req.status_code == 200:
                 status_json = _req.json()
-                utils.echo_msg(status_json['message'])
+                #utils.echo_msg(status_json['message'])
+                #utils.echo_msg(status_json)
                 for link in status_json['links']:
                     if link['title'] == 'Job Status' or link['title'] == 'The current page':
                         status_url = link['href']
+
+                if status_url is None:
+                    if 'request' in status_json.keys():
+                        status_url = status_json['request']
 
                 if status_url is not None:                
                     with tqdm(
@@ -210,8 +216,10 @@ class EarthData(fetches.FetchModule):
                     
                         while True:
                             _req = fetches.Fetch(status_url).fetch_req(timeout=None, read_timeout=None)
+                            utils.echo_msg(_req.status_code)
                             if _req is not None and _req.status_code == 200:
                                 status = _req.json()
+                                utils.echo_msg(status)
                                 pbar.n = status['progress']
                                 pbar.refresh()
                                 if status['status'] == 'successful':
@@ -224,8 +232,12 @@ class EarthData(fetches.FetchModule):
                                             )
 
                                     break
+                                
                                 elif status['status'] == 'running':
                                     time.sleep(10)
+                                else:
+                                    time.sleep(10)
+                                    
                             else:
                                 break
             else:

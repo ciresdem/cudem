@@ -28,10 +28,12 @@
 ### Code:
 
 import os
+import numpy as np
 from osgeo import ogr
 from cudem import utils
 from cudem import regions
 from cudem import gdalfun
+from cudem import xyzfun
 from cudem.fetches import fetches
 from cudem.fetches import gmrt
 
