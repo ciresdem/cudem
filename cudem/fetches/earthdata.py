@@ -216,10 +216,10 @@ class EarthData(fetches.FetchModule):
                     
                         while True:
                             _req = fetches.Fetch(status_url).fetch_req(timeout=None, read_timeout=None)
-                            utils.echo_msg(_req.status_code)
+                            #utils.echo_msg(_req.status_code)
                             if _req is not None and _req.status_code == 200:
                                 status = _req.json()
-                                utils.echo_msg(status)
+                                #utils.echo_msg(status)
                                 pbar.n = status['progress']
                                 pbar.refresh()
                                 if status['status'] == 'successful':

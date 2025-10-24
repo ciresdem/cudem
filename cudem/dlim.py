@@ -4787,7 +4787,7 @@ class ElevationDataset:
 
         if self.verbose:
             utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn} @ {self.weight}'
+                f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
             )
 
         
@@ -4995,7 +4995,7 @@ class ElevationDataset:
 
         if self.verbose:
             utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn} @ {self.weight}'
+                f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
             )    
 
             
@@ -7336,13 +7336,13 @@ class IceSat2File(ElevationDataset):
                 self.atl08_f.close()
 
         ## atl24 doesn't have the short_name attr
-        # if self.atl24_fn is not None and os.path.exists(self.atl24_fn):
-        #     self.atl24_f = h5.File(self.atl24_fn, 'r')
-        #     if 'short_name' not in self.atl24_f.attrs.keys():
-        #         utils.echo_warning_msg(
-        #             f'{self.atl24_fn} does not appear to be an ATL file'
-        #         )
-        #         self.atl24_f.close()
+        if self.atl24_fn is not None and os.path.exists(self.atl24_fn):
+            self.atl24_f = h5.File(self.atl24_fn, 'r')
+            # if 'short_name' not in self.atl24_f.attrs.keys():
+            #     utils.echo_warning_msg(
+            #         f'{self.atl24_fn} does not appear to be an ATL file'
+            #     )
+            #     self.atl24_f.close()
                 
         if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
             self.atl13_f = h5.File(self.atl13_fn, 'r')
@@ -7441,11 +7441,14 @@ class IceSat2File(ElevationDataset):
 
                 ## re-classify photons based on buildings/watermask/bathymetry
                 if self.want_buildings and this_bing is not None:
-                    dataset = self.classify_buildings(dataset, this_bing)
+                    #dataset = self.classify_buildings(dataset, this_bing)
+                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_bing, classification=7)
 
                 if self.want_watermask and this_wm is not None:
-                    dataset = self.classify_water(dataset, this_wm)
+                    #dataset = self.classify_water(dataset, this_wm)
+                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41)
 
+                ## bathymetry is classified in `read_atl_data` using ATL24 now...
                 # if self.want_bathymetry:
                 #     dataset = self.classify_bathymetry(dataset)
 
@@ -7646,33 +7649,102 @@ class IceSat2File(ElevationDataset):
             ph_h_classed[atl08_ph_index[class_mask]] \
                 = atl08_classed_pc_flag[atl08_segment_id_msk][class_mask]
 
-        ## Read in the ATL24 data
-        ## todo: check re subsets
         if self.atl24_f is not None:
-            atl24_classed_pc_flag  = self.atl24_f['/' + laser + '/class_ph'][...,]
-            atl24_classed_pc_indx = self.atl24_f['/' + laser + '/index_ph'][...,]
-            atl24_longitude = self.atl24_f['/' + laser + '/lon_ph'][...,]
-            atl24_latitude = self.atl24_f['/' + laser + '/lat_ph'][...,]
-            atl24_surface_h = self.atl24_f['/' + laser + '/surface_h'][...,]
-            atl24_ellipse_h = self.atl24_f['/' + laser + '/ellipse_h'][...,]
-            atl24_ortho_h = self.atl24_f['/' + laser + '/ortho_h'][...,]
+            atl24_classed_pc_flag  = self.atl24_f[
+                f'/{laser}/class_ph'
+            ][...,]
+            atl24_lat_ph = self.atl24_f[
+                f'/{laser}/lat_ph'
+            ][...,]
+            atl24_lon_ph = self.atl24_f[
+                f'/{laser}/lon_ph'
+            ][...,]
+            atl24_suface_h = self.atl24_f[
+                f'/{laser}/surface_h'
+            ][...,]
+            atl24_ortho_h = self.atl24_f[
+                f'/{laser}/ortho_h'
+            ][...,]
+            atl24_ellipse_h = self.atl24_f[
+                f'/{laser}/ellipse_h'
+            ][...,]
+            
+            # atl24_ph_segment_id = self.atl24_f[
+            #     f'/{laser}/index_seg'
+            # ][...,] # photon src 20 m seg id
+            # atl24_classed_pc_indx = self.atl24_f[
+            #     f'/{laser}/index_ph'
+            # ][...,]
 
-            class_40_mask = atl24_classed_pc_flag == 40
-            class_41_mask = atl24_classed_pc_flag == 41
-            ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
+            atl24_ph_segment_id = self.atl24_f[
+                f'/{laser}/index_ph'
+            ][...,] # photon src 20 m seg id
+            atl24_classed_pc_indx = self.atl24_f[
+                f'/{laser}/index_seg'
+            ][...,]
 
-            # we also need to change the lon/lat/height values to the
-            # updated bathymetry values (we'll just do it to class 40)
-            longitude[atl24_classed_pc_indx[class_40_mask]] = atl24_longitude[class_40_mask]
-            latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
-            photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
-            photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
+            atl24_confidence = self.atl24_f[
+                f'/{laser}/confidence'
+            ][...,]
 
-            # and i guess class 41 as well
-            longitude[atl24_classed_pc_indx[class_41_mask]] = atl24_longitude[class_41_mask]
-            latitude[atl24_classed_pc_indx[class_41_mask]] = atl24_latitude[class_41_mask]
-            photon_h[atl24_classed_pc_indx[class_41_mask]] = atl24_ellipse_h[class_41_mask]
-            photon_h_geoid[atl24_classed_pc_indx[class_41_mask]] = atl24_ortho_h[class_41_mask]
+            atl24_low_confidence_flag = self.atl24_f[
+                f'/{laser}/low_confidence_flag'
+            ][...,]
+
+            #atl24_class_mask = (np.isin(atl24_classed_pc_flag, [40, 41])) & (atl24_low_confidence_flag == 1)
+            atl24_class_mask = np.isin(atl24_classed_pc_flag, [40, 41])
+            atl24_ph_segment_id = atl24_ph_segment_id[atl24_class_mask]
+            atl24_classed_pc_indx = atl24_classed_pc_indx[atl24_class_mask]
+            atl24_classed_pc_flag = atl24_classed_pc_flag[atl24_class_mask]
+            
+            ## set the classifications from ATL24
+            atl24_segment_id_msk = [
+                True if x in segment_id else False for x in atl24_ph_segment_id
+            ]
+            atl24_ph_segment_indx = np.array(
+                list(
+                    map((lambda pid: segment_index_dict[pid]),
+                        atl24_ph_segment_id[atl24_segment_id_msk])
+                )
+            )
+            atl24_ph_index = np.array(
+                atl24_ph_segment_indx + (atl24_classed_pc_indx[atl24_segment_id_msk] - 1),
+                dtype=int
+            )
+            class_mask = atl24_ph_index < len(ph_segment_ids)
+            ph_h_classed[atl24_ph_index[class_mask]] \
+                = atl24_classed_pc_flag[atl24_segment_id_msk][class_mask]
+
+            # # we also need to change the lon/lat/height values to the
+            # # updated/refracted bathymetry values (we'll just do it to class 40)
+            # longitude[atl24_ph_index[class_mask]] = atl24_lon_ph[atl24_class_mask][atl24_segment_id_msk][class_mask]
+            # latitude[atl24_ph_index[class_mask]] = atl24_lat_ph[atl24_class_mask][atl24_segment_id_msk][class_mask]
+            # photon_h[atl24_ph_index[class_mask]] = atl24_ellipse_h[atl24_class_mask][atl24_segment_id_msk][class_mask]
+            # photon_h_geoid[atl24_ph_index[class_mask]] = atl24_ortho_h[atl24_class_mask][atl24_segment_id_msk][class_mask]
+
+            
+        # ## Read in the ATL24 data
+        # ## todo: check re subsets
+        # if self.atl24_f is not None:
+        #     atl24_classed_pc_flag  = self.atl24_f['/' + laser + '/class_ph'][...,]
+        #     atl24_classed_pc_indx = self.atl24_f['/' + laser + '/index_ph'][...,]
+        #     atl24_longitude = self.atl24_f['/' + laser + '/lon_ph'][...,]
+        #     atl24_latitude = self.atl24_f['/' + laser + '/lat_ph'][...,]
+        #     atl24_surface_h = self.atl24_f['/' + laser + '/surface_h'][...,]
+        #     atl24_ellipse_h = self.atl24_f['/' + laser + '/ellipse_h'][...,]
+        #     atl24_ortho_h = self.atl24_f['/' + laser + '/ortho_h'][...,]
+
+        #     subset_mask = np.isin(atl24_classed_pc_indx, seg_ids)
+            
+        #     class_40_mask = atl24_classed_pc_flag == 40
+        #     ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
+
+        #     # we also need to change the lon/lat/height values to the
+        #     # updated/refracted bathymetry values (we'll just do it to class 40)
+        #     longitude[atl24_classed_pc_indx[class_40_mask]] = atl24_longitude[class_40_mask]
+        #     latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
+        #     photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
+        #     photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
 
         if self.atl13_f is not None:
             atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
@@ -7948,6 +8020,34 @@ class IceSat2File(ElevationDataset):
                     idx = f.GetField('index')
                     bathy_mask = dataset.at[idx, 'ph_h_classed'] == 40
                     dataset.at[idx, 'ph_h_classed'][~bathy_mask] = 41
+
+                icesat_layer.SetSpatialFilter(None)
+
+        ogr_df = None
+        return(dataset)
+
+    def classify_by_mask_geoms(self, dataset, mask_geoms=[], classification=-1, except_classes=[]):
+        """classify water photons using OSM coastline 
+        """
+
+        ## vectorize the photons
+        ogr_df = self._vectorize_df(dataset)
+        
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        with tqdm(
+                total=len(mask_geoms),
+                desc='classifying water photons',
+                leave=False
+        ) as pbar:
+            for n, wm_geom in enumerate(mask_geoms):                
+                pbar.update()
+                icesat_layer = ogr_df.GetLayer()
+                icesat_layer.SetSpatialFilter(wm_geom)
+                for f in icesat_layer:
+                    idx = f.GetField('index')
+                    #except_mask = dataset.at[idx, 'ph_h_classed']
+                    dataset.at[idx, 'ph_h_classed'] = classification
 
                 icesat_layer.SetSpatialFilter(None)
 
