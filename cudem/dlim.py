@@ -7277,7 +7277,7 @@ class IceSat2File(ElevationDataset):
                  classify_buildings=True,
                  classify_inland_water=True,
                  reject_failed_qa=True,
-                 classify_water=True,
+                 classify_water=False,
                  **kwargs):
         super().__init__(**kwargs)
         self.data_format = 303
@@ -7454,7 +7454,6 @@ class IceSat2File(ElevationDataset):
 
                 ## keep only photons with a classification mentioned in `self.classes`
                 if len(self.classes) > 0:
-                    utils.echo_msg_bold(classes)
                     dataset = dataset[
                         (np.isin(dataset['ph_h_classed'], self.classes))
                     ]
@@ -7659,6 +7658,7 @@ class IceSat2File(ElevationDataset):
             atl24_ortho_h = self.atl24_f['/' + laser + '/ortho_h'][...,]
 
             class_40_mask = atl24_classed_pc_flag == 40
+            class_41_mask = atl24_classed_pc_flag == 41
             ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
 
             # we also need to change the lon/lat/height values to the
@@ -7667,6 +7667,12 @@ class IceSat2File(ElevationDataset):
             latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
             photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
             photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
+
+            # and i guess class 41 as well
+            longitude[atl24_classed_pc_indx[class_41_mask]] = atl24_longitude[class_41_mask]
+            latitude[atl24_classed_pc_indx[class_41_mask]] = atl24_latitude[class_41_mask]
+            photon_h[atl24_classed_pc_indx[class_41_mask]] = atl24_ellipse_h[class_41_mask]
+            photon_h_geoid[atl24_classed_pc_indx[class_41_mask]] = atl24_ortho_h[class_41_mask]
 
         if self.atl13_f is not None:
             atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
@@ -7940,7 +7946,8 @@ class IceSat2File(ElevationDataset):
                 #[dataset.at[f.GetField('index'), 'ph_h_classed'] = 7 for f in icesat_layer]
                 for f in icesat_layer:
                     idx = f.GetField('index')
-                    dataset.at[idx, 'ph_h_classed'] = 5
+                    bathy_mask = dataset.at[idx, 'ph_h_classed'] == 40
+                    dataset.at[idx, 'ph_h_classed'][~bathy_mask] = 41
 
                 icesat_layer.SetSpatialFilter(None)
 
