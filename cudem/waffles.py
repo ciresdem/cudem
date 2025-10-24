@@ -92,7 +92,6 @@ from cudem import vdatums
 from cudem import factory
 from cudem import fetches
 from cudem import grits
-from cudem import perspecto
 from cudem import srsfun
 
 ## Data cache directory, hold temp data, fetch data, etc here.
@@ -340,8 +339,8 @@ class Waffle:
         point_fltr=[]
         if isinstance(self.fltr, list):
             for f in self.fltr:
-                if f.split(':')[0] in grits.GritsFactory._modules.keys():
-                    grits_filter = grits.GritsFactory(mod=f)._acquire_module()
+                if f.split(':')[0] in grits.grits_factory.GritsFactory._modules.keys():
+                    grits_filter = grits.grits_factory.GritsFactory(mod=f)._acquire_module()
                     if grits_filter is not None:
                         if 'stacks' in grits_filter.kwargs.keys():
                             if grits_filter.kwargs['stacks']:
@@ -2608,15 +2607,15 @@ class WafflesCoastline(Waffle):
 
         
     def fetch_data(self, fetches_module, check_size=True):
-        this_fetches = fetches.FetchesFactory(
+        this_fetches = fetches.fetches_factory.FetchesFactory(
             mod=fetches_module,
             src_region=self.wgs_region,
             verbose=self.verbose,
             outdir=self.cache_dir,
-            callback=fetches.fetches_callback
+            callback=fetches.fetches.fetches_callback
         )._acquire_module()        
         this_fetches.run()
-        fr = fetches.fetch_results(this_fetches, check_size=check_size)
+        fr = fetches.fetches.fetch_results(this_fetches, check_size=check_size)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -2752,7 +2751,7 @@ class WafflesCoastline(Waffle):
                     if cst_result[-1] == 0:
                         pbar.update()
                         cst_osm = cst_result[1]
-                        out = fetches.polygonize_osm_coastline(
+                        out = fetches.osm.polygonize_osm_coastline(
                             cst_osm, utils.make_temp_fn(
                                 utils.fn_basename2(cst_osm) + '_coast.shp',
                                 temp_dir=self.cache_dir
@@ -3386,13 +3385,13 @@ class WafflesLakes(Waffle):
     def _fetch_lakes(self):
         """fetch hydrolakes polygons"""
 
-        this_lakes = fetches.HydroLakes(
+        this_lakes = fetches.hydrolakes.HydroLakes(
             src_region=self.p_region,
             verbose=self.verbose,
             outdir=self.cache_dir
         )
         this_lakes.run()
-        fr = fetches.fetch_results(this_lakes, check_size=False)
+        fr = fetches.fetches.fetch_results(this_lakes, check_size=False)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -3414,7 +3413,7 @@ class WafflesLakes(Waffle):
         
         _globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
         globathy_zip = os.path.join(self.cache_dir, 'globathy_parameters.zip')
-        fetches.Fetch(
+        fetches.fetches.Fetch(
             _globathy_url, verbose=self.verbose
         ).fetch_file(globathy_zip, check_size=False)
         globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
@@ -3447,7 +3446,7 @@ class WafflesLakes(Waffle):
         if gmrt_region is None:
             gmrt_region = self.p_region
         
-        this_gmrt = fetches.GMRT(
+        this_gmrt = fetches.gmrt.GMRT(
             src_region=gmrt_region,
             verbose=self.verbose,
             layer='topo',
@@ -3455,7 +3454,7 @@ class WafflesLakes(Waffle):
         )
         this_gmrt.run()
 
-        fr = fetches.fetch_results(this_gmrt)
+        fr = fetches.fetches.fetch_results(this_gmrt)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -3475,7 +3474,7 @@ class WafflesLakes(Waffle):
         if cop_region is None:
             cop_region = self.p_region
             
-        this_cop = fetches.CopernicusDEM(
+        this_cop = fetches.copernicus.CopernicusDEM(
             src_region=cop_region,
             verbose=self.verbose,
             datatype='1',
@@ -3483,7 +3482,7 @@ class WafflesLakes(Waffle):
         )
         this_cop.run()
 
-        fr = fetches.fetch_results(this_cop, check_size=False)
+        fr = fetches.fetches.fetch_results(this_cop, check_size=False)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -6101,8 +6100,8 @@ class WaffleDEM:
                 
     def filter_(self, fltr=[]):
         for f in fltr:
-            if f.split(':')[0] in grits.GritsFactory._modules.keys():
-                grits_filter = grits.GritsFactory(
+            if f.split(':')[0] in grits.grits_factory.GritsFactory._modules.keys():
+                grits_filter = grits.grits_factory.GritsFactory(
                     mod=f,
                     src_dem=self.fn
                 )._acquire_module()
@@ -7034,7 +7033,7 @@ Modules (see waffles --modules <module-name> for more info):
     dl_formats=factory._cudem_module_name_short_desc(dlim.DatasetFactory._modules),
     modules=factory._cudem_module_short_desc(WaffleFactory._modules),
     wf_version=cudem.__version__,
-    grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules)
+    grits_modules=factory._cudem_module_short_desc(grits.grits_factory.GritsFactory._modules)
 )
 
 

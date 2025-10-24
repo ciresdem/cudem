@@ -31,9 +31,7 @@
 import os
 import json
 from tqdm import tqdm
-
 from osgeo import ogr
-
 from cudem import utils
 from cudem import regions
 

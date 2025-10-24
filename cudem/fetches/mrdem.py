@@ -1,4 +1,8 @@
-## Copyright (c) 2012 - 2025 Regents of the University of Colorado
+### mrdem.py
+##
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+##
+## fetches.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -18,20 +22,32 @@
 ## SOFTWARE.
 ##
 ###############################################################################
+### Commentary:
+##
+##
 ### Code:
 
-__version__ = "0.1.0"
-__author__ = "Matthew Love"
-__credits__ = "CIRES"
+from cudem.fetches import fetches
 
-from . import perspecto
-from . import hillshade
-from . import gmtimage
-from . import colorbar
-from . import povray
-from . import sphere
-from . import perspective
-from . import figure1
-from . import perspecto_factory
+class MRDEM(fetches.FetchModule):
+    def __init__(self, **kwargs):
+        super().__init__(name='mrdem', **kwargs)
+        # self.mrdem_dtm_url = ('https://datacube-prod-data-public.s3.ca-central-1.'
+        #                       'amazonaws.com/store/elevation/mrdem/mrdem-30/'
+        #                       'mrdem-30-dtm.vrt')
+        # self.mrdem_dsm_url = ('https://datacube-prod-data-public.s3.ca-central-1.'
+        #                       'amazonaws.com/store/elevation/mrdem/mrdem-30/'
+        #                       'mrdem-30-dsm.vrt')
+
+        self.mrdem_dtm_url = 'https://canelevation-dem.s3.ca-central-1.amazonaws.com/mrdem-30/mrdem-30-dtm.vrt'
+        self.mrdem_dsm_url = 'https://canelevation-dem.s3.ca-central-1.amazonaws.com/mrdem-30/mrdem-30-dsm.vrt'
+
+        
+    def run(self):
+        self.add_entry_to_results(
+            self.mrdem_dtm_url,
+            self.mrdem_dtm_url.split('/')[-1],
+            'vrt'
+        )
 
 ### End

@@ -134,6 +134,8 @@ from cudem import grits
 from cudem import vrbag
 from cudem import srsfun
 
+#from cudem.fetches import fetches
+
 # cshelph
 import pandas as pd
 from cudem import cshelph
@@ -894,15 +896,15 @@ class PointZ:
         """Fetch data from a fetches module for the data-region
         """
         
-        this_fetches = fetches.FetchesFactory(
+        this_fetches = fetches.fetches_facotry.FetchesFactory(
             mod=fetches_module,
             src_region=self.region,
             verbose=self.verbose,
             #outdir='./',
-            callback=fetches.fetches_callback
+            callback=fetches.fetches.fetches_callback
         )._acquire_module()        
         this_fetches.run()
-        fr = fetches.fetch_results(this_fetches, check_size=check_size)
+        fr = fetches.fetches.fetch_results(this_fetches, check_size=check_size)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -1222,15 +1224,15 @@ class RQOutlierZ(PointZOutlier):
         if os.path.exists(f'{raster}_swath.tif'):
             return(f'{raster}_swath.tif')
 
-        this_fetch = fetches.FetchesFactory(
+        this_fetch = fetches.fetches_factory.FetchesFactory(
             mod='gmrt',
             src_region=self.region,
             verbose=self.verbose,
-            callback=fetches.fetches_callback
+            callback=fetches.fetches.fetches_callback
         )._acquire_module()        
 
         swath_masks = []
-        if fetches.Fetch(
+        if fetches.fetches.Fetch(
                 this_fetch._gmrt_swath_poly_url,
                 verbose=self.verbose
         ).fetch_file(
@@ -3489,7 +3491,7 @@ class ElevationDataset:
         ## todo: move this out of here, so we have original stack saved, maybe a new band of 'bin_mask'
         for f in self.stack_fltrs:
             utils.echo_msg(f'filtering stacks module with {f}')
-            grits_filter = grits.GritsFactory(
+            grits_filter = grits.grits_factory.GritsFactory(
                 mod=f,
                 src_dem=out_file,
                 uncertainty_mask=4,
@@ -5444,7 +5446,7 @@ class ElevationDataset:
             
         time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
         time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
-        this_sst = fetches.MUR_SST(
+        this_sst = fetches.earthdata.MUR_SST(
             src_region=this_region,
             verbose=self.verbose,
             outdir=self.cache_dir,
@@ -5474,13 +5476,13 @@ class ElevationDataset:
                     f'fetching buildings for region {this_region}'
                 )
                 
-            this_bldg = fetches.BingBFP(
+            this_bldg = fetches.bingbfp.BingBFP(
                 src_region=this_region,
                 verbose=verbose,
                 outdir=self.cache_dir
             )
             this_bldg.run()
-            fr = fetches.fetch_results(this_bldg)
+            fr = fetches.fetches.fetch_results(this_bldg)
             #, check_size=False)
             fr.daemon=True
             fr.start()
@@ -5534,7 +5536,7 @@ class ElevationDataset:
                     f'fetching coastline for region {this_region}'
                 )
                 
-            this_cst = fetches.OpenStreetMap(
+            this_cst = fetches.osm.OpenStreetMap(
                 src_region=this_region,
                 verbose=verbose,
                 outdir=self.cache_dir,
@@ -5542,7 +5544,7 @@ class ElevationDataset:
                 chunks=chunks,
             )
             this_cst.run()
-            fr = fetches.fetch_results(this_cst, check_size=False)
+            fr = fetches.fetches.fetch_results(this_cst, check_size=False)
             fr.daemon=True
             fr.start()
             fr.join()
@@ -5571,7 +5573,7 @@ class ElevationDataset:
                     if cst_result[-1] == 0:
                         pbar.update()
                         cst_osm = cst_result[1]
-                        out = fetches.polygonize_osm_coastline(
+                        out = fetches.osm.polygonize_osm_coastline(
                             cst_osm,
                             utils.make_temp_fn(
                                 f'{utils.fn_basename2(cst_osm)}_coast.shp',
@@ -6180,7 +6182,7 @@ class GDALFile(ElevationDataset):
         tmp_unc_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
         tmp_weight_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
         if self.remove_flat:
-            grits_filter = grits.GritsFactory(
+            grits_filter = grits.grits_factory.GritsFactory(
                 mod='flats',
                 src_dem=self.fn,
                 cache_dir=self.cache_dir,
@@ -7479,7 +7481,7 @@ class IceSat2File(ElevationDataset):
         #atlxx_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
         atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1])
         #utils.echo_msg(f'using fn filter: {atlxx_filter}')
-        this_atlxx = fetches.IceSat2(
+        this_atlxx = fetches.earthdata.IceSat2(
             src_region=None,
             verbose=True,
             outdir=self.cache_dir,
@@ -7492,7 +7494,7 @@ class IceSat2File(ElevationDataset):
             atlxx_filter = '_'.join(
                 utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1]
             )
-            this_atlxx = fetches.IceSat2(
+            this_atlxx = fetches.earthdata.IceSat2(
                 src_region=None,
                 verbose=True,
                 outdir=self.cache_dir,
@@ -8187,7 +8189,7 @@ class MBSParser(ElevationDataset):
                 '{}.grd*'.format(ofn)
             )
             
-            grits_filter = grits.GritsFactory(
+            grits_filter = grits.grits_factory.GritsFactory(
                 mod='outliers:multipass=2',
                 src_dem='{}.tif'.format(ofn),
                 cache_dir=self.cache_dir,
@@ -9304,7 +9306,7 @@ class Fetcher(ElevationDataset):
                  outdir=None,
                  check_size=True,
                  want_single_metadata_name=False,
-                 callback=fetches.fetches_callback,
+                 callback=fetches.fetches.fetches_callback,
                  **kwargs
     ):
         super().__init__(**kwargs)
@@ -9317,7 +9319,7 @@ class Fetcher(ElevationDataset):
         if self.dst_srs is not None:
             self.wgs_region.warp(self.wgs_srs)
 
-        self.fetch_module = fetches.FetchesFactory(
+        self.fetch_module = fetches.fetches_factory.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
             callback=callback, verbose=False,
             outdir=outdir,
@@ -9357,10 +9359,10 @@ class Fetcher(ElevationDataset):
 
         
     def init_fetch_module(self):
-        self.fetch_module = fetches.FetchesFactory(
+        self.fetch_module = fetches.fetches_factory.FetchesFactory(
             mod=self.fn,
             src_region=self.region,
-            callback=fetches.fetches_callback,
+            callback=fetches.fetches.fetches_callback,
             verbose=self.verbose,
             outdir=outdir
         )._acquire_module() # the fetches module
@@ -9529,7 +9531,7 @@ class NEDFetcher(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <ned> - {}'''.format(
-        __doc__, fetches.NED.__doc__
+        __doc__, fetches.tnm.NED.__doc__
     )
 
     
@@ -9575,7 +9577,7 @@ class DNRFetcher(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <wadnr> - {}'''.format(
-        __doc__, fetches.waDNR.__doc__
+        __doc__, fetches.wadnr.waDNR.__doc__
     )
     
     def __init__(self, **kwargs):
@@ -9609,7 +9611,7 @@ class DAVFetcher_CoNED(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <CoNED> - {}'''.format(
-        __doc__, fetches.CoNED.__doc__
+        __doc__, fetches.dav.CoNED.__doc__
     )
     
     
@@ -9679,7 +9681,7 @@ class DAVFetcher_SLR(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <SLR> - {}'''.format(
-        __doc__, fetches.SLR.__doc__
+        __doc__, fetches.dav.SLR.__doc__
     )
 
     
@@ -9754,7 +9756,7 @@ class SWOTFetcher(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <swot> - {}'''.format(
-        __doc__, fetches.SWOT.__doc__
+        __doc__, fetches.earthdata.SWOT.__doc__
     )
 
     
@@ -9849,7 +9851,7 @@ class IceSat2Fetcher(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <icesat2> - {}'''.format(
-        __doc__, fetches.IceSat2.__doc__
+        __doc__, fetches.earthdata.IceSat2.__doc__
     )
 
     
@@ -9918,7 +9920,7 @@ class GMRTFetcher(Fetcher):
     
     __doc__ = '''{}    
     Fetches Module: <gmrt> - {}'''.format(
-        __doc__, fetches.GMRT.__doc__
+        __doc__, fetches.gmrt.GMRT.__doc__
     )
 
     
@@ -9938,7 +9940,7 @@ class GMRTFetcher(Fetcher):
             gdalfun.gdal_set_ndv(src_ds, verbose=False)
 
         if self.swath_only:
-            if fetches.Fetch(
+            if fetches.fetches.Fetch(
                     self.fetch_module._gmrt_swath_poly_url,
                     verbose=self.verbose
             ).fetch_file(
@@ -9981,7 +9983,7 @@ class GEBCOFetcher(Fetcher):
     
     __doc__ = '''{}    
     Fetches Module: <gebco> - {}'''.format(
-        __doc__, fetches.GEBCO.__doc__
+        __doc__, fetches.gebco.GEBCO.__doc__
     )
 
     
@@ -10004,7 +10006,7 @@ class GEBCOFetcher(Fetcher):
         
         ## fetch the TID zip if needed
         if self.exclude_tid:
-            if fetches.Fetch(
+            if fetches.fetches.Fetch(
                     self.fetch_module._gebco_urls['gebco_tid']['geotiff'],
                     verbose=self.verbose
             ).fetch_file(
@@ -10097,7 +10099,7 @@ class CopernicusFetcher(Fetcher):
     
     __doc__ = '''{}    
     Fetches Module: <copernicus> - {}'''.format(
-        __doc__, fetches.CopernicusDEM.__doc__
+        __doc__, fetches.copernicus.CopernicusDEM.__doc__
     )
 
     
@@ -10134,7 +10136,7 @@ class FABDEMFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <fabdem> - {}'''.format(
-        __doc__, fetches.FABDEM.__doc__
+        __doc__, fetches.fabdem.FABDEM.__doc__
     )
 
     
@@ -10162,7 +10164,7 @@ class MarGravFetcher(Fetcher):
     
     __doc__ = '''{}    
     Fetches Module: <mar_grav> - {}'''.format(
-        __doc__, fetches.MarGrav.__doc__
+        __doc__, fetches.margrav.MarGrav.__doc__
     )
 
     
@@ -10250,7 +10252,7 @@ class ChartsFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <charts> - {}'''.format(
-        __doc__, fetches.Charts.__doc__
+        __doc__, fetches.charts.Charts.__doc__
     )
 
                                         
@@ -10298,7 +10300,7 @@ class MBSFetcher(Fetcher):
 
     __doc__ = '''{}
     Fetches Module: <multibeam> - {}'''.format(
-        __doc__, fetches.Multibeam.__doc__
+        __doc__, fetches.multibeam.Multibeam.__doc__
     )
 
                                         
@@ -10330,7 +10332,7 @@ class HydroNOSFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <hydronos> - {}'''.format(
-        __doc__, fetches.HydroNOS.__doc__
+        __doc__, fetches.hydronos.HydroNOS.__doc__
     )
 
                                         
@@ -10392,7 +10394,7 @@ class CSBFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <csb> - {}'''.format(__doc__, fetches.CSB.__doc__)
+    Fetches Module: <csb> - {}'''.format(__doc__, fetches.csb.CSB.__doc__)
 
                                         
     def __init__(self, **kwargs):
@@ -10408,7 +10410,7 @@ class R2RFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <r2r> - {}'''.format(__doc__, fetches.R2R.__doc__)
+    Fetches Module: <r2r> - {}'''.format(__doc__, fetches.multibeam.R2R.__doc__)
 
                                         
     def __init__(self, **kwargs):
@@ -10441,7 +10443,7 @@ class EMODNetFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <emodnet> - {}'''.format(
-        __doc__, fetches.EMODNet.__doc__
+        __doc__, fetches.emodnet.EMODNet.__doc__
     )
 
                                         
@@ -10465,7 +10467,7 @@ class GEDTM30Fetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <gedtm30> - {}'''.format(
-        __doc__, fetches.GEDTM30.__doc__
+        __doc__, fetches.gedtm30.GEDTM30.__doc__
     )
 
                                         
@@ -10495,7 +10497,7 @@ class HRDEMFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <hrdem> - {}'''.format(
-        __doc__, fetches.HRDEM.__doc__
+        __doc__, fetches.hrdem.HRDEM.__doc__
     )
 
                                         
@@ -10512,7 +10514,7 @@ class eHydroFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.eHydro.__doc__)
+    Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.ehydro.eHydro.__doc__)
 
                                         
     def __init__(self, want_contours=True, **kwargs):
@@ -10601,7 +10603,7 @@ class BlueTopoFetcher(Fetcher):
 
     __doc__ = '''{}
     Fetches Module: <bluetopo> - {}'''.format(
-        __doc__, fetches.BlueTopo.__doc__
+        __doc__, fetches.bluetopo.BlueTopo.__doc__
     )
 
     
@@ -10644,7 +10646,7 @@ class NGSFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <ngs> - {}'''.format(__doc__, fetches.NGS.__doc__)
+    Fetches Module: <ngs> - {}'''.format(__doc__, fetches.ngs.NGS.__doc__)
 
     
     def __init__(self, datum = 'geoidHt', **kwargs):
@@ -10696,7 +10698,7 @@ class TidesFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <tides> - {}'''.format(__doc__, fetches.Tides.__doc__)
+    Fetches Module: <tides> - {}'''.format(__doc__, fetches.tides.Tides.__doc__)
 
     
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', **kwargs):
@@ -10765,7 +10767,7 @@ class WaterServicesFetcher(Fetcher):
 
     __doc__ = '''{}
     Fetches Module: <waterservices> - {}'''.format(
-        __doc__, fetches.WaterServices.__doc__
+        __doc__, fetches.waterservices.WaterServices.__doc__
     )
 
     
@@ -10822,7 +10824,7 @@ class VDatumFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <vdatum> - {}'''.format(__doc__, fetches.VDATUM.__doc__)
+    Fetches Module: <vdatum> - {}'''.format(__doc__, fetches.vdatum.VDATUM.__doc__)
 
     
     def __init__(self, **kwargs):
@@ -11481,7 +11483,7 @@ Examples:
         DatasetFactory._modules
     ),
     grits_modules=factory._cudem_module_short_desc(
-        grits.GritsFactory._modules
+        grits.grits_factory.GritsFactory._modules
     ),
     point_filter_modules=factory._cudem_module_short_desc(
         PointFilterFactory._modules

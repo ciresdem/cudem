@@ -217,7 +217,7 @@ def process_cpt(cpt, gmin, gmax, gdal=False, split_cpt=None):
 
 def fetch_cpt_city(q='grass/haxby', cache_dir='./'):
     utils.echo_msg(f'checking for `{q}` at cpt-city')
-    this_fetches = fetches.FetchesFactory(
+    this_fetches = fetches.fetches_factory.FetchesFactory(
         mod='cpt_city', verbose=True, outdir=cache_dir, q=q
     )._acquire_module()
     this_fetches.run()
@@ -226,7 +226,7 @@ def fetch_cpt_city(q='grass/haxby', cache_dir='./'):
             len(this_fetches.results), q, this_fetches.results[0]['url']
         )
     )
-    fetches.Fetch(
+    fetches.fetches.Fetch(
         this_fetches.results[0]['url']
     ).fetch_file(
         this_fetches.results[0]['dst_fn']

@@ -20,18 +20,51 @@
 ###############################################################################
 ### Code:
 
-__version__ = "0.1.0"
+__version__ = "0.5.0"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
-from . import perspecto
-from . import hillshade
-from . import gmtimage
-from . import colorbar
-from . import povray
-from . import sphere
-from . import perspective
-from . import figure1
-from . import perspecto_factory
+from . import fetches
+from . import gmrt
+from . import margrav
+from . import srtmplus
+from . import synbath
+from . import charts
+from . import dav
+from . import multibeam
+from . import gebco
+from . import gedtm30
+from . import mgds
+from . import trackline
+from . import ehydro
+from . import ngs
+from . import hydronos
+from . import nceithredds
+from . import etopo
+from . import tnm
+from . import emodnet
+from . import chs
+from . import hrdem
+from . import mrdem
+from . import arcticdem
+from . import bluetopo
+from . import osm
+from . import copernicus
+from . import fabdem
+from . import nasadem
+from . import tides
+from . import vdatum
+from . import buoys
+from . import earthdata
+from . import usiei
+from . import wsf
+from . import hydrolakes
+from . import bingbfp
+from . import waterservices
+from . import csb
+from . import cptcity
+from . import wadnr
+from . import nswtb
+from . import fetches_factory
 
 ### End
