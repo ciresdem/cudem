@@ -2062,15 +2062,15 @@ class ElevationDataset:
 
 
         if self.valid_p():
-            try:
-                self.infos = self.inf(
-                    check_hash=True if self.data_format == -1 else False
-                )
-            except:
-                utils.echo_error_msg(
-                    f'could not parse dataset {self.fn}'
-                )
-                return(self)
+            #try:
+            self.infos = self.inf(
+                check_hash=True if self.data_format == -1 else False
+            )
+            # except:
+            #     utils.echo_error_msg(
+            #         f'could not parse dataset {self.fn}'
+            #     )
+            #     return(self)
              
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
