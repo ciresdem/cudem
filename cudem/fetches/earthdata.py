@@ -198,6 +198,7 @@ class EarthData(fetches.FetchModule):
             if _req is not None and _req.status_code == 200:
                 status_json = _req.json()
                 #utils.echo_msg(status_json['message'])
+                #utils.echo_msg(status_json['Error'])
                 #utils.echo_msg(status_json)
                 for link in status_json['links']:
                     if link['title'] == 'Job Status' or link['title'] == 'The current page':
@@ -298,11 +299,12 @@ class IceSat2(EarthData):
                 )
                 short_name = 'ATL03'
 
-        if subset:
-            atl08_v06_id = 'C2613553260-NSIDC_CPRD'
-            atl03_v06_id = 'C2596864127-NSIDC_CPRD'
-            atl03_v07_id = 'C3326974349-NSIDC_CPRD'
-            short_name = atl03_v06_id
+        # if subset:
+        #     atl08_v06_id = 'C2613553260-NSIDC_CPRD'
+        #     atl03_v06_id = 'C2596864127-NSIDC_CPRD'
+        #     atl03_v07_id = 'C3326974349-NSIDC_CPRD'
+        #     atl03_v07_id = 'C3326974349-NSIDC_CPRD'
+        #     short_name = atl03_v06_id
                 
         super().__init__(short_name=short_name, subset=subset, **kwargs)
 
