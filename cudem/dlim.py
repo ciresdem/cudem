@@ -7720,7 +7720,7 @@ class IceSat2File(ElevationDataset):
 
                 # we also need to change the lon/lat/height values to the
                 # updated/refracted bathymetry values (we'll just do it to class 40)
-                class_msk = class_ph == 40:
+                class_msk = class_ph == 40
                 longitude[index_ph[class_msk]] = lon_ph[class_msk]
                 latitude[index_ph[class_msk]] = lat_ph[class_msk]
                 photon_h[index_ph[class_msk]] = ellipse_h[class_msk]
