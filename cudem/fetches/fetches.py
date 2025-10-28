@@ -861,11 +861,11 @@ def fetch_queue(q, c = True):
                 ## we will try to do this, once exhausted, we will give up.
                 # and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
                 if fetch_args[4] > 0:
-                    utils.echo_warning_msg(
-                        'fetch of {} failed...putting back in the queue: {}'.format(
-                            fetch_args[0], e
-                        )
-                    )
+                    # utils.echo_warning_msg(
+                    #     'fetch of {} failed...putting back in the queue: {}'.format(
+                    #         fetch_args[0], e
+                    #     )
+                    # )
                     fetch_args[4] -= 1
                     utils.remove_glob(fetch_args[1])
                     q.put(fetch_args)
