@@ -297,8 +297,11 @@ class IceSat2(EarthData):
                     '{} is not a valid icesat2 short_name, using ATL03'.format(short_name)
                 )
                 short_name = 'ATL03'
+
+        atlx_v06_id = 'C2613553260-NSIDC_CPRD'
+        atlx_v07_id = 'C3326974349-NSIDC_CPRD'
                 
-        super().__init__(short_name=short_name, subset=subset, **kwargs)
+        super().__init__(short_name=atlx_v06_id, subset=subset, **kwargs)
 
         ## for dlim
         self.data_format = 303

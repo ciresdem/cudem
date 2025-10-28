@@ -7355,7 +7355,12 @@ class IceSat2File(ElevationDataset):
             #         f'{self.atl24_fn} does not appear to be an ATL file'
             #     )
             #     self.atl24_f.close()
-                
+
+        else:
+            utils.echo_warning_msg('falling back to CSphelph to classify bathymetry')
+            self.want_bathymetry = True
+            self.want_watermask = True
+            
         if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
             self.atl13_f = h5.File(self.atl13_fn, 'r')
             if self.verbose:
@@ -7463,9 +7468,12 @@ class IceSat2File(ElevationDataset):
                     #dataset = self.classify_water(dataset, this_wm)
                     dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41)
 
+                if dataset is None or len(dataset) == 0:
+                    continue
+                
                 ## bathymetry is classified in `read_atl_data` using ATL24 now...
-                # if self.want_bathymetry:
-                #     dataset = self.classify_bathymetry(dataset)
+                if self.want_bathymetry:
+                    dataset = self.classify_bathymetry(dataset)
                     
                 if dataset is None or len(dataset) == 0:
                     continue
