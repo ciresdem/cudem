@@ -299,9 +299,10 @@ class IceSat2(EarthData):
                 short_name = 'ATL03'
 
         if subset:
-            atlx_v06_id = 'C2613553260-NSIDC_CPRD'
-            atlx_v07_id = 'C3326974349-NSIDC_CPRD'
-            short_name = atlx_v06_id
+            atl08_v06_id = 'C2613553260-NSIDC_CPRD'
+            atl03_v06_id = 'C2596864127-NSIDC_CPRD'
+            atl03_v07_id = 'C3326974349-NSIDC_CPRD'
+            short_name = atl03_v06_id
                 
         super().__init__(short_name=short_name, subset=subset, **kwargs)
 
