@@ -7356,10 +7356,10 @@ class IceSat2File(ElevationDataset):
             #     )
             #     self.atl24_f.close()
 
-        else:
-            utils.echo_warning_msg('falling back to CSphelph to classify bathymetry')
-            self.want_bathymetry = True
-            self.want_watermask = True
+        # else:
+        #     utils.echo_warning_msg('falling back to CSphelph to classify bathymetry')
+        #     self.want_bathymetry = True
+        #     self.want_watermask = True
             
         if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
             self.atl13_f = h5.File(self.atl13_fn, 'r')
@@ -7456,9 +7456,13 @@ class IceSat2File(ElevationDataset):
                         (np.isin(dataset['confidence'], self.confidence_levels))
                     ]
 
+                ## reduce the dataset to the input region for faster masking
+                dataset = dataset[(dataset['longitude'] >= self.region.xmin) & (dataset['longitude'] <= self.region.xmax)]
+                dataset = dataset[(dataset['latitude'] >= self.region.ymin) & (dataset['latitude'] <= self.region.ymax)]
+                    
                 if dataset is None or len(dataset) == 0:
                     continue
-
+                
                 ## re-classify photons based on buildings/watermask/bathymetry
                 if self.want_buildings and this_bing is not None:
                     #dataset = self.classify_buildings(dataset, this_bing)
@@ -7471,12 +7475,12 @@ class IceSat2File(ElevationDataset):
                 if dataset is None or len(dataset) == 0:
                     continue
                 
-                ## bathymetry is classified in `read_atl_data` using ATL24 now...
-                if self.want_bathymetry:
-                    dataset = self.classify_bathymetry(dataset)
+                # ## bathymetry is classified in `read_atl_data` using ATL24 now...
+                # if self.want_bathymetry:
+                #     dataset = self.classify_bathymetry(dataset)
                     
-                if dataset is None or len(dataset) == 0:
-                    continue
+                # if dataset is None or len(dataset) == 0:
+                #     continue
 
                 ## keep only photons with a classification mentioned in `self.classes`
                 if len(self.classes) > 0:
