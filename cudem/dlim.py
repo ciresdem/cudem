@@ -7682,61 +7682,51 @@ class IceSat2File(ElevationDataset):
             index_seg = self.atl24_f[f'{laser}/index_seg'][...,]
             index_ph = self.atl24_f[f'{laser}/index_ph'][...,]
             conf_ph = self.atl24_f[f'{laser}/confidence'][...,]
+            
+            if 'subset' in self.atl03_fn:
+                ## determine the original `geosed_id` to determine the subset indices
+                orig_segment_id = np.arange(geoseg_beg, geoseg_end+1, 1)
+                orig_segment_id_msk = np.isin(orig_segment_id, ph_segment_ids)
+                index_seg_orig = orig_segment_id[index_seg]
+                segment_id_msk = np.isin(index_seg_orig, ph_segment_ids)
+                index_ph = index_ph - np.min(index_ph[segment_id_msk])
+                ph_h_classed = np.zeros(photon_h.shape)
+                index_msk = (index_ph[segment_id_msk] > 0) & (index_ph[segment_id_msk] < np.max(index_ph[segment_id_msk]))
+                class_msk = class_ph[segment_id_msk][index_msk] >= 40
+                ph_msk = (class_msk)
+                if self.min_bathy_confidence is not None:
+                    confidence_msk = conf_ph[segment_id_msk][index_msk] >= self.min_bathy_confidence
+                    ph_msk = (class_msk) & (confidence_msk)
 
-            ## determine the original `geosed_id` to determine the subset indices
-            orig_segment_id = np.arange(geoseg_beg, geoseg_end+1, 1)
-            orig_segment_id_msk = np.isin(orig_segment_id, ph_segment_ids)
-            index_seg_orig = orig_segment_id[index_seg]
-            segment_id_msk = np.isin(index_seg_orig, ph_segment_ids)
-            index_ph = index_ph - np.min(index_ph[segment_id_msk])
-            ph_h_classed = np.zeros(photon_h.shape)
-            index_msk = (index_ph[segment_id_msk] > 0) & (index_ph[segment_id_msk] < np.max(index_ph[segment_id_msk]))
-            class_msk = class_ph[segment_id_msk][index_msk] >= 40
-            ph_msk = (class_msk)
-            if self.min_bathy_confidence is not None:
-                confidence_msk = conf_ph[segment_id_msk][index_msk] >= self.min_bathy_confidence
-                ph_msk = (class_msk) & (confidence_msk)
+                #ph_h_classed[index_ph[segment_id_msk][index_msk]] = class_ph[class_msk][segment_id_msk][index_msk]
+                ph_h_classed[index_ph[segment_id_msk][index_msk][ph_msk]] = class_ph[segment_id_msk][index_msk][ph_msk]
+
+                # we also need to change the lon/lat/height values to the
+                # updated/refracted bathymetry values (we'll just do it to class 40)
+                class_msk = class_ph[segment_id_msk][index_msk] == 40
+                ph_class = (class_msk)
+                if self.min_bathy_confidence is not None:
+                    ph_msk = (class_msk) & (confidence_msk)
+
+                longitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lon_ph[segment_id_msk][index_msk][ph_msk]
+                latitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lat_ph[segment_id_msk][index_msk][ph_msk]
+                photon_h[index_ph[segment_id_msk][index_msk][ph_msk]] = ellipse_h[segment_id_msk][index_msk][ph_msk]
+                photon_h_meantide[index_ph[segment_id_msk][index_msk][ph_msk]] = surface_h[segment_id_msk][index_msk][ph_msk]
+                photon_h_geoid[index_ph[segment_id_msk][index_msk][ph_msk]] = ortho_h[segment_id_msk][index_msk][ph_msk]
+                #conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
+            else:
+                class_msk = class_ph >= 40
+                ph_h_classed[index_ph[class_msk]] = class_ph[class_msk]
+
+                # we also need to change the lon/lat/height values to the
+                # updated/refracted bathymetry values (we'll just do it to class 40)
+                class_msk = class_ph == 40:
+                longitude[index_ph[class_msk]] = lon_ph[class_msk]
+                latitude[index_ph[class_msk]] = lat_ph[class_msk]
+                photon_h[index_ph[class_msk]] = ellipse_h[class_msk]
+                photon_h_geoid[index_ph[class_msk]] = ortho_h[class_msk]
+                photon_h_meantide[index_ph[class_msk]] = surface_h[class_msk]
                 
-            #ph_h_classed[index_ph[segment_id_msk][index_msk]] = class_ph[class_msk][segment_id_msk][index_msk]
-            ph_h_classed[index_ph[segment_id_msk][index_msk][ph_msk]] = class_ph[segment_id_msk][index_msk][ph_msk]
-            
-            # we also need to change the lon/lat/height values to the
-            # updated/refracted bathymetry values (we'll just do it to class 40)
-            class_msk = class_ph[segment_id_msk][index_msk] == 40
-            ph_class = (class_msk)
-            if self.min_bathy_confidence is not None:
-                ph_msk = (class_msk) & (confidence_msk)
-
-            longitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lon_ph[segment_id_msk][index_msk][ph_msk]
-            latitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lat_ph[segment_id_msk][index_msk][ph_msk]
-            photon_h[index_ph[segment_id_msk][index_msk][ph_msk]] = ellipse_h[segment_id_msk][index_msk][ph_msk]
-            photon_h_meantide[index_ph[segment_id_msk][index_msk][ph_msk]] = surface_h[segment_id_msk][index_msk][ph_msk]
-            photon_h_geoid[index_ph[segment_id_msk][index_msk][ph_msk]] = ortho_h[segment_id_msk][index_msk][ph_msk]
-            #conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
-
-        # ## Read in the ATL24 data
-        # ## todo: check re subsets
-        # if self.atl24_f is not None:
-        #     atl24_classed_pc_flag  = self.atl24_f['/' + laser + '/class_ph'][...,]
-        #     atl24_classed_pc_indx = self.atl24_f['/' + laser + '/index_ph'][...,]
-        #     atl24_longitude = self.atl24_f['/' + laser + '/lon_ph'][...,]
-        #     atl24_latitude = self.atl24_f['/' + laser + '/lat_ph'][...,]
-        #     atl24_surface_h = self.atl24_f['/' + laser + '/surface_h'][...,]
-        #     atl24_ellipse_h = self.atl24_f['/' + laser + '/ellipse_h'][...,]
-        #     atl24_ortho_h = self.atl24_f['/' + laser + '/ortho_h'][...,]
-
-        #     subset_mask = np.isin(atl24_classed_pc_indx, seg_ids)
-            
-        #     class_40_mask = atl24_classed_pc_flag == 40
-        #     ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
-
-        #     # we also need to change the lon/lat/height values to the
-        #     # updated/refracted bathymetry values (we'll just do it to class 40)
-        #     longitude[atl24_classed_pc_indx[class_40_mask]] = atl24_longitude[class_40_mask]
-        #     latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
-        #     photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
-        #     photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
-
         if self.atl13_f is not None:
             atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
             ph_h_classed[atl13_refid] = 44
@@ -7992,9 +7982,9 @@ class IceSat2File(ElevationDataset):
                                 bath_height = [x for x in bath_height if ~np.isnan(x)]
                                 
                                 for n, id in enumerate(geo_df.ids.values):
-                                    dataset.at[id, 'ph_h_classed'] = 4
-                                    #dataset.at[id, 'latitude'] = lat_wgs84[n]
-                                    #dataset.at[id, 'longitude'] = lon_wgs84[n]
+                                    dataset.at[id, 'ph_h_classed'] = 40
+                                    dataset.at[id, 'latitude'] = lat_wgs84[n]
+                                    dataset.at[id, 'longitude'] = lon_wgs84[n]
                                     dataset.at[id, 'photon_height'] = geo_df.depth.values[n] * -1
                             
                                 return(dataset)

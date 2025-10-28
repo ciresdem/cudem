@@ -199,7 +199,7 @@ class EarthData(fetches.FetchModule):
                 status_json = _req.json()
                 #utils.echo_msg(status_json['message'])
                 #utils.echo_msg(status_json['Error'])
-                #utils.echo_msg(status_json)
+                utils.echo_msg(status_json)
                 for link in status_json['links']:
                     if link['title'] == 'Job Status' or link['title'] == 'The current page':
                         status_url = link['href']
