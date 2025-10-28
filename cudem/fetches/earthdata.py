@@ -128,7 +128,6 @@ class EarthData(fetches.FetchModule):
         self.version = version
         self.filename_filter = filename_filter
         self.subset = subset
-        self.version_replace = version_replace
 
         ## The various EarthData URLs
         self._cmr_url = 'https://cmr.earthdata.nasa.gov/search/granules.json?'
@@ -308,7 +307,7 @@ class IceSat2(EarthData):
             atl03_v06_id = 'C2596864127-NSIDC_CPRD'
             atl03_v07_id = 'C3326974349-NSIDC_CPRD'
             atl03_v07_id = 'C3326974349-NSIDC_CPRD'
-            short_name = atl03_v06_id
+            short_name = atl03_v07_id
                 
         super().__init__(short_name=short_name, subset=subset, **kwargs)
 

@@ -7697,29 +7697,30 @@ class IceSat2File(ElevationDataset):
                 orig_segment_id_msk = np.isin(orig_segment_id, ph_segment_ids)
                 index_seg_orig = orig_segment_id[index_seg]
                 segment_id_msk = np.isin(index_seg_orig, ph_segment_ids)
-                index_ph = index_ph - np.min(index_ph[segment_id_msk])
-                ph_h_classed = np.zeros(photon_h.shape)
-                index_msk = (index_ph[segment_id_msk] > 0) & (index_ph[segment_id_msk] < np.max(index_ph[segment_id_msk]))
-                class_msk = class_ph[segment_id_msk][index_msk] >= 40
-                ph_msk = (class_msk)
-                if self.min_bathy_confidence is not None:
-                    confidence_msk = conf_ph[segment_id_msk][index_msk] >= self.min_bathy_confidence
-                    ph_msk = (class_msk) & (confidence_msk)
+                if len(index_ph[segment_id_msk]) > 0:
+                    index_ph = index_ph - np.min(index_ph[segment_id_msk])
+                    ph_h_classed = np.zeros(photon_h.shape)
+                    index_msk = (index_ph[segment_id_msk] > 0) & (index_ph[segment_id_msk] < np.max(index_ph[segment_id_msk]))
+                    class_msk = class_ph[segment_id_msk][index_msk] >= 40
+                    ph_msk = (class_msk)
+                    if self.min_bathy_confidence is not None:
+                        confidence_msk = conf_ph[segment_id_msk][index_msk] >= self.min_bathy_confidence
+                        ph_msk = (class_msk) & (confidence_msk)
 
-                ph_h_classed[index_ph[segment_id_msk][index_msk][ph_msk]] = class_ph[segment_id_msk][index_msk][ph_msk]
-                # we also need to change the lon/lat/height values to the
-                # updated/refracted bathymetry values (we'll just do it to class 40)
-                class_msk = class_ph[segment_id_msk][index_msk] == 40
-                ph_class = (class_msk)
-                if self.min_bathy_confidence is not None:
-                    ph_msk = (class_msk) & (confidence_msk)
+                    ph_h_classed[index_ph[segment_id_msk][index_msk][ph_msk]] = class_ph[segment_id_msk][index_msk][ph_msk]
+                    # we also need to change the lon/lat/height values to the
+                    # updated/refracted bathymetry values (we'll just do it to class 40)
+                    class_msk = class_ph[segment_id_msk][index_msk] == 40
+                    ph_class = (class_msk)
+                    if self.min_bathy_confidence is not None:
+                        ph_msk = (class_msk) & (confidence_msk)
 
-                longitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lon_ph[segment_id_msk][index_msk][ph_msk]
-                latitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lat_ph[segment_id_msk][index_msk][ph_msk]
-                photon_h[index_ph[segment_id_msk][index_msk][ph_msk]] = ellipse_h[segment_id_msk][index_msk][ph_msk]
-                photon_h_meantide[index_ph[segment_id_msk][index_msk][ph_msk]] = surface_h[segment_id_msk][index_msk][ph_msk]
-                photon_h_geoid[index_ph[segment_id_msk][index_msk][ph_msk]] = ortho_h[segment_id_msk][index_msk][ph_msk]
-                #conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
+                    longitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lon_ph[segment_id_msk][index_msk][ph_msk]
+                    latitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lat_ph[segment_id_msk][index_msk][ph_msk]
+                    photon_h[index_ph[segment_id_msk][index_msk][ph_msk]] = ellipse_h[segment_id_msk][index_msk][ph_msk]
+                    photon_h_meantide[index_ph[segment_id_msk][index_msk][ph_msk]] = surface_h[segment_id_msk][index_msk][ph_msk]
+                    photon_h_geoid[index_ph[segment_id_msk][index_msk][ph_msk]] = ortho_h[segment_id_msk][index_msk][ph_msk]
+                    #conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
                 # else:
                 #     class_msk = class_ph >= 40
                 #     ph_h_classed[index_ph[class_msk]] = class_ph[class_msk]
