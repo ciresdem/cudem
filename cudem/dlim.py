@@ -7249,6 +7249,7 @@ class IceSat2File(ElevationDataset):
     classify_buildings: True # classify buildings using BING BFP
     classify_water: True # classify water using OSM
     reject_failed_qa: True # skip granules that failed QA
+    min_bathy_confidence: <0-1> the minimum passable ATL24 confidence level
 
     Classes:
     -1 - no classification (ATL08)
@@ -7277,7 +7278,9 @@ class IceSat2File(ElevationDataset):
                  classify_buildings=True,
                  classify_inland_water=True,
                  reject_failed_qa=True,
-                 classify_water=True,
+                 classify_water=False,
+                 append_atl24=False,
+                 min_bathy_confidence=None,
                  **kwargs):
         super().__init__(**kwargs)
         self.data_format = 303
@@ -7292,12 +7295,15 @@ class IceSat2File(ElevationDataset):
             if confidence_levels is not None \
                else []
         self.columns = columns
+        #self.columns = {'/gtx/heights/delta_time': 'delta_time_b'}
         self.atl_fn = None
         self.want_bathymetry = classify_bathymetry
         self.want_buildings = classify_buildings
         self.want_watermask = classify_water
         self.want_inland_water = classify_inland_water
         self.reject_failed_qa = reject_failed_qa
+        self.append_atl24 = append_atl24
+        self.min_bathy_confidence = utils.float_or(min_bathy_confidence)
 
         
     def init_atl_h5(self):
@@ -7329,6 +7335,9 @@ class IceSat2File(ElevationDataset):
         
         if self.atl08_fn is not None and os.path.exists(self.atl08_fn):
             self.atl08_f = h5.File(self.atl08_fn, 'r')
+            if self.verbose:
+                utils.echo_msg(f'Using ATL08 file: {self.atl08_fn}')
+                
             if 'short_name' not in self.atl08_f.attrs.keys():
                 utils.echo_warning_msg(
                     f'{self.atl08_fn} does not appear to be an ATL file'
@@ -7338,6 +7347,9 @@ class IceSat2File(ElevationDataset):
         ## atl24 doesn't have the short_name attr
         if self.atl24_fn is not None and os.path.exists(self.atl24_fn):
             self.atl24_f = h5.File(self.atl24_fn, 'r')
+            if self.verbose:
+                utils.echo_msg(f'Using ATL24 file: {self.atl08_fn}')
+                
             # if 'short_name' not in self.atl24_f.attrs.keys():
             #     utils.echo_warning_msg(
             #         f'{self.atl24_fn} does not appear to be an ATL file'
@@ -7346,6 +7358,9 @@ class IceSat2File(ElevationDataset):
                 
         if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
             self.atl13_f = h5.File(self.atl13_fn, 'r')
+            if self.verbose:
+                utils.echo_msg(f'Using ATL13 file: {self.atl08_fn}')
+                
             if 'short_name' not in self.atl13_f.attrs.keys():
                 utils.echo_warning_msg(
                     f'{self.atl13_fn} does not appear to be an ATL file'
@@ -7451,94 +7466,7 @@ class IceSat2File(ElevationDataset):
                 ## bathymetry is classified in `read_atl_data` using ATL24 now...
                 # if self.want_bathymetry:
                 #     dataset = self.classify_bathymetry(dataset)
-
-                if self.atl24_f is not None:
-                    orientDict = {0:'l', 1:'r', 21:'error'}
-                    laser = 'gt' + f'{i}' + orientDict[orient]
-                    atl24_classed_pc_flag  = self.atl24_f[
-                        f'/{laser}/class_ph'
-                    ][...,]
-                    atl24_lat_ph = self.atl24_f[
-                        f'/{laser}/lat_ph'
-                    ][...,]
-                    atl24_lon_ph = self.atl24_f[
-                        f'/{laser}/lon_ph'
-                    ][...,]
-                    atl24_suface_h = self.atl24_f[
-                        f'/{laser}/surface_h'
-                    ][...,]
-                    atl24_ortho_h = self.atl24_f[
-                        f'/{laser}/ortho_h'
-                    ][...,]
-                    atl24_ellipse_h = self.atl24_f[
-                        f'/{laser}/ellipse_h'
-                    ][...,]
-
-                    atl24_ph_segment_id = self.atl24_f[
-                        f'/{laser}/index_seg'
-                    ][...,] # photon src 20 m seg id
-                    atl24_classed_pc_indx = self.atl24_f[
-                        f'/{laser}/index_ph'
-                    ][...,]
-                    atl24_conf = self.atl24_f[
-                        f'/{laser}/confidence'
-                    ][...,]
-
-                    if self.water_surface == 'mean_tide':
-                        atl24_ph_height = atl24_surface_h
-                    elif self.water_surface == 'geoid':
-                        atl24_ph_height = atl24_ortho_h
-                    else:
-                        atl24_ph_height = atl24_ellipse_h
                     
-                    ## append the laser to each record
-
-                    laser_arr = np.empty(atl24_ortho_h.shape, dtype='object')
-                    laser_arr[:] = laser
-                    
-                    ## append the filename to each record
-                    fn_arr = np.empty(atl24_ortho_h.shape, dtype='object')
-                    fn_arr[:] = self.fn
-
-                    # ph_ref_elev = np.zeros(atl24_ortho_h.shape)
-                    # ph_ref_elev[:] = -1
-                    
-                    # ph_ref_azimuth = np.zeros(atl24_ortho_h.shape)
-                    # ph_ref_azimuth[:] = -1
-
-                    # ph_altitude_sc = np.zeros(atl24_ortho_h.shape)
-                    # ph_altitude_sc[:] = -1
-
-                    class_mask = (atl24_classed_pc_flag == 40) | (atl24_classed_pc_flag == 41)
-                    if self.region is not None:
-                        lat_mask = (atl24_lat_ph >= self.region.ymin) & (atl24_lat_ph <= self.region.ymax)
-                        lon_mask = (atl24_lon_ph >= self.region.xmin) & (atl24_lon_ph <= self.region.xmax)
-                        dataset_mask = class_mask & lat_mask & lon_mask
-                    else:
-                        dataset_mask = class_mask
-                        
-                    atl24_dataset = pd.DataFrame(
-                        {'latitude': atl24_lat_ph[dataset_mask],
-                         'longitude': atl24_lon_ph[dataset_mask],
-                         'photon_height': atl24_ph_height[dataset_mask],
-                         'laser': laser_arr[dataset_mask],
-                         'fn': fn_arr[dataset_mask],
-                         'confidence': atl24_conf[dataset_mask],
-                         'ph_h_classed': atl24_classed_pc_flag[dataset_mask]},
-                        columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
-                                 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt',
-                                 'ph_h_classed']
-                    )
-                    for column in dataset.columns:
-                        if column not in atl24_dataset.columns:
-                            tmp_data = np.zeros(atl24_ortho_h.shape)
-                            tmp_data[:] = -1
-
-                            atl24_dataset[column] = tmp_data
-                            
-                    #dataset = dataset.append(atl24_dataset, ignore_index=True)
-                    dataset = pd.concat([dataset, atl24_dataset], ignore_index=True)
-                
                 if dataset is None or len(dataset) == 0:
                     continue
 
@@ -7566,11 +7494,7 @@ class IceSat2File(ElevationDataset):
     def fetch_atlxx(self, short_name='ATL08'):
         """fetch an associated ATLxx file"""
 
-        #utils.echo_msg(self.atl03_fn)
-        #utils.echo_msg(f'searching for {short_name}')
-        #atlxx_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
         atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1])
-        #utils.echo_msg(f'using fn filter: {atlxx_filter}')
         this_atlxx = fetches.earthdata.IceSat2(
             src_region=None,
             verbose=True,
@@ -7599,7 +7523,6 @@ class IceSat2File(ElevationDataset):
                 )
                 return(None)
         else:
-            #utils.echo_msg(this_atlxx.results)
             if this_atlxx.fetch_entry(
                     this_atlxx.results[0], check_size=True
             ) == 0:
@@ -7637,6 +7560,7 @@ class IceSat2File(ElevationDataset):
         conf = self.atl03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
         qual = self.atl03_f['/' + laser + '/heights/quality_ph/'][...,0]
         dist_ph_along = self.atl03_f['/' + laser + '/heights/dist_ph_along'][...,]
+        delta_time = self.atl03_f['/' + laser + '/heights/delta_time'][...,]
         this_N = latitude.shape[0]
 
         ## Read in the geolocation level data
@@ -7653,6 +7577,10 @@ class IceSat2File(ElevationDataset):
         photon_geoid = self.atl03_f['/' + laser + '/geophys_corr/geoid'][...,]
         photon_geoid_f2m = self.atl03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
 
+        ## Read in the geosegment info for subsets
+        geoseg_beg = self.atl03_f['ancillary_data/start_geoseg'][...,][0]
+        geoseg_end = self.atl03_f['ancillary_data/end_geoseg'][...,][0]
+                    
         ## Create a dictionary with (segment_id --> index into ATL03 photons)
         ## lookup pairs, for the starting photon of each segment
         #segment_indices = ph_index_beg+(ref_photon_index-1)
@@ -7664,12 +7592,12 @@ class IceSat2File(ElevationDataset):
         ]
         
         ## Compute the total along-track distances.
-        #segment_dist_dict = dict(zip(segment_id, segment_dist_x))
+        segment_dist_dict = dict(zip(segment_id, segment_dist_x))
 
         ## Determine where in the array each segment index needs to look.
-        #ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]),
-        #ph_segment_ids)))
-        #dist_x = ph_segment_dist_x + dist_ph_along
+        ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]),
+                                              ph_segment_ids)))
+        dist_x = ph_segment_dist_x + dist_ph_along
 
         ## meantide/geoid heights
         h_geoid_dict = dict(zip(segment_id, photon_geoid))
@@ -7736,124 +7664,70 @@ class IceSat2File(ElevationDataset):
             ph_h_classed[atl08_ph_index[class_mask]] \
                 = atl08_classed_pc_flag[atl08_segment_id_msk][class_mask]
 
+        if self.atl24_f is not None:
+            lat_ph = self.atl24_f[f'{laser}/lat_ph'][...,]
+            lon_ph = self.atl24_f[f'{laser}/lon_ph'][...,]
+            ortho_h = self.atl24_f[f'{laser}/ortho_h'][...,]
+            ellipse_h = self.atl24_f[f'{laser}/ellipse_h'][...,]
+            surface_h = self.atl24_f[f'{laser}/surface_h'][...,]
+            class_ph = self.atl24_f[f'{laser}/class_ph'][...,]
+            index_seg = self.atl24_f[f'{laser}/index_seg'][...,]
+            index_ph = self.atl24_f[f'{laser}/index_ph'][...,]
+            conf_ph = self.atl24_f[f'{laser}/confidence'][...,]
+
+            ## determine the original `geosed_id` to determine the subset indices
+            orig_segment_id = np.arange(geoseg_beg, geoseg_end+1, 1)
+            orig_segment_id_msk = np.isin(orig_segment_id, ph_segment_ids)
+            index_seg_orig = orig_segment_id[index_seg]
+            segment_id_msk = np.isin(index_seg_orig, ph_segment_ids)
+            index_ph = index_ph - np.min(index_ph[segment_id_msk])
+            ph_h_classed = np.zeros(photon_h.shape)
+            index_msk = (index_ph[segment_id_msk] > 0) & (index_ph[segment_id_msk] < np.max(index_ph[segment_id_msk]))
+            class_msk = class_ph[segment_id_msk][index_msk] >= 40
+            ph_msk = (class_msk)
+            if self.min_bathy_confidence is not None:
+                confidence_msk = conf_ph[segment_id_msk][index_msk] >= self.min_bathy_confidence
+                ph_msk = (class_msk) & (confidence_msk)
+                
+            #ph_h_classed[index_ph[segment_id_msk][index_msk]] = class_ph[class_msk][segment_id_msk][index_msk]
+            ph_h_classed[index_ph[segment_id_msk][index_msk][ph_msk]] = class_ph[segment_id_msk][index_msk][ph_msk]
+            
+            # we also need to change the lon/lat/height values to the
+            # updated/refracted bathymetry values (we'll just do it to class 40)
+            class_msk = class_ph[segment_id_msk][index_msk] == 40
+            ph_class = (class_msk)
+            if self.min_bathy_confidence is not None:
+                ph_msk = (class_msk) & (confidence_msk)
+
+            longitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lon_ph[segment_id_msk][index_msk][ph_msk]
+            latitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lat_ph[segment_id_msk][index_msk][ph_msk]
+            photon_h[index_ph[segment_id_msk][index_msk][ph_msk]] = ellipse_h[segment_id_msk][index_msk][ph_msk]
+            photon_h_meantide[index_ph[segment_id_msk][index_msk][ph_msk]] = surface_h[segment_id_msk][index_msk][ph_msk]
+            photon_h_geoid[index_ph[segment_id_msk][index_msk][ph_msk]] = ortho_h[segment_id_msk][index_msk][ph_msk]
+            #conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
+
+        # ## Read in the ATL24 data
+        # ## todo: check re subsets
         # if self.atl24_f is not None:
-        #     atl24_classed_pc_flag  = self.atl24_f[
-        #         f'/{laser}/class_ph'
-        #     ][...,]
-        #     atl24_lat_ph = self.atl24_f[
-        #         f'/{laser}/lat_ph'
-        #     ][...,]
-        #     atl24_lon_ph = self.atl24_f[
-        #         f'/{laser}/lon_ph'
-        #     ][...,]
-        #     atl24_suface_h = self.atl24_f[
-        #         f'/{laser}/surface_h'
-        #     ][...,]
-        #     atl24_ortho_h = self.atl24_f[
-        #         f'/{laser}/ortho_h'
-        #     ][...,]
-        #     atl24_ellipse_h = self.atl24_f[
-        #         f'/{laser}/ellipse_h'
-        #     ][...,]
+        #     atl24_classed_pc_flag  = self.atl24_f['/' + laser + '/class_ph'][...,]
+        #     atl24_classed_pc_indx = self.atl24_f['/' + laser + '/index_ph'][...,]
+        #     atl24_longitude = self.atl24_f['/' + laser + '/lon_ph'][...,]
+        #     atl24_latitude = self.atl24_f['/' + laser + '/lat_ph'][...,]
+        #     atl24_surface_h = self.atl24_f['/' + laser + '/surface_h'][...,]
+        #     atl24_ellipse_h = self.atl24_f['/' + laser + '/ellipse_h'][...,]
+        #     atl24_ortho_h = self.atl24_f['/' + laser + '/ortho_h'][...,]
+
+        #     subset_mask = np.isin(atl24_classed_pc_indx, seg_ids)
             
-        #     atl24_ph_segment_id = self.atl24_f[
-        #         f'/{laser}/index_seg'
-        #     ][...,] # photon src 20 m seg id
-        #     atl24_classed_pc_indx = self.atl24_f[
-        #         f'/{laser}/index_ph'
-        #     ][...,]
+        #     class_40_mask = atl24_classed_pc_flag == 40
+        #     ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
 
-        #     # atl24_ph_segment_id = self.atl24_f[
-        #     #     f'/{laser}/index_ph'
-        #     # ][...,] # photon src 20 m seg id
-        #     # atl24_classed_pc_indx = self.atl24_f[
-        #     #     f'/{laser}/index_seg'
-        #     # ][...,].astype(int)
-
-        #     # atl24_confidence = self.atl24_f[
-        #     #     f'/{laser}/confidence'
-        #     # ][...,]
-
-        #     # atl24_low_confidence_flag = self.atl24_f[
-        #     #     f'/{laser}/low_confidence_flag'
-        #     # ][...,]
-
-        #     # #atl24_class_mask = (np.isin(atl24_classed_pc_flag, [40, 41])) & (atl24_low_confidence_flag == 1)
-        #     # atl24_class_mask = np.isin(atl24_classed_pc_flag, [40, 41])
-        #     # atl24_ph_segment_id = atl24_ph_segment_id[atl24_class_mask]
-        #     # atl24_classed_pc_indx = atl24_classed_pc_indx[atl24_class_mask]
-        #     # atl24_classed_pc_flag = atl24_classed_pc_flag[atl24_class_mask]
-            
-        #     ## set the classifications from ATL24
-        #     # atl24_segment_id_msk = np.isin(atl24_ph_segment_id, segment_id)            
-        #     # utils.echo_msg(np.count_nonzero(np.isin(atl24_ph_segment_id, segment_id)))
-        #     # #h_ph_dict = dict(zip(segment_id, atl24_ph_segment_id))
-        #     # #if np.count_nonzero(atl24_segment_id_msk) > 0:
-        #     # h_ph_dict = dict(zip(atl24_classed_pc_indx[atl24_segment_id_msk], atl24_classed_pc_flag[atl24_segment_id_msk]))
-        #     # ph_ref = np.array(
-        #     #     list(map((lambda pid: h_ph_dict[pid]), ph_segment_ids))#atl24_ph_segment_id[atl24_segment_id_msk]))#ph_segment_ids))
-        #     # )#.astype(float)
-            
-        #     # utils.echo_msg(ph_ref)
-        #     # utils.echo_msg(len(ph_ref))
-        #     # utils.echo_msg(len(ph_h_classed))
-        #     # ph_h_classed = ph_ref
-        #     #utils.echo_msg(np.count_nonzero(np.isin(atl24_ph_segment_id, ph_segment_ids)))
-        #     #utils.echo_msg(np.count_nonzero(np.isin(atl24_classed_pc_indx[atl24_classed_pc_flag==40], segment_id)))
-        #     #utils.echo_msg(np.count_nonzero(np.isin(atl24_classed_pc_indx[atl24_classed_pc_flag==40], ph_segment_ids)))
-        #     #utils.echo_msg(np.count_nonzero(np.isin(segment_id, atl24_classed_pc_indx[atl24_classed_pc_flag==40])))
-        #     #utils.echo_msg(np.count_nonzero(np.isin(ph_segment_ids, atl24_classed_pc_indx[atl24_classed_pc_flag==40])))
-        #     atl24_segment_id_msk = [
-        #         True if x in segment_id else False for x in atl24_ph_segment_id
-        #     ]
-
-        #     atl24_ph_segment_indx = np.array(
-        #         list(
-        #             map((lambda pid: segment_index_dict[pid]),
-        #                 atl24_ph_segment_id[atl24_segment_id_msk])
-        #         )
-        #     )
-        #     atl24_ph_index = np.array(
-        #         atl24_ph_segment_indx + (atl24_classed_pc_indx[atl24_segment_id_msk] - 1),
-        #         dtype=int
-        #     )
-        #     #atl24_ph_segment_indx
-        #     class_mask = atl24_ph_index < len(ph_segment_ids)
-        #     #ph_h_classed[atl24_classed_pc_indx[atl24_segment_id_msk][class_mask]] = atl24_classed_pc_flag[atl24_segment_id_msk][class_mask]
-        #     ph_h_classed[atl24_ph_index[class_mask]] \
-        #         = atl24_classed_pc_flag[atl24_segment_id_msk][class_mask]
-           
-
-        #     # # we also need to change the lon/lat/height values to the
-        #     # # updated/refracted bathymetry values (we'll just do it to class 40)
-        #     # longitude[atl24_ph_index[class_mask]] = atl24_lon_ph[atl24_class_mask][atl24_segment_id_msk][class_mask]
-        #     # latitude[atl24_ph_index[class_mask]] = atl24_lat_ph[atl24_class_mask][atl24_segment_id_msk][class_mask]
-        #     # photon_h[atl24_ph_index[class_mask]] = atl24_ellipse_h[atl24_class_mask][atl24_segment_id_msk][class_mask]
-        #     # photon_h_geoid[atl24_ph_index[class_mask]] = atl24_ortho_h[atl24_class_mask][atl24_segment_id_msk][class_mask]
-
-            
-        # # ## Read in the ATL24 data
-        # # ## todo: check re subsets
-        # # if self.atl24_f is not None:
-        # #     atl24_classed_pc_flag  = self.atl24_f['/' + laser + '/class_ph'][...,]
-        # #     atl24_classed_pc_indx = self.atl24_f['/' + laser + '/index_ph'][...,]
-        # #     atl24_longitude = self.atl24_f['/' + laser + '/lon_ph'][...,]
-        # #     atl24_latitude = self.atl24_f['/' + laser + '/lat_ph'][...,]
-        # #     atl24_surface_h = self.atl24_f['/' + laser + '/surface_h'][...,]
-        # #     atl24_ellipse_h = self.atl24_f['/' + laser + '/ellipse_h'][...,]
-        # #     atl24_ortho_h = self.atl24_f['/' + laser + '/ortho_h'][...,]
-
-        # #     subset_mask = np.isin(atl24_classed_pc_indx, seg_ids)
-            
-        # #     class_40_mask = atl24_classed_pc_flag == 40
-        # #     ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
-
-        # #     # we also need to change the lon/lat/height values to the
-        # #     # updated/refracted bathymetry values (we'll just do it to class 40)
-        # #     longitude[atl24_classed_pc_indx[class_40_mask]] = atl24_longitude[class_40_mask]
-        # #     latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
-        # #     photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
-        # #     photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
+        #     # we also need to change the lon/lat/height values to the
+        #     # updated/refracted bathymetry values (we'll just do it to class 40)
+        #     longitude[atl24_classed_pc_indx[class_40_mask]] = atl24_longitude[class_40_mask]
+        #     latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
+        #     photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
+        #     photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
 
         if self.atl13_f is not None:
             atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
@@ -7878,10 +7752,11 @@ class IceSat2File(ElevationDataset):
              'ref_elevation':ph_ref_elev,
              'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_altitude_sc,
+             'delta_time':delta_time,
              'ph_h_classed': ph_h_classed},
             columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
                      'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt',
-                     'ph_h_classed']
+                     'delta_time', 'ph_h_classed']
         )
 
         ## Process extra columns specified in `self.columns`
@@ -7911,6 +7786,84 @@ class IceSat2File(ElevationDataset):
 
         return(dataset)        
 
+    
+    def append_atl24_to_dataset(dataset):
+        if self.atl24_f is not None:
+            orientDict = {0:'l', 1:'r', 21:'error'}
+            laser = 'gt' + f'{i}' + orientDict[orient]
+            atl24_classed_pc_flag  = self.atl24_f[
+                f'/{laser}/class_ph'
+            ][...,]
+            atl24_lat_ph = self.atl24_f[
+                f'/{laser}/lat_ph'
+            ][...,]
+            atl24_lon_ph = self.atl24_f[
+                f'/{laser}/lon_ph'
+            ][...,]
+            atl24_suface_h = self.atl24_f[
+                f'/{laser}/surface_h'
+            ][...,]
+            atl24_ortho_h = self.atl24_f[
+                f'/{laser}/ortho_h'
+            ][...,]
+            atl24_ellipse_h = self.atl24_f[
+                f'/{laser}/ellipse_h'
+            ][...,]
+
+            atl24_ph_segment_id = self.atl24_f[
+                f'/{laser}/index_seg'
+            ][...,] # photon src 20 m seg id
+            atl24_classed_pc_indx = self.atl24_f[
+                f'/{laser}/index_ph'
+            ][...,]
+            atl24_conf = self.atl24_f[
+                f'/{laser}/confidence'
+            ][...,]
+
+            if self.water_surface == 'mean_tide':
+                atl24_ph_height = atl24_surface_h
+            elif self.water_surface == 'geoid':
+                atl24_ph_height = atl24_ortho_h
+            else:
+                atl24_ph_height = atl24_ellipse_h
+
+            ## append the laser to each record
+
+            laser_arr = np.empty(atl24_ortho_h.shape, dtype='object')
+            laser_arr[:] = laser
+
+            ## append the filename to each record
+            fn_arr = np.empty(atl24_ortho_h.shape, dtype='object')
+            fn_arr[:] = self.fn
+
+            class_mask = (atl24_classed_pc_flag == 40) | (atl24_classed_pc_flag == 41)
+            if self.region is not None:
+                lat_mask = (atl24_lat_ph >= self.region.ymin) & (atl24_lat_ph <= self.region.ymax)
+                lon_mask = (atl24_lon_ph >= self.region.xmin) & (atl24_lon_ph <= self.region.xmax)
+                dataset_mask = class_mask & lat_mask & lon_mask
+            else:
+                dataset_mask = class_mask
+
+            atl24_dataset = pd.DataFrame(
+                {'latitude': atl24_lat_ph[dataset_mask],
+                 'longitude': atl24_lon_ph[dataset_mask],
+                 'photon_height': atl24_ph_height[dataset_mask],
+                 'laser': laser_arr[dataset_mask],
+                 'fn': fn_arr[dataset_mask],
+                 'confidence': atl24_conf[dataset_mask],
+                 'ph_h_classed': atl24_classed_pc_flag[dataset_mask]},
+                columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
+                         'confidence', 'ph_h_classed']
+            )
+            for column in dataset.columns:
+                if column not in atl24_dataset.columns:
+                    tmp_data = np.zeros(atl24_ortho_h.shape)
+                    tmp_data[:] = -1
+
+                    atl24_dataset[column] = tmp_data
+
+            dataset = pd.concat([dataset, atl24_dataset], ignore_index=True)
+    
     
     def classify_bathymetry(
             self, dataset, thresh=95, min_buffer=-40, max_buffer=5,
@@ -10033,39 +9986,14 @@ class SWOTFetcher(Fetcher):
             
 class IceSat2Fetcher(Fetcher):
     """IceSat2 data from NASA
-
-    See `fetches --modules icesat2` for fetching parameters
-
-    Parameters:
     
-    # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
-    water_surface: 'geoid' 
-    classes: None # return only data with the specified classes, e.g. '2/3/4'
-    confidence_levels: None # return only data with the specified confidence 
-                       levels, e.g. '2/3/4'
-    columns: {} # the additional columns to export in transform_and_yield_points
-    classify_bathymetry: True # extract bathymetry with CShelph
-    classify_buildings: True # classify buildings with BING BFP
-    classify_water: True # classify water using OSM
-    reject_failed_qa: True # skip granules that failed QA
-
-    Classes:
-    -1 - no classification (ATL08)
-    0 - noise / atmosphere (ATL08)
-    1 - ground surface (ATL08)
-    2 - canopy (ATL08)
-    3 - canopy top (ATL08)
-    4 - bathymetry floor surface (CShelph, future ATL24)
-    5 - bathymetry water surface (CShelph, future ATL24)
-    6 - ice surface (ATL06) (unused for now, just planning ahead for 
-                             possible future ATL06 integration)
-    7 - built structure (OSM or Bing)
-    8 - "urban" (WSF, if used)
-
-    Confidence Levels:
-    0, 1, 2, 3, 4
     """
 
+    __doc__ = '''{}    
+    DLIM Module: <IceSat2File> - {}'''.format(
+        __doc__, IceSat2File.__doc__
+    )
+    
     __doc__ = '''{}    
     Fetches Module: <icesat2> - {}'''.format(
         __doc__, fetches.earthdata.IceSat2.__doc__
