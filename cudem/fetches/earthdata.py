@@ -119,7 +119,7 @@ class EarthData(fetches.FetchModule):
     """
 
     def __init__(self, short_name='ATL03', provider='', time_start='', time_end='',
-                 version='', filename_filter=None, subset=False, version_replace=[], **kwargs):
+                 version='', filename_filter=None, subset=False, **kwargs):
         super().__init__(name='cmr', **kwargs)
         self.short_name = short_name
         self.provider = provider
@@ -167,6 +167,9 @@ class EarthData(fetches.FetchModule):
             'page_size': 2000,
         }
 
+        if self.version != '':
+            _data['version'] = f'self.version'
+            
         if '*' in self.short_name:
             _data['options[short_name][pattern]'] = 'true'
         
@@ -265,18 +268,9 @@ class EarthData(fetches.FetchModule):
                         for link in links:
                             if link['rel'].endswith('/data#') and 'inherited' not in link.keys():
                                 if not any([link['href'].split('/')[-1] in res for res in self.results]):
-                                    if len(self.version_replace) == 2:
-                                        vr_0 = [f'/{self.version_replace[0]}/', f'/{self.version_replace[1]}/']
-                                        vr_1 = [f'_{self.version_replace[0]}_', f'_{self.version_replace[1]}_']
-                                        self.add_entry_to_results(
-                                            link['href'].replace(*vr_0).replace(*vr_1),
-                                            link['href'].split('/')[-1].replace(*vr_1),
-                                            self.short_name
-                                        )
-                                    else:
-                                        self.add_entry_to_results(
-                                            link['href'], link['href'].split('/')[-1], self.short_name
-                                        )
+                                    self.add_entry_to_results(
+                                        link['href'], link['href'].split('/')[-1], self.short_name
+                                    )
 
                                     
 ## IceSat2 from EarthData shortcut - NASA (requires login credentials)
@@ -300,8 +294,7 @@ class IceSat2(EarthData):
     < icesat2:short_name=ATL03:time_start='':time_end='':filename_filter='' >
     """
     
-    def __init__(self, short_name='ATL03', subset=False, force_v6=False, **kwargs):
-        self.force_v6 = force_v6
+    def __init__(self, short_name='ATL03', subset=False, **kwargs):
         if short_name is not None:
             short_name = short_name.upper()
             if not short_name.startswith('ATL'):
