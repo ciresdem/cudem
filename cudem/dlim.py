@@ -7457,8 +7457,8 @@ class IceSat2File(ElevationDataset):
                     ]
 
                 ## reduce the dataset to the input region for faster masking
-                dataset = dataset[(dataset['longitude'] >= self.region.xmin) & (dataset['longitude'] <= self.region.xmax)]
-                dataset = dataset[(dataset['latitude'] >= self.region.ymin) & (dataset['latitude'] <= self.region.ymax)]
+                #dataset = dataset[(dataset['longitude'] >= self.region.xmin) & (dataset['longitude'] <= self.region.xmax)]
+                #dataset = dataset[(dataset['latitude'] >= self.region.ymin) & (dataset['latitude'] <= self.region.ymax)]
                     
                 if dataset is None or len(dataset) == 0:
                     continue
@@ -7702,9 +7702,7 @@ class IceSat2File(ElevationDataset):
                 confidence_msk = conf_ph[segment_id_msk][index_msk] >= self.min_bathy_confidence
                 ph_msk = (class_msk) & (confidence_msk)
 
-            #ph_h_classed[index_ph[segment_id_msk][index_msk]] = class_ph[class_msk][segment_id_msk][index_msk]
             ph_h_classed[index_ph[segment_id_msk][index_msk][ph_msk]] = class_ph[segment_id_msk][index_msk][ph_msk]
-
             # we also need to change the lon/lat/height values to the
             # updated/refracted bathymetry values (we'll just do it to class 40)
             class_msk = class_ph[segment_id_msk][index_msk] == 40
@@ -10020,7 +10018,8 @@ class IceSat2Fetcher(Fetcher):
         self.fetches_params['classify_bathymetry'] = classify_bathymetry
         self.fetches_params['classify_buildings'] = classify_buildings
         self.fetches_params['classify_water'] = classify_water
-        self.fetches_params['reject_failed_qa'] = reject_failed_qa        
+        self.fetches_params['reject_failed_qa'] = reject_failed_qa
+        self.data_format = -111
 
         
     def yield_ds(self, result):
