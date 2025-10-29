@@ -7509,7 +7509,7 @@ class IceSat2File(ElevationDataset):
         atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1])
         this_atlxx = fetches.earthdata.IceSat2(
             src_region=None,
-            verbose=True,
+            verbose=self.verbose,
             outdir=self.cache_dir,
             short_name=short_name,
             filename_filter=atlxx_filter,
@@ -7522,7 +7522,7 @@ class IceSat2File(ElevationDataset):
             )
             this_atlxx = fetches.earthdata.IceSat2(
                 src_region=None,
-                verbose=True,
+                verbose=self.verbose,
                 outdir=self.cache_dir,
                 short_name=short_name,
                 filename_filter=atlxx_filter,
