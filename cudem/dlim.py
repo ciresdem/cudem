@@ -7232,6 +7232,136 @@ class SWOT_HR_Raster(ElevationDataset):
                 yield(gdal_ds)
 
                 
+class IceSat2_ATL24File(ElevationDataset):
+    def __init__(self, min_confidence=None, classes='40', water_surface='ortho', **kwargs):
+        super().__init__(**kwargs)
+        self.orientDict = {0:'l', 1:'r', 21:'error'}
+        self.lasers = ['gt1l', 'gt2l', 'gt3l', 'gt1r', 'gt2r', 'gt3r']
+
+        self.data_format = 304
+        self.water_surface = water_surface
+        if self.water_surface not in ['surface', 'ortho', 'ellipse']:
+            self.water_surface = 'ortho'
+        
+        self.water_surface
+        self.min_confidence = utils.float_or(min_confidence)
+        self.classes = [int(x) for x in classes.split('/')] \
+            if classes is not None \
+               else []        
+        
+    def generate_inf(self):
+        if self.src_srs is None:
+            self.infos.src_srs = 'epsg:4326+3855'
+        else:
+            self.infos.src_srs = self.src_srs
+
+        f = h5.File(self.fn, 'r')
+        these_regions = []
+        numpts = 0
+        for b in range(1, 4):
+            for p in ['l', 'r']:
+                if f'gt{b}{p}' not in list(f.keys()):
+                    continue
+                
+                y = f[f'gt{b}{p}/lat_ph'][...,]
+                x = f[f'gt{b}{p}/lon_ph'][...,]
+                z = f[f'gt{b}{p}/ortho_h'][...,]
+                this_region = regions.Region(src_srs=self.infos.src_srs).from_list(
+                    [np.min(x), np.max(x), np.min(y), np.max(y), np.min(z), np.max(z)]
+                )
+                these_regions.append(this_region)
+                numpts += len(x)
+
+        region_cnt = len(these_regions)
+        if region_cnt > 0:
+            merged_region = these_regions[0].copy()
+            for r in range(1, region_cnt):
+                merged_region = regions.regions_merge(merged_region, these_regions[r])
+
+            self.infos.minmax = merged_region.export_as_list(include_z=True)
+            self.infos.wkt = merged_region.export_as_wkt()
+            
+        self.infos.numpts = numpts 
+        
+        f.close()
+        return(self.infos)
+    
+        
+    def yield_points(self):
+        dataset = None
+
+        f = h5.File(self.fn)
+
+        for b in range(1, 4):
+            for p in ['l', 'r']:
+        
+                if f'gt{b}{p}' not in list(f.keys()):
+                    continue
+
+                lat_ph = f[f'gt{b}{p}/lat_ph'][...,]
+                lon_ph = f[f'gt{b}{p}/lon_ph'][...,]
+                ortho_h = f[f'gt{b}{p}/ortho_h'][...,]
+                surface_h = f[f'gt{b}{p}/surface_h'][...,]
+                ellipse_h = f[f'gt{b}{p}/ellipse_h'][...,]
+                class_ph = f[f'gt{b}{p}/class_ph'][...,]
+                index_seg = f[f'gt{b}{p}/index_seg'][...,]
+                index_ph = f[f'gt{b}{p}/index_ph'][...,]
+                conf_ph = f[f'gt{b}{p}/confidence'][...,]
+                low_confidence_ph = f[f'gt{b}{p}/low_confidence_flag'][...,]
+
+                ## append the laser to each record
+                laser_arr = np.empty(ortho_h.shape, dtype='object')
+                laser_arr[:] = f'gt{b}{p}'
+
+                ## append the filename to each record
+                fn_arr = np.empty(ortho_h.shape, dtype='object')
+                fn_arr[:] = self.fn
+
+                if self.water_surface == 'surface':
+                    ph_height = surface_h
+                elif self.water_surface == 'ortho':
+                    ph_height = ortho_h
+                else:
+                    ph_height = ellipse_h
+                
+                dataset = pd.DataFrame(
+                    {'latitude': lat_ph,
+                     'longitude': lon_ph,
+                     'photon_height': ph_height,
+                     'laser': laser_arr,
+                     'fn': fn_arr,
+                     'confidence': conf_ph,
+                     'low_confidence_ph': low_confidence_ph,
+                     'ph_h_classed': class_ph},
+                    columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
+                             'confidence', 'low_confidence_ph', 'ph_h_classed']
+                )
+
+                ## keep only photons with a classification mentioned in `self.classes`
+                if len(self.classes) > 0:
+                    dataset = dataset[
+                        (np.isin(dataset['ph_h_classed'], self.classes))
+                    ]
+
+                if self.min_confidence is not None:
+                    dataset = dataset[dataset['confidence'] >= self.min_confidence]
+                    
+                if dataset is None or len(dataset) == 0:
+                    continue
+                
+                ## rename the x,y,z columns for `transform_and_yield_points`
+                dataset.rename(
+                    columns={
+                        'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'
+                    },
+                    inplace=True
+                )
+                
+                yield(dataset)                
+                
+        f.close()
+
+        
 class IceSat2File(ElevationDataset):
     """IceSat2 data from NASA
 
@@ -10067,7 +10197,7 @@ class IceSat2Fetcher(Fetcher):
 
     
     def __init__(self,
-                 water_surface='geoid',
+                 water_surface=None,
                  classes=None,
                  confidence_levels=None,
                  columns={},
@@ -10075,16 +10205,19 @@ class IceSat2Fetcher(Fetcher):
                  classify_buildings=True,
                  classify_water=False,
                  reject_failed_qa=True,
+                 min_bathy_confidence=None,
                  **kwargs):
         super().__init__(**kwargs)
-        self.fetches_params['water_suface'] = water_surface
-        self.fetches_params['classes'] = classes
-        self.fetches_params['confidence_levels'] = confidence_levels
-        self.fetches_params['columns'] = columns
-        self.fetches_params['classify_bathymetry'] = classify_bathymetry
-        self.fetches_params['classify_buildings'] = classify_buildings
-        self.fetches_params['classify_water'] = classify_water
-        self.fetches_params['reject_failed_qa'] = reject_failed_qa
+        self.water_surface = water_surface
+        self.classes = classes
+        self.confidence_levels = confidence_levels
+        self.columns = columns
+        self.classify_bathymetry = classify_bathymetry
+        self.classify_buildings = classify_buildings
+        self.classify_water = classify_water
+        self.reject_failed_qa = reject_failed_qa
+        self.min_bathy_confidence = min_bathy_confidence
+        
         self.data_format = -111
 
         
@@ -10092,33 +10225,54 @@ class IceSat2Fetcher(Fetcher):
         icesat2_fn= os.path.join(
             self.fetch_module._outdir, result['dst_fn']
         )
-        if self.fetches_params['classify_buildings']:
-            self.fetches_params['classify_buildings'] \
-                = self.process_buildings(self.fetch_buildings(verbose=False), verbose=False)
+        if result['data_type'].lower() == 'atl03':
+            self.fetches_params['water_suface'] = self.water_surface if self.water_surface is not None else 'geoid'
+            self.fetches_params['classes'] = self.classes
+            self.fetches_params['confidence_levels'] = self.confidence_levels
+            self.fetches_params['columns'] = self.columns
+            self.fetches_params['classify_bathymetry'] = self.classify_bathymetry
+            self.fetches_params['classify_buildings'] = self.classify_buildings
+            self.fetches_params['classify_water'] = self.classify_water
+            self.fetches_params['reject_failed_qa'] = self.reject_failed_qa
+            self.fetches_params['min_bathy_confidence'] = self.min_bathy_confidence
+            
+            if self.fetches_params['classify_buildings']:
+                self.fetches_params['classify_buildings'] \
+                    = self.process_buildings(self.fetch_buildings(verbose=False), verbose=False)
 
-        if self.fetches_params['classify_water']:
-            self.fetches_params['classify_water'] = self.process_coastline(
-                self.fetch_coastline(chunks=False, verbose=False),
-                return_geom=True, verbose=False
-            )
-            
-        if 'processed_zip' in result['data_type']:
-            icesat2_h5s = utils.p_unzip(
-                icesat2_fn,
-                exts=['h5'],
-                outdir=self.cache_dir,
-                verbose=self.verbose
-            )
-            for icesat2_h5 in icesat2_h5s:
-                self.fetches_params['fn'] = icesat2_h5
-                yield(IceSat2File(**self.fetches_params)._acquire_module())
-                yield(sub_ds)
-            
-        else:
+            if self.fetches_params['classify_water']:
+                self.fetches_params['classify_water'] = self.process_coastline(
+                    self.fetch_coastline(chunks=False, verbose=False),
+                    return_geom=True, verbose=False
+                )
+
+            if 'processed_zip' in result['data_type']:
+                icesat2_h5s = utils.p_unzip(
+                    icesat2_fn,
+                    exts=['h5'],
+                    outdir=self.cache_dir,
+                    verbose=self.verbose
+                )
+                for icesat2_h5 in icesat2_h5s:
+                    self.fetches_params['fn'] = icesat2_h5
+                    yield(IceSat2File(**self.fetches_params)._acquire_module())
+                    yield(sub_ds)
+
+            else:
+                self.fetches_params['fn'] = icesat2_fn
+                self.fetches_params['data_format'] = 303
+                #yield(IceSat2File(**self.fetches_params)._acquire_module())
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())
+                
+        elif result['data_type'].lower() == 'atl24':
+            self.fetches_params['water_suface'] = self.water_surface if self.water_surface is not None else 'ortho'
+            self.fetches_params['classes'] = self.classes
+            self.fetches_params['min_confidence'] = self.min_bathy_confidence
             self.fetches_params['fn'] = icesat2_fn
-            self.fetches_params['data_format'] = 303
-            #yield(IceSat2File(**self.fetches_params)._acquire_module())
+            self.fetches_params['data_format'] = 304
             yield(DatasetFactory(**self.fetches_params)._acquire_module())
+        else:
+            utils.echo_warning_msg(f'{icesat2_fn}({result["dst_fn"]}) cannot be processed')
 
             
 class GMRTFetcher(Fetcher):
@@ -11149,7 +11303,11 @@ class DatasetFactory(factory.CUDEMFactory):
               'fmts': ['h5'],
               'description': 'An HDF5 IceSat2 ATL03 datafile',
               'call': IceSat2File},
-        304: {'name': 'cudem',
+        304: {'name': 'icesat2_atl24',
+              'fmts': ['h5'],
+              'description': 'An HDF5 IceSat2 ATL24 datafile',
+              'call': IceSat2_ATL24File},
+        310: {'name': 'cudem',
               'fmts': ['csg', 'nc', 'h5'],
               'description': 'A netCDF/h5 CUDEM file',
               'call': CUDEMFile},
