@@ -166,8 +166,8 @@ class EarthData(fetches.FetchModule):
             'page_size': 2000,
         }
 
-        if self.version != '':
-            _data['version'] = f'self.version'
+        # if self.version != '':
+        #     _data['version'] = f'self.version'
             
         if '*' in self.short_name:
             _data['options[short_name][pattern]'] = 'true'
@@ -293,7 +293,7 @@ class IceSat2(EarthData):
     < icesat2:short_name=ATL03:time_start='':time_end='':filename_filter='' >
     """
     
-    def __init__(self, short_name='ATL03', subset=False, **kwargs):
+    def __init__(self, short_name='ATL03', subset=False, version='007', **kwargs):
         if short_name is not None:
             short_name = short_name.upper()
             if not short_name.startswith('ATL'):
@@ -306,8 +306,10 @@ class IceSat2(EarthData):
             atl08_v06_id = 'C2613553260-NSIDC_CPRD'
             atl03_v06_id = 'C2596864127-NSIDC_CPRD'
             atl03_v07_id = 'C3326974349-NSIDC_CPRD'
-            atl03_v07_id = 'C3326974349-NSIDC_CPRD'
-            short_name = atl03_v07_id
+            if version == '007':
+                short_name = atl03_v07_id
+            elif version == '006':
+                short_name = atl03_v06_id
                 
         super().__init__(short_name=short_name, subset=subset, **kwargs)
 
