@@ -303,7 +303,8 @@ class IceSat2(EarthData):
                 short_name = 'ATL03'
 
         if short_name.lower() == 'atl24':
-            version = ''
+            if version != '':
+                version = '001'
                 
         if subset:
             atl08_v06_id = 'C2613553260-NSIDC_CPRD'

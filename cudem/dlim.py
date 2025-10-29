@@ -10225,7 +10225,8 @@ class IceSat2Fetcher(Fetcher):
         icesat2_fn= os.path.join(
             self.fetch_module._outdir, result['dst_fn']
         )
-        if result['data_type'].lower() == 'atl03':
+        if result['data_type'].lower() == 'atl03' or \
+           'NSIDC_CPRD' in result['data_type'].upper():
             self.fetches_params['water_suface'] = self.water_surface if self.water_surface is not None else 'geoid'
             self.fetches_params['classes'] = self.classes
             self.fetches_params['confidence_levels'] = self.confidence_levels
@@ -10272,7 +10273,7 @@ class IceSat2Fetcher(Fetcher):
             self.fetches_params['data_format'] = 304
             yield(DatasetFactory(**self.fetches_params)._acquire_module())
         else:
-            utils.echo_warning_msg(f'{icesat2_fn}({result["dst_fn"]}) cannot be processed')
+            utils.echo_warning_msg(f'{icesat2_fn}({result["dst_fn"]} - {result["data_type"]} cannot be processed')
 
             
 class GMRTFetcher(Fetcher):
