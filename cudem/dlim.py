@@ -2067,10 +2067,10 @@ class ElevationDataset:
                     check_hash=True if self.data_format == -1 else False
                 )
             except:
-                utils.echo_error_msg(
-                    f'could not parse dataset {self.fn}'
-                )
-                return(self)
+               utils.echo_error_msg(
+                   f'could not parse dataset {self.fn}'
+               )
+               return(self)
              
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
@@ -2703,7 +2703,7 @@ class ElevationDataset:
         dataset object
         """
 
-        if self.region is not None:
+        if self.region is not None and self.inf_region is not None:
             # try:
             #     inf_region = regions.Region().from_string(self.infos.wkt)
             # except:
@@ -7305,6 +7305,39 @@ class IceSat2File(ElevationDataset):
         self.append_atl24 = append_atl24
         self.min_bathy_confidence = utils.float_or(min_bathy_confidence)
 
+
+    def generate_inf(self):
+        if self.src_srs is None:
+            self.infos.src_srs = 'epsg:4326+3855'
+        else:
+            self.infos.src_srs = self.src_srs
+
+        f = h5.File(self.fn, 'r')
+        these_regions = []
+        numpts = 0
+        for b in range(1, 4):
+            for p in ['l', 'r']:
+                y = f[f'gt{b}{p}/heights/lat_ph'][...,]
+                x = f[f'gt{b}{p}/heights/lon_ph'][...,]
+                z = f[f'gt{b}{p}/heights/h_ph'][...,]
+                this_region = regions.Region(src_srs=self.infos.src_srs).from_list(
+                    [np.min(x), np.max(x), np.min(y), np.max(y), np.min(z), np.max(z)]
+                )
+                these_regions.append(this_region)
+                numpts += len(x)
+
+        region_cnt = len(these_regions)
+        merged_region = these_regions[0].copy()
+        for r in range(1, region_cnt):
+            merged_region = regions.regions_merge(merged_region, these_regions[r])
+
+        self.infos.minmax = merged_region.export_as_list(include_z=True)
+        self.infos.wkt = merged_region.export_as_wkt()
+        self.infos.numpts = numpts 
+        
+        f.close()
+        return(self.infos)
+
         
     def init_atl_h5(self):
         """initialize all the relevant ATL h5 files"""
@@ -10012,7 +10045,7 @@ class IceSat2Fetcher(Fetcher):
                  columns={},
                  classify_bathymetry=True,
                  classify_buildings=True,
-                 classify_water=True,
+                 classify_water=False,
                  reject_failed_qa=True,
                  **kwargs):
         super().__init__(**kwargs)
