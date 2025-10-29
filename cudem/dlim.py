@@ -7539,19 +7539,20 @@ class IceSat2File(ElevationDataset):
     def fetch_atlxx(self, short_name='ATL08'):
         """fetch an associated ATLxx file"""
 
-        atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1])
+        atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-2])
         this_atlxx = fetches.earthdata.IceSat2(
             src_region=None,
             verbose=self.verbose,
             outdir=self.cache_dir,
             short_name=short_name,
             filename_filter=atlxx_filter,
+            version='',
             #subset=True if 'subset' in self.fn else False,
         )
         this_atlxx.run()
         if len(this_atlxx.results) == 0:
             atlxx_filter = '_'.join(
-                utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1]
+                utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-2]
             )
             this_atlxx = fetches.earthdata.IceSat2(
                 src_region=None,
@@ -7559,6 +7560,7 @@ class IceSat2File(ElevationDataset):
                 outdir=self.cache_dir,
                 short_name=short_name,
                 filename_filter=atlxx_filter,
+                version='',
             )
             this_atlxx.run()
             if len(this_atlxx.results) == 0:
@@ -7710,7 +7712,6 @@ class IceSat2File(ElevationDataset):
                 = atl08_classed_pc_flag[atl08_segment_id_msk][class_mask]
 
         if self.atl24_f is not None:
-
             ## some atl24 files don't have all the lasers, so make sure
             ## it exists before proceding
             if laser in self.atl24_f.keys():            
@@ -7731,6 +7732,7 @@ class IceSat2File(ElevationDataset):
                 index_seg_orig = orig_segment_id[index_seg]
                 segment_id_msk = np.isin(index_seg_orig, ph_segment_ids)
                 if len(index_ph[segment_id_msk]) > 0:
+                    ## check for previous index
                     index_ph = index_ph - np.min(index_ph[segment_id_msk])
                     ph_h_classed = np.zeros(photon_h.shape)
                     index_msk = (index_ph[segment_id_msk] > 0) & (index_ph[segment_id_msk] < np.max(index_ph[segment_id_msk]))

@@ -166,8 +166,8 @@ class EarthData(fetches.FetchModule):
             'page_size': 2000,
         }
 
-        # if self.version != '':
-        #     _data['version'] = f'self.version'
+        if self.version != '':
+            _data['version'] = self.version
             
         if '*' in self.short_name:
             _data['options[short_name][pattern]'] = 'true'
@@ -311,7 +311,7 @@ class IceSat2(EarthData):
             elif version == '006':
                 short_name = atl03_v06_id
                 
-        super().__init__(short_name=short_name, subset=subset, **kwargs)
+        super().__init__(short_name=short_name, subset=subset, version=version, **kwargs)
 
         ## for dlim
         self.data_format = 303
