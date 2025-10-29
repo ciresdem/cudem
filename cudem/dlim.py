@@ -7305,6 +7305,8 @@ class IceSat2File(ElevationDataset):
         self.append_atl24 = append_atl24
         self.min_bathy_confidence = utils.float_or(min_bathy_confidence)
 
+        self.orientDict = {0:'l', 1:'r', 21:'error'}
+        self.lasers = ['gt1l', 'gt2l', 'gt3l', 'gt1r', 'gt2r', 'gt3r']
 
     def generate_inf(self):
         if self.src_srs is None:
@@ -7317,6 +7319,12 @@ class IceSat2File(ElevationDataset):
         numpts = 0
         for b in range(1, 4):
             for p in ['l', 'r']:
+                if f'gt{b}{p}' not in list(f.keys()):
+                    continue
+
+                if 'heights' not in list(f[f'gt{b}{p}'].keys()):
+                    continue
+                
                 y = f[f'gt{b}{p}/heights/lat_ph'][...,]
                 x = f[f'gt{b}{p}/heights/lon_ph'][...,]
                 z = f[f'gt{b}{p}/heights/h_ph'][...,]
@@ -7327,12 +7335,14 @@ class IceSat2File(ElevationDataset):
                 numpts += len(x)
 
         region_cnt = len(these_regions)
-        merged_region = these_regions[0].copy()
-        for r in range(1, region_cnt):
-            merged_region = regions.regions_merge(merged_region, these_regions[r])
+        if region_cnt > 0:
+            merged_region = these_regions[0].copy()
+            for r in range(1, region_cnt):
+                merged_region = regions.regions_merge(merged_region, these_regions[r])
 
-        self.infos.minmax = merged_region.export_as_list(include_z=True)
-        self.infos.wkt = merged_region.export_as_wkt()
+            self.infos.minmax = merged_region.export_as_list(include_z=True)
+            self.infos.wkt = merged_region.export_as_wkt()
+            
         self.infos.numpts = numpts 
         
         f.close()
@@ -7365,7 +7375,12 @@ class IceSat2File(ElevationDataset):
                             ][...,][0]
                         )
                     )
-        
+
+            if not np.any(np.isin(list(self.atl03_f.keys()), self.lasers)):
+                raise UnboundLocalError(
+                    f'this granule ({self.atl03_fn}) has no lasers'
+                )
+            
         if self.atl08_fn is not None and os.path.exists(self.atl08_fn):
             self.atl08_f = h5.File(self.atl08_fn, 'r')
             if self.verbose:
@@ -7478,6 +7493,15 @@ class IceSat2File(ElevationDataset):
         for i in range(1, 4):
             for orient in range(2):
                 #try:
+                ## selects the strong beams only [we can include weak beams later on]
+                if f'gt{i}{self.orientDict[orient]}' not in list(self.atl03_f.keys()):
+                    utils.echo_warning_msg(f'could not find laser gt{i}{self.orientDict[orient]} in {self.atl03_fn}')
+                    continue
+
+                if 'heights' not in list(self.atl03_f[f'gt{i}{self.orientDict[orient]}'].keys()):
+                    utils.echo_warning_msg(f'laser gt{i}{self.orientDict[orient]} in {self.atl03_fn} has no heights')
+                    continue
+                
                 dataset = self.read_atl_data('{}'.format(i), orientation=orient)
                 if dataset is None or len(dataset) == 0:
                     continue
@@ -7539,7 +7563,8 @@ class IceSat2File(ElevationDataset):
     def fetch_atlxx(self, short_name='ATL08'):
         """fetch an associated ATLxx file"""
 
-        atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-2])
+        #atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-2])
+        atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('_')[1:4])
         this_atlxx = fetches.earthdata.IceSat2(
             src_region=None,
             verbose=self.verbose,
@@ -7551,9 +7576,10 @@ class IceSat2File(ElevationDataset):
         )
         this_atlxx.run()
         if len(this_atlxx.results) == 0:
-            atlxx_filter = '_'.join(
-                utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-2]
-            )
+            #atlxx_filter = '_'.join(
+            #    utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-2]
+            #)
+            atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('_')[1:3])
             this_atlxx = fetches.earthdata.IceSat2(
                 src_region=None,
                 verbose=self.verbose,
@@ -7592,8 +7618,8 @@ class IceSat2File(ElevationDataset):
             orientation = self.atl03_f['/orbit_info/sc_orient'][0]
             
         ## selects the strong beams only [we can include weak beams later on]
-        orientDict = {0:'l', 1:'r', 21:'error'}
-        laser = 'gt' + laser_num + orientDict[orientation]
+        #orientDict = {0:'l', 1:'r', 21:'error'}
+        laser = 'gt' + laser_num + self.orientDict[orientation]
 
         ## for 'subsets', where heights don't come through
         if 'heights' not in self.atl03_f['/{}'.format(laser)].keys():
