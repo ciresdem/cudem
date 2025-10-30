@@ -140,6 +140,21 @@ def xml2py(node):
     return(texts)
 
 
+def get_userpass(authenticator_url):
+    try:
+        info = netrc.netrc()
+        username, account, password \
+            = info.authenticators(urlparse(authenticator_url).hostname)
+        errprefix = 'netrc error: '
+    except Exception as e:
+        if (not ('No such file' in str(e))):
+            print('netrc error: {0}'.format(str(e)))
+        username = None
+        password = None
+
+    return(username, password)
+
+
 def get_credentials(url, authenticator_url='https://urs.earthdata.nasa.gov'):
     """Get user credentials from .netrc or prompt for input. 
     Used for EarthData.

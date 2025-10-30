@@ -7408,7 +7408,7 @@ class IceSat2File(ElevationDataset):
                  classify_buildings=True,
                  classify_inland_water=True,
                  reject_failed_qa=True,
-                 classify_water=True,
+                 classify_water=False,
                  append_atl24=False,
                  min_bathy_confidence=None,
                  **kwargs):
@@ -7534,10 +7534,11 @@ class IceSat2File(ElevationDataset):
             #     )
             #     self.atl24_f.close()
 
-        # else:
-        #     utils.echo_warning_msg('falling back to CSphelph to classify bathymetry')
-        #     self.want_bathymetry = True
-        #     self.want_watermask = True
+        else:
+            #utils.echo_warning_msg('falling back to CSphelph to classify bathymetry')
+            utils.echo_warning_msg('falling back to classify water points only')
+            #self.want_bathymetry = True
+            self.want_watermask = True
             
         if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
             self.atl13_f = h5.File(self.atl13_fn, 'r')
@@ -7601,8 +7602,8 @@ class IceSat2File(ElevationDataset):
         if self.want_buildings:
             if isinstance(self.want_buildings, bool):
                 this_bing = self.process_buildings(
-                    self.fetch_buildings(verbose=False),
-                    verbose=False
+                    self.fetch_buildings(verbose=self.verbose),
+                    verbose=self.verbose
                 )
             elif isinstance(self.want_buildings, list):
                 this_bing = self.want_buildings         
@@ -7612,9 +7613,9 @@ class IceSat2File(ElevationDataset):
         if self.want_watermask:
             if isinstance(self.want_watermask, bool):
                 this_wm = self.process_coastline(
-                    self.fetch_coastline(chunks=False, verbose=False),
+                    self.fetch_coastline(chunks=False, verbose=self.verbose),
                     return_geom=True,
-                    verbose=False
+                    verbose=self.verbose
                 )
             elif isinstance(self.want_watermask, list):
                 this_wm = self.want_watermask                
@@ -10208,7 +10209,7 @@ class IceSat2Fetcher(Fetcher):
                  columns={},
                  classify_bathymetry=True,
                  classify_buildings=True,
-                 classify_water=False,
+                 classify_water=True,
                  reject_failed_qa=True,
                  min_bathy_confidence=None,
                  **kwargs):

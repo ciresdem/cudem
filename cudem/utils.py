@@ -606,7 +606,7 @@ def get_username():
 def get_password():
     password = ''
     while not password:
-        password = getpass('password: ')
+        password = getpass.getpass('password: ')
         
     return password
 
