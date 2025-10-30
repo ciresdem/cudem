@@ -7408,7 +7408,7 @@ class IceSat2File(ElevationDataset):
                  classify_buildings=True,
                  classify_inland_water=True,
                  reject_failed_qa=True,
-                 classify_water=False,
+                 classify_water=True,
                  append_atl24=False,
                  min_bathy_confidence=None,
                  **kwargs):
@@ -7657,7 +7657,7 @@ class IceSat2File(ElevationDataset):
 
                 if self.want_watermask and this_wm is not None:
                     #dataset = self.classify_water(dataset, this_wm)
-                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41)
+                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41, except_classes=[40])
 
                 if dataset is None or len(dataset) == 0:
                     continue
@@ -7814,6 +7814,9 @@ class IceSat2File(ElevationDataset):
         ph_h_classed = np.zeros(photon_h.shape)
         ph_h_classed[:] = -1
 
+        ph_h_bathy_conf = np.zeros(photon_h.shape)
+        ph_h_bathy_conf[:] = -1
+
         ## append the laser to each record
         laser_arr = np.empty(photon_h.shape, dtype='object')
         laser_arr[:] = laser
@@ -7890,7 +7893,6 @@ class IceSat2File(ElevationDataset):
                 if len(index_ph[segment_id_msk]) > 0:
                     ## check for previous index
                     index_ph = index_ph - np.min(index_ph[segment_id_msk])
-                    ph_h_classed = np.zeros(photon_h.shape)
                     index_msk = (index_ph[segment_id_msk] > 0) & (index_ph[segment_id_msk] < np.max(index_ph[segment_id_msk]))
                     class_msk = class_ph[segment_id_msk][index_msk] >= 40
                     ph_msk = (class_msk)
@@ -7899,6 +7901,7 @@ class IceSat2File(ElevationDataset):
                         ph_msk = (class_msk) & (confidence_msk)
 
                     ph_h_classed[index_ph[segment_id_msk][index_msk][ph_msk]] = class_ph[segment_id_msk][index_msk][ph_msk]
+                    ph_h_bathy_conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
                     # we also need to change the lon/lat/height values to the
                     # updated/refracted bathymetry values (we'll just do it to class 40)
                     class_msk = class_ph[segment_id_msk][index_msk] == 40
@@ -7949,10 +7952,11 @@ class IceSat2File(ElevationDataset):
              'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_altitude_sc,
              'delta_time':delta_time,
+             'bathy_confidence':ph_h_bathy_conf,
              'ph_h_classed': ph_h_classed},
             columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
                      'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt',
-                     'delta_time', 'ph_h_classed']
+                     'delta_time', 'bathy_confidence', 'ph_h_classed']
         )
 
         ## Process extra columns specified in `self.columns`
@@ -8305,7 +8309,8 @@ class IceSat2File(ElevationDataset):
                 for f in icesat_layer:
                     idx = f.GetField('index')
                     #except_mask = dataset.at[idx, 'ph_h_classed']
-                    dataset.at[idx, 'ph_h_classed'] = classification
+                    if dataset.at[idx, 'ph_h_classed'] not in except_classes:
+                        dataset.at[idx, 'ph_h_classed'] = classification
 
                 icesat_layer.SetSpatialFilter(None)
 
