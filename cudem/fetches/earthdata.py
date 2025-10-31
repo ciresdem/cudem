@@ -248,8 +248,8 @@ class EarthData(fetches.FetchModule):
                                 else:
                                     time.sleep(10)
                                     
-                            else:
-                                break
+                            #else:
+                            #    break
             else:
                 utils.echo_warning_msg(f'failed to make subset request: {_req.status_code}')
             

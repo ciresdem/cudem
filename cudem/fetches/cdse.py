@@ -48,7 +48,7 @@ except ImportError:
 
 import xml.etree.ElementTree as ET
 
-## Copernicus
+## CDSE
 class CDSE(fetches.FetchModule):
     """
     """
