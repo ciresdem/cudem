@@ -194,7 +194,7 @@ class EarthData(fetches.FetchModule):
             #utils.echo_msg(_harmony_data)
             status_url = None
             _req = fetches.Fetch(
-                self._harmony_url
+                self._harmony_url, headers=self.headers
             ).fetch_req(
                 params=_harmony_data, timeout=None, read_timeout=None
             )
@@ -205,17 +205,17 @@ class EarthData(fetches.FetchModule):
                 utils.echo_msg(status_json)
                 #utils.echo_msg(_req.status_code)
 
-                #if status_url is None:
-                if 'request' in list(status_json.keys()):
-                    status_url = status_json['request']
-                    utils.echo_msg(f'using {status_url} from request')
+                # #if status_url is None:
+                # if 'request' in list(status_json.keys()):
+                #     status_url = status_json['request']
+                #     utils.echo_msg(f'using {status_url} from request')
 
-                if status_url is None:
-                    for link in status_json['links']:
-                        if link['title'] == 'Job Status':# or link['title'] == 'The current page':
-                            status_url = link['href']
-                            utils.echo_msg(f'using {status_url} from {link["title"]}')
-                            break
+                #if status_url is None:
+                for link in status_json['links']:
+                    if link['title'] == 'Job Status' or link['title'] == 'The current page':
+                        status_url = link['href']
+                        utils.echo_msg(f'using {status_url} from {link["title"]}')
+                        break
 
                 if status_url is None:
                     utils.echo_error_msg(f'could not acquire request url: {status_json.keys()}, {_req.status_code}')
@@ -226,7 +226,7 @@ class EarthData(fetches.FetchModule):
                             leave=self.verbose
                     ) as pbar:                    
                         while True:
-                            _req = fetches.Fetch(status_url).fetch_req(timeout=None, read_timeout=None)
+                            _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
                             if _req is not None and _req.status_code == 200:
                                 status = _req.json()
                                 #utils.echo_msg(status)
