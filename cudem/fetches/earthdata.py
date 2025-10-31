@@ -207,7 +207,7 @@ class EarthData(fetches.FetchModule):
                     #utils.echo_msg(status_json['Error'])
                     utils.echo_msg(status_json)
                     #utils.echo_msg(_req.status_code)
-
+                    job_id = status_json['jobID']
                     # #if status_url is None:
                     # if 'request' in list(status_json.keys()):
                     #     status_url = status_json['request']
@@ -231,32 +231,31 @@ class EarthData(fetches.FetchModule):
                             while True:
                                 try:
                                     _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
-                                except:
-                                    pass
+                                    if _req is not None and _req.status_code == 200:
+                                        status = _req.json()
+                                        #utils.echo_msg(status)
+                                        pbar.n = status['progress']
+                                        pbar.refresh()
+                                        if status['status'] == 'successful':
+                                            for link in status['links']:
+                                                if link['href'].endswith('.h5'):
+                                                    self.add_entry_to_results(
+                                                        link['href'],
+                                                        os.path.basename(link['href']),
+                                                        f'{self.short_name} subset'
+                                                    )
 
-                                if _req is not None and _req.status_code == 200:
-                                    status = _req.json()
-                                    #utils.echo_msg(status)
-                                    pbar.n = status['progress']
-                                    pbar.refresh()
-                                    if status['status'] == 'successful':
-                                        for link in status['links']:
-                                            if link['href'].endswith('.h5'):
-                                                self.add_entry_to_results(
-                                                    link['href'],
-                                                    os.path.basename(link['href']),
-                                                    f'{self.short_name} subset'
-                                                )
+                                            break
 
-                                        break
+                                        elif status['status'] == 'running':
+                                            time.sleep(10)
+                                        else:
+                                            time.sleep(10)
 
-                                    elif status['status'] == 'running':
-                                        time.sleep(10)
-                                    else:
-                                        time.sleep(10)
-
-                                #else:
-                                #    break
+                                    #else:
+                                    #    break
+                                except Exception as e:
+                                    utils.echo_error_msg(f'status request failed for job id: {job_id}, {e}')
 
                 else:
                     utils.echo_warning_msg(f'failed to make subset request: {_req.status_code}')
@@ -271,29 +270,30 @@ class EarthData(fetches.FetchModule):
                     while True:
                         try:
                             _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
-                        except:
-                            pass
 
-                        if _req is not None and _req.status_code == 200:
-                            status = _req.json()
-                            #utils.echo_msg(status)
-                            pbar.n = status['progress']
-                            pbar.refresh()
-                            if status['status'] == 'successful':
-                                for link in status['links']:
-                                    if link['href'].endswith('.h5'):
-                                        self.add_entry_to_results(
-                                            link['href'],
-                                            os.path.basename(link['href']),
-                                            f'{self.short_name} subset'
-                                        )
+                            if _req is not None and _req.status_code == 200:
+                                status = _req.json()
+                                #utils.echo_msg(status)
+                                pbar.n = status['progress']
+                                pbar.refresh()
+                                if status['status'] == 'successful':
+                                    for link in status['links']:
+                                        if link['href'].endswith('.h5'):
+                                            self.add_entry_to_results(
+                                                link['href'],
+                                                os.path.basename(link['href']),
+                                                f'{self.short_name} subset'
+                                            )
 
-                                break
+                                    break
 
-                            elif status['status'] == 'running':
-                                time.sleep(10)
-                            else:
-                                time.sleep(10)
+                                elif status['status'] == 'running':
+                                    time.sleep(10)
+                                else:
+                                    time.sleep(10)
+                                    
+                        except Exception as e:
+                            utils.echo_error_msg(f'status request failed for job id: {job_id}, {e}')                            
                 
             
         else:
