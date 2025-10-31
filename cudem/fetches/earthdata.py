@@ -182,7 +182,7 @@ class EarthData(fetches.FetchModule):
         return(None)
         
 
-    def harmony_gather_current_subsets(job_id):
+    def harmony_gather_current_subsets(self, job_id):
         subsets = []
         status = self.harmony_ping_for_status(job_id)
         if status is not None:
