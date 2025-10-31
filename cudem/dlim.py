@@ -2022,8 +2022,13 @@ class ElevationDataset:
 
         return(_params)
 
+
+    def _sub_init(self):
+        pass
+        
     
     def initialize(self):
+        self._sub_init()
         self._fn = None # temp filename holder
         self.data_region = None # self.region and inf.region reduced
         self.inf_region = None # inf region
@@ -9716,19 +9721,28 @@ class Fetcher(ElevationDataset):
 
         self.outdir = os.path.abspath(self.outdir)        
         self.cache_dir = self.outdir                
-        try:
-            self.fetch_module.run()
-        except:
-            utils.echo_warning_msg(
-                f'fetch module {self.fn} returned zero results'
-            )
-            self.fetch_module.results = []
+        # try:
+        #     self.fetch_module.run()
+        # except Exception as e:
+        #     utils.echo_warning_msg(
+        #         f'fetch module {self.fn} returned zero results, {e}'
+        #     )
+        #     self.fetch_module.results = []
 
         ## breaks when things not set...
         # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
 
         self._reset_params()
 
+
+    def _sub_init(self):
+        try:
+            self.fetch_module.run()
+        except Exception as e:
+            utils.echo_warning_msg(
+                f'fetch module {self.fn} returned zero results, {e}'
+            )
+            self.fetch_module.results = []
         
     def init_fetch_module(self):
         self.fetch_module = fetches.fetches_factory.FetchesFactory(
@@ -9746,9 +9760,9 @@ class Fetcher(ElevationDataset):
 
         try:
             self.fetch_module.run()
-        except:
+        except Exception as e:
             utils.echo_warning_msg(
-                f'fetch module {self.fn} returned zero results'
+                f'fetch module {self.fn} returned zero results, {e}'
             )
             self.fetch_module.results = []
 

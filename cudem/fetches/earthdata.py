@@ -120,7 +120,7 @@ class EarthData(fetches.FetchModule):
 
     def __init__(self, short_name='ATL03', provider='', time_start='', time_end='',
                  version='', filename_filter=None, subset=False, subset_job_id=None,
-                 **kwargs):
+                 harmony_ping=None, **kwargs):
         super().__init__(name='cmr', **kwargs)
         self.short_name = short_name
         self.provider = provider
@@ -130,7 +130,8 @@ class EarthData(fetches.FetchModule):
         self.filename_filter = filename_filter
         self.subset = subset
         self.subset_job_id = subset_job_id
-
+        self.harmony_ping = harmony_ping # 'status', 'pause', 'resume' or 'cancel'
+        
         ## The various EarthData URLs
         self._cmr_url = 'https://cmr.earthdata.nasa.gov/search/granules.json?'
         self._harmony_url = f'https://harmony.earthdata.nasa.gov/ogc-api-edr/1.1.0/collections/{short_name}/cube?'
@@ -154,7 +155,156 @@ class EarthData(fetches.FetchModule):
         return(in_str)
 
     
+    def harmony_ping_for_status(self, job_id, ping_request='status'):
+        ping_requests = ['status', 'pause', 'resume', 'cancel']
+        status_url = None
+        if ping_request == 'status':
+            status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}'
+            
+        elif ping_request == 'cancel':
+            status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/cancel'
+
+        elif ping_request == 'pause':
+            status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/pause'
+
+        elif ping_request == 'resume':
+            status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/resume'
+
+        else:
+            utils.echo_error_msg(f'{pint_request} is not a valid requst value, try one of: {ping_requests}')
+
+        if status_url is not None:
+            _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
+            if _req is not None and _req.status_code == 200:
+                status = _req.json()
+                return(status)
+
+        return(None)
+        
+        
+    def harmony_make_request(self):
+        _harmony_data = {
+            'bbox': self.region.format('bbox'),
+        }
+        if self.time_start != '' or self.time_end != '':
+            start_time = datetime.datetime.fromisoformat(self.time_start).isoformat() + 'Z' if self.time_start != '' else '..'
+            end_time = datetime.datetime.fromisoformat(self.time_end).isoformat() + 'Z' if self.time_end != '' else '..'
+            _harmony_data['datetime'] = f'{start_time}/{end_time}'
+
+        status_url = None
+        _req = fetches.Fetch(
+            self._harmony_url, headers=self.headers
+        ).fetch_req(
+            params=_harmony_data, timeout=None, read_timeout=None
+        )
+        if _req is not None and _req.status_code == 200:
+            status_json = _req.json()
+            return(status_json)
+
+        return(None)
+
+
+    def earthdata_set_config(self):
+        _data = {
+            'provider': self.provider,
+            'short_name': self.short_name,
+            'bounding_box': self.region.format('bbox'),
+            'temporal': f'{self.time_start}, {self.time_end}',
+            'page_size': 2000,
+        }
+
+        if self.version != '':
+            _data['version'] = self.version
+            
+        if '*' in self.short_name:
+            _data['options[short_name][pattern]'] = 'true'
+        
+        if self.filename_filter is not None:
+            _data['options[producer_granule_id][pattern]'] = 'true'
+            filename_filters = self.filename_filter.split(',')
+            for filename_filter in filename_filters:
+                _data['producer_granule_id'] = self.add_wildcards_to_str(filename_filter)
+
+        return(_data)
+        
+
     def run(self):
+
+        if self.harmony_ping is not None:
+            status = self.harmony_ping_for_status
+            utils.echo_msg(status)
+            return([])
+        
+        if self.region is None:
+            return([])
+
+        if not self.subset:
+            _data = self.earthdata_set_config()
+            _req = fetches.Fetch(self._cmr_url).fetch_req(params=_data)
+            if _req is not None:
+                features = _req.json()['feed']['entry']
+                for feature in features:
+                    if 'polygons' in feature.keys():
+                        poly = feature['polygons'][0][0]
+                        cc = [float(x) for x in poly.split()]
+                        gg = [x for x in zip(cc[::2], cc[1::2])]
+                        ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
+                        ## uncomment below to output shapefiles of the feature polygons
+                        #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
+                    else:
+                        ogr_geom = self.region.export_as_geom()
+
+                    if self.region.export_as_geom().Intersects(ogr_geom):
+                        links = feature['links']
+                        for link in links:
+                            if link['rel'].endswith('/data#') and 'inherited' not in link.keys():
+                                if not any([link['href'].split('/')[-1] in res for res in self.results]):
+                                    self.add_entry_to_results(
+                                        link['href'], link['href'].split('/')[-1], self.short_name
+                                    )
+
+        else:
+            if self.subset_job_id is None:
+                status = self.harmony_make_request()
+                self.subset_job_id = status['jobID']
+                utils.echo_msg(status)
+
+            if self.subset_job_id is not None:
+                with tqdm(
+                        total=100,
+                        desc=f'Harmony Job ({self.subset_job_id})',
+                        leave=self.verbose
+                ) as pbar: 
+                    while True:
+                        try:
+                            status = self.harmony_ping_for_status(self.subset_job_id)
+                            pbar.n = status['progress']
+                            pbar.set_description(f'Harmony Job {self.subset_job_id} -- ({status["status"]})')
+                            pbar.refresh()
+
+                            if status['status'] == 'successful':
+                                for link in status['links']:
+                                    if link['href'].endswith('.h5'):
+                                        self.add_entry_to_results(
+                                            link['href'],
+                                            os.path.basename(link['href']),
+                                            f'{self.short_name} subset'
+                                        )
+
+                                break
+
+                            elif status['status'] == 'running':
+                                time.sleep(25)
+                            elif status['status'] == 'canceled':
+                                break
+                            else:
+                                time.sleep(25)
+                                    
+                        except Exception as e:
+                            utils.echo_error_msg(f'Harmony status request failed for job id: {job_id}, {e}')                            
+                
+    
+    def run_old(self):
         """Run the earthdata fetches module"""
         
         if self.region is None:
