@@ -119,7 +119,8 @@ class EarthData(fetches.FetchModule):
     """
 
     def __init__(self, short_name='ATL03', provider='', time_start='', time_end='',
-                 version='', filename_filter=None, subset=False, **kwargs):
+                 version='', filename_filter=None, subset=False, subset_job_id=None,
+                 **kwargs):
         super().__init__(name='cmr', **kwargs)
         self.short_name = short_name
         self.provider = provider
@@ -128,6 +129,7 @@ class EarthData(fetches.FetchModule):
         self.version = version
         self.filename_filter = filename_filter
         self.subset = subset
+        self.subset_job_id = subset_job_id
 
         ## The various EarthData URLs
         self._cmr_url = 'https://cmr.earthdata.nasa.gov/search/granules.json?'
@@ -179,83 +181,120 @@ class EarthData(fetches.FetchModule):
                 _data['producer_granule_id'] = self.add_wildcards_to_str(filename_filter)
 
         if self.subset:
-            _harmony_data = {
-                'bbox': self.region.format('bbox'),
-            }
-            ## add time if specified
-            if self.time_start != '' or self.time_end != '':
-                start_time = datetime.datetime.fromisoformat(self.time_start).isoformat() + 'Z' if self.time_start != '' else '..'
-                end_time = datetime.datetime.fromisoformat(self.time_end).isoformat() + 'Z' if self.time_end != '' else '..'
-                _harmony_data['datetime'] = f'{start_time}/{end_time}'
-                #'time': f'{self.time_start}, {self.time_end}',
+            if self.subset_job_id is None:
+                _harmony_data = {
+                    'bbox': self.region.format('bbox'),
+                }
+                ## add time if specified
+                if self.time_start != '' or self.time_end != '':
+                    start_time = datetime.datetime.fromisoformat(self.time_start).isoformat() + 'Z' if self.time_start != '' else '..'
+                    end_time = datetime.datetime.fromisoformat(self.time_end).isoformat() + 'Z' if self.time_end != '' else '..'
+                    _harmony_data['datetime'] = f'{start_time}/{end_time}'
+                    #'time': f'{self.time_start}, {self.time_end}',
 
-            utils.echo_msg('requesting data subsets, please wait...')
-            #utils.echo_msg(self._harmony_url)
-            #utils.echo_msg(_harmony_data)
-            status_url = None
-            _req = fetches.Fetch(
-                self._harmony_url, headers=self.headers
-            ).fetch_req(
-                params=_harmony_data, timeout=None, read_timeout=None
-            )
-            if _req is not None and _req.status_code == 200:
-                status_json = _req.json()
-                #utils.echo_msg(status_json['message'])
-                #utils.echo_msg(status_json['Error'])
-                utils.echo_msg(status_json)
-                #utils.echo_msg(_req.status_code)
+                utils.echo_msg('requesting data subsets, please wait...')
+                #utils.echo_msg(self._harmony_url)
+                #utils.echo_msg(_harmony_data)
+                status_url = None
+                _req = fetches.Fetch(
+                    self._harmony_url, headers=self.headers
+                ).fetch_req(
+                    params=_harmony_data, timeout=None, read_timeout=None
+                )
+                if _req is not None and _req.status_code == 200:
+                    status_json = _req.json()
+                    #utils.echo_msg(status_json['message'])
+                    #utils.echo_msg(status_json['Error'])
+                    utils.echo_msg(status_json)
+                    #utils.echo_msg(_req.status_code)
 
-                # #if status_url is None:
-                # if 'request' in list(status_json.keys()):
-                #     status_url = status_json['request']
-                #     utils.echo_msg(f'using {status_url} from request')
+                    # #if status_url is None:
+                    # if 'request' in list(status_json.keys()):
+                    #     status_url = status_json['request']
+                    #     utils.echo_msg(f'using {status_url} from request')
 
-                #if status_url is None:
-                for link in status_json['links']:
-                    if link['title'] == 'Job Status' or link['title'] == 'The current page':
-                        status_url = link['href']
-                        utils.echo_msg(f'using {status_url} from {link["title"]}')
-                        break
+                    #if status_url is None:
+                    for link in status_json['links']:
+                        if link['title'] == 'Job Status' or link['title'] == 'The current page':
+                            status_url = link['href']
+                            utils.echo_msg(f'using {status_url} from {link["title"]}')
+                            break
 
-                if status_url is None:
-                    utils.echo_error_msg(f'could not acquire request url: {status_json.keys()}, {_req.status_code}')
+                    if status_url is None:
+                        utils.echo_error_msg(f'could not acquire request url: {status_json.keys()}, {_req.status_code}')
+                    else:
+                        with tqdm(
+                                total=100,
+                                desc='processing IceSat2 data',
+                                leave=self.verbose
+                        ) as pbar:                    
+                            while True:
+                                try:
+                                    _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
+                                except:
+                                    pass
+
+                                if _req is not None and _req.status_code == 200:
+                                    status = _req.json()
+                                    #utils.echo_msg(status)
+                                    pbar.n = status['progress']
+                                    pbar.refresh()
+                                    if status['status'] == 'successful':
+                                        for link in status['links']:
+                                            if link['href'].endswith('.h5'):
+                                                self.add_entry_to_results(
+                                                    link['href'],
+                                                    os.path.basename(link['href']),
+                                                    f'{self.short_name} subset'
+                                                )
+
+                                        break
+
+                                    elif status['status'] == 'running':
+                                        time.sleep(10)
+                                    else:
+                                        time.sleep(10)
+
+                                #else:
+                                #    break
+
                 else:
-                    with tqdm(
-                            total=100,
-                            desc='processing IceSat2 data',
-                            leave=self.verbose
-                    ) as pbar:                    
-                        while True:
-                            try:
-                                _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
-                            except:
-                                pass
-                            
-                            if _req is not None and _req.status_code == 200:
-                                status = _req.json()
-                                #utils.echo_msg(status)
-                                pbar.n = status['progress']
-                                pbar.refresh()
-                                if status['status'] == 'successful':
-                                    for link in status['links']:
-                                        if link['href'].endswith('.h5'):
-                                            self.add_entry_to_results(
-                                                link['href'],
-                                                os.path.basename(link['href']),
-                                                f'{self.short_name} subset'
-                                            )
-
-                                    break
-                                
-                                elif status['status'] == 'running':
-                                    time.sleep(10)
-                                else:
-                                    time.sleep(10)
-                                    
-                            #else:
-                            #    break
+                    utils.echo_warning_msg(f'failed to make subset request: {_req.status_code}')
             else:
-                utils.echo_warning_msg(f'failed to make subset request: {_req.status_code}')
+                utils.echo_msg(f'checking on job id: {self.subset_job_id}')
+                status_url = f'https://harmony.earthdata.nasa.gov/jobs/{self.subset_job_id}?page=1&limit=2000'
+                with tqdm(
+                        total=100,
+                        desc='processing IceSat2 data',
+                        leave=self.verbose
+                ) as pbar:                    
+                    while True:
+                        try:
+                            _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
+                        except:
+                            pass
+
+                        if _req is not None and _req.status_code == 200:
+                            status = _req.json()
+                            #utils.echo_msg(status)
+                            pbar.n = status['progress']
+                            pbar.refresh()
+                            if status['status'] == 'successful':
+                                for link in status['links']:
+                                    if link['href'].endswith('.h5'):
+                                        self.add_entry_to_results(
+                                            link['href'],
+                                            os.path.basename(link['href']),
+                                            f'{self.short_name} subset'
+                                        )
+
+                                break
+
+                            elif status['status'] == 'running':
+                                time.sleep(10)
+                            else:
+                                time.sleep(10)
+                
             
         else:
             _req = fetches.Fetch(self._cmr_url).fetch_req(params=_data)
