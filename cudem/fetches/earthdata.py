@@ -231,9 +231,12 @@ class EarthData(fetches.FetchModule):
     def run(self):
 
         if self.harmony_ping is not None:
-            status = self.harmony_ping_for_status
-            utils.echo_msg(status)
-            return([])
+            status = self.harmony_ping_for_status()
+            if status is not None:
+                utils.echo_msg(status)
+                return([])
+            else:
+                utils.echo_warning_msg(f'bad harmony ping {self.harmony_ping}')
         
         if self.region is None:
             return([])
