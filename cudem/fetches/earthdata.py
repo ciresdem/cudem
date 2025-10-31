@@ -235,6 +235,7 @@ class EarthData(fetches.FetchModule):
                                         status = _req.json()
                                         #utils.echo_msg(status)
                                         pbar.n = status['progress']
+                                        pbar.set_description(f'processing IceSat2 data ({status["status"]})')
                                         pbar.refresh()
                                         if status['status'] == 'successful':
                                             for link in status['links']:
@@ -262,6 +263,7 @@ class EarthData(fetches.FetchModule):
             else:
                 utils.echo_msg(f'checking on job id: {self.subset_job_id}')
                 status_url = f'https://harmony.earthdata.nasa.gov/jobs/{self.subset_job_id}?page=1&limit=2000'
+                utils.echo_msg(f'using {status_url} from subset_job_id')
                 with tqdm(
                         total=100,
                         desc='processing IceSat2 data',
@@ -270,11 +272,11 @@ class EarthData(fetches.FetchModule):
                     while True:
                         try:
                             _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
-
                             if _req is not None and _req.status_code == 200:
                                 status = _req.json()
                                 #utils.echo_msg(status)
                                 pbar.n = status['progress']
+                                pbar.set_description(f'processing IceSat2 data ({status["status"]})')
                                 pbar.refresh()
                                 if status['status'] == 'successful':
                                     for link in status['links']:
