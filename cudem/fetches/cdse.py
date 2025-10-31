@@ -56,7 +56,7 @@ class CDSE(fetches.FetchModule):
     """
     
     def __init__(self, collection_name='SENTINEL-2', product_type='S2MSI1C',
-                 max_cloud_cover=1, time_start='', time_end='', **kwargs):
+                 max_cloud_cover=None, time_start='', time_end='', **kwargs):
         super().__init__(name='cdse', **kwargs)
 
         # base URL of the product catalogue
@@ -65,7 +65,7 @@ class CDSE(fetches.FetchModule):
         
         self.collection_name = collection_name
         self.product_type = product_type
-        self.max_cloud_cover = utils.int_or(max_cloud_cover, 1)
+        self.max_cloud_cover = utils.float_or(max_cloud_cover)
         self.aoi = self.region.export_as_wkt().replace('POLYGON ', 'POLYGON')
         self.time_start = time_start
         self.time_end = time_end
@@ -143,6 +143,10 @@ class CDSE(fetches.FetchModule):
 
         if self.time_end != '':
             search_query += f' and ContentDate/Start lt {self.time_end}'
+
+
+        if self.max_cloud_cover is not None:
+            search_query += f" and Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' and att/OData.CSC.DoubleAttribute/Value le {self.max_cloud_cover})"
             
         response = requests.get(search_query).json()
         results = response['value']
