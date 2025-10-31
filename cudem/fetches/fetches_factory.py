@@ -174,6 +174,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'gps_coordinates': {'call': GPSCoordinates},
         'wa_dnr': {'call': wadnr.waDNR},
         'nsw_tb': {'call': nswtb.NSW_TB},
+        'sentinel2': {'call': cdse.Sentinel2},
     }
 
     

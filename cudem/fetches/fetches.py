@@ -386,13 +386,15 @@ class Fetch:
             callback=fetches_callback,
             verbose=None,
             headers=r_headers,
-            verify=True
+            verify=True,
+            allow_redirects=True
     ):
         self.url = url
         self.callback = callback
         self.verbose = verbose
         self.headers = headers
         self.verify = verify
+        self.allow_redirects = allow_redirects
 
         
     def fetch_req(
@@ -421,7 +423,8 @@ class Fetch:
                 json=json,
                 timeout=(timeout,read_timeout),
                 headers=self.headers,
-                verify=self.verify
+                verify=self.verify,
+                allow_redirects=self.allow_redirects
             )
         except Exception as e:
             ## there was an exception and we'll try again until tries is less than 1
@@ -430,17 +433,20 @@ class Fetch:
                 params=params,
                 json=json,
                 tries=tries - 1,
+                headers=self.headers,
                 timeout=timeout * 2 if timeout is not None else None,
                 read_timeout=read_timeout * 2 if read_timeout is not None else None
             )
-            
+
         if req is not None:
+            #utils.echo_msg(req.status_code)
             if req.status_code == 504:
                 time.sleep(2)
                 req = self.fetch_req(
                     params=params,
                     json=json,
                     tries=tries - 1,
+                    headers=self.headers,
                     timeout=timeout + 1 if timeout is not None else None,
                     read_timeout=read_timeout + 10 if read_timeout is not None else None
                 )
@@ -454,6 +460,7 @@ class Fetch:
                         params=params,
                         json=json,
                         tries=tries - 1,
+                        headers=self.headers,
                         timeout=timeout + 1 if timeout is not None else None,
                         read_timeout=read_timeout + 10 if read_timeout is not None else None
                     )
@@ -467,7 +474,7 @@ class Fetch:
                             req.url, req.status_code
                         )
                     )
-                req = None
+                #req = None
             
             return(req)
 
@@ -490,7 +497,7 @@ class Fetch:
         )
         try:
             req = self.fetch_req(
-                timeout=timeout, read_timeout=read_timeout
+                timeout=timeout, read_timeout=read_timeout, headers=self.headers
             )
             results = lxml.etree.fromstring(req.text.encode('utf-8'))
         except:
@@ -853,7 +860,6 @@ def fetch_queue(q, c = True):
                 fetch_args[3].callback(fetch_results_)
         else:
             try:
-                #utils.echo_msg(fetch_args[3].name)
                 status = Fetch(
                     url=fetch_args[0],
                     callback=fetch_args[3].callback,
