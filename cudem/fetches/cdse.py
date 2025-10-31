@@ -50,7 +50,9 @@ import xml.etree.ElementTree as ET
 
 ## CDSE
 class CDSE(fetches.FetchModule):
-    """
+    """Copernicus Data Space Ecosystem
+
+    < cdse:collection_name=SENTINEL-2:product_type=S2MSI1C:time_start='':time_end='':max_cloud_cover=1 >
     """
     
     def __init__(self, collection_name='SENTINEL-2', product_type='S2MSI1C',
@@ -70,8 +72,8 @@ class CDSE(fetches.FetchModule):
 
         #print(self.time_start, self.time_end)
         if self.time_start != '' or self.time_end != '':
-            self.time_start = datetime.datetime.fromisoformat(self.time_start).isoformat(timepsec='milliseconds') + 'Z' if self.time_start != '' else ''
-            self.time_end = datetime.datetime.fromisoformat(self.time_end).isoformat(timepsec='milliseconds') + 'Z' if self.time_end != '' else ''
+            self.time_start = datetime.datetime.fromisoformat(self.time_start).isoformat(timespec='milliseconds') + 'Z' if self.time_start != '' else ''
+            self.time_end = datetime.datetime.fromisoformat(self.time_end).isoformat(timespec='milliseconds') + 'Z' if self.time_end != '' else ''
             
         self.access_token = self.get_auth_token()
         self.headers = {
@@ -145,40 +147,44 @@ class CDSE(fetches.FetchModule):
         response = requests.get(search_query).json()
         results = response['value']
         # Select identifier of the first product
-        for result in results:
-            product_identifier = result['Id']
-            product_name = result['Name']
+        with tqdm(total = len(results),
+                  desc='parsing datasets...',
+                  leave=self.verbose) as pbar:
+            for result in results:
+                pbar.update()
+                product_identifier = result['Id']
+                product_name = result['Name']
 
-            url = f"{self.catalogue_odata_url}/Products({product_identifier})/Nodes({product_name})/Nodes(MTD_MSIL1C.xml)/$value"
-            _req = fetches.Fetch(url, headers=self.headers, allow_redirects=False).fetch_req()
-            while _req.status_code in (301, 302, 303, 307):
-                url = _req.headers["Location"]
+                url = f"{self.catalogue_odata_url}/Products({product_identifier})/Nodes({product_name})/Nodes(MTD_MSIL1C.xml)/$value"
                 _req = fetches.Fetch(url, headers=self.headers, allow_redirects=False).fetch_req()
+                while _req.status_code in (301, 302, 303, 307):
+                    url = _req.headers["Location"]
+                    _req = fetches.Fetch(url, headers=self.headers, allow_redirects=False).fetch_req()
 
-            _req = fetches.Fetch(url, headers=self.headers, verify=True, allow_redirects=True).fetch_req()
+                _req = fetches.Fetch(url, headers=self.headers, verify=True, allow_redirects=True).fetch_req()
 
-            root = ET.fromstring(_req.text.encode('utf-8'))
+                root = ET.fromstring(_req.text.encode('utf-8'))
 
-            # Get the location of individual bands in Sentinel-2 granule
-            band_location = []
-            band_location.append(f"{product_name}/{root[0][0][12][0][0][1].text}.jp2".split("/"))
-            band_location.append(f"{product_name}/{root[0][0][12][0][0][2].text}.jp2".split("/"))
-            band_location.append(f"{product_name}/{root[0][0][12][0][0][3].text}.jp2".split("/"))
+                # Get the location of individual bands in Sentinel-2 granule
+                band_location = []
+                band_location.append(f"{product_name}/{root[0][0][12][0][0][1].text}.jp2".split("/"))
+                band_location.append(f"{product_name}/{root[0][0][12][0][0][2].text}.jp2".split("/"))
+                band_location.append(f"{product_name}/{root[0][0][12][0][0][3].text}.jp2".split("/"))
 
-            bands = []
-            for band_file in band_location:
-                url = f"{self.catalogue_odata_url}/Products({product_identifier})/Nodes({product_name})/Nodes({band_file[1]})/Nodes({band_file[2]})/Nodes({band_file[3]})/Nodes({band_file[4]})/$value"
-                #print(url)
-                self.add_entry_to_results(
-                    url,
-                    band_file[4],
-                    'SENTINEL 2LA'
-                )
+                bands = []
+                for band_file in band_location:
+                    url = f"{self.catalogue_odata_url}/Products({product_identifier})/Nodes({product_name})/Nodes({band_file[1]})/Nodes({band_file[2]})/Nodes({band_file[3]})/Nodes({band_file[4]})/$value"
+                    #print(url)
+                    self.add_entry_to_results(
+                        url,
+                        band_file[4],
+                        'SENTINEL 2LA'
+                    )
 
                 
 class Sentinel2(CDSE):
     def __init__(self, **kwargs):
-        super().__init__(name='sentinel2', collection_name='SENTINEL-2', product_type='S2MSI1C', **kwargs)
+        super().__init__(collection_name='SENTINEL-2', product_type='S2MSI1C', **kwargs)
         
             
 # class CDSE_s3(fetches.FetchModule):
