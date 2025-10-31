@@ -231,7 +231,7 @@ class EarthData(fetches.FetchModule):
     def run(self):
 
         if self.harmony_ping is not None:
-            status = self.harmony_ping_for_status()
+            status = self.harmony_ping_for_status(self.subset_job_id, self.harmony_ping)
             if status is not None:
                 utils.echo_msg(status)
                 return([])
