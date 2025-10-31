@@ -181,7 +181,18 @@ class EarthData(fetches.FetchModule):
 
         return(None)
         
-        
+
+    def harmony_gather_current_subsets(job_id):
+        subsets = []
+        status = self.harmony_ping_for_status(job_id)
+        if status is not None:
+            for link in status['links']:
+                if link['href'].endswith('.h5'):
+                    subsets.append(link['href'])
+                    
+        return(subsets)
+    
+    
     def harmony_make_request(self):
         _harmony_data = {
             'bbox': self.region.format('bbox'),
