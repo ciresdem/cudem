@@ -226,7 +226,11 @@ class EarthData(fetches.FetchModule):
                             leave=self.verbose
                     ) as pbar:                    
                         while True:
-                            _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
+                            try:
+                                _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
+                            except:
+                                pass
+                            
                             if _req is not None and _req.status_code == 200:
                                 status = _req.json()
                                 #utils.echo_msg(status)
