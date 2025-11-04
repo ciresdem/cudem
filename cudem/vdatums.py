@@ -433,13 +433,13 @@ class VerticalTransform:
         from cudem import waffles # we want waffles for some interpolation
 
         ## fetch the input tidal datum from VDatum
-        v_in = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
+        v_in = fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
         v_in._outdir = self.cache_dir
         v_in.run()
 
         if vdatum_tidal_out is not None:
             ## fetch the output tidal datum from VDatum if necessary
-            v_out = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
+            v_out = fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
             v_out._outdir = self.cache_dir
             v_out.run()
 
@@ -553,11 +553,11 @@ class VerticalTransform:
         geoid = 'g2018' if geoid is None else geoid
         ## fetch the cdn transformation grids
         if epsg is not None:
-            cdn_results = fetches.search_proj_cdn(
+            cdn_results = fetches.vdatum.search_proj_cdn(
                 self.src_region, epsg=epsg, cache_dir=self.cache_dir, verbose=self.verbose
             )
         else:
-            cdn_results = fetches.search_proj_cdn(
+            cdn_results = fetches.vdatum.search_proj_cdn(
                 self.src_region, cache_dir=self.cache_dir, verbose=self.verbose
             )
 
@@ -581,7 +581,7 @@ class VerticalTransform:
                 if epsg == dst_code or np.any([g in _result['name'] for g in _geoids.keys()]):
                     if src_code in _htdp_reference_frames.keys():
                         _trans_grid = os.path.join(self.cache_dir, _result['name'])
-                        if fetches.Fetch(
+                        if fetches.fetches.Fetch(
                                 _result['url'], verbose=self.verbose
                         ).fetch_file(_trans_grid) == 0:
                             tmp_infos = gdalfun.gdal_infos(_trans_grid)

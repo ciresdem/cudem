@@ -157,27 +157,31 @@ class EarthData(fetches.FetchModule):
     
     def harmony_ping_for_status(self, job_id, ping_request='status'):
         ping_requests = ['status', 'pause', 'resume', 'cancel']
-        status_url = None
-        if ping_request == 'status':
-            status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}'
+        status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}'
+
+        if ping_request in ping_requests[1:]:
+            status_url = f'{status_url}/{ping_request}'
             
-        elif ping_request == 'cancel':
-            status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/cancel'
+        # if ping_request == 'status':
+        #     status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}'
+            
+        # elif ping_request == 'cancel':
+        #     status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/cancel'
 
-        elif ping_request == 'pause':
-            status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/pause'
+        # elif ping_request == 'pause':
+        #     status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/pause'
 
-        elif ping_request == 'resume':
-            status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/resume'
+        # elif ping_request == 'resume':
+        #     status_url = f'https://harmony.earthdata.nasa.gov/jobs/{job_id}/resume'
 
-        else:
-            utils.echo_error_msg(f'{pint_request} is not a valid requst value, try one of: {ping_requests}')
+        # else:
+        #     utils.echo_error_msg(f'{pint_request} is not a valid requst value, try one of: {ping_requests}')
 
-        if status_url is not None:
-            _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
-            if _req is not None and _req.status_code == 200:
-                status = _req.json()
-                return(status)
+        #if status_url is not None:
+        _req = fetches.Fetch(status_url, headers=self.headers).fetch_req(timeout=None, read_timeout=None)
+        if _req is not None and _req.status_code == 200:
+            status = _req.json()
+            return(status)
 
         return(None)
         

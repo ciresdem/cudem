@@ -5505,9 +5505,8 @@ class ElevationDataset:
                     desc='processing buildings',
                     leave=verbose
             ) as pbar:
-                for n, bing_result in enumerate(this_bing.results):                
+                for n, bing_result in enumerate(this_bing.results):
                     if bing_result[-1] == 0:
-                        pbar.update()
                         bing_gz = bing_result[1]
                         try:
                             bing_gj = utils.gunzip(bing_gz, self.cache_dir)
@@ -5525,7 +5524,9 @@ class ElevationDataset:
                             utils.echo_error_msg(f'could not process bing bfp, {e}')
 
                         utils.remove_glob(bing_gz)
-
+                        
+                    pbar.update()
+                    
         return(bldg_geoms)
 
     
@@ -5574,31 +5575,33 @@ class ElevationDataset:
                     desc='processing coastline',
                     leave=verbose
             ) as pbar:
-                for n, cst_result in enumerate(this_cst.results):                
+                for n, cst_result in enumerate(this_cst.results):
                     if cst_result[-1] == 0:
-                        pbar.update()
                         cst_osm = cst_result[1]
                         out = fetches.osm.polygonize_osm_coastline(
                             cst_osm,
                             utils.make_temp_fn(
-                                f'{utils.fn_basename2(cst_osm)}_coast.shp',
+                                f'{utils.fn_basename2(cst_osm)}_coast.gpkg',
                                 temp_dir=self.cache_dir
                             ),
                             region=this_region,
                             include_landmask=include_landmask,
                             landmask_is_watermask=landmask_is_watermask,
-                            line_buffer=line_buffer
+                            line_buffer=line_buffer,
+                            verbose=verbose,
                         )
 
                         if out is not None:
                             cst_ds = ogr.Open(out, 0)
                             cst_layer = cst_ds.GetLayer()
                             cst_geom = gdalfun.ogr_union_geom(
-                                cst_layer, verbose=False
+                                cst_layer, verbose=verbose
                             )
                             cst_geoms.append(cst_geom)
                             cst_ds = None
                             utils.remove_glob(cst_osm)
+                            
+                    pbar.update()
                         
             if return_geom:
                 utils.remove_glob(f'{utils.fn_basename2(out)}.*')
@@ -7399,6 +7402,7 @@ class IceSat2File(ElevationDataset):
         ATL06 integration)
     7 - built structure (OSM or Bing)
     8 - "urban" (WSF, if used)
+    9 - inland water surface
 
     Confidence Levels:
     0, 1, 2, 3, 4
@@ -7443,6 +7447,7 @@ class IceSat2File(ElevationDataset):
         self.orientDict = {0:'l', 1:'r', 21:'error'}
         self.lasers = ['gt1l', 'gt2l', 'gt3l', 'gt1r', 'gt2r', 'gt3r']
 
+        
     def generate_inf(self):
         if self.src_srs is None:
             self.infos.src_srs = 'epsg:4326+3855'
@@ -7490,7 +7495,8 @@ class IceSat2File(ElevationDataset):
         self.atl03_f = None
         self.atl08_f = None
         self.atl24_f = None
-        self.atl13_f = None
+        #self.atl12_f = None
+        #self.atl13_f = None
 
         if self.atl03_fn is not None and os.path.exists(self.atl03_fn):
             self.atl03_f = h5.File(self.atl03_fn, 'r')            
@@ -7544,17 +7550,29 @@ class IceSat2File(ElevationDataset):
             utils.echo_warning_msg('falling back to classify water points only')
             #self.want_bathymetry = True
             self.want_watermask = True
-            
-        if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
-            self.atl13_f = h5.File(self.atl13_fn, 'r')
-            if self.verbose:
-                utils.echo_msg(f'Using ATL13 file: {self.atl08_fn}')
+
+        # if self.atl12_fn is not None and os.path.exists(self.atl12_fn):
+        #     self.atl12_f = h5.File(self.atl12_fn, 'r')
+        #     if self.verbose:
+        #         utils.echo_msg(f'Using ATL12 file: {self.atl12_fn}')
                 
-            if 'short_name' not in self.atl13_f.attrs.keys():
-                utils.echo_warning_msg(
-                    f'{self.atl13_fn} does not appear to be an ATL file'
-                )
-                self.atl13_f.close()                
+        #     if 'short_name' not in self.atl13_f.attrs.keys():
+        #         utils.echo_warning_msg(
+        #             f'{self.atl12_fn} does not appear to be an ATL file'
+        #         )
+        #         self.atl12_f.close()                
+
+        
+        # if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
+        #     self.atl13_f = h5.File(self.atl13_fn, 'r')
+        #     if self.verbose:
+        #         utils.echo_msg(f'Using ATL13 file: {self.atl13_fn}')
+                
+        #     if 'short_name' not in self.atl13_f.attrs.keys():
+        #         utils.echo_warning_msg(
+        #             f'{self.atl13_fn} does not appear to be an ATL file'
+        #         )
+        #         self.atl13_f.close()                
 
                 
     def close_atl_h5(self):
@@ -7570,8 +7588,11 @@ class IceSat2File(ElevationDataset):
         if self.atl24_f is not None:
             self.atl24_f.close()
 
-        if self.atl13_f is not None:
-            self.atl13_f.close()
+        # if self.atl12_f is not None:
+        #     self.atl12_f.close()
+            
+        # if self.atl13_f is not None:
+        #     self.atl13_f.close()
 
             
     def yield_points(self):
@@ -7584,14 +7605,20 @@ class IceSat2File(ElevationDataset):
         self.atl03_fn = self.fn
         self.atl08_fn = None
         self.atl24_fn = None
-        self.atl13_fn = None
+        # self.atl12_fn = None
+        # self.atl13_fn = None
+
+        ## only fetch atl08/atl24 if classes are desired
         if len(self.classes) > 0:
             atl08_result = self.fetch_atlxx(short_name='ATL08')
             self.atl08_fn = atl08_result
-            atl13_result = self.fetch_atlxx(short_name='ATL13')
-            self.atl13_fn = atl13_result
             atl24_result = self.fetch_atlxx(short_name='ATL24')
             self.atl24_fn = atl24_result
+
+            # atl12_result = self.fetch_atlxx(short_name='ATL12')
+            # self.atl12_fn = atl12_result
+            # atl13_result = self.fetch_atlxx(short_name='ATL13')
+            # self.atl13_fn = atl13_result
 
         try:
             self.init_atl_h5()
@@ -7603,7 +7630,7 @@ class IceSat2File(ElevationDataset):
             return
 
         ## fetch and process buildings, if wanted
-        this_bing = None
+        #this_bing = None
         if self.want_buildings:
             if isinstance(self.want_buildings, bool):
                 this_bing = self.process_buildings(
@@ -7614,7 +7641,7 @@ class IceSat2File(ElevationDataset):
                 this_bing = self.want_buildings         
 
         ## fetch and process watermask, if wanted
-        this_wm = None
+        #this_wm = None
         if self.want_watermask:
             if isinstance(self.want_watermask, bool):
                 this_wm = self.process_coastline(
@@ -7623,7 +7650,21 @@ class IceSat2File(ElevationDataset):
                     verbose=self.verbose
                 )
             elif isinstance(self.want_watermask, list):
-                this_wm = self.want_watermask                
+                this_wm = self.want_watermask
+
+        ## fetch and process watermask, if wanted
+        this_wm = None
+        if self.want_watermask:
+            this_wm = self._load_gmrt()
+            # if isinstance(self.want_watermask, bool):
+            #     this_wm = self.process_coastline(
+            #         self.fetch_coastline(chunks=False, verbose=self.verbose),
+            #         return_geom=True,
+            #         verbose=self.verbose
+            #     )
+            # elif isinstance(self.want_watermask, list):
+            #     this_wm = self.want_watermask                
+                
 
         ## parse through the icesat2 file by laser number
         for i in range(1, 4):
@@ -7664,6 +7705,13 @@ class IceSat2File(ElevationDataset):
                 if self.want_watermask and this_wm is not None:
                     #dataset = self.classify_water(dataset, this_wm)
                     dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41, except_classes=[40])
+                    # points = np.column_stack(
+                    #     (dataset['longitude'], dataset['latitude'], dataset['photon_height'])
+                    # )
+                    # topo_photons = gdalfun.gdal_query(
+                    #     points, this_wm, 'g'
+                    # ).flatten()
+                    # dataset['ph_h_classed'][(dataset['ph_h_classed'] != 40) & (topo_photons < 0)] = 41
 
                 if dataset is None or len(dataset) == 0:
                     continue
@@ -7695,11 +7743,39 @@ class IceSat2File(ElevationDataset):
 
         self.close_atl_h5()
 
+        
+    def fetch_data(self, fetches_module, check_size=True):
+        this_fetches = fetches.fetches_factory.FetchesFactory(
+            mod=fetches_module,
+            src_region=self.region,
+            verbose=self.verbose,
+            outdir=self.cache_dir,
+            callback=fetches.fetches.fetches_callback
+        )._acquire_module()        
+        this_fetches.run()
+        fr = fetches.fetches.fetch_results(this_fetches, check_size=check_size)
+        fr.daemon = True
+        fr.start()
+        fr.join()
 
+        return(fr)
+
+
+    def _load_gmrt(self):
+        """GMRT - Global low-res.
+        """
+        
+        this_gmrt = self.fetch_data('gmrt:layer=topo')        
+        gmrt_result = this_gmrt.results[0]
+        if gmrt_result[-1] == 0:
+            gmrt_tif = gmrt_result[1]
+
+            return(gmrt_tif)
+
+        
     def fetch_atlxx(self, short_name='ATL08'):
         """fetch an associated ATLxx file"""
 
-        #atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-2])
         atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('_')[1:4])
         this_atlxx = fetches.earthdata.IceSat2(
             src_region=None,
@@ -7712,9 +7788,6 @@ class IceSat2File(ElevationDataset):
         )
         this_atlxx.run()
         if len(this_atlxx.results) == 0:
-            #atlxx_filter = '_'.join(
-            #    utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-2]
-            #)
             atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('_')[1:3])
             this_atlxx = fetches.earthdata.IceSat2(
                 src_region=None,
@@ -7740,112 +7813,9 @@ class IceSat2File(ElevationDataset):
                 ))
 
             
-    def read_atl_data(self, laser_num, orientation=None):
-        """Read data from an ATL03 file
-
-        Adapted from 'cshelph' https://github.com/nmt28/C-SHELPh.git 
-        and 'iVert' https://github.com/ciresdem/ivert.git
-
-        laser_num is 1, 2 or 3
-        surface is 'mean_tide', 'geoid' or 'ellipsoid'
-        """
-
-        if orientation is None:
-            orientation = self.atl03_f['/orbit_info/sc_orient'][0]
-            
-        ## selects the strong beams only [we can include weak beams later on]
-        #orientDict = {0:'l', 1:'r', 21:'error'}
-        laser = 'gt' + laser_num + self.orientDict[orientation]
-
-        ## for 'subsets', where heights don't come through
-        if 'heights' not in self.atl03_f['/{}'.format(laser)].keys():
-            return(None)
-        
-        ## Read in the required photon level data
-        photon_h = self.atl03_f['/' + laser + '/heights/h_ph'][...,]
-        latitude = self.atl03_f['/' + laser + '/heights/lat_ph'][...,]
-        longitude = self.atl03_f['/' + laser + '/heights/lon_ph'][...,]
-        ph_count = self.atl03_f['/' + laser + '/heights/ph_id_count'][...,]
-        conf = self.atl03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
-        qual = self.atl03_f['/' + laser + '/heights/quality_ph/'][...,0]
-        dist_ph_along = self.atl03_f['/' + laser + '/heights/dist_ph_along'][...,]
-        delta_time = self.atl03_f['/' + laser + '/heights/delta_time'][...,]
-        this_N = latitude.shape[0]
-
-        ## Read in the geolocation level data
-        segment_ph_cnt = self.atl03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
-        segment_id = self.atl03_f['/' + laser + '/geolocation/segment_id'][...,]
-        segment_dist_x = self.atl03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
-        ref_elev = self.atl03_f['/' + laser + '/geolocation/ref_elev'][...,]
-        ref_azimuth = self.atl03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
-        ref_photon_index = self.atl03_f['/' + laser + '/geolocation/reference_photon_index'][...,]
-        ph_index_beg = self.atl03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
-        altitude_sc = self.atl03_f['/' + laser + '/geolocation/altitude_sc'][...,]
-
-        ## Read in the geoid data
-        photon_geoid = self.atl03_f['/' + laser + '/geophys_corr/geoid'][...,]
-        photon_geoid_f2m = self.atl03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
-
-        ## Read in the geosegment info for subsets
-        geoseg_beg = self.atl03_f['ancillary_data/start_geoseg'][...,][0]
-        geoseg_end = self.atl03_f['ancillary_data/end_geoseg'][...,][0]
-                    
-        ## Create a dictionary with (segment_id --> index into ATL03 photons)
-        ## lookup pairs, for the starting photon of each segment
-        #segment_indices = ph_index_beg+(ref_photon_index-1)
-        #segment_index_dict = dict(zip(segment_id, ph_index_beg+ref_photon_index-1))
-        segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
-        segment_index_dict = dict(zip(segment_id, segment_indices))
-        ph_segment_ids = segment_id[
-            np.searchsorted(segment_indices, np.arange(0.5, len(photon_h), 1))-1
-        ]
-        
-        ## Compute the total along-track distances.
-        segment_dist_dict = dict(zip(segment_id, segment_dist_x))
-
-        ## Determine where in the array each segment index needs to look.
-        ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]),
-                                              ph_segment_ids)))
-        dist_x = ph_segment_dist_x + dist_ph_along
-
-        ## meantide/geoid heights
-        h_geoid_dict = dict(zip(segment_id, photon_geoid))
-        ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))        
-        h_meantide_dict = dict(zip(segment_id, photon_geoid_f2m))
-        ph_h_meantide = np.array(list(map((lambda pid: h_meantide_dict[pid]), ph_segment_ids)))
-        photon_h_geoid = photon_h - ph_h_geoid
-        photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
-
-        ## setup classifications
-        ph_h_classed = np.zeros(photon_h.shape)
-        ph_h_classed[:] = -1
-
-        ph_h_bathy_conf = np.zeros(photon_h.shape)
-        ph_h_bathy_conf[:] = -1
-
-        ## append the laser to each record
-        laser_arr = np.empty(photon_h.shape, dtype='object')
-        laser_arr[:] = laser
-
-        ## append the filename to each record
-        fn_arr = np.empty(photon_h.shape, dtype='object')
-        fn_arr[:] = self.fn
-        
-        ## ref values
-        h_ref_elev_dict = dict(zip(segment_id, ref_elev))
-        ph_ref_elev = np.array(
-            list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids))
-        )#.astype(float)        
-        h_ref_azimuth_dict = dict(zip(segment_id, ref_azimuth))
-        ph_ref_azimuth = np.array(
-            list(map((lambda pid: h_ref_azimuth_dict[pid]), ph_segment_ids))
-        )#.astype(float)
-        h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
-        ph_altitude_sc = np.array(
-            list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids))
-        )#.astype(float)
-
-        ## Read in the ATL08 data
+    def apply_atl08_classifications(
+            self, ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids
+    ):
         if self.atl08_f is not None:
             ## classed flag (signal_photons)
             atl08_classed_pc_flag  = self.atl08_f[
@@ -7875,7 +7845,14 @@ class IceSat2File(ElevationDataset):
             class_mask = atl08_ph_index < len(ph_segment_ids)
             ph_h_classed[atl08_ph_index[class_mask]] \
                 = atl08_classed_pc_flag[atl08_segment_id_msk][class_mask]
+            
+        return(ph_h_classed)
 
+
+    def apply_atl24_classifications(
+            self, ph_h_classed, ph_h_bathy_conf, latitude, longitude, photon_h, photon_h_meantide,
+            photon_h_geoid, laser, geoseg_beg, geoseg_end, ph_segment_ids
+    ):
         if self.atl24_f is not None:
             ## some atl24 files don't have all the lasers, so make sure
             ## it exists before proceding
@@ -7921,22 +7898,155 @@ class IceSat2File(ElevationDataset):
                     photon_h_meantide[index_ph[segment_id_msk][index_msk][ph_msk]] = surface_h[segment_id_msk][index_msk][ph_msk]
                     photon_h_geoid[index_ph[segment_id_msk][index_msk][ph_msk]] = ortho_h[segment_id_msk][index_msk][ph_msk]
                     #conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
-                # else:
-                #     class_msk = class_ph >= 40
-                #     ph_h_classed[index_ph[class_msk]] = class_ph[class_msk]
 
-                #     # we also need to change the lon/lat/height values to the
-                #     # updated/refracted bathymetry values (we'll just do it to class 40)
-                #     class_msk = class_ph == 40
-                #     longitude[index_ph[class_msk]] = lon_ph[class_msk]
-                #     latitude[index_ph[class_msk]] = lat_ph[class_msk]
-                #     photon_h[index_ph[class_msk]] = ellipse_h[class_msk]
-                #     photon_h_geoid[index_ph[class_msk]] = ortho_h[class_msk]
-                #     photon_h_meantide[index_ph[class_msk]] = surface_h[class_msk]
-                
-        if self.atl13_f is not None:
-            atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
-            ph_h_classed[atl13_refid] = 44
+        return(ph_h_classed, ph_h_bathy_conf, latitude, longitude, photon_h, photon_h_meantide, photon_h_geoid)
+    
+    
+    def read_atl_data(self, laser_num, orientation=None):
+        """Read data from an ATL03 file
+
+        Adapted from 'cshelph' https://github.com/nmt28/C-SHELPh.git 
+        and 'iVert' https://github.com/ciresdem/ivert.git
+
+        laser_num is 1, 2 or 3
+        surface is 'mean_tide', 'geoid' or 'ellipsoid'
+        """
+
+        if orientation is None:
+            orientation = self.atl03_f['/orbit_info/sc_orient'][0]
+            
+        ## selects the strong beams only [we can include weak beams later on]
+        #orientDict = {0:'l', 1:'r', 21:'error'}
+        laser = 'gt' + laser_num + self.orientDict[orientation]
+
+        ## for 'subsets', where heights don't come through
+        if 'heights' not in self.atl03_f['/{}'.format(laser)].keys():
+            return(None)
+        
+        ## Read in the required photon level data
+        photon_h = self.atl03_f['/' + laser + '/heights/h_ph'][...,]
+        latitude = self.atl03_f['/' + laser + '/heights/lat_ph'][...,]
+        longitude = self.atl03_f['/' + laser + '/heights/lon_ph'][...,]
+        ph_count = self.atl03_f['/' + laser + '/heights/ph_id_count'][...,]
+        conf = self.atl03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
+        qual = self.atl03_f['/' + laser + '/heights/quality_ph/'][...,0]
+        dist_ph_along = self.atl03_f['/' + laser + '/heights/dist_ph_along'][...,]
+        delta_time = self.atl03_f['/' + laser + '/heights/delta_time'][...,]
+        this_N = latitude.shape[0]
+
+        ## Read in the geolocation level data
+        segment_ph_cnt = self.atl03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
+        segment_id = self.atl03_f['/' + laser + '/geolocation/segment_id'][...,]
+        segment_dist_x = self.atl03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
+        ref_elev = self.atl03_f['/' + laser + '/geolocation/ref_elev'][...,]
+        ref_azimuth = self.atl03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
+        ref_photon_index = self.atl03_f['/' + laser + '/geolocation/reference_photon_index'][...,]
+        ph_index_beg = self.atl03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
+        altitude_sc = self.atl03_f['/' + laser + '/geolocation/altitude_sc'][...,]
+        surf_type = self.atl03_f['/' + laser + '/geolocation/surf_type'][...,]
+        
+        ## Read in the geophysical correction
+        photon_geoid = self.atl03_f['/' + laser + '/geophys_corr/geoid'][...,]
+        photon_geoid_f2m = self.atl03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
+        photon_dem_h = self.atl03_f['/' + laser + '/geophys_corr/dem_h'][...,]
+
+        ## Read in the geosegment info for subsets
+        geoseg_beg = self.atl03_f['ancillary_data/start_geoseg'][...,][0]
+        geoseg_end = self.atl03_f['ancillary_data/end_geoseg'][...,][0]
+                    
+        ## Create a dictionary with (segment_id --> index into ATL03 photons)
+        ## lookup pairs, for the starting photon of each segment
+        #segment_indices = ph_index_beg+(ref_photon_index-1)
+        #segment_index_dict = dict(zip(segment_id, ph_index_beg+ref_photon_index-1))
+        segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
+        segment_index_dict = dict(zip(segment_id, segment_indices))
+        ph_segment_ids = segment_id[
+            np.searchsorted(segment_indices, np.arange(0.5, len(photon_h), 1))-1
+        ]
+        
+        ## Compute the total along-track distances.
+        segment_dist_dict = dict(zip(segment_id, segment_dist_x))
+
+        ## Determine where in the array each segment index needs to look.
+        ph_segment_dist_x = np.array(
+            list(map((lambda pid: segment_dist_dict[pid]), ph_segment_ids))
+        )
+        dist_x = ph_segment_dist_x + dist_ph_along
+
+        ## meantide/geoid/dem heights
+        h_geoid_dict = dict(zip(segment_id, photon_geoid))
+        ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))        
+        h_meantide_dict = dict(zip(segment_id, photon_geoid_f2m))
+        ph_h_meantide = np.array(list(map((lambda pid: h_meantide_dict[pid]), ph_segment_ids)))
+        photon_h_geoid = photon_h - ph_h_geoid
+        photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
+
+        h_dem_dict = dict(zip(segment_id, photon_dem_h))
+        ph_h_dem = np.array(list(map((lambda pid: h_dem_dict[pid]), ph_segment_ids)))
+        photon_h_dem = ph_h_dem - (ph_h_geoid + ph_h_meantide)
+        
+        ## setup classifications asn bathy confidence
+        ph_h_classed = np.zeros(photon_h.shape)
+        ph_h_classed[:] = -1
+
+        ph_h_bathy_conf = np.zeros(photon_h.shape)
+        ph_h_bathy_conf[:] = -1
+
+        ## append the laser to each record
+        laser_arr = np.empty(photon_h.shape, dtype='object')
+        laser_arr[:] = laser
+
+        ## append the filename to each record
+        fn_arr = np.empty(photon_h.shape, dtype='object')
+        fn_arr[:] = self.fn
+        
+        ## ref values
+        h_ref_elev_dict = dict(zip(segment_id, ref_elev))
+        ph_ref_elev = np.array(
+            list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids))
+        )#.astype(float)        
+        h_ref_azimuth_dict = dict(zip(segment_id, ref_azimuth))
+        ph_ref_azimuth = np.array(
+            list(map((lambda pid: h_ref_azimuth_dict[pid]), ph_segment_ids))
+        )#.astype(float)
+        h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
+        ph_altitude_sc = np.array(
+            list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids))
+        )#.astype(float)
+        h_surf_type_dict = dict(zip(segment_id, surf_type))
+        ph_surf_type = np.array(
+            list(map((lambda pid: h_surf_type_dict[pid]), ph_segment_ids))
+        )#.astype(float)
+        
+        ## classify the photons
+        ## Read in the ATL08 data and classify points based on the ATL08 classifications
+        ph_h_classed = self.apply_atl08_classifications(
+            ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids
+        )
+
+        ## classify phtons as water surface if dem_h is below zero
+        #ph_h_classed[photon_h_dem < 0] = 41
+        
+        ## classify bathymetry and water-surface points based on ATL24
+        ## classifications...
+        ph_h_classed, ph_h_bathy_conf, latitude, longitude, photon_h, photon_h_meantide, photon_h_geoid = self.apply_atl24_classifications(
+            ph_h_classed, ph_h_bathy_conf, latitude, longitude, photon_h, photon_h_meantide,
+            photon_h_geoid, laser, geoseg_beg, geoseg_end, ph_segment_ids
+        )
+
+        ## classify inland water based on ATL13 classifications
+        # if self.atl13_f is not None:
+        #     atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
+        #     ph_h_classed[atl13_refid] = 44
+
+        ## classify water based on ATL12 classifications
+        # if self.atl13_f is not None:
+        #     atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
+        #     ph_h_classed[atl13_refid] = 44
+        
+        ## classify water points based on the 'surf_type' parameter to
+        ## remove ATL08 bare-earth clasification over water
+        ph_surf_type = [x[1] for x in ph_surf_type]
             
         ## set the photon height, either 'mean_tide' or 'geoid', else ellipsoid
         if self.water_surface == 'mean_tide':
@@ -7959,10 +8069,12 @@ class IceSat2File(ElevationDataset):
              'ref_sat_alt':ph_altitude_sc,
              'delta_time':delta_time,
              'bathy_confidence':ph_h_bathy_conf,
+             'ph_surf_type':ph_surf_type,
+             'photon_h_dem':photon_h_dem,
              'ph_h_classed': ph_h_classed},
             columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
                      'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt',
-                     'delta_time', 'bathy_confidence', 'ph_h_classed']
+                     'delta_time', 'bathy_confidence', 'ph_surf_type', 'photon_h_dem', 'ph_h_classed']
         )
 
         ## Process extra columns specified in `self.columns`
@@ -10223,7 +10335,7 @@ class IceSat2Fetcher(Fetcher):
                  columns={},
                  classify_bathymetry=True,
                  classify_buildings=True,
-                 classify_water=True,
+                 classify_water=False,
                  reject_failed_qa=True,
                  min_bathy_confidence=None,
                  **kwargs):
