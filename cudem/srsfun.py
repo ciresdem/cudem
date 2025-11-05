@@ -1,6 +1,6 @@
 ### srsfun.py - Projection functions
 ##
-## Copyright (c) 2010 - 2024 Regents of the University of Colorado
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
 ## srsfun.py is part of CUDEM
 ##
@@ -29,7 +29,7 @@
 ### Code:
 
 import os
-
+from tqdm import tqdm
 from osgeo import osr
 from osgeo import ogr
 import pyproj
@@ -468,7 +468,7 @@ def set_vertical_transform(transform, region=None, infos=None,
             os.path.abspath(transform['trans_fn']),
             transform['dst_horz_crs'].to_proj4()
         )
-        self.transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
+        transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
             '+proj=pipeline +step +proj=vgridshift +grids={} +inv'.format(os.path.abspath(transform['trans_fn']))
             )
     else:
@@ -478,7 +478,9 @@ def set_vertical_transform(transform, region=None, infos=None,
              f'and {os.path.abspath(transform["dst_vert_epsg"])} for this region!')
         )
 
-        
+    return(transform)
+
+
 def set_transform(src_srs=None, dst_srs=None, region=None, infos=None):
     """Set the pyproj horizontal and vertical transformations for the dataset"""
 
@@ -501,7 +503,7 @@ def set_transform(src_srs=None, dst_srs=None, region=None, infos=None):
 
         ## vertical Transformation
         if transform['want_vertical']:
-            set_vertical_transform()
+            set_vertical_transform(transform, region=region)
         else:
             transform['pipeline'] = transform['horz_pipeline']
 
@@ -518,9 +520,10 @@ def set_transform(src_srs=None, dst_srs=None, region=None, infos=None):
             data_region = region.copy() \
                 if transform['trans_region'] is None \
                    else transform['trans_region'].copy()
-            inf_region = regions.Region().from_list(infos.minmax)
-            data_region = regions.regions_reduce(data_region, inf_region)
-            data_region.src_srs = infos.src_srs
+            if infos is not None:
+                inf_region = regions.Region().from_list(infos.minmax)
+                data_region = regions.regions_reduce(data_region, inf_region)                
+                data_region.src_srs = infos.src_srs
 
             if not data_region.valid_p():
                 data_region = self.region.copy() \
