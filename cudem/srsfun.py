@@ -489,6 +489,9 @@ def set_transform(src_srs=None, dst_srs=None, region=None, infos=None):
     if transform['src_horz_crs'] is not None \
        and transform['dst_horz_crs'] is not None:        
         ## horizontal Transformation
+        # transform['horz_pipeline'] = '+proj=pipeline +step {} +inv +step {}'.format(
+        #     transform['src_horz_crs'].to_proj4(), transform['dst_horz_crs'].to_proj4()
+        # )
         transform['horz_pipeline'] = '+proj=pipeline +step {} +inv +step {}'.format(
             transform['src_horz_crs'].to_proj4(), transform['dst_horz_crs'].to_proj4()
         )
@@ -503,12 +506,13 @@ def set_transform(src_srs=None, dst_srs=None, region=None, infos=None):
 
         ## vertical Transformation
         if transform['want_vertical']:
-            set_vertical_transform(transform, region=region)
+            transform = set_vertical_transform(transform, region=region)
         else:
             transform['pipeline'] = transform['horz_pipeline']
 
         try:
-            transform['transformer'] = pyproj.Transformer.from_pipeline(transform['pipeline'])
+            #transform['transformer'] = pyproj.Transformer.from_pipeline(transform['pipeline'])
+            transform['transformer'] = pyproj.Transformer.from_crs(transform['src_horz_crs'], transform['dst_horz_crs'], always_xy=True)
         except Exception as e:
             utils.echo_warning_msg('could not set transformation in: {}, out: {}, {}'.format(
                 transform['src_horz_crs'].name, transform['dst_horz_crs'].name, e
