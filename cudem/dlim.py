@@ -400,12 +400,13 @@ def polygonize_mask_multibands(
         if output is None \
         else os.path.basename(output)
     )
-    dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
-    utils.remove_glob('{}.*'.format(dst_layer))
+    dst_vector = os.path.join(os.path.dirname(output) if output is not None else '', f'{dst_layer}.{gdalfun.ogr_fext(ogr_format)}')
+    #dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
+    #utils.remove_glob('{}.*'.format(dst_layer))
+    utils.remove_glob('{}.*'.format(utils.fn_basename2(dst_vector)))
     srs = srsfun.osr_srs(src_ds.GetProjectionRef())
     driver = ogr.GetDriverByName(ogr_format)
     ds = driver.CreateDataSource(dst_vector)
-    utils.echo_msg(dst_vector)
     if ds is not None: 
         layer = ds.CreateLayer(
             dst_layer, srs, ogr.wkbMultiPolygon
