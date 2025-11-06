@@ -7549,7 +7549,18 @@ class IceSat2File(ElevationDataset):
             #utils.echo_warning_msg('falling back to CSphelph to classify bathymetry')
             utils.echo_warning_msg('falling back to classify water points only')
             #self.want_bathymetry = True
-            self.want_watermask = True
+
+            #if self.want_watermask:
+            if isinstance(self.want_watermask, bool):
+                self.want_watermask = True
+                this_wm = self.process_coastline(
+                    self.fetch_coastline(chunks=False, verbose=self.verbose),
+                    return_geom=True,
+                    verbose=self.verbose
+                )
+            elif isinstance(self.want_watermask, list):
+                this_wm = self.want_watermask
+                
 
         # if self.atl12_fn is not None and os.path.exists(self.atl12_fn):
         #     self.atl12_f = h5.File(self.atl12_fn, 'r')
