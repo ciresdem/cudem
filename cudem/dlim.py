@@ -7537,7 +7537,7 @@ class IceSat2File(ElevationDataset):
         if self.atl24_fn is not None and os.path.exists(self.atl24_fn):
             self.atl24_f = h5.File(self.atl24_fn, 'r')
             if self.verbose:
-                utils.echo_msg(f'Using ATL24 file: {self.atl08_fn}')
+                utils.echo_msg(f'Using ATL24 file: {self.atl24_fn}')
                 
             # if 'short_name' not in self.atl24_f.attrs.keys():
             #     utils.echo_warning_msg(
@@ -7653,17 +7653,17 @@ class IceSat2File(ElevationDataset):
                 this_wm = self.want_watermask
 
         ## fetch and process watermask, if wanted
-        this_wm = None
-        if self.want_watermask:
-            this_wm = self._load_gmrt()
-            # if isinstance(self.want_watermask, bool):
-            #     this_wm = self.process_coastline(
-            #         self.fetch_coastline(chunks=False, verbose=self.verbose),
-            #         return_geom=True,
-            #         verbose=self.verbose
-            #     )
-            # elif isinstance(self.want_watermask, list):
-            #     this_wm = self.want_watermask                
+        #this_wm = None
+        # if self.want_watermask:
+        #     this_wm = self._load_gmrt()
+        #     # if isinstance(self.want_watermask, bool):
+        #     #     this_wm = self.process_coastline(
+        #     #         self.fetch_coastline(chunks=False, verbose=self.verbose),
+        #     #         return_geom=True,
+        #     #         verbose=self.verbose
+        #     #     )
+        #     # elif isinstance(self.want_watermask, list):
+        #     #     this_wm = self.want_watermask                
                 
 
         ## parse through the icesat2 file by laser number

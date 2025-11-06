@@ -163,7 +163,7 @@ def polygonize_osm_coastline(
                     #             #         > (y_end - y_beg)*(x_ext - x_beg)
                     #             #     ss.append(s)
                     #ss = ss[ss is not None]
-                    utils.echo_msg(ss)
+                    #utils.echo_msg(ss)
                     if all(ss):
                         s = True
                     elif not any(ss):
