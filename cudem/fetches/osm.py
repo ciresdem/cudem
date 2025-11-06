@@ -113,7 +113,7 @@ def polygonize_osm_coastline(
             leave=verbose
     ) as pbar:        
         for line_layer in line_ds:
-            utils.echo_msg(line_layer)
+            #utils.echo_msg(line_layer)
             line_type = line_layer.GetGeomType()
             ## feature is a line, polygonize water/land based on which side of
             ## the line each polygon falls...

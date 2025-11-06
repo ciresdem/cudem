@@ -10335,7 +10335,7 @@ class IceSat2Fetcher(Fetcher):
                  columns={},
                  classify_bathymetry=True,
                  classify_buildings=True,
-                 classify_water=False,
+                 classify_water=True,
                  reject_failed_qa=True,
                  min_bathy_confidence=None,
                  **kwargs):
@@ -10348,36 +10348,36 @@ class IceSat2Fetcher(Fetcher):
         self.classify_buildings = classify_buildings
         self.classify_water = classify_water
         self.reject_failed_qa = reject_failed_qa
-        self.min_bathy_confidence = min_bathy_confidence
-        
+        self.min_bathy_confidence = min_bathy_confidence        
         self.data_format = -111
+        self.fetches_params['classify_bathymetry'] = self.classify_bathymetry
+        self.fetches_params['classify_buildings'] = self.classify_buildings
+        self.fetches_params['classify_water'] = self.classify_water
+
+        if self.fetches_params['classify_buildings']:
+            self.fetches_params['classify_buildings'] \
+                = self.process_buildings(self.fetch_buildings(verbose=self.verbose), verbose=self.verbose)
+
+        if self.fetches_params['classify_water']:
+            self.fetches_params['classify_water'] = self.process_coastline(
+                self.fetch_coastline(chunks=False, verbose=self.verbose),
+                return_geom=True, verbose=self.verbose
+            )
 
         
     def yield_ds(self, result):
         icesat2_fn= os.path.join(
             self.fetch_module._outdir, result['dst_fn']
         )
+
         if result['data_type'].lower() == 'atl03' or \
            'NSIDC_CPRD' in result['data_type'].upper():
             self.fetches_params['water_suface'] = self.water_surface if self.water_surface is not None else 'geoid'
             self.fetches_params['classes'] = self.classes
             self.fetches_params['confidence_levels'] = self.confidence_levels
             self.fetches_params['columns'] = self.columns
-            self.fetches_params['classify_bathymetry'] = self.classify_bathymetry
-            self.fetches_params['classify_buildings'] = self.classify_buildings
-            self.fetches_params['classify_water'] = self.classify_water
             self.fetches_params['reject_failed_qa'] = self.reject_failed_qa
             self.fetches_params['min_bathy_confidence'] = self.min_bathy_confidence
-            
-            if self.fetches_params['classify_buildings']:
-                self.fetches_params['classify_buildings'] \
-                    = self.process_buildings(self.fetch_buildings(verbose=False), verbose=False)
-
-            if self.fetches_params['classify_water']:
-                self.fetches_params['classify_water'] = self.process_coastline(
-                    self.fetch_coastline(chunks=False, verbose=False),
-                    return_geom=True, verbose=False
-                )
 
             if 'processed_zip' in result['data_type']:
                 icesat2_h5s = utils.p_unzip(
