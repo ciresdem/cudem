@@ -84,6 +84,9 @@ class BlueTopo(fetches.FetchModule):
         )
         self._bluetopo_index = self._bluetopo_index_url.split('/')[-1]
 
+        ## dlim variables, parse with GDAL and set to WGS84/MSL
+        self.data_format = 200
+        
         
     def run(self):
         s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')

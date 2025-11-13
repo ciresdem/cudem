@@ -422,7 +422,7 @@ class Fetch:
                 params=params,
                 json=json,
                 timeout=(timeout,read_timeout),
-                headers=self.headers,
+                #headers=self.headers,
                 verify=self.verify,
                 allow_redirects=self.allow_redirects
             )
@@ -433,7 +433,7 @@ class Fetch:
                 params=params,
                 json=json,
                 tries=tries - 1,
-                headers=self.headers,
+                #headers=self.headers,
                 timeout=timeout * 2 if timeout is not None else None,
                 read_timeout=read_timeout * 2 if read_timeout is not None else None
             )
@@ -446,7 +446,7 @@ class Fetch:
                     params=params,
                     json=json,
                     tries=tries - 1,
-                    headers=self.headers,
+                    #headers=self.headers,
                     timeout=timeout + 1 if timeout is not None else None,
                     read_timeout=read_timeout + 10 if read_timeout is not None else None
                 )
@@ -460,7 +460,7 @@ class Fetch:
                         params=params,
                         json=json,
                         tries=tries - 1,
-                        headers=self.headers,
+                        #headers=self.headers,
                         timeout=timeout + 1 if timeout is not None else None,
                         read_timeout=read_timeout + 10 if read_timeout is not None else None
                     )

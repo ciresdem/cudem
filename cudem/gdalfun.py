@@ -993,6 +993,10 @@ def gdal_infos(src_gdal, region=None, scan=False, band=1):
                 utils.echo_warning_msg(
                     f'invalid band {band} for data source {src_gdal}'
                 )
+        else:
+            utils.echo_warning_msg(
+                f'could not load raster {src_gdal}'
+            )
 
     return(ds_config)
 
