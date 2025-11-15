@@ -7685,11 +7685,11 @@ class IceSat2File(ElevationDataset):
                 #try:
                 ## selects the strong beams only [we can include weak beams later on]
                 if f'gt{i}{self.orientDict[orient]}' not in list(self.atl03_f.keys()):
-                    utils.echo_warning_msg(f'could not find laser gt{i}{self.orientDict[orient]} in {self.atl03_fn}')
+                    #utils.echo_warning_msg(f'could not find laser gt{i}{self.orientDict[orient]} in {self.atl03_fn}')
                     continue
 
                 if 'heights' not in list(self.atl03_f[f'gt{i}{self.orientDict[orient]}'].keys()):
-                    utils.echo_warning_msg(f'laser gt{i}{self.orientDict[orient]} in {self.atl03_fn} has no heights')
+                    #utils.echo_warning_msg(f'laser gt{i}{self.orientDict[orient]} in {self.atl03_fn} has no heights')
                     continue
                 
                 dataset = self.read_atl_data('{}'.format(i), orientation=orient)
@@ -7715,16 +7715,10 @@ class IceSat2File(ElevationDataset):
                     #dataset = self.classify_buildings(dataset, this_bing)
                     dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_bing, classification=7)
 
+                #utils.echo_msg(f'this_wm: {this_wm}')
                 if self.want_watermask and this_wm is not None:
                     #dataset = self.classify_water(dataset, this_wm)
                     dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41, except_classes=[40])
-                    # points = np.column_stack(
-                    #     (dataset['longitude'], dataset['latitude'], dataset['photon_height'])
-                    # )
-                    # topo_photons = gdalfun.gdal_query(
-                    #     points, this_wm, 'g'
-                    # ).flatten()
-                    # dataset['ph_h_classed'][(dataset['ph_h_classed'] != 40) & (topo_photons < 0)] = 41
 
                 if dataset is None or len(dataset) == 0:
                     continue
@@ -7858,6 +7852,8 @@ class IceSat2File(ElevationDataset):
             class_mask = atl08_ph_index < len(ph_segment_ids)
             ph_h_classed[atl08_ph_index[class_mask]] \
                 = atl08_classed_pc_flag[atl08_segment_id_msk][class_mask]
+
+            #utils.echo_msg_bold(np.count_nonzero(ph_h_classed==1))
             
         return(ph_h_classed)
 
@@ -8036,7 +8032,7 @@ class IceSat2File(ElevationDataset):
         ph_h_classed = self.apply_atl08_classifications(
             ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids
         )
-
+        
         ## classify phtons as water surface if dem_h is below zero
         #ph_h_classed[photon_h_dem < 0] = 41
         
@@ -8411,8 +8407,11 @@ class IceSat2File(ElevationDataset):
                 #[dataset.at[f.GetField('index'), 'ph_h_classed'] = 7 for f in icesat_layer]
                 for f in icesat_layer:
                     idx = f.GetField('index')
-                    bathy_mask = dataset.at[idx, 'ph_h_classed'] == 40
-                    dataset.at[idx, 'ph_h_classed'][~bathy_mask] = 41
+                    #bathy_mask = dataset.at[idx, 'ph_h_classed'] == 40
+                    #utils.echo_msg_bold(idx)
+                    #utils.echo_msg_bold(dataset.at[idx, 'ph_h_classed'])
+                    if dataset.at[idx, 'ph_h_classed'] != 40:
+                        dataset.at[idx, 'ph_h_classed'] = 41
 
                 icesat_layer.SetSpatialFilter(None)
 
@@ -8437,6 +8436,7 @@ class IceSat2File(ElevationDataset):
                 pbar.update()
                 icesat_layer = ogr_df.GetLayer()
                 icesat_layer.SetSpatialFilter(wm_geom)
+                #utils.echo_msg(len(icesat_layer))
                 for f in icesat_layer:
                     idx = f.GetField('index')
                     #except_mask = dataset.at[idx, 'ph_h_classed']
@@ -10346,7 +10346,7 @@ class IceSat2Fetcher(Fetcher):
                  classes=None,
                  confidence_levels=None,
                  columns={},
-                 classify_bathymetry=True,
+                 classify_bathymetry=False,
                  classify_buildings=True,
                  classify_water=True,
                  reject_failed_qa=True,

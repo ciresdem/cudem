@@ -72,7 +72,6 @@ def polygonize_osm_coastline(
                 > (y_end - y_beg)*(x_ext - x_beg)
             # ss.append(s)
             return(s)
-
     
     # Open the input line layer
     line_ds = ogr.Open(src_ogr)
@@ -113,7 +112,6 @@ def polygonize_osm_coastline(
             leave=verbose
     ) as pbar:        
         for line_layer in line_ds:
-            #utils.echo_msg(line_layer)
             line_type = line_layer.GetGeomType()
             ## feature is a line, polygonize water/land based on which side of
             ## the line each polygon falls...
@@ -121,7 +119,7 @@ def polygonize_osm_coastline(
                 line_geometries = gdalfun.ogr_union_geom(
                     line_layer,
                     ogr.wkbMultiLineString if line_type == 2 else ogr.wkbMultiPolygon,
-                    verbose=verbose
+                    verbose=False
                 )
                 if line_geometries.IsEmpty():
                     continue
@@ -130,40 +128,33 @@ def polygonize_osm_coastline(
                 poly_line = line_geometries.Buffer(line_buffer)
                 split_geoms = region_geom.Difference(poly_line)
                 for split_geom in split_geoms:
-                    #ss = []
-                    #[get_ss(point_n, split_geom) if split_geom.Intersects(line_geometry.Buffer(line_buffer)) else None for point_n in range(0, line_geometry.GetPointCount()) for line_geometry in line_geometries]
-                    ss = [get_ss(point_n, line_geometry, split_geom) \
-                          for line_geometry in line_geometries \
-                          for point_n in range(0, line_geometry.GetPointCount()) \
-                          if split_geom.Intersects(line_geometry.Buffer(line_buffer))]
-                    # for line_geometry in line_geometries:
-                    #     if split_geom.Intersects(line_geometry.Buffer(line_buffer)):
-                    #         point_count = line_geometry.GetPointCount()
-                    #         utils.echo_msg(point_count)
-                    #         for point_n in range(0, point_count-1):
-                    #             ss.append(get_ss(point_n, split_geom))
-                    #             # x_beg = line_geometry.GetX(point_n)
-                    #             # y_beg = line_geometry.GetY(point_n)
-                    #             # x_end = line_geometry.GetX(point_n+1)
-                    #             # y_end = line_geometry.GetY(point_n+1)
-                    #             # y_ext = y_end
-                    #             # x_ext = x_beg
-                    #             # xyz = xyzfun.XYZPoint(x=x_ext, y=y_ext)
-                    #             # xyz_wkt = xyz.export_as_wkt()
-                    #             # p_geom = ogr.CreateGeometryFromWkt(xyz_wkt)
-                    #             # if not p_geom.Within(split_geom):
-                    #             #     y_ext = y_beg
-                    #             #     x_ext = x_end
-                    #             #     xyz = xyzfun.XYZPoint(x=x_ext, y=y_ext)
-                    #             #     xyz_wkt = xyz.export_as_wkt()
-                    #             #     p_geom = ogr.CreateGeometryFromWkt(xyz_wkt)
+                    ss = []            
+                    for line_geometry in line_geometries:
+                        if split_geom.Intersects(line_geometry.Buffer(line_buffer)):
+                            point_count = line_geometry.GetPointCount()
+                            for point_n in range(0, point_count-1):
+                                x_beg = line_geometry.GetX(point_n)
+                                y_beg = line_geometry.GetY(point_n)
+                                x_end = line_geometry.GetX(point_n+1)
+                                y_end = line_geometry.GetY(point_n+1)
+                                y_ext = y_end
+                                x_ext = x_beg
+                                xyz = xyzfun.XYZPoint(x=x_ext, y=y_ext)
+                                xyz_wkt = xyz.export_as_wkt()
+                                p_geom = ogr.CreateGeometryFromWkt(xyz_wkt)
+                                if not p_geom.Within(split_geom):
+                                    y_ext = y_beg
+                                    x_ext = x_end
+                                    xyz = xyzfun.XYZPoint(x=x_ext, y=y_ext)
+                                    xyz_wkt = xyz.export_as_wkt()
+                                    p_geom = ogr.CreateGeometryFromWkt(xyz_wkt)
 
-                    #             # if p_geom.Within(split_geom):
-                    #             #     s = (x_end - x_beg)*(y_ext - y_beg) \
-                    #             #         > (y_end - y_beg)*(x_ext - x_beg)
-                    #             #     ss.append(s)
-                    #ss = ss[ss is not None]
-                    #utils.echo_msg(ss)
+                                else:
+                                    #if p_geom.Within(split_geom):
+                                    s = (x_end - x_beg)*(y_ext - y_beg) \
+                                        > (y_end - y_beg)*(x_ext - x_beg)
+                                    ss.append(s)
+
                     if all(ss):
                         s = True
                     elif not any(ss):
