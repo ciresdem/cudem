@@ -2146,7 +2146,8 @@ class ElevationDataset:
                 if self.fn not in fmts:
                     if not self.fn.startswith('http') \
                        and not self.fn.startswith('/vsicurl/') \
-                       and not self.fn.startswith('BAG'):
+                       and not self.fn.startswith('BAG') \
+                       and not ':' in self.fn:
                         if not utils.fn_url_p(self.fn):
                             if self.data_format > -10:
                                 if not os.path.exists(self.fn):
@@ -3437,28 +3438,28 @@ class ElevationDataset:
                 stacked_data[key][stacked_data[key] == ndv] = np.nan
 
             stacked_data['weights'][stacked_data['weights'] == 0] = 1
-            if mode != 'supercede':
-                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                if mode == 'mean' or mode == 'mixed':
-                    ## average the accumulated arrays for finalization
-                    ## x, y, z and u are weighted sums, so divide by weights
-                    stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) \
-                        / stacked_data['count']
-                    stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) \
-                        / stacked_data['count']
-                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) \
-                        / stacked_data['count']
-                        
-                ## apply the source uncertainty with the sub-cell variance uncertainty
-                ## caclulate the standard error (sqrt( uncertainty / count))
-                stacked_data['uncertainty'] = np.sqrt(
-                    (stacked_data['uncertainty'] / stacked_data['weights']) \
-                    / stacked_data['count']
-                )
-                stacked_data['uncertainty'] = np.sqrt(
-                    np.power(stacked_data['src_uncertainty'], 2) \
-                    + np.power(stacked_data['uncertainty'], 2)
-                )
+            #if mode != 'supercede':
+            stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+            #if mode == 'mean' or mode == 'mixed':
+            ## average the accumulated arrays for finalization
+            ## x, y, z and u are weighted sums, so divide by weights
+            stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) \
+                / stacked_data['count']
+            stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) \
+                / stacked_data['count']
+            stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) \
+                / stacked_data['count']
+
+            ## apply the source uncertainty with the sub-cell variance uncertainty
+            ## caclulate the standard error (sqrt( uncertainty / count))
+            stacked_data['uncertainty'] = np.sqrt(
+                (stacked_data['uncertainty'] / stacked_data['weights']) \
+                / stacked_data['count']
+            )
+            stacked_data['uncertainty'] = np.sqrt(
+                np.power(stacked_data['src_uncertainty'], 2) \
+                + np.power(stacked_data['uncertainty'], 2)
+            )
 
             ## write out final rasters
             for key in stack_keys:
@@ -3678,12 +3679,6 @@ class ElevationDataset:
             )
         else:
             mask_level = 0
-
-        if self.verbose:
-            utils.echo_msg(
-                (f'stacking using {self.stack_mode_name} '
-                 f'with {self.stack_mode_args}')
-            )
         
         ## initialize the output rasters
         if out_name is None:
@@ -3711,6 +3706,13 @@ class ElevationDataset:
             )
             sys.exit(-1)
 
+        if self.verbose:
+            utils.echo_msg(
+                (f'stacking using {self.stack_mode_name} '
+                 f'with {self.stack_mode_args} '
+                 f'to {out_file}')
+            )
+            
         lon_start = dst_gt[0] + (dst_gt[1] / 2)
         lat_start = dst_gt[3] + (dst_gt[5] / 2)
         lon_end = dst_gt[0] + (dst_gt[1] * xcount)
@@ -3970,13 +3972,13 @@ class ElevationDataset:
                 ## supercede based on weights, else do weighted mean
                 ## todo: do (weighted) mean on cells with same weight
                 if mode == 'supercede':
-                    tmp_stacked_weight = sums_data['weight']
+                    tmp_stacked_weight = sums_data['weights'] / sums_data['count']
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
 
                     sums_data['count'][(sup_mask)] = arrs['count'][(sup_mask)]
                     sums_data['z'][(sup_mask)] = arrs['z'][(sup_mask)]
-                    sums_data['weight'][(sup_mask)] = arrs['weight'][(sup_mask)]
+                    sums_data['weights'][(sup_mask)] = arrs['weight'][(sup_mask)]
                     sums_data['x'][(sup_mask)] = arrs['x'][(sup_mask)]
                     sums_data['y'][(sup_mask)] = arrs['y'][(sup_mask)]
                     sums_data['src_uncertainty'][(sup_mask)] = arrs['uncertainty'][(sup_mask)]
@@ -4013,8 +4015,8 @@ class ElevationDataset:
 
                         key_dset_arr = mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
                                                      srcwin[0]:srcwin[0]+srcwin[2]]
-                        if weight_above_sup is None:
-                            weight_above_sup = ~np.isnan(key_dset_arr)
+                        #if weight_above_sup is None:
+                        weight_above_sup = ~np.isnan(key_dset_arr)
 
                         key_dset_mask = key_dset_arr[weight_above_sup] == 1
                         if np.any(key_dset_mask):
@@ -4345,43 +4347,57 @@ class ElevationDataset:
 
         for key in sums_grp.keys():
             sums_data[key] = sums_grp[key][...]
-            sums_data[key][sums_data[key] == ndv] = np.nan
+            #sums_data[key][sums_data[key] == ndv] = np.nan
                 
         for key in stack_grp.keys():
             stacked_data[key] = stack_grp[key][...]
-            stacked_data[key][stacked_data[key] == ndv] = np.nan
+            #stacked_data[key][stacked_data[key] == ndv] = np.nan
 
         #utils.echo_msg(sums_data['count'])
         #if mode == 'mean' or mode == 'min' or mode == 'max' or mode == 'mixed':
-        if mode != 'supercede':
-            stacked_data['weights'] = sums_data['weights'] \
-                / sums_data['count']
-            if mode == 'mean' or mode == 'mixed':
-                ## average the accumulated arrays for finalization
-                ## x, y, z and u are weighted sums, so divide by weights
-                stacked_data['x'] = (sums_data['x'] / sums_data['weights']) \
-                    / sums_data['count']
-                stacked_data['y'] = (sums_data['y'] / sums_data['weights']) \
-                    / sums_data['count']
-                stacked_data['z'] = (sums_data['z'] / sums_data['weights']) \
-                    / sums_data['count']
+        #if mode != 'supercede':
+        stacked_data['weights'] = sums_data['weights'] \
+            / sums_data['count']
+        #if mode == 'mean' or mode == 'mixed':
+        ## average the accumulated arrays for finalization
+        ## x, y, z and u are weighted sums, so divide by weights
+        stacked_data['x'] = (sums_data['x'] / sums_data['weights']) \
+            / sums_data['count']
+        stacked_data['y'] = (sums_data['y'] / sums_data['weights']) \
+            / sums_data['count']
+        stacked_data['z'] = (sums_data['z'] / sums_data['weights']) \
+            / sums_data['count']
 
-            ## apply the source uncertainty with the sub-cell variance uncertainty
-            ## caclulate the standard error (sqrt( uncertainty / count))
-            stacked_data['uncertainty'] \
-                = np.sqrt((sums_data['uncertainty'] / sums_data['weights']) \
-                          / sums_data['count'])
-            stacked_data['uncertainty'] \
-                = np.sqrt(np.power(sums_data['src_uncertainty'], 2) \
-                          + np.power(sums_data['uncertainty'], 2))
+        ## apply the source uncertainty with the sub-cell variance uncertainty
+        ## caclulate the standard error (sqrt( uncertainty / count))
+        stacked_data['uncertainty'] \
+            = np.sqrt((sums_data['uncertainty'] / sums_data['weights']) \
+                      / sums_data['count'])
+        stacked_data['uncertainty'] \
+            = np.sqrt(np.power(sums_data['src_uncertainty'], 2) \
+                      + np.power(sums_data['uncertainty'], 2))
+        # else:
+        #     ## supercede
+        #     stacked_data['x'] = (sums_data['x'] / sums_data['count'])
+        #     stacked_data['y'] = (sums_data['y'] / sums_data['count'])
+        #     stacked_data['z'] = (sums_data['z'] / sums_data['count'])
 
+        #     ## apply the source uncertainty with the sub-cell variance uncertainty
+        #     ## caclulate the standard error (sqrt( uncertainty / count))
+        #     stacked_data['uncertainty'] \
+        #         = np.sqrt(sums_data['uncertainty'] / sums_data['count'])
+        #     stacked_data['uncertainty'] \
+        #         = np.sqrt(np.power(sums_data['src_uncertainty'], 2) \
+        #                   + np.power(sums_data['uncertainty'], 2))
+            
+            
         ## write out final rasters
         for key in stack_grp.keys():
-            stacked_data[key][np.isnan(stacked_data[key])] = np.nan
+            #stacked_data[key][np.isnan(stacked_data[key])] = np.nan
             stack_grp[key][:] = stacked_data[key]
 
         for key in sums_grp.keys():
-            sums_data[key][np.isnan(sums_data[key])] = np.nan
+            #sums_data[key][np.isnan(sums_data[key])] = np.nan
             sums_grp[key][:] = sums_data[key]
 
         stack_ds.close()                        
@@ -4766,9 +4782,9 @@ class ElevationDataset:
             try:
                 points_w = points['w']
             except:
-                points_w = np.ones(points['z'].shape)
+                points_w = np.ones(points['z'].shape).astype(float)
 
-            points_w *= self.weight if self.weight is not None else 1
+            points_w *= self.weight if self.weight is not None else 1.
             points_w[np.isnan(points_w)] = 1
                 
             try:
@@ -5068,6 +5084,7 @@ class ElevationDataset:
 
             sw = sds_stack['weights'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
             su = sds_stack['uncertainty'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            sc = sds_stack['count'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
 
             sx = sds_stack['x'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
             sy = sds_stack['y'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
@@ -7211,7 +7228,6 @@ class SWOT_HR_Raster(ElevationDataset):
         src_ds = gdal.Open(self.fn)
         if src_ds is not None:
             sub_datasets = src_ds.GetSubDatasets()
-
             idx = 2
             if utils.int_or(self.data_set) is not None:
                 idx = utils.int_or(self.data_set)
@@ -7415,7 +7431,7 @@ class IceSat2File(ElevationDataset):
                  classes=None,
                  confidence_levels='2/3/4',
                  columns={},
-                 classify_bathymetry=True,
+                 classify_bathymetry=False,
                  classify_buildings=True,
                  classify_inland_water=True,
                  reject_failed_qa=True,
@@ -9084,8 +9100,8 @@ class OGRFile(ElevationDataset):
                         #[x.append(unc if unc is not None else 0) for x in xyzs]
                         
                         for x in xyzs:
-                            x.append(weight if weight is not None else 1)
-                            x.append(unc if unc is not None else 0)
+                            x.append(weight if weight is not None else 1.)
+                            x.append(unc if unc is not None else 0.)
                             
                         points = np.rec.fromrecords(
                             xyzs, names='x, y, z, w, u'
@@ -9861,13 +9877,14 @@ class Fetcher(ElevationDataset):
 
 
     def _sub_init(self):
-        try:
-            self.fetch_module.run()
-        except Exception as e:
-            utils.echo_warning_msg(
-                f'fetch module {self.fn} returned zero results, {e}'
-            )
-            self.fetch_module.results = []
+        if len(self.fetch_module.results) == 0:
+            try:
+                self.fetch_module.run()
+            except Exception as e:
+                utils.echo_warning_msg(
+                    f'fetch module {self.fn} returned zero results, {e}'
+                )
+                self.fetch_module.results = []
         
     def init_fetch_module(self):
         self.fetch_module = fetches.fetches_factory.FetchesFactory(
@@ -10284,7 +10301,7 @@ class SWOTFetcher(Fetcher):
         self.fetches_params['apply_geoid'] = apply_geoid
         self.fetches_params['classes'] = classes
         self.fetches_params['anc_classes'] = anc_classes
-        self.fetches_params['classes_qual'] = clases_qual
+        self.fetches_params['classes_qual'] = classes_qual
         self.fetches_params['remove_class_flags'] = remove_class_flags
 
         
@@ -10314,10 +10331,10 @@ class SWOTFetcher(Fetcher):
             #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
             #swot_pixc_vec_fn = pixc_vec_result
             self.fetches_params['data_format'] = 202
-            yield(DatasetFactory(**self.fetches_params).acquire_module())
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
         elif 'L2_HR_Raster' in result['data_type']:
-            self.fetch_module['data_format'] = 203
-            yield(DatasetFactory(**self.fetches_params).acquire_module())
+            self.fetches_params['data_format'] = 203
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
         else:
             utils.echo_warning_msg(
                 (f'{result["data_type"]} is not a currently supported '
