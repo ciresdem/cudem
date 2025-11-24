@@ -134,6 +134,7 @@ from cudem import grits
 from cudem import vrbag
 from cudem import srsfun
 from cudem import pointz
+from cudem.datalists import inf
 
 #from cudem.fetches import fetches
 
@@ -1112,7 +1113,7 @@ class ElevationDataset:
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
 
-        self.infos = INF(
+        self.infos = inf.INF(
             name=self.fn, file_hash='0', numpts=0, fmt=self.data_format
         ) # infos blob
 
