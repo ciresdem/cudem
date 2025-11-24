@@ -495,15 +495,15 @@ class Fetch:
         results = lxml.etree.fromstring(
             '<?xml version="1.0"?><!DOCTYPE _[<!ELEMENT _ EMPTY>]><_/>'.encode('utf-8')
         )
-        try:
-            req = self.fetch_req(
-                timeout=timeout, read_timeout=read_timeout, headers=self.headers
-            )
-            results = lxml.etree.fromstring(req.text.encode('utf-8'))
-        except:
-            utils.echo_error_msg(
-                f'could not access {self.url}'
-            )
+        #try:
+        req = self.fetch_req(
+            timeout=timeout, read_timeout=read_timeout#, headers=self.headers
+        )
+        results = lxml.etree.fromstring(req.text.encode('utf-8'))
+        #except:
+        #    utils.echo_error_msg(
+        #        f'could not access {self.url}'
+        #    )
         return(results)
 
     

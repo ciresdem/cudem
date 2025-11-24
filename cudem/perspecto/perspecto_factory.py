@@ -119,7 +119,8 @@ def perspecto_cli(argv = sys.argv):
             max_z = utils.float_or(argv[i + 1])
             i += 1
         elif arg == '--split-cpt' or arg == '-Z':
-            split_cpt = 0
+            split_cpt = utils.float_or(argv[i + 1])
+            i += 1
         
         elif arg == '--modules' or arg == '-m':
             factory.echo_modules(

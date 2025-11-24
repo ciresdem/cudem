@@ -38,6 +38,7 @@ from . import vdatums
 from . import fetches
 from . import grits
 from . import vrbag
+from . import pointz
 from . import waffles
 from . import dlim
 #from . import datalists

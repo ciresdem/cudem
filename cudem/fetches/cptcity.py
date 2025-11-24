@@ -52,6 +52,7 @@ class CPTCity(fetches.FetchModule):
         """Run the cpt-city fetches module"""
         
         cpt_xml = fetches.iso_xml(self.cpt_pkg_url + "package.xml")
+        print(cpt_xml)
         cpt_url_bn = cpt_xml.xml_doc.find('cpt').text
         cpt_zip = requests.get(self.cpt_pkg_url + cpt_url_bn)
         zip_ref = zipfile.ZipFile(BytesIO(cpt_zip.content))
