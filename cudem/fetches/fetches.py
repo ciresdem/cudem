@@ -1081,5 +1081,82 @@ class FetchModule:
             entry[key] = kwargs[key]
 
         self.results.append(entry)             
+
+
+## Default http fetches
+class HttpDataset(FetchModule):
+    """fetch an http file"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def run(self):
+        self.add_entry_to_results(
+            self.params['mod'],
+            os.path.basename(self.params['mod']),
+            'https'
+        )
+
+        
+## TESTING MODULES
+class Nominatim(FetchModule):
+    def __init__(self, q='boulder', **kwargs):
+        super().__init__(name='nominatim', **kwargs)
+        self.q = q
+        self._nom_url = 'https://nominatim.openstreetmap.org/search?'
+        self.headers = {
+            'User-Agent': ('Fetches/CUDEM'),
+            'referer': 'https://nominatim.openstreetmap.org/ui/search.html?q=seattle'
+        }
+
+    def run(self):
+        if utils.str_or(self.q) is not None:
+            q_url = f'{self._nom_url}q={self.q}&format=jsonv2'
+
+        _req = fetches.Fetch(
+            q_url,
+            verbose=self.verbose
+        ).fetch_req()
+        if _req is not None:
+            results = _req.json()
+            x = utils.float_or(results["lon"])
+            y = utils.float_or(results["lat"])
+            print(f'{x}, {y}')
+
+            
+class GPSCoordinates(FetchModule):
+    """GPS Coordinates
+
+    Fetch various coordinates for places
+    """
+    
+    def __init__(self, q = 'boulder', **kwargs):
+        super().__init__(name='gps_coordinates', **kwargs)
+        self.q = q
+
+        ## The various gps-coordinates URLs
+        self.gpsc_api_url = "http://www.gps-coordinates.net/api/"
+        self.gpsc_web_url = "http://www.gps-coordinates.net/id/"
+
+        
+    def run(self):
+        """Run the gps-coordiantes fetches module"""
+
+        if utils.str_or(self.q) is not None:
+            q_url = f'{self.gpsc_api_url}{self.q}'
+            qw_url = f'{self.gpsc_web_url}{self.q}'
+
+        _req = fetches.Fetch(
+            q_url,
+            verbose=self.verbose
+        ).fetch_req()
+        if _req is not None:
+            results = _req.json()
+            if results["responseCode"] == '200':
+                x = utils.float_or(results["longitude"])
+                y = utils.float_or(results["latitude"])
+                print(f'{x}, {y}')
+            else:
+                print(results)
         
 ### End

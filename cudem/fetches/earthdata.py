@@ -529,9 +529,9 @@ class IceSat2(EarthData):
             atl08_v06_id = 'C2613553260-NSIDC_CPRD'
             atl03_v06_id = 'C2596864127-NSIDC_CPRD'
             atl03_v07_id = 'C3326974349-NSIDC_CPRD'
-            if version == '007':
+            if version == '007' and short_name.lower() == 'atl03':
                 short_name = atl03_v07_id
-            elif version == '006':
+            elif version == '006' and short_name.lower() == 'atl03':
                 short_name = atl03_v06_id
                 
         super().__init__(short_name=short_name, subset=subset, version=version, **kwargs)

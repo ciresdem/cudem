@@ -37,6 +37,7 @@ from cudem.grits import lspoutliers
 from cudem.grits import weights
 from cudem.grits import flats
 
+#__version__ = "0.5.0"
 class GritsFactory(factory.CUDEMFactory):
     """Grits Factory Settings and Generator
     
@@ -214,7 +215,7 @@ def grits_cli(argv = sys.argv):
             sys.stderr.write(grits_cli_usage)
             sys.exit(0)
         elif arg == '--version' or arg == '-v':
-            sys.stdout.write('{}\n'.format(cudem.__version__))
+            sys.stdout.write('{}\n'.format(grits.__version__))
             sys.exit(0)
         elif arg[0] == '-':
             sys.stdout.write(grits_cli_usage)

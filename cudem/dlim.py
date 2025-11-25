@@ -134,8 +134,7 @@ from cudem import grits
 from cudem import vrbag
 from cudem import srsfun
 from cudem import pointz
-from cudem.datalists import inf
-
+#from cudem import datalists_factory
 #from cudem.fetches import fetches
 
 # cshelph
@@ -1113,7 +1112,7 @@ class ElevationDataset:
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
 
-        self.infos = inf.INF(
+        self.infos = INF(
             name=self.fn, file_hash='0', numpts=0, fmt=self.data_format
         ) # infos blob
 
@@ -3214,10 +3213,10 @@ class ElevationDataset:
                               srcwin[0]:srcwin[0]+srcwin[2]][arrs['count'] != 0] = 1
 
                 ## update the dataset
-                if ds_dset is not None:
-                    for key in datasets_data.keys():                        
-                        datasets_dset_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
-                                               srcwin[0]:srcwin[0]+srcwin[2]] = arrs[key]
+                #if ds_dset is not None:
+                # for key in datasets_data.keys():                        
+                #     datasets_dset_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                #                            srcwin[0]:srcwin[0]+srcwin[2]] = arrs[key]
                                         
                 ## Read the saved accumulated rasters at the incoming srcwin
                 ## and set ndv to zero
@@ -3266,6 +3265,23 @@ class ElevationDataset:
                     sums_data['uncertainty'][(sup_mask)] \
                         = np.array(sums_data['src_uncertainty'])[(sup_mask)]
                                    
+                    # ## higher weight supercedes lower weight (first come first served atm)
+                    # sums_data['z'][arrs['weight'] > sums_data['weights']] \
+                    #     = arrs['z'][arrs['weight'] > sums_data['weights']]
+                    # sums_data['x'][arrs['weight'] > sums_data['weights']] \
+                    #     = arrs['x'][arrs['weight'] > sums_data['weights']]
+                    # sums_data['y'][arrs['weight'] > sums_data['weights']] \
+                    #     = arrs['y'][arrs['weight'] > sums_data['weights']]
+                    # sums_data['src_uncertainty'][arrs['weight'] > sums_data['weights']] \
+                    #     = arrs['uncertainty'][arrs['weight'] > sums_data['weights']]
+                    # sums_data['weights'][arrs['weight'] > sums_data['weights']] \
+                    #     = arrs['weight'][arrs['weight'] > sums_data['weights']]
+                    # ## uncertainty is src_uncertainty, as only one point goes into a cell
+                    # sums_data['uncertainty'][:] = np.array(sums_data['src_uncertainty'])
+
+                    # #sup_mask = arrs['weight'] > (sums_data['weights'] / sums_data['count'])
+                    
+                    #if self.want_mask:
                     k = []
                     mask_grp.visit(
                         lambda x: k.append(x) if not isinstance(
@@ -3516,6 +3532,80 @@ class ElevationDataset:
 
                     sums_data = average(weight_below, sums_data, arrs)
                     
+                    # sums_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
+                    # sums_data['z'][weight_above_sup] = (arrs['z'][weight_above_sup] \
+                    #                                        * arrs['weight'][weight_above_sup])
+                    # sums_data['x'][weight_above_sup] = (arrs['x'][weight_above_sup] \
+                    #                                        * arrs['weight'][weight_above_sup])
+                    # sums_data['y'][weight_above_sup] = (arrs['y'][weight_above_sup] \
+                    #                                        * arrs['weight'][weight_above_sup])
+                    # sums_data['src_uncertainty'][weight_above_sup] \
+                    #     = arrs['uncertainty'][weight_above_sup]
+                    # sums_data['weights'][weight_above_sup] = arrs['weight'][weight_above_sup]
+                    # sums_data['uncertainty'][weight_above_sup] \
+                    #     = np.array(sums_data['src_uncertainty'][weight_above_sup])
+                    
+                    # tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                    # tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                        
+                    # # average of incoming data with existing data above weight_threshold
+                    # weight_above = (arrs['weight'] >= wt) \
+                    #     & (arrs['weight'] >= tmp_stacked_weight) \
+                    #     & (~weight_above_sup)
+                    # # if self.want_mask:                        
+                    # #     m_array[(weight_above) & (arrs['count'] != 0)] = 1
+                    # #     m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
+                        
+                    # sums_data['count'][weight_above] += arrs['count'][weight_above]
+                    # sums_data['z'][weight_above] \
+                    #     += (arrs['z'][weight_above] * arrs['weight'][weight_above])
+                    # sums_data['x'][weight_above] \
+                    #     += (arrs['x'][weight_above] * arrs['weight'][weight_above])
+                    # sums_data['y'][weight_above] \
+                    #     += (arrs['y'][weight_above] * arrs['weight'][weight_above])
+                    # sums_data['src_uncertainty'][weight_above] \
+                    #     = np.sqrt(np.power(sums_data['src_uncertainty'][weight_above], 2) \
+                    #               + np.power(arrs['uncertainty'][weight_above], 2))
+                    # sums_data['weights'][weight_above] += arrs['weight'][weight_above]
+                    # ## accumulate variance * weight
+                    # sums_data['uncertainty'][weight_above] \
+                    #     += arrs['weight'][weight_above] \
+                    #     * np.power(
+                    #         (arrs['z'][weight_above] \
+                    #          - (sums_data['z'][weight_above] \
+                    #             / sums_data['weights'][weight_above])),
+                    #         2
+                    #     )
+                    
+                    # # below
+                    # tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                    # tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    # weight_below = (arrs['weight'] < wt) & (tmp_stacked_weight < wt)
+                    # #& (arrs['weight'] >= tmp_stacked_weight)
+                    # # if self.want_mask:
+                    # #     m_array[(weight_below) & (arrs['count'] != 0)] = 1
+                    # #     m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
+                        
+                    # sums_data['count'][weight_below] += arrs['count'][weight_below]
+                    # sums_data['z'][weight_below] \
+                    #     += (arrs['z'][weight_below] * arrs['weight'][weight_below])
+                    # sums_data['x'][weight_below] \
+                    #     += (arrs['x'][weight_below] * arrs['weight'][weight_below])
+                    # sums_data['y'][weight_below] \
+                    #     += (arrs['y'][weight_below] * arrs['weight'][weight_below])
+                    # sums_data['src_uncertainty'][weight_below] \
+                    #     = np.sqrt(np.power(sums_data['src_uncertainty'][weight_below], 2) \
+                    #               + np.power(arrs['uncertainty'][weight_below], 2))
+                    # sums_data['weights'][weight_below] += arrs['weight'][weight_below]
+                    # ## accumulate variance * weight
+                    # sums_data['uncertainty'][weight_below] += arrs['weight'][weight_below] \
+                    #     * np.power(
+                    #         (arrs['z'][weight_below] \
+                    #          - (sums_data['z'][weight_below] \
+                    #             / sums_data['weights'][weight_below])),
+                    #         2
+                    #     )               
+                    
                 ## write out results to accumulated rasters
                 sums_data['count'][sums_data['count'] == 0] = np.nan
                 for key in sums_grp.keys():
@@ -3568,7 +3658,21 @@ class ElevationDataset:
                       / sums_data['count'])
         stacked_data['uncertainty'] \
             = np.sqrt(np.power(sums_data['src_uncertainty'], 2) \
-                      + np.power(sums_data['uncertainty'], 2))            
+                      + np.power(sums_data['uncertainty'], 2))
+        # else:
+        #     ## supercede
+        #     stacked_data['x'] = (sums_data['x'] / sums_data['count'])
+        #     stacked_data['y'] = (sums_data['y'] / sums_data['count'])
+        #     stacked_data['z'] = (sums_data['z'] / sums_data['count'])
+
+        #     ## apply the source uncertainty with the sub-cell variance uncertainty
+        #     ## caclulate the standard error (sqrt( uncertainty / count))
+        #     stacked_data['uncertainty'] \
+        #         = np.sqrt(sums_data['uncertainty'] / sums_data['count'])
+        #     stacked_data['uncertainty'] \
+        #         = np.sqrt(np.power(sums_data['src_uncertainty'], 2) \
+        #                   + np.power(sums_data['uncertainty'], 2))
+            
             
         ## write out final rasters
         for key in stack_grp.keys():
@@ -4027,8 +4131,7 @@ class ElevationDataset:
             )
             yield(
                 point_array(
-                    points, weight=self.weight, uncertainty=self.uncertainty, mode='sums'
-                )
+                    points, weight=self.weight, uncertainty=self.uncertainty, mode='sums')
             )
 
         if self.verbose:
