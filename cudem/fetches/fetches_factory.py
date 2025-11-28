@@ -31,8 +31,8 @@ import os, sys
 from cudem import utils
 from cudem import regions
 from cudem import factory
-from cudem import fetches
-#from cudem.fetches import *
+from cudem.fetches import fetches
+from cudem.fetches import __version__
 
 ## Fetches Module Parser
 class FetchesFactory(factory.CUDEMFactory):
@@ -40,62 +40,104 @@ class FetchesFactory(factory.CUDEMFactory):
     expose it in the  CLI or API via FetchesFactory.
     
     Use the Factory in python by calling: FetchesFactory()"""
+
+    from . import gmrt
+    from . import margrav
+    from . import srtmplus
+    from . import synbath
+    from . import charts
+    from . import dav
+    from . import multibeam
+    from . import gebco
+    from . import gedtm30
+    from . import mgds
+    from . import trackline
+    from . import ehydro
+    from . import ngs
+    from . import hydronos
+    from . import nceithredds
+    from . import etopo
+    from . import tnm
+    from . import emodnet
+    from . import chs
+    from . import hrdem
+    from . import mrdem
+    from . import arcticdem
+    from . import bluetopo
+    from . import osm
+    from . import copernicus
+    from . import fabdem
+    from . import nasadem
+    from . import tides
+    from . import vdatum
+    from . import buoys
+    from . import earthdata
+    from . import usiei
+    from . import wsf
+    from . import hydrolakes
+    from . import bingbfp
+    from . import waterservices
+    from . import csb
+    from . import cptcity
+    from . import wadnr
+    from . import nswtb
+    from . import cdse
     
     _modules = {
-        'https': {'call': fetches.fetches.HttpDataset},
-        'gmrt': {'call': fetches.gmrt.GMRT},
-        'mar_grav': {'call': fetches.margrav.MarGrav},
-        'srtm_plus': {'call': fetches.srtmplus.SRTMPlus},
-        'synbath': {'call': fetches.synbath.SynBath},
-        'charts': {'call': fetches.charts.NauticalCharts},
-	    'digital_coast': {'call': fetches.dav.DAV},
-        'SLR': {'call': fetches.dav.SLR},
-        'CoNED': {'call': fetches.dav.CoNED},
-        'CUDEM': {'call': fetches.dav.CUDEM},
-        'multibeam': {'call': fetches.multibeam.Multibeam}, 
-        'mbdb': {'call': fetches.multibeam.MBDB},
-        'r2r': {'call': fetches.multibeam.R2R},
-        'gebco': {'call': fetches.gebco.GEBCO},
-        'gedtm30': {'call': fetches.gedtm30.GEDTM30},
-        'mgds': {'call': fetches.mgds.MGDS},
-        'trackline': {'call': fetches.trackline.Trackline},
-        'ehydro': {'call': fetches.ehydro.eHydro},
-        'ngs': {'call': fetches.ngs.NGS},
-        'hydronos': {'call': fetches.hydronos.HydroNOS},
-        'ncei_thredds': {'call': fetches.nceithredds.NCEIThreddsCatalog},
-        'etopo': {'call': fetches.etopo.ETOPO},
-        'tnm': {'call': fetches.tnm.TheNationalMap},
-        'ned': {'call': fetches.tnm.NED},
-        'ned1': {'call': fetches.tnm.NED1},
-        'tnm_laz': {'call': fetches.tnm.TNM_LAZ},
-        'emodnet': {'call': fetches.emodnet.EMODNet},
-        'chs': {'call': fetches.chs.CHS},
-        'hrdem': {'call': fetches.hrdem.HRDEM},
-        'mrdem': {'call': fetches.mrdem.MRDEM},
-        'arcticdem': {'call': fetches.arcticdem.ArcticDEM},
-        'bluetopo': {'call': fetches.bluetopo.BlueTopo},
-        'osm': {'call': fetches.osm.OpenStreetMap},
-        'copernicus': {'call': fetches.copernicus.CopernicusDEM},
-        'fabdem': {'call': fetches.fabdem.FABDEM},
-        'nasadem': {'call': fetches.nasadem.NASADEM},
-        'tides': {'call': fetches.tides.Tides},
-        'vdatum': {'call': fetches.vdatum.VDATUM},
-        'buoys': {'call': fetches.buoys.BUOYS},
-        'earthdata': {'call': fetches.earthdata.EarthData},
-        'icesat2': {'call': fetches.earthdata.IceSat2},
-        'mur_sst': {'call': fetches.earthdata.MUR_SST},
-        'swot': {'call': fetches.earthdata.SWOT},
-        'usiei': {'call': fetches.usiei.USIEI},
-        'wsf': {'call': fetches.wsf.WSF},
-        'hydrolakes': {'call': fetches.hydrolakes.HydroLakes},
-        'bing_bfp': {'call': fetches.bingbfp.BingBFP},
-        'waterservices': {'call': fetches.waterservices.WaterServices},
-        'csb': {'call': fetches.csb.CSB},
-        'cpt_city': {'call': fetches.cptcity.CPTCity},
-        'gps_coordinates': {'call': fetches.fetches.GPSCoordinates},
-        'wa_dnr': {'call': fetches.wadnr.waDNR},
-        'nsw_tb': {'call': fetches.nswtb.NSW_TB},
-        'sentinel2': {'call': fetches.cdse.Sentinel2},
+        'https': {'call': fetches.HttpDataset},
+        'gmrt': {'call': gmrt.GMRT},
+        'mar_grav': {'call': margrav.MarGrav},
+        'srtm_plus': {'call': srtmplus.SRTMPlus},
+        'synbath': {'call': synbath.SynBath},
+        'charts': {'call': charts.NauticalCharts},
+	    'digital_coast': {'call': dav.DAV},
+        'SLR': {'call': dav.SLR},
+        'CoNED': {'call': dav.CoNED},
+        'CUDEM': {'call': dav.CUDEM},
+        'multibeam': {'call': multibeam.Multibeam}, 
+        'mbdb': {'call': multibeam.MBDB},
+        'r2r': {'call': multibeam.R2R},
+        'gebco': {'call': gebco.GEBCO},
+        'gedtm30': {'call': gedtm30.GEDTM30},
+        'mgds': {'call': mgds.MGDS},
+        'trackline': {'call': trackline.Trackline},
+        'ehydro': {'call': ehydro.eHydro},
+        'ngs': {'call': ngs.NGS},
+        'hydronos': {'call': hydronos.HydroNOS},
+        'ncei_thredds': {'call': nceithredds.NCEIThreddsCatalog},
+        'etopo': {'call': etopo.ETOPO},
+        'tnm': {'call': tnm.TheNationalMap},
+        'ned': {'call': tnm.NED},
+        'ned1': {'call': tnm.NED1},
+        'tnm_laz': {'call': tnm.TNM_LAZ},
+        'emodnet': {'call': emodnet.EMODNet},
+        'chs': {'call': chs.CHS},
+        'hrdem': {'call': hrdem.HRDEM},
+        'mrdem': {'call': mrdem.MRDEM},
+        'arcticdem': {'call': arcticdem.ArcticDEM},
+        'bluetopo': {'call': bluetopo.BlueTopo},
+        'osm': {'call': osm.OpenStreetMap},
+        'copernicus': {'call': copernicus.CopernicusDEM},
+        'fabdem': {'call': fabdem.FABDEM},
+        'nasadem': {'call': nasadem.NASADEM},
+        'tides': {'call': tides.Tides},
+        'vdatum': {'call': vdatum.VDATUM},
+        'buoys': {'call': buoys.BUOYS},
+        'earthdata': {'call': earthdata.EarthData},
+        'icesat2': {'call': earthdata.IceSat2},
+        'mur_sst': {'call': earthdata.MUR_SST},
+        'swot': {'call': earthdata.SWOT},
+        'usiei': {'call': usiei.USIEI},
+        'wsf': {'call': wsf.WSF},
+        'hydrolakes': {'call': hydrolakes.HydroLakes},
+        'bing_bfp': {'call': bingbfp.BingBFP},
+        'waterservices': {'call': waterservices.WaterServices},
+        'csb': {'call': csb.CSB},
+        'cpt_city': {'call': cptcity.CPTCity},
+        'gps_coordinates': {'call': fetches.GPSCoordinates},
+        'wa_dnr': {'call': wadnr.waDNR},
+        'nsw_tb': {'call': nswtb.NSW_TB},
+        'sentinel2': {'call': cdse.Sentinel2},
     }
 
     
@@ -134,7 +176,7 @@ Options:
 Supported FETCHES modules (see fetches --modules <module-name> for more info): 
   {f_formats}
 """.format(cmd=os.path.basename(sys.argv[0]), 
-           version=fetches.__version__,
+           version=__version__,
            f_formats=utils._cudem_module_short_desc(FetchesFactory._modules))
 
 def fetches_cli(argv = sys.argv):
@@ -184,7 +226,7 @@ See `fetches_cli_usage` for full cli options.
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
             print('{}, version {}'.format(
-                os.path.basename(sys.argv[0]), fetches.__version__)
+                os.path.basename(sys.argv[0]), __version__)
                   )
             sys.exit(1)
         elif arg == '--modules' or arg == '-m':

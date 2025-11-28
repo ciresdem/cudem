@@ -1,6 +1,6 @@
 [project]
 name = 'cudem'
-version = '2.6.0'
+version = '2.6.1'
 dependencies = [
 	     'numpy', # all
              'scipy', # waffles/convex hulls
@@ -36,13 +36,13 @@ classifiers = [
 #[project.entry-points."cudem"]
 [project.scripts]
 regions = 'cudem.regions:regions_cli'
-#dlim = 'cudem.datalists.datalists_factory:datalists_cli'
-dlim = 'cudem.dlim:datalists_cli'
+dlim = 'cudem.datalists.dlim:datalists_cli'
+#dlim = 'cudem.dlim:datalists_cli'
 waffles = 'cudem.waffles:waffles_cli'
-fetches = 'cudem.fetches.fetches_factory:fetches_cli'
+fetches = 'cudem.fetches.fetches:fetches_cli'
 vdatums = 'cudem.vdatums:vdatums_cli'
-perspecto = 'cudem.perspecto.perspecto_factory:perspecto_cli'
-grits = 'cudem.grits.grits_factory:grits_cli'
+perspecto = 'cudem.perspecto.perspecto:perspecto_cli'
+grits = 'cudem.grits.grits:grits_cli'
 
 #[tools.setuptools.packages.find]
 #where=['cudem']

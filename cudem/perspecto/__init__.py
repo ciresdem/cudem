@@ -32,6 +32,6 @@ from . import povray
 from . import sphere
 from . import perspective
 from . import figure1
-from . import perspecto_factory
+#from . import perspecto_factory
 
 ### End

@@ -83,7 +83,9 @@ from osgeo import ogr
 from osgeo import osr
 
 import cudem
-from cudem import dlim
+from cudem.datalists import dlim
+from cudem.datalists import xyzfile
+from cudem import pointz
 from cudem import regions
 from cudem import utils
 from cudem import xyzfun
@@ -91,7 +93,7 @@ from cudem import gdalfun
 from cudem import vdatums
 from cudem import factory
 from cudem import fetches
-from cudem import grits
+from cudem.grits import grits
 from cudem import srsfun
 
 ## Data cache directory, hold temp data, fetch data, etc here.
@@ -339,14 +341,14 @@ class Waffle:
         point_fltr=[]
         if isinstance(self.fltr, list):
             for f in self.fltr:
-                if f.split(':')[0] in grits.grits_factory.GritsFactory._modules.keys():
-                    grits_filter = grits.grits_factory.GritsFactory(mod=f)._acquire_module()
+                if f.split(':')[0] in grits.GritsFactory._modules.keys():
+                    grits_filter = grits.GritsFactory(mod=f)._acquire_module()
                     if grits_filter is not None:
                         if 'stacks' in grits_filter.kwargs.keys():
                             if grits_filter.kwargs['stacks']:
                                 stack_fltr.append(f)
-                elif f.split(':')[0] in dlim.PointFilterFactory._modules.keys():
-                    point_filter = dlim.PointFilterFactory(mod=f)._acquire_module()
+                elif f.split(':')[0] in pointz.PointFilterFactory._modules.keys():
+                    point_filter = pointz.PointFilterFactory(mod=f)._acquire_module()
                     if point_filter is not None:
                         point_fltr.append(f)
 
@@ -4459,7 +4461,7 @@ class WafflesUncertainty(Waffle):
         
         out_inner = '{}_inner.xyz'.format(sub_bn)
         out_outer = '{}_outer.xyz'.format(sub_bn)
-        xyz_ds = dlim.XYZFile(
+        xyz_ds = xyzfile.XYZFile(
             fn=o_xyz,
             data_format=168,
             src_region=sub_region
@@ -6100,8 +6102,8 @@ class WaffleDEM:
                 
     def filter_(self, fltr=[]):
         for f in fltr:
-            if f.split(':')[0] in grits.grits_factory.GritsFactory._modules.keys():
-                grits_filter = grits.grits_factory.GritsFactory(
+            if f.split(':')[0] in grits.GritsFactory._modules.keys():
+                grits_filter = grits.GritsFactory(
                     mod=f,
                     src_dem=self.fn
                 )._acquire_module()
@@ -7033,7 +7035,7 @@ Modules (see waffles --modules <module-name> for more info):
     dl_formats=factory._cudem_module_name_short_desc(dlim.DatasetFactory._modules),
     modules=factory._cudem_module_short_desc(WaffleFactory._modules),
     wf_version=cudem.__version__,
-    grits_modules=factory._cudem_module_short_desc(grits.grits_factory.GritsFactory._modules)
+    grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules)
 )
 
 

@@ -20,16 +20,16 @@
 ###############################################################################
 ### Code:
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
 from . import grits
-# from . import blur
-# from . import lspoutliers
-# from . import weights
-# from . import flats
-# from . import gmtfilter
-from . import grits_factory
+from . import blur
+from . import lspoutliers
+from . import weights
+from . import flats
+from . import gmtfilter
+#from . import grits_factory
 
 ### End

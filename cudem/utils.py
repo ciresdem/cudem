@@ -171,7 +171,7 @@ def make_temp_fn(fn, temp_dir=cudem_cache(), region=None, inc=None):
         except FileExistsError:
             pass
         except Exception as e:
-            utils.echo_error_msg(e)
+            echo_error_msg(f'could not make dirs \'{temp_dir}\', {e}')
 
     if region is None:
         return(os.path.join(
@@ -624,7 +624,7 @@ def get_outliers(
     """
 
     if verbose:
-        utils.echo_msg(
+        echo_msg(
             f'input percentile: {percentile}'
         )
 
@@ -641,7 +641,7 @@ def get_outliers(
         min_percentile = 0
 
     if verbose:
-        utils.echo_msg(
+        echo_msg(
             f'percentiles: {min_percentile}>>{max_percentile}'
         )
 
@@ -657,6 +657,27 @@ def get_outliers(
 
     return(upper_limit, lower_limit)
 
+
+def num_strings_to_range(*args):
+    """parse args to a number range.
+
+    e.g. if args == ['1934', '1920-1980', '2001'] will return '1920-2001'
+    """
+    
+    dates = []
+    for arg in args:
+        if str_or(arg) is not None:
+            dd = re.findall(r'[-+]?\d*\.?\d+', str(arg))
+            for d in dd:
+                dates.append(abs(float(d)))
+            
+    if len(dates) > 0:
+        if min(dates) != max(dates):
+            return('-'.join([str(min(dates)), str(max(dates))]))
+        else:
+            return(str(min(dates)))
+    else:
+        return(None)
 
 ## ==============================================
 ##
@@ -2003,7 +2024,7 @@ def _err_fit_plot(
     plt.savefig(out_png)
     plt.close()
 
-    #except: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
+    #except: echo_error_msg('you need to install matplotlib to run uncertainty plots...')
 
     
 def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist,
@@ -2077,7 +2098,7 @@ def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist,
     plt.savefig(out_png)
     plt.close()
 
-    #xcept: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
+    #xcept: echo_error_msg('you need to install matplotlib to run uncertainty plots...')
 
     
 def _errbin(err_arr, nbins=10):
@@ -2173,7 +2194,7 @@ def _err2coeff(err_arr, sampling_den, coeff_guess=[0, 0.1, 0.2],
     
     if plots:
         try:
-            utils.echo_msg('plotting error data')
+            echo_msg('plotting error data')
             _err_fit_plot(
                 xdata,
                 ydata,
