@@ -27,7 +27,6 @@ __credits__ = "CIRES"
 from . import inf
 from . import dlim
 from . import ziplists
-#from . import dlim
 from . import xyzfile
 from . import lasfile
 # from . import gdalf

@@ -348,6 +348,7 @@ class GritsFactory(factory.CUDEMFactory):
     from . import lspoutliers
     from . import weights
     from . import flats
+    from . import blend
     
     _modules = {
         'blur': {
@@ -384,6 +385,11 @@ class GritsFactory(factory.CUDEMFactory):
             'name': 'weight_zones',
             'description': 'Make a NDV buffer around the weight threshold',
             'call': weights.WeightZones
+        },
+        'blend': {
+            'name': 'blend',
+            'description': 'blend aux data into dem',
+            'call': blend.Blend
         },
     }
 
