@@ -37,6 +37,7 @@ import numpy as np
 from osgeo import gdal
 
 from cudem import utils
+from cudem import regions
 from cudem import gdalfun
 from cudem import factory
 from . import __version__
@@ -94,7 +95,15 @@ class Grits:
     def __call__(self):
         return(self.generate())
 
-    
+
+    def init_region(self, src_ds: any = None):
+        ds_config = gdalfun.gdal_infos(src_ds)
+        self.src_region = regions.Region().from_geo_transform(
+            ds_config['geoT'], ds_config['nx'], ds_config['ny']
+        )
+
+        return(self.src_region, ds_config)
+        
     def init_ds(self, src_ds: any = None):
         self.ds_config = gdalfun.gdal_infos(src_ds)
         self.ds_band = src_ds.GetRasterBand(self.band)
