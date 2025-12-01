@@ -1,4 +1,4 @@
-### icesat2file.py 
+### icesat2file.py - DataLists IMproved
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
