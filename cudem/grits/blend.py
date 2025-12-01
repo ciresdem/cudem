@@ -100,7 +100,7 @@ def interpolate_array(points_arr, ndv=-9999, chunk_size=None, chunk_step=None, c
                 (xi, yi), method=method
             )
             interp_data = interp_data[y_origin:y_size,x_origin:x_size]
-            interp_array[srcwin[1]:srcwin[1]+points_array.shape[0], srcwin[0]:srcwin[0]+points_array.shape[1]] = interp_data
+            interp_array[srcwin[1]:srcwin[1]+interp_data.shape[0], srcwin[0]:srcwin[0]+interp_data.shape[1]] = interp_data
             #interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
             #except Exception as e:
             #    continue
@@ -211,16 +211,29 @@ class Blend(grits.Grits):
 
         ## interpolate the buffer and extract just the buffer area and calculate the
         ## difference between the src data and the interp data
-        interp_arr = interpolate_array(combined_arr, ndv=self.ds_config['ndv'], method='linear', chunk_size=self.buffer_cells*5, chunk_step=self.buffer_cells*5)
+        interp_arr = interpolate_array(
+            combined_arr, ndv=self.ds_config['ndv'], method='linear',
+            chunk_size=self.buffer_cells*5, chunk_step=self.buffer_cells*5,
+            #chunk_buffer=self.buffer_cells
+        )
         interp_data_in_buffer = interp_arr[(combined_mask) & (src_mask)]
         src_data_in_buffer = src_arr[(combined_mask) & (src_mask)]
-        buffer_diffs = interp_data_in_buffer - src_data_in_buffer
         interp_arr = None
+        buffer_diffs = interp_data_in_buffer - src_data_in_buffer
+        buffer_diffs[np.isnan(buffer_diffs)] = 0
 
+        ## testings
+        # med_buffer_diffs = np.median(buffer_diffs)
+        # diff_threshold = .5
+        # buffer_diffs[np.abs(buffer_diffs) <= diff_threshold] = 0
+        # buffer_diffs[np.abs(buffer_diffs) > diff_threshold] = med_buffer_diffs
+        
         ## generate a distance transform and normalize the results
-        dt = scipy.ndimage.distance_transform_cdt(combined_mask)
+        ## to values between 0 (near combined) and 1 (near src)
+        dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
         dt = dt[(src_mask) & (combined_mask)]
         dt = (dt - np.min(dt)) / (np.max(dt) - np.min(dt))
+        #dt = (dt - np.min(dt)) / (np.max(dt)*dt_factor - np.min(dt))
 
         ## apply the normalize results to the differences and set and write out the results
         combined_arr[(combined_mask) & (src_mask)] = src_arr[(combined_mask) & (src_mask)] + (buffer_diffs*dt)
