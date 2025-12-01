@@ -32,7 +32,7 @@ from . import lasfile
 # from . import gdalf
 from . import ogrfile
 # from . import cudemf
-# from . import mbsf
+from . import mbsfile
 # from . import swotf
 from . import icesat2file
 from . import fetchers
