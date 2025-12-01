@@ -29,7 +29,7 @@ from . import dlim
 from . import ziplists
 from . import xyzfile
 from . import lasfile
-# from . import gdalf
+from . import gdalfile
 from . import ogrfile
 # from . import cudemf
 from . import mbsfile
