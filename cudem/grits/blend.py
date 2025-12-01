@@ -38,7 +38,10 @@ from cudem import gdalfun
 from cudem.grits import grits
 #from cudem.datalists import GDALFile
 
-def interpolate_array(points_arr, ndv=-9999, chunk_size=None, chunk_step=None, chunk_buffer=0, method='cubic', verbose=True):
+def interpolate_array(
+        points_arr, ndv=-9999, chunk_size=None, chunk_step=None, chunk_buffer=0,
+        method='cubic', verbose=True
+):
 
     ycount, xcount = points_arr.shape
     if chunk_size is None:
@@ -62,7 +65,7 @@ def interpolate_array(points_arr, ndv=-9999, chunk_size=None, chunk_step=None, c
     for srcwin in utils.yield_srcwin(
             (ycount, xcount),
             n_chunk=n_chunk,
-            msg='generating {} grid'.format(method),
+            msg='generating {} interpolated array'.format(method),
             verbose=verbose,
             step=n_step
     ):
@@ -86,24 +89,21 @@ def interpolate_array(points_arr, ndv=-9999, chunk_size=None, chunk_step=None, c
         elif np.count_nonzero(np.isnan(points_array)) == 0:
 
             points_array = points_array[y_origin:y_size,x_origin:x_size]
-            interp_array[srcwin[1]:srcwin[1]+points_array.shape[0], srcwin[0]:srcwin[0]+points_array.shape[1]] = points_array
-            #interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+            interp_array[srcwin[1]:srcwin[1]+points_array.shape[0],
+                         srcwin[0]:srcwin[0]+points_array.shape[1]] = points_array
 
         elif len(point_indices[0]):
             point_values = points_array[point_indices]
             xi, yi = np.mgrid[0:srcwin_buff[2],
                               0:srcwin_buff[3]]
 
-            #try:
             interp_data = interpolate.griddata(
                 np.transpose(point_indices), point_values,
                 (xi, yi), method=method
             )
             interp_data = interp_data[y_origin:y_size,x_origin:x_size]
-            interp_array[srcwin[1]:srcwin[1]+interp_data.shape[0], srcwin[0]:srcwin[0]+interp_data.shape[1]] = interp_data
-            #interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
-            #except Exception as e:
-            #    continue
+            interp_array[srcwin[1]:srcwin[1]+interp_data.shape[0],
+                         srcwin[0]:srcwin[0]+interp_data.shape[1]] = interp_data
 
     point_values = None
 
@@ -171,7 +171,9 @@ class Blend(grits.Grits):
         combined_arr = np.full((ycount, xcount), np.nan)
 
         for aux_fn in self.aux_dems:
-            aux_ds = DatasetFactory(mod=aux_fn, src_region=src_region, x_inc=x_inc, y_inc=y_inc)._acquire_module().initialize()
+            aux_ds = DatasetFactory(
+                mod=aux_fn, src_region=src_region, x_inc=x_inc, y_inc=y_inc
+            )._acquire_module().initialize()
             for arrs, srcwin, gt in aux_ds.array_yield:
                 ## supercede
                 combined_arr[srcwin[1]:srcwin[1]+srcwin[3],
@@ -233,7 +235,6 @@ class Blend(grits.Grits):
         dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
         dt = dt[(src_mask) & (combined_mask)]
         dt = (dt - np.min(dt)) / (np.max(dt) - np.min(dt))
-        #dt = (dt - np.min(dt)) / (np.max(dt)*dt_factor - np.min(dt))
 
         ## apply the normalize results to the differences and set and write out the results
         combined_arr[(combined_mask) & (src_mask)] = src_arr[(combined_mask) & (src_mask)] + (buffer_diffs*dt)
