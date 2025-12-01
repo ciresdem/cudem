@@ -231,13 +231,22 @@ region = regions.Region().from_list([-124.5, -124.24, 44.75, 45.0])
 tstart = "2024-06-28"
 tend = "2024-08-30"
 
-is2_03 = earthdata.IceSat2(src_region=region, outdir="cache", time_start=tstart, time_end=tend, subset=True, short_name="ATL03", version="006")
+is2_03 = earthdata.IceSat2(
+    src_region=region, outdir="cache", time_start=tstart, time_end=tend,
+    subset=True, short_name="ATL03", version="006"
+)
 js_03 = is2_03.harmony_make_request()
  
-is2_08 = earthdata.IceSat2(src_region=region, outdir="cache", time_start=tstart, time_end=tend, subset=True, short_name="ATL08", version="006")
+is2_08 = earthdata.IceSat2(
+    src_region=region, outdir="cache", time_start=tstart, time_end=tend,
+    subset=True, short_name="ATL08", version="006"
+)
 js_08 = is2_08.harmony_make_request()
 
-is2_24 = earthdata.IceSat2(src_region=region, outdir="cache", time_start=tstart, time_end=tend, subset=True, short_name="ATL24", version="006")
+is2_24 = earthdata.IceSat2(
+    src_region=region, outdir="cache", time_start=tstart, time_end=tend,
+    subset=True, short_name="ATL24", version="006"
+)
 js_24 = is2_24.harmony_make_request()
  
 jid_03 = js_03['jobID']
