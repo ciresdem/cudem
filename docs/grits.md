@@ -1,4 +1,4 @@
-# grits
+# grits - GRId filTerS
 
 Filter Digital Elevation Models.
 
