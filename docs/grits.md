@@ -42,7 +42,7 @@ Display the module descriptions and usage
 `--version`
 Print the version information
 
-**Table 1.** Filtering odules available in the CUDEM software tool "grits"
+**Table 1.** Filtering modules available in the CUDEM software tool "grits"
 
 |  ***Name***  |  ***Description*** |
 |----------------------|----------------------------------|
