@@ -33,7 +33,7 @@ from . import lasfile
 from . import ogrfile
 # from . import cudemf
 from . import mbsfile
-# from . import swotf
+from . import swotfile
 from . import icesat2file
 from . import fetchers
 # from . import globato
