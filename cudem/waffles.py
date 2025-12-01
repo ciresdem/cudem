@@ -82,7 +82,7 @@ from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
 
-#import cudem
+import cudem
 from cudem.datalists import dlim
 from cudem.datalists import xyzfile
 from cudem import pointz
