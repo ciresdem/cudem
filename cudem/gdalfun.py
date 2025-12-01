@@ -46,6 +46,7 @@ import scipy
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
+from cudem import vrbag
 
 gc = utils.config_check()
 gdal.DontUseExceptions()

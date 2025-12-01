@@ -1,8 +1,8 @@
-### datalists.py - DataLists IMproved
+### dlim.py - DataLists IMproved
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## datalists.py is part of CUDEM
+## dlim.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -101,7 +101,7 @@ import math
 from tqdm import tqdm
 import traceback
 import warnings
-
+n
 # import threading
 # import multiprocessing as mp
 # mp.set_start_method('spawn')
@@ -110,19 +110,18 @@ import warnings
 # except: import queue as queue
         
 import numpy as np
+import pandas as pd
 # from scipy.spatial import ConvexHull
 # import lxml.etree
 
 import pyproj
-import utm
-import laspy as lp
 from osgeo import gdal
 from osgeo import ogr
 #from osgeo import osr
 import h5py as h5
 import netCDF4 as nc
 
-import cudem
+#import cudem
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
@@ -131,17 +130,10 @@ from cudem import factory
 from cudem import vdatums
 from cudem import fetches
 from cudem import grits
-from cudem import vrbag
 from cudem import srsfun
 from cudem import pointz
 from . import __version__
 from . import inf
-#from cudem import datalists_factory
-#from cudem.fetches import fetches
-
-# cshelph
-import pandas as pd
-from cudem import cshelph
 
 ## Config info and setup
 gc = utils.config_check()
