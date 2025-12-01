@@ -6472,7 +6472,7 @@ class DatasetFactory(factory.CUDEMFactory):
         202: {'name': 'swot_pixc',
               'fmts': ['h5'],
               'description': 'An HDF5 SWOT PIXC datafile',
-              'call': swatfile.SWOT_PIXC},
+              'call': swotfile.SWOT_PIXC},
         203: {'name': 'swot_hr_raster',
               'fmts': ['nc'],
               'description': 'An HDF5 SWOT HR Raster datafile',

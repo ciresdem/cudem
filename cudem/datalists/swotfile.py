@@ -39,7 +39,7 @@ from osgeo import gdal
 from cudem import utils
 from cudem import regions
 from cudem import gdalfun
-ffrom cudem.datalists.dlim import ElevationDataset
+from cudem.datalists.dlim import ElevationDataset
 
 ## NASA SWOT Data class (hdf5)
 ## uses h5py
