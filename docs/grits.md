@@ -50,13 +50,14 @@ Print the version information
 | grdfilter | filter a DEM using the GMT tool `grdfilter` |
 | outliers | discover and remove outliers from a DEM |
 | flats | remove flattened areas from a DEM |
+| blend | blend datasets into the input DEM |
 
 ## Python API
 
 ### Filter outliers with a weight below 1.2 from a 1/9 arc-second `stacks` DEM (generated with `waffles`)
 
 ```python
-from cudem import grits
+from cudem.grits import grits
 grits_filter = grits.GritsFactory(
     mod='outliers',
     src_dem='ncei19_n38x25_w123x50_2024v1_stack.tif',
@@ -76,6 +77,16 @@ if grits_filter is not None:
 $ grits -M outliers --max_weight 1.2 -U 4 -W 3 -C 2 ncei19_n38x25_w123x50_2024v1_stack.tif
 ```
 
+### Blend a neighboring DEM into a DEM to create a seemless edge
+
+```bash
+$ grits -M blend:aux_dems=crm_vol8_navd88_2025_cut.tif:buffer_cells=50 crm_vol7_v2_2024_cut.tif
+```
+
+![](/media/edge_profile3.png)
+**Figure 1.** Edge profile of original DEM (purple) neighboring DEM (lime) and the blended DEM (green) 
+
+
 ### Remove 'flattened' areas from a USGS NED DEM
 
 ```bash
@@ -87,7 +98,7 @@ $ grits -M flats USGS_1_n45w125_20130911.tif
 ```
 
 ![](/media/USGS_1_n45w125_20130911_hs.png)
-**Figure 1.** USGS NED 1 arc-second DEM
+**Figure 2.** USGS NED 1 arc-second DEM
 
 ![](/media/USGS_1_n45w125_20130911_filtered_hs.png)
-**Figure 2.** USGS NED 1 arc-second DEM with flattened areas removed
+**Figure 3.** USGS NED 1 arc-second DEM with flattened areas removed
