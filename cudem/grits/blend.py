@@ -190,6 +190,7 @@ class Blend(grits.Grits):
                 src_arr[srcwin[1]:srcwin[1]+srcwin[3],
                         srcwin[0]:srcwin[0]+srcwin[2]] = self.ds_band.ReadAsArray()
 
+                src_arr[src_arr == ds_config['ndv']] = np.nan
                 src_mask = ~np.isnan(src_arr)
                 
         return(combined_arr, src_arr, combined_mask, src_mask)
@@ -223,7 +224,8 @@ class Blend(grits.Grits):
 
         ## apply the normalize results to the differences and set and write out the results
         combined_arr[(combined_mask) & (src_mask)] = src_arr[(combined_mask) & (src_mask)] + (buffer_diffs*dt)
-        combined_arr[~src_mask] = np.nan        
+        combined_arr[~src_mask] = np.nan
+        combined_arr[np.isnan(combined_arr)] = self.ds_config['ndv']
         srcwin = (self.buffer_cells, self.buffer_cells, self.ds_config['nx'], self.ds_config['ny'])        
         this_band = dst_ds.GetRasterBand(1)
         this_band.WriteArray(combined_arr[srcwin[1]:srcwin[1]+srcwin[3],
