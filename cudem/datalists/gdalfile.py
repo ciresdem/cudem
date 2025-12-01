@@ -1,8 +1,8 @@
-### inf.py - DataLists IMproved
+### gdalfile.py - DataLists IMproved
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## inf.py is part of CUDEM
+## gdalfile.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
