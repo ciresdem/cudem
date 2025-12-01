@@ -892,7 +892,7 @@ class BAGFile(ElevationDataset):
         return(self.infos)
 
     def parse(self, resample=True):
-        from .dlim import DatasetFactory
+        from .dlim import DatasetFactoyr
         
         parse_entry_p = True
         if self.region is not None:            

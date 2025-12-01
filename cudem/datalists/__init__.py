@@ -20,7 +20,7 @@
 ###############################################################################
 ### Code:
 
-__version__ = "0.5.0"
+__version__ = "0.5.2"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
@@ -36,6 +36,7 @@ from . import mbsfile
 from . import swotfile
 from . import icesat2file
 from . import fetchers
+from . import datalists
 # from . import globato
 #from . import dlim_factory
 
