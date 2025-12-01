@@ -24,19 +24,18 @@
 ###############################################################################
 ### Commentary:
 ##
+## This grits module will blend the input data with the input raster.
 ##
 ### Code:
 
 import numpy as np
 import scipy
 from scipy import interpolate
-#from scipy.spatial import distance_matrix
 from tqdm import trange
 from tqdm import tqdm
 from cudem import utils
 from cudem import gdalfun
 from cudem.grits import grits
-#from cudem.datalists import GDALFile
 
 def interpolate_array(
         points_arr, ndv=-9999, chunk_size=None, chunk_step=None, chunk_buffer=0,
@@ -198,11 +197,7 @@ class Blend(grits.Grits):
         return(combined_arr, src_arr, combined_mask, src_mask)
         
 
-    def run(self):
-        dst_ds = self.copy_src_dem()
-        if dst_ds is None:
-            return(self.src_dem, -1)
-
+    def blend_data(self):
         ## combined_arr is the aux_data, src_arr is the src dem data
         ## combined mask is the combined data + buffer
         ## src_mask is the src data
@@ -240,13 +235,23 @@ class Blend(grits.Grits):
         combined_arr[(combined_mask) & (src_mask)] = src_arr[(combined_mask) & (src_mask)] + (buffer_diffs*dt)
         combined_arr[~src_mask] = np.nan
         combined_arr[np.isnan(combined_arr)] = self.ds_config['ndv']
-        srcwin = (self.buffer_cells, self.buffer_cells, self.ds_config['nx'], self.ds_config['ny'])        
+        srcwin = (self.buffer_cells, self.buffer_cells, self.ds_config['nx'], self.ds_config['ny'])
+        
+        return(combined_arr, srcwin)
+
+        
+    def run(self):
+        dst_ds = self.copy_src_dem()
+        if dst_ds is None:
+            return(self.src_dem, -1)
+
+        combined_arr, srcwin = self.blend_data()        
         this_band = dst_ds.GetRasterBand(1)
         this_band.WriteArray(combined_arr[srcwin[1]:srcwin[1]+srcwin[3],
                                           srcwin[0]:srcwin[0]+srcwin[2]])
-
-        dst_ds = None
         
+        dst_ds = None
         return(self.dst_dem, 0)
+
 
 ### End

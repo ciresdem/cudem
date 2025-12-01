@@ -184,7 +184,7 @@ class Grits:
                 
         return(copy_ds)
 
-    
+        
     def _density(self, src_arr):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
         dd = nonzero / src_arr.size
