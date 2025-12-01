@@ -50,6 +50,7 @@ Print the version information
 | grdfilter | filter a DEM using the GMT tool `grdfilter` |
 | outliers | discover and remove outliers from a DEM |
 | flats | remove flattened areas from a DEM |
+| weights | buffer cells in a DEM based on weight |
 | blend | blend datasets into the input DEM |
 
 ## Python API
