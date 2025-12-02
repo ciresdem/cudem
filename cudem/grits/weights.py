@@ -200,15 +200,13 @@ class Weights(grits.Grits):
                 ) as w_pbar:
                     for n, weight_threshold in enumerate(self.weight_thresholds):
                         this_w_arr[this_w_arr < weight_threshold] = np.nan
-                        if self.binary_dilation:
-                            
+                        if self.binary_dilation:                            
                             if self.binary_pulse:
                                 weight_mask = this_w_arr >= weight_threshold
                                 expanded_w_arr = self.binary_closed_dilation(
                                     weight_mask, iterations=self.buffer_sizes[n],
                                     closing_iterations=self.gap_fill_sizes[n]
-                                )
-                            
+                                )                            
                             else:
                                 weight_mask = this_w_arr >= weight_threshold
                                 expanded_w_arr = self.binary_reversion(

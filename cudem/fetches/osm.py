@@ -323,6 +323,22 @@ class OpenStreetMap(fetches.FetchModule):
                 ) if min_length is not None else ''
             )
 
+        if self.q == 'lakes':
+            #self.h = '[maxsize:2000000000]'
+            self.h = '[timeout:3600]'
+            self.q = '''
+            //(way["natural"="water"]{};
+            //relation["type"="lines"];
+            nwr["water"="lakes"];
+            //);
+            (._;>;);
+            out meta;
+            '''.format(
+                '(if: length() > {})'.format(
+                    min_length
+                ) if min_length is not None else ''
+            )
+            
         if self.q == 'place2':
             #self.h = '[maxsize:2000000000]'
             self.h = '[timeout:3600]'

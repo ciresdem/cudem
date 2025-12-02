@@ -66,6 +66,6 @@ from . import cptcity
 from . import wadnr
 from . import nswtb
 from . import cdse
-from . import fetches_factory
+#from . import fetches_factory
 
 ### End
