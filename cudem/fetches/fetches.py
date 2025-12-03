@@ -748,7 +748,7 @@ class Fetch:
                         )
                         
                     status = -1
-                    raise ConnectionError(req.status_code)
+                    raise ConnectionError(f'{req.url}: {req.status_code}')
 
         ## file exists, so we return status of 0,
         ## as if we were successful!

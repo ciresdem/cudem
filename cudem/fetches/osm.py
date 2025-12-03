@@ -39,6 +39,83 @@ from cudem.fetches import fetches
 from cudem.fetches import gmrt
 
 ## OSM - Open Street Map
+def fetch_coastline(region=None, chunks=True, verbose=True, cache_dir='./'):
+    if region is not None:
+        this_region = region.copy()
+        
+    #this_region.buffer(pct=5)
+    if this_region.valid_p():
+        if verbose:
+            utils.echo_msg(
+                f'fetching coastline for region {this_region}'
+            )
+
+        this_cst = OpenStreetMap(
+            src_region=this_region,
+            verbose=verbose,
+            outdir=cache_dir,
+            q='coastline',
+            chunks=chunks,
+        )
+        this_cst.run()
+        fr = fetches.fetch_results(this_cst, check_size=False)
+        fr.daemon=True
+        fr.start()
+        fr.join()
+        return(fr)
+
+    return(None)
+
+
+def process_coastline(
+        this_cst, region=None, return_geom=True, landmask_is_watermask=False,
+        line_buffer=0.0000001, include_landmask=False, verbose=True, cache_dir='./'
+):
+    this_region = region.copy()
+    cst_geoms = []
+    if this_cst is not None:
+        with tqdm(
+                total=len(this_cst.results),
+                desc='processing coastline',
+                leave=verbose
+        ) as pbar:
+            for n, cst_result in enumerate(this_cst.results):
+                if cst_result[-1] == 0:
+                    cst_osm = cst_result[1]
+                    out = polygonize_osm_coastline(
+                        cst_osm,
+                        utils.make_temp_fn(
+                            f'{utils.fn_basename2(cst_osm)}_coast.gpkg',
+                            temp_dir=cache_dir
+                        ),
+                        region=this_region,
+                        include_landmask=include_landmask,
+                        landmask_is_watermask=landmask_is_watermask,
+                        line_buffer=line_buffer,
+                        verbose=verbose,
+                    )
+
+                    if out is not None:
+                        cst_ds = ogr.Open(out, 0)
+                        cst_layer = cst_ds.GetLayer()
+                        cst_geom = gdalfun.ogr_union_geom(
+                            cst_layer, verbose=verbose
+                        )
+                        cst_geoms.append(cst_geom)
+                        cst_ds = None
+                        utils.remove_glob(cst_osm)
+
+                pbar.update()
+
+        if return_geom:
+            utils.remove_glob(f'{utils.fn_basename2(out)}.*')
+
+    if return_geom:            
+        return(cst_geoms)
+    else:
+        return(out)
+
+
 ## todo: make wrapper modules for 'buildings' and 'coastline' and whaterver else...perhaps
 def polygonize_osm_coastline(
         src_ogr, dst_ogr, region=None, include_landmask=True,
@@ -401,7 +478,7 @@ class OpenStreetMap(fetches.FetchModule):
 
             ## break up the requests into .05 degree chunks for
             ## better usage of the OSM API
-            if x_delta > .25 or y_delta > .25:
+            if x_delta > .05 or y_delta > .05:
                 xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
                 if x_delta >= y_delta:
                     n_chunk = int(xcount*(.1/x_delta))

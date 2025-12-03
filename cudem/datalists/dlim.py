@@ -4804,6 +4804,7 @@ class ElevationDataset:
         else:
             return(out)
 
+        
     def fetch_data(self, fetches_module, check_size=True):
         this_fetches = fetches.FetchesFactory(
             mod=fetches_module,

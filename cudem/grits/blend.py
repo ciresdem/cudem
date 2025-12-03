@@ -210,18 +210,19 @@ class Blend(grits.Grits):
         ## generate a distance transform and normalize the results
         ## to values between 0 (near combined) and 1 (near src)
         dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
-        dt = dt[(src_mask) & (combined_mask)]
-        dt = (dt - np.min(dt)) / (np.max(dt) - np.min(dt))
         
         ## random src mask
         if self.random_buffer:
-            utils.echo_msg('rand!')
             random_arr = np.random.rand(combined_arr.shape[0], combined_arr.shape[1]) #> 0.985
-            random_arr[(src_mask) & (combined_mask)][dt > .15] = .1
             random_mask = random_arr > .985
-            #random_mask = dt < .5
+            random_mask[(src_mask) & (combined_mask) & (dt > max(10, np.max(dt)/2))] = False
             combined_arr[(combined_mask) & (src_mask) & (random_mask)] = src_arr[(combined_mask) & (src_mask) & (random_mask)]
-        
+            combined_mask[random_mask] = True
+
+        dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
+        dt = dt[(src_mask) & (combined_mask)]
+        dt = (dt - np.min(dt)) / (np.max(dt) - np.min(dt))
+            
         ## interpolate the buffer and extract just the buffer area and calculate the
         ## difference between the src data and the interp data
         interp_arr = interpolate_array(
@@ -235,12 +236,6 @@ class Blend(grits.Grits):
         buffer_diffs = interp_data_in_buffer - src_data_in_buffer
         buffer_diffs[np.isnan(buffer_diffs)] = 0
 
-        ## testings
-        # med_buffer_diffs = np.median(buffer_diffs)
-        # diff_threshold = .5
-        # buffer_diffs[np.abs(buffer_diffs) <= diff_threshold] = 0
-        # buffer_diffs[np.abs(buffer_diffs) > diff_threshold] = med_buffer_diffs
-        
         ## apply the normalize results to the differences and set and write out the results
         combined_arr[(combined_mask) & (src_mask)] = src_arr[(combined_mask) & (src_mask)] + (buffer_diffs*dt)
         combined_arr[~src_mask] = np.nan

@@ -33,6 +33,68 @@ import csv
 from cudem import utils
 from cudem.fetches import fetches
 
+
+def fetch_buildings(region=None, verbose=True, cache_dir='./'):
+    """fetch building footprints from BING"""
+
+    if this_region is not None:
+        this_region = region.copy()
+        
+    if this_region.valid_p():
+        if verbose:
+            utils.echo_msg(
+                f'fetching buildings for region {this_region}'
+            )
+
+        this_bldg = BingBFP(
+            src_region=this_region,
+            verbose=verbose,
+            outdir=cache_dir
+        )
+        this_bldg.run()
+        fr = fetches.fetch_results(this_bldg)
+        #, check_size=False)
+        fr.daemon=True
+        fr.start()
+        fr.join()
+        return(fr)
+
+    return(None)
+
+
+def process_buildings(this_bing, region=None, verbose=True, cache_dir='./'):
+    bldg_geoms = []
+    if this_bing is not None:
+        with tqdm(
+                total=len(this_bing.results),
+                desc='processing buildings',
+                leave=verbose
+        ) as pbar:
+            for n, bing_result in enumerate(this_bing.results):
+                if bing_result[-1] == 0:
+                    bing_gz = bing_result[1]
+                    try:
+                        bing_gj = utils.gunzip(bing_gz, cache_dir)
+                        os.rename(bing_gj, bing_gj + '.geojson')
+                        bing_gj = bing_gj + '.geojson'
+                        bldg_ds = ogr.Open(bing_gj, 0)
+                        bldg_layer = bldg_ds.GetLayer()
+                        bldg_geom = gdalfun.ogr_union_geom(
+                            bldg_layer, verbose=False
+                        )
+                        bldg_geoms.append(bldg_geom)
+                        bldg_ds = None
+                        utils.remove_glob(bing_gj)
+                    except Exception as e:
+                        utils.echo_error_msg(f'could not process bing bfp, {e}')
+
+                    utils.remove_glob(bing_gz)
+
+                pbar.update()
+
+    return(bldg_geoms)
+
+    
 ## BING Building Footprints
 class BingBFP(fetches.FetchModule):
     """Bing Building Footprints
