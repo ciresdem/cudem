@@ -104,7 +104,10 @@ def process_coastline(
                 pbar.update()
 
         if return_geom:
-            utils.remove_glob(f'{utils.fn_basename2(out)}.*')
+            try:
+                utils.remove_glob(f'{utils.fn_basename2(out)}.*')
+            except:
+                pass
 
     if return_geom:            
         return(cst_geoms)
