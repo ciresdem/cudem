@@ -113,7 +113,7 @@ class Blend(grits.Grits):
     def __init__(self,  weight_threshold=None, buffer_cells=1, gap_fill_cells=None,
                  weight_thresholds=None, buffer_sizes=None, gap_fill_sizes=None,
                  binary_dilation=True, binary_pulse=False,
-                 fill_holes=False, aux_dems=None, random_buffer=False, **kwargs):
+                 fill_holes=False, aux_dems=None, random_buffer=0, **kwargs):
         super().__init__(**kwargs)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
@@ -127,7 +127,7 @@ class Blend(grits.Grits):
         self.binary_pulse = binary_pulse
         
         self.fill_holes = fill_holes
-        self.random_buffer = random_buffer
+        self.random_buffer = utils.int_or(random_buffer, 0)
 
         self.aux_dems = aux_dems.split(',')
         
@@ -212,10 +212,12 @@ class Blend(grits.Grits):
         dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
         
         ## random src mask
-        if self.random_buffer:
+        if self.random_buffer > 0:
             random_arr = np.random.rand(combined_arr.shape[0], combined_arr.shape[1]) #> 0.985
             random_mask = random_arr > .985
-            random_mask[(src_mask) & (combined_mask) & (dt > max(10, np.max(dt)/2))] = False
+            #random_mask[(src_mask) & (combined_mask) & (dt > max(10, np.max(dt) - self.random_buffer))] = False
+            utils.echo_msg(f'{np.max(dt) - self.random_buffer}')
+            random_mask[(src_mask) & (combined_mask) & (dt > np.max(dt) - self.random_buffer)] = False
             combined_arr[(combined_mask) & (src_mask) & (random_mask)] = src_arr[(combined_mask) & (src_mask) & (random_mask)]
             combined_mask[random_mask] = True
 
