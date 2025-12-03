@@ -2609,7 +2609,7 @@ class WafflesCoastline(Waffle):
 
         
     def fetch_data(self, fetches_module, check_size=True):
-        this_fetches = fetches.fetches_factory.FetchesFactory(
+        this_fetches = fetches.fetches.FetchesFactory(
             mod=fetches_module,
             src_region=self.wgs_region,
             verbose=self.verbose,

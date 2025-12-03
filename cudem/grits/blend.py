@@ -113,7 +113,7 @@ class Blend(grits.Grits):
     def __init__(self,  weight_threshold=None, buffer_cells=1, gap_fill_cells=None,
                  weight_thresholds=None, buffer_sizes=None, gap_fill_sizes=None,
                  binary_dilation=True, binary_pulse=False,
-                 fill_holes=False, aux_dems=None, **kwargs):
+                 fill_holes=False, aux_dems=None, random_buffer=False, **kwargs):
         super().__init__(**kwargs)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
@@ -127,6 +127,7 @@ class Blend(grits.Grits):
         self.binary_pulse = binary_pulse
         
         self.fill_holes = fill_holes
+        self.random_buffer = random_buffer
 
         self.aux_dems = aux_dems.split(',')
         
@@ -202,10 +203,22 @@ class Blend(grits.Grits):
         ## combined mask is the combined data + buffer
         ## src_mask is the src data
         combined_arr, src_arr, combined_mask, src_mask = self.init_data()
-
+            
         ## combined_arr now has a nan buffer between aux and src data               
         combined_arr[~combined_mask] = src_arr[~combined_mask]
 
+        ## generate a distance transform and normalize the results
+        ## to values between 0 (near combined) and 1 (near src)
+        dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
+        dt = dt[(src_mask) & (combined_mask)]
+        dt = (dt - np.min(dt)) / (np.max(dt) - np.min(dt))
+        
+        ## random src mask
+        if self.random_buffer:
+            utils.echo_msg('rand!')
+            random_mask = np.random.rand(combined_arr.shape[0], combined_arr.shape[1]) > 0.985
+            combined_arr[(combined_mask) & (src_mask) & (random_mask)] = src_arr[(combined_mask) & (src_mask) & (random_mask)]
+        
         ## interpolate the buffer and extract just the buffer area and calculate the
         ## difference between the src data and the interp data
         interp_arr = interpolate_array(
@@ -225,12 +238,6 @@ class Blend(grits.Grits):
         # buffer_diffs[np.abs(buffer_diffs) <= diff_threshold] = 0
         # buffer_diffs[np.abs(buffer_diffs) > diff_threshold] = med_buffer_diffs
         
-        ## generate a distance transform and normalize the results
-        ## to values between 0 (near combined) and 1 (near src)
-        dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
-        dt = dt[(src_mask) & (combined_mask)]
-        dt = (dt - np.min(dt)) / (np.max(dt) - np.min(dt))
-
         ## apply the normalize results to the differences and set and write out the results
         combined_arr[(combined_mask) & (src_mask)] = src_arr[(combined_mask) & (src_mask)] + (buffer_diffs*dt)
         combined_arr[~src_mask] = np.nan

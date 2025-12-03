@@ -442,7 +442,6 @@ class Fetch:
             )
 
         if req is not None:
-            #utils.echo_msg(req.status_code)
             if req.status_code == 504:
                 time.sleep(2)
                 req = self.fetch_req(
@@ -1020,6 +1019,9 @@ class FetchModule:
         else:
             self._outdir = os.path.join(self.outdir, self.name)
 
+        # if not os.path.exists(self._outdir):
+        #     os.makedirs(self._outdir)
+            
         ## for dlim support, we can check these variables for
         ## to do the proper processing. Set these to their correct
         ## values in the sub-class

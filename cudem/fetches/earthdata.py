@@ -206,7 +206,9 @@ class EarthData(fetches.FetchModule):
             end_time = datetime.datetime.fromisoformat(self.time_end).isoformat() + 'Z' if self.time_end != '' else '..'
             _harmony_data['datetime'] = f'{start_time}/{end_time}'
 
+        print(_harmony_data)
         status_url = None
+        #try:
         _req = fetches.Fetch(
             self._harmony_url, headers=self.headers
         ).fetch_req(
@@ -214,8 +216,8 @@ class EarthData(fetches.FetchModule):
         )
         if _req is not None and _req.status_code == 200:
             status_json = _req.json()
-            return(status_json)
-
+            return(status_json)        
+            
         return(None)
 
 
