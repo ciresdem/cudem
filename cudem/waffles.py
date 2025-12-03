@@ -2970,14 +2970,18 @@ class WafflesCoastline(Waffle):
                 co=self.co
             )
             for i, tnm_result in enumerate(this_tnm.results):
+                utils.echo_msg_bold(tnm_result)
                 if tnm_result[-1] == 0:
                     #tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
                     tnm_zip = tnm_result[1]
                     if not os.path.exists(tnm_zip):
                         break
 
-                    tnm_zips = utils.unzip(tnm_zip, self.cache_dir, verbose=False)
+                    tnm_zips = utils.unzip(tnm_zip, outdir=os.path.dirname(tnm_zip), verbose=False)
                     gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
+                    if 'GDB' not in gdb:
+                        continue
+                    
                     utils.run_cmd(
                         'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
                             gdb, self.p_region.format('ul_lr')

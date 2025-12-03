@@ -216,7 +216,10 @@ class Blend(grits.Grits):
         ## random src mask
         if self.random_buffer:
             utils.echo_msg('rand!')
-            random_mask = np.random.rand(combined_arr.shape[0], combined_arr.shape[1]) > 0.985
+            random_arr = np.random.rand(combined_arr.shape[0], combined_arr.shape[1]) #> 0.985
+            random_arr[(src_mask) & (combined_mask)][dt > .15] = .1
+            random_mask = random_arr > .985
+            #random_mask = dt < .5
             combined_arr[(combined_mask) & (src_mask) & (random_mask)] = src_arr[(combined_mask) & (src_mask) & (random_mask)]
         
         ## interpolate the buffer and extract just the buffer area and calculate the
