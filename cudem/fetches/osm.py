@@ -39,26 +39,23 @@ from cudem.fetches import fetches
 from cudem.fetches import gmrt
 
 ## OSM - Open Street Map
-def fetch_coastline(region=None, chunks=True, verbose=True, cache_dir='./'):
-    if region is not None:
-        this_region = region.copy()
-        
+def fetch_coastline(region=None, chunks=True, verbose=True, attempts=5, n_threads=1, cache_dir='./'):
     #this_region.buffer(pct=5)
-    if this_region.valid_p():
+    if region.valid_p():
         if verbose:
             utils.echo_msg(
-                f'fetching coastline for region {this_region}'
+                f'fetching coastline for region {region}'
             )
 
         this_cst = OpenStreetMap(
-            src_region=this_region,
+            src_region=region,
             verbose=verbose,
             outdir=cache_dir,
             q='coastline',
             chunks=chunks,
         )
         this_cst.run()
-        fr = fetches.fetch_results(this_cst, check_size=False)
+        fr = fetches.fetch_results(this_cst, check_size=False, attempts=attempts, n_threads=n_threads)
         fr.daemon=True
         fr.start()
         fr.join()
@@ -71,7 +68,6 @@ def process_coastline(
         this_cst, region=None, return_geom=True, landmask_is_watermask=False,
         line_buffer=0.0000001, include_landmask=False, verbose=True, cache_dir='./'
 ):
-    this_region = region.copy()
     cst_geoms = []
     if this_cst is not None:
         with tqdm(
@@ -88,7 +84,7 @@ def process_coastline(
                             f'{utils.fn_basename2(cst_osm)}_coast.gpkg',
                             temp_dir=cache_dir
                         ),
-                        region=this_region,
+                        region=region,
                         include_landmask=include_landmask,
                         landmask_is_watermask=landmask_is_watermask,
                         line_buffer=line_buffer,
@@ -478,12 +474,12 @@ class OpenStreetMap(fetches.FetchModule):
 
             ## break up the requests into .05 degree chunks for
             ## better usage of the OSM API
-            if x_delta > .05 or y_delta > .05:
+            if x_delta > .25 or y_delta > .25:
                 xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
                 if x_delta >= y_delta:
-                    n_chunk = int(xcount*(.1/x_delta))
+                    n_chunk = int(xcount*(.25/x_delta))
                 elif y_delta > x_delta:
-                    n_chunk = int(ycount*(.1/y_delta))
+                    n_chunk = int(ycount*(.25/y_delta))
             else:
                 n_chunk = None
 

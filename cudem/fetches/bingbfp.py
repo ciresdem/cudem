@@ -30,24 +30,24 @@
 import os
 import mercantile
 import csv
+from tqdm import tqdm
+from osgeo import ogr
 from cudem import utils
+from cudem import gdalfun
 from cudem.fetches import fetches
 
 
 def fetch_buildings(region=None, verbose=True, cache_dir='./'):
     """fetch building footprints from BING"""
 
-    if this_region is not None:
-        this_region = region.copy()
-        
-    if this_region.valid_p():
+    if region.valid_p():
         if verbose:
             utils.echo_msg(
-                f'fetching buildings for region {this_region}'
+                f'fetching buildings for region {region}'
             )
 
         this_bldg = BingBFP(
-            src_region=this_region,
+            src_region=region,
             verbose=verbose,
             outdir=cache_dir
         )
@@ -62,7 +62,7 @@ def fetch_buildings(region=None, verbose=True, cache_dir='./'):
     return(None)
 
 
-def process_buildings(this_bing, region=None, verbose=True, cache_dir='./'):
+def process_buildings(this_bing, verbose=True, cache_dir='./'):
     bldg_geoms = []
     if this_bing is not None:
         with tqdm(
