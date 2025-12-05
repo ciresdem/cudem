@@ -755,13 +755,13 @@ class IceSat2_ATL03(ElevationDataset):
 
                                 if len(self.classes) > 0:
                                     ## vectorize the photons
-                                    #ogr_df = self._vectorize_df(dataset)
+                                    ogr_df = self._vectorize_df(dataset)
                                     
                                     ## re-classify photons based on buildings/watermask/bathymetry
                                     if self.classify_buildings and this_bing is not None:
                                         #dataset = self.classify_buildings(dataset, this_bing)
                                         dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_bing, classification=7)
-                                        
+
                                     #utils.echo_msg(f'this_wm: {this_wm}')
                                     if self.classify_water and this_wm is not None:
                                         #dataset = self.classify_water(dataset, this_wm)
@@ -771,13 +771,10 @@ class IceSat2_ATL03(ElevationDataset):
                                     if self.classify_inland_water and this_iwm is not None:
                                         dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_iwm, classification=42, except_classes=[40])
 
-                                    if dataset is None or len(dataset) == 0:
-                                        continue
-
                                     # ## bathymetry is classified in `read_atl_data` using ATL24 now...
                                     # if self.want_bathymetry:
                                     #     dataset = self.classify_bathymetry(dataset)
-
+                                    
                                     # if dataset is None or len(dataset) == 0:
                                     #     continue
 
@@ -790,7 +787,7 @@ class IceSat2_ATL03(ElevationDataset):
                                     if dataset is None or len(dataset) == 0:
                                         continue
 
-                                    ogr_df = None
+                                    #ogr_df = None
                                     
                                 ## rename the x,y,z columns for `transform_and_yield_points`
                                 dataset.rename(
@@ -889,6 +886,7 @@ class IceSat2_ATL03(ElevationDataset):
                         dataset.at[idx, 'ph_h_classed'] = classification
 
                 icesat_layer.SetSpatialFilter(None)
+                icesat_layer = None
 
         #ogr_df = None
         #return(dataset)

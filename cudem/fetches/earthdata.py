@@ -304,9 +304,16 @@ class EarthData(fetches.FetchModule):
                             if status['status'] == 'successful':
                                 for link in status['links']:
                                     if link['href'].endswith('.h5'):
+                                        out_fn = '{}.h5'.format(
+                                            utils.append_fn(
+                                                utils.fn_basename2(os.path.basename(link['href'])),
+                                                self.region,
+                                                1
+                                            )
+                                        )
                                         self.add_entry_to_results(
                                             link['href'],
-                                            os.path.basename(link['href']),
+                                            out_fn,
                                             f'{self.short_name} subset'
                                         )
 
