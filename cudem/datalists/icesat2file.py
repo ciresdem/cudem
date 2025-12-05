@@ -223,7 +223,7 @@ class IceSat2_ATL03(ElevationDataset):
                  reject_failed_qa=True,
                  classify_buildings=True,
                  classify_water=True,
-                 classify_lakes=True,
+                 classify_inland_water=True,
                  append_atl24=False,
                  min_bathy_confidence=None,
                  **kwargs):
@@ -244,7 +244,7 @@ class IceSat2_ATL03(ElevationDataset):
         self.atl_fn = None
         self.classify_buildings = classify_buildings
         self.classify_water = classify_water
-        self.classify_lakes = classify_lakes
+        self.classify_inland_water = classify_inland_water
         self.reject_failed_qa = reject_failed_qa
         self.append_atl24 = append_atl24
         self.min_bathy_confidence = utils.float_or(min_bathy_confidence)
@@ -696,27 +696,27 @@ class IceSat2_ATL03(ElevationDataset):
                     this_wm = gdalfun.ogr_geoms(self.classify_water)
 
         ## fetch and process lakemask, if wanted
-        if self.classify_lakes:
-            if isinstance(self.classify_lakes, bool):
-                this_lm = osm.osmCoastline(
+        if self.classify_inland_water:
+            if isinstance(self.classify_inland_water, bool):
+                this_iwm = osm.osmCoastline(
                     region=self.region,
                     chunks=True,
                     verbose=self.verbose,
                     attempts=5,
                     cache_dir=self.cache_dir,
-                    q='lakes'
+                    q='water'
                 )
-                this_lm = this_lm(
+                this_iwm = this_iwm(
                     return_geom=True,
                     overwrite=True
                 )
                 
-            elif isinstance(self.classify_lakes, list):
-                this_lm = self.classify_lakes
+            elif isinstance(self.classify_inland_water, list):
+                this_iwm = self.classify_inland_water
                 
-            elif isinstance(self.classify_lakes, str):
-                if os.path.exists(self.classify_lakes):
-                    this_lm = gdalfun.ogr_geoms(self.classify_lakes)
+            elif isinstance(self.classify_inland_water, str):
+                if os.path.exists(self.classify_inland_water):
+                    this_iwm = gdalfun.ogr_geoms(self.classify_inland_water)
                     
         ## parse through the icesat2 file by laser number
         with h5.File(self.fn, 'r') as atl03_f:
@@ -764,8 +764,8 @@ class IceSat2_ATL03(ElevationDataset):
                                     dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41, except_classes=[40])
 
                                 #utils.echo_msg(f'this_wm: {this_wm}')
-                                if self.classify_lakes and this_lm is not None:
-                                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_lm, classification=42, except_classes=[40])
+                                if self.classify_inland_water and this_iwm is not None:
+                                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_iwm, classification=42, except_classes=[40])
                                     
                                 if dataset is None or len(dataset) == 0:
                                     continue

@@ -167,8 +167,10 @@ class osmCoastline:
         if self.q == 'coastline':
             out_fn, osm_geoms = self.process(out_fn)
         elif self.q == 'lakes':
-            out_fn, osm_geoms = self.process_lakes(out_fn)
-                
+            out_fn, osm_geoms = self.process_water(out_fn)
+        elif self.q == 'water':
+            out_fn, osm_geoms = self.process_water(out_fn)
+            
         if return_geom:            
             return(osm_geoms)
         else:
@@ -260,7 +262,7 @@ class osmCoastline:
 
         return(out_fn, cst_geoms)        
 
-    def process_lakes(self, out_fn):
+    def process_water(self, out_fn):
         if self.this_osm is None:
             self.this_osm = self.fetch()
                 
@@ -268,7 +270,7 @@ class osmCoastline:
         if self.this_osm is not None:
             with tqdm(
                     total=len(self.this_osm.results),
-                    desc='processing lakes',
+                    desc=f'processing {self.q}',
                     leave=self.verbose
             ) as pbar:
                 for n, lk_result in enumerate(self.this_osm.results):
@@ -525,6 +527,7 @@ class OpenStreetMap(fetches.FetchModule):
                  min_length = None, **kwargs):
         super().__init__(name='osm', **kwargs)
         self.q = q
+        self.q_fn = q
         self.fmt = fmt
         self.planet = planet
         self.chunks = chunks
@@ -563,10 +566,11 @@ class OpenStreetMap(fetches.FetchModule):
             #self.h = '[maxsize:2000000000]'
             self.h = '[timeout:3600]'
             self.q = '''
-            //(way["natural"="water"]{};
+            (way["natural"="water"]{};
             //relation["type"="lines"];
-            nwr["water"="river"];
-            //);
+            rel["natural"="river";
+            //nwr["water"="river"];
+            );
             (._;>;);
             out meta;
             '''.format(
@@ -608,7 +612,23 @@ class OpenStreetMap(fetches.FetchModule):
                     min_length
                 ) if min_length is not None else ''
             )
-            
+
+
+        if self.q == 'water':
+            #self.h = '[maxsize:2000000000]'
+            self.h = '[timeout:3600]'
+            self.q = '''
+            (way["natural"="water"]{};
+            rel["natural"="water"];
+            );
+            (._;>;);
+            out meta;
+            '''.format(
+                '(if: length() > {})'.format(
+                    min_length
+                ) if min_length is not None else ''
+            )
+
         if self.q == 'place2':
             #self.h = '[maxsize:2000000000]'
             self.h = '[timeout:3600]'
@@ -688,7 +708,7 @@ class OpenStreetMap(fetches.FetchModule):
             )
             for this_region in these_regions:
                 c_bbox = this_region.format('osm_bbox')
-                out_fn = 'osm_{}_{}'.format(self.q, this_region.format('fn_full'))
+                out_fn = 'osm_{}_{}'.format(self.q_fn, this_region.format('fn_full'))
                 osm_q_bbox  = '''
                 {1}{2}[bbox:{0}];'''.format(
                     c_bbox,
@@ -712,7 +732,7 @@ class OpenStreetMap(fetches.FetchModule):
                 )
         else:
             c_bbox = self.region.format('osm_bbox')
-            out_fn = 'osm_{}_{}'.format(self.q, self.region.format('fn_full'))
+            out_fn = 'osm_{}_{}'.format(self.q_fn, self.region.format('fn_full'))
             osm_q_bbox  = '''
             {1}[bbox:{0}];'''.format(
                 c_bbox, '[out:{}]'.format(
