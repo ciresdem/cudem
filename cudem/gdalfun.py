@@ -754,6 +754,74 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
         #else:
         #    self.mask = None
 
+
+def ogr_geoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):
+    dst_layer = os.path.basename(utils.fn_basename2(out))
+    dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
+    if os.path.exists(out):
+        utils.remove_glob(f'{utils.fn_basename2(out)}*')
+        
+    osr_prj_file('{}.prj'.format(utils.fn_basename2(out)), dst_srs)
+    driver = ogr.GetDriverByName(ogr_format)
+    ds = driver.CreateDataSource(dst_vector)
+    if ds is not None: 
+        layer = ds.CreateLayer(
+           dst_layer, None, ogr.wkbMultiPolygon
+        )
+        [layer.SetFeature(feature) for feature in layer]
+    else:
+        layer = None
+
+    for g in geoms:
+        #out_feature = ogr.Feature(layer.GetLayerDefn())        
+        #layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+
+        # print(geoms)
+
+        # multi = ogr.Geometry(ogr.wkbMultiPolygon)
+        # for g in geoms:
+        #     print(g)
+        #     multi.AddGeometry(g)
+
+        #[multi.AddGeometry(g) for g in geoms]
+
+        #print(multi)
+        #for i, geom in enumerate(geoms):
+        out_feature = ogr.Feature(layer.GetLayerDefn())
+        #out_feature.SetGeometry(multi)
+        out_feature.SetGeometry(g)
+        #layer.SetFeature(out_feature)
+
+        #out_feature.SetField('DN', 1)
+        layer.CreateFeature(out_feature)
+
+    ds = None
+
+    return(out)
+
+
+def ogr_geoms(ogr_fn):
+    out_geoms = []
+    #try:
+    ds = ogr.Open(ogr_fn, 0)
+    layer = ds.GetLayer()
+    for f in layer:
+        if f:
+            geom = f.GetGeometryRef()
+            #print(f)
+            #geom = ogr_union_geom(
+            #    layer, verbose=False
+            #)
+            if geom is not None and not geom.IsEmpty():
+                out_geoms.append(geom.ExportToWkt())
+        
+    ds = None    
+    #except:
+    #    utils.echo_warning_msg(f'{ogr_fn} could not be opened with ogr')
+
+    #print(out_geoms)
+    return(out_geoms)
+    
         
 ###############################################################################        
 ## GDAL

@@ -31,6 +31,5 @@ from . import weights
 from . import flats
 from . import gmtfilter
 from . import blend
-#from . import grits_factory
 
 ### End

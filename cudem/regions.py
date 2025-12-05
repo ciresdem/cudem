@@ -651,13 +651,21 @@ class Region:
           list: the center point [xc, yc]
         """
 
+        # if self.valid_p():
+        #     return([self.xmin + ((self.xmax-self.xmin)/2),
+        #             self.ymax + ((self.ymax-self.ymin)/2)])
+        
+        # else:
+        #     return(None)        
+
         if self.valid_p():
-            return([self.xmin + ((self.xmax-self.xmin)/2),
-                    self.ymax + ((self.ymax-self.ymin)/2)])
+            return([(self.xmax+self.xmin)/2,
+                    (self.ymax+self.ymin)/2])
         
         else:
             return(None)        
 
+        
         
     def chunk(self, inc, n_chunk=10):
         """chunk the xy region [xmin, xmax, ymin, ymax] into 

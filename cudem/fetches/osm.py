@@ -38,6 +38,131 @@ from cudem import xyzfun
 from cudem.fetches import fetches
 from cudem.fetches import gmrt
 
+class osmCoastline:
+    def __init__(self, region=None, chunks=True, verbose=True, attempts=5, n_threads=1, cache_dir='.',
+                 landmask_is_watermask=False, line_buffer=0.0000001, include_landmask=False):
+        self.region = region
+        self.chunks = chunks
+        self.verbose = verbose
+        self.attempts = attempts
+        self.n_threads = n_threads
+        self.cache_dir = cache_dir
+        self.landmask_is_watermask = landmask_is_watermask
+        self.line_buffer = line_buffer
+        self.include_landmask = include_landmask
+        
+        self.this_cst = None
+
+        
+    def __call__(self, return_geom=True, overwrite=False):
+        if self.region is None or not self.region.valid_p():
+            utils.echo_error_msg(f'{self.region} is an invalid region')
+            return(None)
+
+        if not return_geom:
+            out_fn = '{}.gpkg'.format(utils.append_fn('osm_coast', self.region, 1))
+            if not overwrite:
+                if os.path.exists(out_fn):
+                    return(out_fn)
+            else:
+                utils.remove_glob(out_fn)
+        else:
+            out_fn = None
+
+        out_fn, cst_geoms = self.process(out_fn)
+                
+        if return_geom:            
+            return(cst_geoms)
+        else:
+            #return(gdalfun.ogr_geoms2ogr(cst_geoms, out_fn, ogr_format='GPKG'))
+            return(out_fn)
+                
+                
+    def init_fetch(self):
+        self.this_cst = OpenStreetMap(
+            src_region=self.region,
+            verbose=self.verbose,
+            outdir=self.cache_dir,
+            q='coastline',
+            chunks=self.chunks,
+        )
+
+        
+    def fetch(self):
+        if self.this_cst is None:
+            self.init_fetch()
+            
+        self.this_cst.run()
+        fr = fetches.fetch_results(
+            self.this_cst, check_size=False, attempts=self.attempts, n_threads=self.n_threads
+        )
+        fr.daemon=True
+        fr.start()
+        fr.join()
+        return(fr)
+
+
+    def union_geoms(self):
+        cst_ds = ogr.Open(tmp_dst, 0)
+        cst_layer = cst_ds.GetLayer()
+        cst_geom = gdalfun.ogr_union_geom(cst_layer, verbose=True)
+        #cst_geoms.append(cst_geom)
+        
+        driver = ogr.GetDriverByName("ESRI Shapefile")
+        out_ds = driver.CreateDataSource(dst_ogr)
+        out_layer = out_ds.CreateLayer("split_polygons", cst_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
+        cst_ds = None
+        out_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
+        out_feature = ogr.Feature(out_layer.GetLayerDefn())
+        out_feature.SetGeometry(cst_geom)
+        out_feature.SetField('watermask', 1)
+        out_layer.CreateFeature(out_feature)
+        
+        utils.echo_msg('ok')
+        out_ds =  None
+
+        return(tmp_dst)
+    
+    def process(self, out_fn):
+        cst_geoms = []
+        if self.this_cst is None:
+            self.this_cst = self.fetch()
+
+        with tqdm(
+                total=len(self.this_cst.results),
+                desc='processing coastline',
+                leave=self.verbose
+        ) as pbar:
+            for n, cst_result in enumerate(self.this_cst.results):
+                print(cst_result)
+                if cst_result[-1] == 0:
+                    cst_osm = cst_result[1]
+                    out = polygonize_osm_coastline(
+                        cst_osm, out_fn,
+                        #region=self.region,
+                        include_landmask=self.include_landmask,
+                        landmask_is_watermask=self.landmask_is_watermask,
+                        line_buffer=self.line_buffer,
+                        verbose=self.verbose,
+                    )
+
+        if out_fn is None:
+            cst_ds = ogr.Open(out_fn, 0)
+            cst_layer = cst_ds.GetLayer()
+            cst_geom = gdalfun.ogr_union_geom(
+                cst_layer, verbose=self.verbose
+            )
+            cst_geoms.append(cst_geom)
+            cst_ds = None
+            #utils.remove_glob(cst_osm)
+            #utils.remove_glob(f'{utils.fn_basename2(out)}.*')
+            
+            pbar.update()
+            
+
+        return(out_fn, cst_geoms)        
+
+
 ## OSM - Open Street Map
 def fetch_coastline(region=None, chunks=True, verbose=True, attempts=5, n_threads=1, cache_dir='./'):
     #this_region.buffer(pct=5)
@@ -66,8 +191,17 @@ def fetch_coastline(region=None, chunks=True, verbose=True, attempts=5, n_thread
 
 def process_coastline(
         this_cst, region=None, return_geom=True, landmask_is_watermask=False,
-        line_buffer=0.0000001, include_landmask=False, verbose=True, cache_dir='./'
+        line_buffer=0.0000001, include_landmask=False, verbose=True, cache_dir='./',
+        overwrite=False
 ):
+    if not return_geom:
+        out_fn = utils.append_fn('osm_coast.gpkg', region, 1)
+        if overwrite:
+            if os.path.exists(out_fn):
+                return(out_fn)
+        else:
+            utils.remove_glob(out_fn)
+            
     cst_geoms = []
     if this_cst is not None:
         with tqdm(
@@ -100,19 +234,14 @@ def process_coastline(
                         cst_geoms.append(cst_geom)
                         cst_ds = None
                         utils.remove_glob(cst_osm)
+                        utils.remove_glob(f'{utils.fn_basename2(out)}.*')
 
                 pbar.update()
-
-        if return_geom:
-            try:
-                utils.remove_glob(f'{utils.fn_basename2(out)}.*')
-            except:
-                pass
 
     if return_geom:            
         return(cst_geoms)
     else:
-        return(out)
+        return(gdalfun.ogr_geoms2ogr(cst_geoms, out_fn, ogr_format='GPKG'))
 
 
 ## todo: make wrapper modules for 'buildings' and 'coastline' and whaterver else...perhaps

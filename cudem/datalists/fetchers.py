@@ -82,7 +82,7 @@ class Fetcher(ElevationDataset):
         if self.dst_srs is not None:
             self.wgs_region.warp(self.wgs_srs)
 
-        self.fetch_module = fetches.fetches_factory.FetchesFactory(
+        self.fetch_module = fetches.fetches.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
             callback=callback, verbose=False,
             outdir=outdir,
@@ -132,7 +132,7 @@ class Fetcher(ElevationDataset):
                 self.fetch_module.results = []
         
     def init_fetch_module(self):
-        self.fetch_module = fetches.fetches_factory.FetchesFactory(
+        self.fetch_module = fetches.fetches.FetchesFactory(
             mod=self.fn,
             src_region=self.region,
             callback=fetches.fetches.fetches_callback,

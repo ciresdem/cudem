@@ -42,6 +42,7 @@ from osgeo import ogr
 
 from cudem import utils
 from cudem import regions
+from cudem import gdalfun
 from cudem.fetches import fetches
 from cudem.fetches import earthdata
 from cudem.datalists.dlim import ElevationDataset
@@ -1758,7 +1759,10 @@ class IceSat2_ATL03(ElevationDataset):
                     verbose=self.verbose
                 )
             elif isinstance(self.classify_buildings, list):
-                this_bing = self.classify_buildings         
+                this_bing = self.classify_buildings
+            elif isinstance(self.classify_buildings, str):
+                if os.path.exists(self.classify_buildings):
+                    this_bing = gdalfun.ogr_geoms(self.classify_buildings)
 
         ## fetch and process watermask, if wanted
         if self.classify_water:
@@ -1770,6 +1774,9 @@ class IceSat2_ATL03(ElevationDataset):
                 )
             elif isinstance(self.classify_water, list):
                 this_wm = self.classify_water
+            elif isinstance(self.classify_water, str):
+                if os.path.exists(self.classify_water):
+                    this_wm = gdalfun.ogr_geoms(self.classify_water)
 
         ## parse through the icesat2 file by laser number
         with h5.File(self.fn, 'r') as atl03_f:
@@ -1891,6 +1898,9 @@ class IceSat2_ATL03(ElevationDataset):
             for n, wm_geom in enumerate(mask_geoms):                
                 pbar.update()
                 icesat_layer = ogr_df.GetLayer()
+                if isinstance(wm_geom,  str):
+                    wm_geom = ogr.CreateGeometryFromWkt(wm_geom)
+                    
                 icesat_layer.SetSpatialFilter(wm_geom)
                 for f in icesat_layer:
                     idx = f.GetField('index')
