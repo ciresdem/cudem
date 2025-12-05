@@ -753,38 +753,42 @@ class IceSat2_ATL03(ElevationDataset):
                                 if dataset is None or len(dataset) == 0:
                                     continue
 
-                                ## re-classify photons based on buildings/watermask/bathymetry
-                                if self.classify_buildings and this_bing is not None:
-                                    #dataset = self.classify_buildings(dataset, this_bing)
-                                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_bing, classification=7)
-
-                                #utils.echo_msg(f'this_wm: {this_wm}')
-                                if self.classify_water and this_wm is not None:
-                                    #dataset = self.classify_water(dataset, this_wm)
-                                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41, except_classes=[40])
-
-                                #utils.echo_msg(f'this_wm: {this_wm}')
-                                if self.classify_inland_water and this_iwm is not None:
-                                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_iwm, classification=42, except_classes=[40])
-                                    
-                                if dataset is None or len(dataset) == 0:
-                                    continue
-
-                                # ## bathymetry is classified in `read_atl_data` using ATL24 now...
-                                # if self.want_bathymetry:
-                                #     dataset = self.classify_bathymetry(dataset)
-
-                                # if dataset is None or len(dataset) == 0:
-                                #     continue
-
-                                ## keep only photons with a classification mentioned in `self.classes`
                                 if len(self.classes) > 0:
+                                    ## vectorize the photons
+                                    ogr_df = self._vectorize_df(dataset)
+
+                                    ## re-classify photons based on buildings/watermask/bathymetry
+                                    if self.classify_buildings and this_bing is not None:
+                                        #dataset = self.classify_buildings(dataset, this_bing)
+                                        dataset = self.classify_by_mask_geoms(ogr_df, mask_geoms=this_bing, classification=7)
+
+                                    #utils.echo_msg(f'this_wm: {this_wm}')
+                                    if self.classify_water and this_wm is not None:
+                                        #dataset = self.classify_water(dataset, this_wm)
+                                        dataset = self.classify_by_mask_geoms(ogr_df, mask_geoms=this_wm, classification=41, except_classes=[40])
+
+                                    #utils.echo_msg(f'this_wm: {this_wm}')
+                                    if self.classify_inland_water and this_iwm is not None:
+                                        dataset = self.classify_by_mask_geoms(ogr_df, mask_geoms=this_iwm, classification=42, except_classes=[40])
+
+                                    if dataset is None or len(dataset) == 0:
+                                        continue
+
+                                    # ## bathymetry is classified in `read_atl_data` using ATL24 now...
+                                    # if self.want_bathymetry:
+                                    #     dataset = self.classify_bathymetry(dataset)
+
+                                    # if dataset is None or len(dataset) == 0:
+                                    #     continue
+
+                                    ## keep only photons with a classification mentioned in `self.classes`
+                                    #if len(self.classes) > 0:
                                     dataset = dataset[
                                         (np.isin(dataset['ph_h_classed'], self.classes))
                                     ]
 
-                                if dataset is None or len(dataset) == 0:
-                                    continue
+                                    if dataset is None or len(dataset) == 0:
+                                        continue
 
                                 ## rename the x,y,z columns for `transform_and_yield_points`
                                 dataset.rename(
@@ -857,5 +861,36 @@ class IceSat2_ATL03(ElevationDataset):
         ogr_df = None
         return(dataset)
 
+    
+    def classify_by_mask_geoms(self, ogr_df, mask_geoms=[], classification=-1, except_classes=[]):
+        """classify water photons using OSM coastline 
+        """
+        
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        with tqdm(
+                total=len(mask_geoms),
+                desc='classifying water photons',
+                leave=False
+        ) as pbar:
+            for n, wm_geom in enumerate(mask_geoms):                
+                pbar.update()
+                icesat_layer = ogr_df.GetLayer()
+                if isinstance(wm_geom,  str):
+                    wm_geom = ogr.CreateGeometryFromWkt(wm_geom)
+                    
+                icesat_layer.SetSpatialFilter(wm_geom)
+                for f in icesat_layer:
+                    idx = f.GetField('index')
+                    #except_mask = dataset.at[idx, 'ph_h_classed']
+                    if dataset.at[idx, 'ph_h_classed'] not in except_classes:
+                        dataset.at[idx, 'ph_h_classed'] = classification
+
+                icesat_layer.SetSpatialFilter(None)
+
+        #ogr_df = None
+        return(dataset)
+
+    
     
 ### End
