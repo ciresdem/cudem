@@ -148,13 +148,15 @@ class osmCoastline:
         self.this_osm = None
 
         
-    def __call__(self, return_geom=True, overwrite=False):
+    def __call__(self, out_fn=None, return_geom=True, overwrite=False):
         if self.region is None or not self.region.valid_p():
             utils.echo_error_msg(f'{self.region} is an invalid region')
             return(None)
 
         if not return_geom:
-            out_fn = '{}.gpkg'.format(utils.append_fn(f'osm_{self.q}', self.region, 1, high_res=True))
+            if out_fn is None or not isinstance(out_fn, str):
+                out_fn = '{}.gpkg'.format(utils.append_fn(f'osm_{self.q}', self.region, 1, high_res=True))
+                
             utils.echo_msg(out_fn)
             if not overwrite:
                 if os.path.exists(out_fn):
@@ -238,7 +240,11 @@ class osmCoastline:
                 if cst_result[-1] == 0:
                     cst_osm = cst_result[1]
                     out = polygonize_osm_coastline(
-                        cst_osm, out_fn,
+                        cst_osm,
+                        out_fn if out_fn is not None else utils.make_temp_fn(
+                            f'{utils.fn_basename2(cst_osm)}_coast.gpkg',
+                            temp_dir=cache_dir
+                        ),
                         #region=self.region,
                         include_landmask=self.include_landmask,
                         landmask_is_watermask=self.landmask_is_watermask,
@@ -259,7 +265,6 @@ class osmCoastline:
             
             pbar.update()
             
-
         return(out_fn, cst_geoms)        
 
     def process_water(self, out_fn):
@@ -289,7 +294,9 @@ class osmCoastline:
 
                     pbar.update()
 
-        gdalfun.ogr_wktgeoms2ogr(lk_geoms, out_fn, ogr_format='GPKG')        
+        if out_fn is not None:
+            gdalfun.ogr_wktgeoms2ogr(lk_geoms, out_fn, ogr_format='GPKG')
+            
         return(out_fn, lk_geoms)
     
 

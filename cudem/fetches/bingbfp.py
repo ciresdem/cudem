@@ -48,13 +48,15 @@ class bingBuildings:
         self.this_bldg = None
 
         
-    def __call__(self, return_geom=True, overwrite=False):
+    def __call__(self, out_fn=None, return_geom=True, overwrite=False):
         if self.region is None or not self.region.valid_p():
             utils.echo_error_msg(f'{self.region} is an invalid region')
             return(None)
 
         if not return_geom:
-            out_fn = '{}.gpkg'.format(utils.append_fn('bing_buildings', self.region, 1))
+            if out_fn is None or not isinstance(out_fn, str):
+                out_fn = '{}.gpkg'.format(utils.append_fn('bing_buildings', self.region, 1))
+                
             if not overwrite:
                 if os.path.exists(out_fn):
                     return(out_fn)
@@ -125,7 +127,8 @@ class bingBuildings:
 
                 pbar.update()
 
-        gdalfun.ogr_geoms2ogr(bldg_geoms, out_fn, ogr_format='GPKG')
+        if out_fn is not None:
+            gdalfun.ogr_geoms2ogr(bldg_geoms, out_fn, ogr_format='GPKG')
         
         return(out_fn, bldg_geoms)        
 
