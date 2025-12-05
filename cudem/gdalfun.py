@@ -777,8 +777,9 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
 
 
 def ogr_geoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):
+    dirname = os.path.dirname(out)
     dst_layer = os.path.basename(utils.fn_basename2(out))
-    dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
+    dst_vector = os.path.join(dirname, dst_layer + '.{}'.format(ogr_fext(ogr_format)))
     if os.path.exists(out):
         utils.remove_glob(f'{utils.fn_basename2(out)}*')
         
@@ -822,8 +823,10 @@ def ogr_geoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):
 
 
 def ogr_wktgeoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):
+    dirname = os.path.dirname(out)
     dst_layer = os.path.basename(utils.fn_basename2(out))
-    dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
+    dst_vector = os.path.join(dirname, dst_layer + '.{}'.format(ogr_fext(ogr_format)))
+    #dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
     if os.path.exists(out):
         utils.remove_glob(f'{utils.fn_basename2(out)}*')
         

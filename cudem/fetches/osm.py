@@ -156,7 +156,7 @@ class osmCoastline:
         if not return_geom:
             if out_fn is None or not isinstance(out_fn, str):
                 out_fn = '{}.gpkg'.format(utils.append_fn(f'osm_{self.q}', self.region, 1, high_res=True))
-                
+
             utils.echo_msg(out_fn)
             if not overwrite:
                 if os.path.exists(out_fn):
