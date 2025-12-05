@@ -202,10 +202,16 @@ class Blend(grits.Grits):
         combined_mask = ~np.isnan(combined_arr)
         
         if self.sub_buffer_cells is not None:
-            combined_sub_mask = self.binary_closed_dilation(combined_mask, iterations=self.sub_buffer_cells)
+            combined_sub_mask = self.binary_closed_dilation(
+                combined_mask,
+                iterations=self.sub_buffer_cells
+            )
             
         if self.buffer_cells is not None:
-            combined_mask = self.binary_closed_dilation(combined_mask, iterations=self.buffer_cells)
+            combined_mask = self.binary_closed_dilation(
+                combined_mask,
+                iterations=self.buffer_cells
+            )
             
         ## load the src dem
         src_arr = np.full((ycount, xcount), np.nan)        
@@ -238,7 +244,7 @@ class Blend(grits.Grits):
         gy, gx = np.gradient(tmp)
         slope = np.sqrt(gx * gx + gy * gy)
 
-        m = np.max(np.abs(slope))
+        m = np.nanmax(np.abs(slope))
         if m == 0:
             return(None)
 
@@ -262,12 +268,13 @@ class Blend(grits.Grits):
         ## to values between 0 (near combined) and 1 (near src)
         dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
         #slope_n = self._compute_slope(src_arr, buffer_mask)
-        
+
         ## random src mask
         if self.sub_buffer_cells > 0:
             random_arr = np.random.rand(*combined_arr.shape)
             random_mask = random_arr > .985
-
+            #random_mask[slope_n < .25] = False
+            #random_mask = slope_n > .15
             random_mask[sub_buffer_mask] = False
             #slope_n[combined_sub_mask] = 0#self.slope_scale
             combined_arr[(buffer_mask) & (random_mask)] = src_arr[(buffer_mask) & (random_mask)]

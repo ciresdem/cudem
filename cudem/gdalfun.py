@@ -610,6 +610,27 @@ def ogr_union_geom(src_layer, geom_type=ogr.wkbMultiPolygon,
 
     return(multi)
 
+def ogr_union_geom2(src_layer, geom_type=ogr.wkbMultiPolygon,
+                    verbose=True):        
+    multi = ogr.Geometry(geom_type)
+    feats = src_layer.GetFeatureCount()#len(src_layer)
+    # [multi.AddGeometry(f.geometry().ExportToWkt()) for f in src_layer]
+    # if verbose:
+    #     utils.echo_msg(f'unioned {feats} features')
+        
+    #if feats > 0:
+    # with tqdm(
+    #         total=len(feats),
+    #         desc=f'unioning {feats} features...'
+    # ) as pbar:
+    for f in src_layer:
+        f_geom = f.geometry()
+        print(f_geom)
+        f_geom_wkt = f_geom
+        multi.AddGeometry(f_geom)
+
+    return(multi.ExportToWkt())
+
 
 def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
     """check if the OGR file is empty or not"""
@@ -800,26 +821,45 @@ def ogr_geoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):
     return(out)
 
 
+def ogr_wktgeoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):
+    dst_layer = os.path.basename(utils.fn_basename2(out))
+    dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
+    if os.path.exists(out):
+        utils.remove_glob(f'{utils.fn_basename2(out)}*')
+        
+    osr_prj_file('{}.prj'.format(utils.fn_basename2(out)), dst_srs)
+    driver = ogr.GetDriverByName(ogr_format)
+    ds = driver.CreateDataSource(dst_vector)
+    if ds is not None: 
+        layer = ds.CreateLayer(
+           dst_layer, None, ogr.wkbMultiPolygon
+        )
+        [layer.SetFeature(feature) for feature in layer]
+    else:
+        layer = None
+
+    for g in geoms:
+        out_feature = ogr.Feature(layer.GetLayerDefn())
+        gg = ogr.CreateGeometryFromWkt(g)
+        out_feature.SetGeometry(gg)
+        layer.CreateFeature(out_feature)
+
+    ds = None
+
+    return(out)
+
+
 def ogr_geoms(ogr_fn):
     out_geoms = []
-    #try:
     ds = ogr.Open(ogr_fn, 0)
     layer = ds.GetLayer()
     for f in layer:
         if f:
             geom = f.GetGeometryRef()
-            #print(f)
-            #geom = ogr_union_geom(
-            #    layer, verbose=False
-            #)
             if geom is not None and not geom.IsEmpty():
                 out_geoms.append(geom.ExportToWkt())
         
     ds = None    
-    #except:
-    #    utils.echo_warning_msg(f'{ogr_fn} could not be opened with ogr')
-
-    #print(out_geoms)
     return(out_geoms)
     
         
