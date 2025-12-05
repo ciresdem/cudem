@@ -38,8 +38,8 @@ from cudem import gdalfun
 from cudem.grits import grits
 
 def interpolate_array(
-        points_arr, ndv=-9999, chunk_size=None, chunk_step=None, chunk_buffer=0,
-        method='cubic', verbose=True
+        points_arr, ndv=-9999, chunk_size=None, chunk_step=None,
+        chunk_buffer=0, method='cubic', verbose=True
 ):
 
     ycount, xcount = points_arr.shape
@@ -72,40 +72,50 @@ def interpolate_array(
             srcwin, (ycount, xcount), chunk_buffer
         )
 
-        points_array = points_arr[srcwin_buff[1]:srcwin_buff[1]+srcwin_buff[3],
-                                  srcwin_buff[0]:srcwin_buff[0]+srcwin_buff[2]]
+        points_array = points_arr[
+            srcwin_buff[1]:srcwin_buff[1] + srcwin_buff[3],
+            srcwin_buff[0]:srcwin_buff[0] + srcwin_buff[2]
+        ]
         
         points_array[points_array == ndv] = np.nan
         point_indices = np.nonzero(~np.isnan(points_array))
         
-        y_origin = srcwin[1]-srcwin_buff[1]
-        x_origin = srcwin[0]-srcwin_buff[0]
+        y_origin = srcwin[1] - srcwin_buff[1]
+        x_origin = srcwin[0] - srcwin_buff[0]
         y_size = y_origin + srcwin[3]
         x_size = x_origin + srcwin[2]
         
         if np.all(np.isnan(points_array)):
             continue
+        
         elif np.count_nonzero(np.isnan(points_array)) == 0:
-
             points_array = points_array[y_origin:y_size,x_origin:x_size]
-            interp_array[srcwin[1]:srcwin[1]+points_array.shape[0],
-                         srcwin[0]:srcwin[0]+points_array.shape[1]] = points_array
+            interp_array[
+                srcwin[1]:srcwin[1]+points_array.shape[0],
+                srcwin[0]:srcwin[0]+points_array.shape[1]
+            ] = points_array
 
         elif len(point_indices[0]):
             point_values = points_array[point_indices]
-            xi, yi = np.mgrid[0:srcwin_buff[2],
-                              0:srcwin_buff[3]]
+            xi, yi = np.mgrid[
+                0:srcwin_buff[2],
+                0:srcwin_buff[3]
+            ]
 
             interp_data = interpolate.griddata(
-                np.transpose(point_indices), point_values,
-                (xi, yi), method=method
+                np.transpose(point_indices),
+                point_values,
+                (xi, yi),
+                method=method
             )
-            interp_data = interp_data[y_origin:y_size,x_origin:x_size]
-            interp_array[srcwin[1]:srcwin[1]+interp_data.shape[0],
-                         srcwin[0]:srcwin[0]+interp_data.shape[1]] = interp_data
+            interp_data = interp_data[y_origin:y_size, x_origin:x_size]
+            interp_array[
+                srcwin[1]:srcwin[1] + interp_data.shape[0],
+                srcwin[0]:srcwin[0] + interp_data.shape[1]
+            ] = interp_data
 
     point_values = None
-
+    
     return(interp_array)
 
 
@@ -157,31 +167,40 @@ class Blend(grits.Grits):
         
         aux_arrs = []
         src_arr = None
-        combined_arr = None
 
         src_region, ds_config = self.init_region(self.src_dem)
-        x_inc=ds_config['geoT'][1]
-        y_inc=ds_config['geoT'][5]*-1
+        x_inc = ds_config['geoT'][1]
+        y_inc = ds_config['geoT'][5] * -1
+        
         src_region.buffer(
-            x_bv=(x_inc*self.buffer_cells),
-            y_bv=(y_inc*self.buffer_cells)
+            x_bv=(x_inc * self.buffer_cells),
+            y_bv=(y_inc * self.buffer_cells)
         )
 
         xcount, ycount, dst_gt = src_region.geo_transform(
-            x_inc=ds_config['geoT'][1], y_inc=ds_config['geoT'][5], node='grid'
+            x_inc=ds_config['geoT'][1],
+            y_inc=ds_config['geoT'][5],
+            node='grid'
         )
         combined_arr = np.full((ycount, xcount), np.nan)
 
         for aux_fn in self.aux_dems:
             aux_ds = DatasetFactory(
-                mod=aux_fn, src_region=src_region, x_inc=x_inc, y_inc=y_inc
+                mod=aux_fn,
+                src_region=src_region,
+                x_inc=x_inc,
+                y_inc=y_inc
             )._acquire_module().initialize()
+            
             for arrs, srcwin, gt in aux_ds.array_yield:
                 ## supercede
-                combined_arr[srcwin[1]:srcwin[1]+srcwin[3],
-                             srcwin[0]:srcwin[0]+srcwin[2]] = arrs['z']
+                combined_arr[
+                    srcwin[1]:srcwin[1] + srcwin[3],
+                    srcwin[0]:srcwin[0] + srcwin[2]
+                ] = arrs['z']
 
         combined_mask = ~np.isnan(combined_arr)
+        
         if self.sub_buffer_cells is not None:
             combined_sub_mask = self.binary_closed_dilation(combined_mask, iterations=self.sub_buffer_cells)
             
@@ -193,17 +212,21 @@ class Blend(grits.Grits):
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
             if src_ds is not None:
                 self.init_ds(src_ds)
-                srcwin = (self.buffer_cells, self.buffer_cells, src_ds.RasterXSize, src_ds.RasterYSize)
-                src_arr[srcwin[1]:srcwin[1]+srcwin[3],
-                        srcwin[0]:srcwin[0]+srcwin[2]] = self.ds_band.ReadAsArray()
+                srcwin = (self.buffer_cells, self.buffer_cells,
+                          src_ds.RasterXSize, src_ds.RasterYSize)
+                
+                src_arr[
+                    srcwin[1]:srcwin[1]+srcwin[3],
+                    srcwin[0]:srcwin[0]+srcwin[2]
+                ] = self.ds_band.ReadAsArray()
 
                 src_arr[src_arr == ds_config['ndv']] = np.nan
-                src_mask = ~np.isnan(src_arr)
                 
+        src_mask = np.isfinite(src_arr)
         return(combined_arr, src_arr, combined_mask, src_mask, combined_sub_mask)
 
     
-    def _compute_slope(self, src_arr, seam_mask):
+    def _compute_slope(self, src_arr, buffer_mask):
         """Compute normalised slope in seam."""
 
         tmp = src_arr.copy()
@@ -229,6 +252,8 @@ class Blend(grits.Grits):
         ## combined mask is the combined data + buffer
         ## src_mask is the src data
         combined_arr, src_arr, combined_mask, src_mask, combined_sub_mask = self.init_data()
+        buffer_mask = combined_mask & src_mask
+        sub_buffer_mask = combined_sub_mask & src_mask
             
         ## combined_arr now has a nan buffer between aux and src data               
         combined_arr[~combined_mask] = src_arr[~combined_mask]
@@ -236,46 +261,53 @@ class Blend(grits.Grits):
         ## generate a distance transform and normalize the results
         ## to values between 0 (near combined) and 1 (near src)
         dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
-        #slope_n = self._compute_slope(src_arr, (combined_mask & src_mask))
-
+        #slope_n = self._compute_slope(src_arr, buffer_mask)
+        
         ## random src mask
         if self.sub_buffer_cells > 0:
             random_arr = np.random.rand(*combined_arr.shape)
             random_mask = random_arr > .985
 
-            random_mask[(src_mask) & (combined_sub_mask)] = False
-            #slope_n[combined_sub_mask] *= .25
-            combined_arr[(combined_mask) & (src_mask) & (random_mask)] = src_arr[(combined_mask) & (src_mask) & (random_mask)]
+            random_mask[sub_buffer_mask] = False
+            #slope_n[combined_sub_mask] = 0#self.slope_scale
+            combined_arr[(buffer_mask) & (random_mask)] = src_arr[(buffer_mask) & (random_mask)]
             combined_mask[random_mask] = True
-
-        dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
-        dt = dt[(src_mask) & (combined_mask)]
+            dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
+            
+        dt = dt[buffer_mask]
         dt = (dt - np.min(dt)) / (np.max(dt) - np.min(dt))
 
         # if slope_n is not None and dt.size:
         #     # Option 1: aggressive slope–distance mix
         #     if self.slope_scale not in (0, 0.0):
         #         #dt = (1.0 - self.slope_scale) * dt + self.slope_scale * slope_n[(src_mask) & (combined_mask)]
-        #         dt += (self.slope_scale * slope_n[(src_mask) & (combined_mask)])
+        #         dt += (self.slope_scale * slope_n[buffer_mask])
 
         ## interpolate the buffer and extract just the buffer area and calculate the
         ## difference between the src data and the interp data
         interp_arr = interpolate_array(
-            combined_arr, ndv=self.ds_config['ndv'], method='linear',
-            chunk_size=self.buffer_cells*5, chunk_step=self.buffer_cells*5,
-            #chunk_buffer=self.buffer_cells
+            combined_arr,
+            ndv=self.ds_config['ndv'],
+            method='linear',
+            chunk_size=self.buffer_cells * 5,
+            chunk_step=self.buffer_cells * 5,
         )
-        interp_data_in_buffer = interp_arr[(combined_mask) & (src_mask)]
-        src_data_in_buffer = src_arr[(combined_mask) & (src_mask)]
+        interp_data_in_buffer = interp_arr[buffer_mask]
+        src_data_in_buffer = src_arr[buffer_mask]
         interp_arr = None
         buffer_diffs = interp_data_in_buffer - src_data_in_buffer
         buffer_diffs[np.isnan(buffer_diffs)] = 0
 
         ## apply the normalize results to the differences and set and write out the results
-        combined_arr[(combined_mask) & (src_mask)] = src_arr[(combined_mask) & (src_mask)] + (buffer_diffs*dt)
+        combined_arr[buffer_mask] = src_arr[buffer_mask] + (buffer_diffs * dt)
         combined_arr[~src_mask] = np.nan
         combined_arr[np.isnan(combined_arr)] = self.ds_config['ndv']
-        srcwin = (self.buffer_cells, self.buffer_cells, self.ds_config['nx'], self.ds_config['ny'])
+        srcwin = (
+            self.buffer_cells,
+            self.buffer_cells,
+            self.ds_config['nx'],
+            self.ds_config['ny']
+        )
         
         return(combined_arr, srcwin)
 
@@ -287,8 +319,10 @@ class Blend(grits.Grits):
 
         combined_arr, srcwin = self.blend_data()        
         this_band = dst_ds.GetRasterBand(1)
-        this_band.WriteArray(combined_arr[srcwin[1]:srcwin[1]+srcwin[3],
-                                          srcwin[0]:srcwin[0]+srcwin[2]])
+        this_band.WriteArray(
+            combined_arr[srcwin[1]:srcwin[1] + srcwin[3],
+                         srcwin[0]:srcwin[0] + srcwin[2]]
+        )
         
         dst_ds = None
         return(self.dst_dem, 0)
