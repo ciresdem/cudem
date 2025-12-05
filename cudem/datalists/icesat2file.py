@@ -760,16 +760,16 @@ class IceSat2_ATL03(ElevationDataset):
                                     ## re-classify photons based on buildings/watermask/bathymetry
                                     if self.classify_buildings and this_bing is not None:
                                         #dataset = self.classify_buildings(dataset, this_bing)
-                                        dataset = self.classify_by_mask_geoms(ogr_df, mask_geoms=this_bing, classification=7)
-
+                                        dataset = self.classify_by_mask_geoms(ogr_df, dataset, mask_geoms=this_bing, classification=7)
+                                        
                                     #utils.echo_msg(f'this_wm: {this_wm}')
                                     if self.classify_water and this_wm is not None:
                                         #dataset = self.classify_water(dataset, this_wm)
-                                        dataset = self.classify_by_mask_geoms(ogr_df, mask_geoms=this_wm, classification=41, except_classes=[40])
+                                        dataset = self.classify_by_mask_geoms(ogr_df, dataset, mask_geoms=this_wm, classification=41, except_classes=[40])
 
                                     #utils.echo_msg(f'this_wm: {this_wm}')
                                     if self.classify_inland_water and this_iwm is not None:
-                                        dataset = self.classify_by_mask_geoms(ogr_df, mask_geoms=this_iwm, classification=42, except_classes=[40])
+                                        dataset = self.classify_by_mask_geoms(ogr_df, dataset, mask_geoms=this_iwm, classification=42, except_classes=[40])
 
                                     if dataset is None or len(dataset) == 0:
                                         continue
@@ -790,6 +790,8 @@ class IceSat2_ATL03(ElevationDataset):
                                     if dataset is None or len(dataset) == 0:
                                         continue
 
+                                    ogr_df = None
+                                    
                                 ## rename the x,y,z columns for `transform_and_yield_points`
                                 dataset.rename(
                                     columns={
@@ -862,7 +864,7 @@ class IceSat2_ATL03(ElevationDataset):
         return(dataset)
 
     
-    def classify_by_mask_geoms(self, ogr_df, mask_geoms=[], classification=-1, except_classes=[]):
+    def classify_by_mask_geoms(self, ogr_df, dataset, mask_geoms=[], classification=-1, except_classes=[]):
         """classify water photons using OSM coastline 
         """
         
@@ -889,8 +891,8 @@ class IceSat2_ATL03(ElevationDataset):
                 icesat_layer.SetSpatialFilter(None)
 
         #ogr_df = None
-        return(dataset)
-
+        #return(dataset)
+    
     
     
 ### End
