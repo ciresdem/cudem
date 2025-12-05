@@ -829,7 +829,7 @@ class IceSat2_ATL03(ElevationDataset):
         return(ogr_ds)
 
 
-    def classify_by_mask_geoms(self, dataset, mask_geoms=[], classification=-1, except_classes=[]):
+    def classify_by_mask_geoms2(self, dataset, mask_geoms=[], classification=-1, except_classes=[]):
         """classify water photons using OSM coastline 
         """
 
