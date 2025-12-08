@@ -112,6 +112,7 @@ class INF:
 
         
     def load_inf_file(self, inf_fn = None):
+        from cudem.datalists.mbsfile import MBSParser
         valid_data = False
         data = {}
         if inf_fn is None:

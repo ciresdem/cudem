@@ -4503,8 +4503,46 @@ class ElevationDataset:
     ## Data archive
     ###########################################################################        
     def _archive_xyz_test(self, **kwargs):
+        srs_all = []
+        a_name = None
+        if 'dirname' in kwargs.keys() and kwargs['dirname'] is not None:
+            a_name = kwargs['dirname']
+        #else:
+        aa_name = self.metadata['name'].split('/')[0]
+        if self.region is None:
+            aa_name = '{}_{}'.format(aa_name, utils.this_year())
+        else:
+            aa_name = '{}_{}_{}'.format(
+                aa_name, self.region.format('fn'), utils.this_year())
+
+        if a_name is None:
+            a_name = aa_name
+            self.archive_datalist = '{}.datalist'.format(a_name)
+        else:
+            self.archive_datalist = '{}.datalist'.format(a_name)
+            a_name = os.path.join(a_name, aa_name)
+
+        utils.echo_msg(self.archive_datalist)
+        if not os.path.exists(os.path.dirname(self.archive_datalist)):
+            try:
+                os.makedirs(os.path.dirname(self.archive_datalist))
+            except:
+                pass
+
+        archive_keys = []
         for this_entry in self.parse():
-            utils.echo_msg(this_entry)
+            #utils.echo_msg(this_entry)
+            datalist_dirname = os.path.join(
+                a_name, os.path.dirname(this_entry.metadata['name'])
+            )
+            this_key = datalist_dirname.split('/')[-1]
+            if this_key not in archive_keys:
+                archive_keys.append(this_key)
+                utils.echo_msg_bold(this_key)
+                metadata=this_entry.format_metadata()
+                utils.echo_msg_bold(metadata)
+            #if not os.path.exists(datalist_dirname):
+            #    os.makedirs(datalist_dirname)
 
             
     def archive_xyz(self, **kwargs):
@@ -5803,6 +5841,8 @@ See `datalists_usage` for full cli options.
                     this_archive = this_datalist.archive_xyz(dirname=archive_dirname) 
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
+                elif want_tables:
+                    this_datalist._archive_xyz_test()
                 else:
                     try:
                         # process and dump each dataset independently

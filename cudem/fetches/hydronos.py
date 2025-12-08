@@ -136,7 +136,12 @@ class HydroNOS(fetches.FetchModule):
                         has_bag = feature['attributes']['BAGS_EXIST']
                         dtype = 'bag' if has_bag is not None else 'hydro'
                         line = '{},{}'.format(sid,year)
-                        print(line)
+                        if self.datatype is None or 'bag' in self.datatype.lower():
+                            if dtype == 'bag':
+                                print(line)
+                        else:
+                            if dtype != 'bag':
+                                print(line)
                     else:
                         ID = feature['attributes']['SURVEY_ID']
                         link = feature['attributes']['DOWNLOAD_URL']

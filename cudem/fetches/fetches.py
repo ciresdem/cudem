@@ -1428,6 +1428,7 @@ See `fetches_cli_usage` for full cli options.
             if want_list:
                 for result in x_f.results:
                     print(result['url'])
+                    print(result)
             else:
                 try:
                     fr = fetch_results(
