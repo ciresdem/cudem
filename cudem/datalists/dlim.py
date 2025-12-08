@@ -5784,7 +5784,8 @@ See `datalists_usage` for full cli options.
                     print(this_datalist.inf()) 
                 elif want_list:
                     # output each dataset from the datalist
-                    this_datalist.echo() 
+                    this_datalist.echo()
+                
                 elif want_region:
                     # get the region and warp it if necessary
                     this_inf = this_datalist.inf()

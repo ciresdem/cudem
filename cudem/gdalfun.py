@@ -855,14 +855,16 @@ def ogr_wktgeoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile
 def ogr_geoms(ogr_fn):
     out_geoms = []
     ds = ogr.Open(ogr_fn, 0)
-    layer = ds.GetLayer()
-    for f in layer:
-        if f:
-            geom = f.GetGeometryRef()
-            if geom is not None and not geom.IsEmpty():
-                out_geoms.append(geom.ExportToWkt())
+    if ds is not None:
+        layer = ds.GetLayer()
+        for f in layer:
+            if f:
+                geom = f.GetGeometryRef()
+                if geom is not None and not geom.IsEmpty():
+                    out_geoms.append(geom.ExportToWkt())
         
-    ds = None    
+        ds = None
+        
     return(out_geoms)
     
         

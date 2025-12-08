@@ -119,8 +119,6 @@ def process_coastline(
         return(gdalfun.ogr_geoms2ogr(cst_geoms, out_fn, ogr_format='GPKG'))
 
 
-
-
 class osmCoastline:
     def __init__(
             self,
@@ -283,6 +281,12 @@ class osmCoastline:
                         lk_osm = lk_result[1]
                         lk_ds = ogr.Open(lk_osm, 0)
                         lk_layer = lk_ds.GetLayer('multipolygons')
+
+                        _boundsGeom = None
+                        if self.region is not None:
+                            _boundsGeom = self.region.export_as_geom()                            
+                            lk_layer.SetSpatialFilter(_boundsGeom)
+                        
                         for f in lk_layer:
                             if f.GetField('natural') == 'water':
                                 geom = f.GetGeometryRef()

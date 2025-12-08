@@ -115,7 +115,7 @@ class PointZ:
         """Fetch data from a fetches module for the data-region
         """
         
-        this_fetches = fetches.fetches_facotry.FetchesFactory(
+        this_fetches = fetches.fetches.FetchesFactory(
             mod=fetches_module,
             src_region=self.region,
             verbose=self.verbose,
@@ -448,7 +448,7 @@ class RQOutlierZ(PointZOutlier):
         if os.path.exists(f'{raster}_swath.tif'):
             return(f'{raster}_swath.tif')
 
-        this_fetch = fetches.fetches_factory.FetchesFactory(
+        this_fetch = fetches.fetches.FetchesFactory(
             mod='gmrt',
             src_region=self.region,
             verbose=self.verbose,

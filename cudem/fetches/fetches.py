@@ -1215,6 +1215,7 @@ class FetchesFactory(factory.CUDEMFactory):
     from . import wadnr
     from . import nswtb
     from . import cdse
+    from . import gba
     
     _modules = {
         'https': {'call': HttpDataset},
@@ -1271,6 +1272,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'wa_dnr': {'call': wadnr.waDNR},
         'nsw_tb': {'call': nswtb.NSW_TB},
         'sentinel2': {'call': cdse.Sentinel2},
+        'gba': {'call': gba.GBA},
     }
 
     

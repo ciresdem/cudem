@@ -114,6 +114,12 @@ class bingBuildings:
                         bing_gj = bing_gj + '.geojson'
                         bldg_ds = ogr.Open(bing_gj, 0)
                         bldg_layer = bldg_ds.GetLayer()
+
+                        _boundsGeom = None
+                        if self.region is not None:
+                            _boundsGeom = self.region.export_as_geom()                            
+                            bldg_layer.SetSpatialFilter(_boundsGeom)
+                        
                         bldg_geom = gdalfun.ogr_union_geom(
                             bldg_layer, verbose=False
                         )
