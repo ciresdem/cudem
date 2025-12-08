@@ -996,6 +996,8 @@ class FetchModule:
             verbose=True,
             outdir=None,
             name='fetches',
+            min_year=None,
+            max_year=None,
             params={}
     ):
         self.region = src_region # fetching region
@@ -1006,6 +1008,8 @@ class FetchModule:
         self.status = 0 # fetching status
         self.results = [] # fetching results, a list of dicts
         self.name = name # the name of the fetch module
+        self.min_year = utils.int_or(min_year)
+        self.max_year = utils.int_or(max_year)
         
         ## some servers don't like us, or any 'bot' at all, so let's
         ## pretend we're just a Mozilla user on Linux. 

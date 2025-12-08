@@ -93,10 +93,11 @@ class NauticalCharts(fetches.FetchModule):
     < charts:want_rnc=False >
     """
 
-    def __init__(self, where='', want_rnc=False, **kwargs):
+    def __init__(self, where='', want_rnc=False, tables=False, **kwargs):
         super().__init__(name='charts', **kwargs)
         self.where = [where] if len(where) > 0 else []
         self.want_rnc = want_rnc
+        self.tables = tables
         
         ## various charts URLs
         self._charts_url = 'https://www.charts.noaa.gov/'
@@ -219,8 +220,11 @@ class NauticalCharts(fetches.FetchModule):
             for surv in _results:
                 pbar.update(1)
                 for i in surv['DataLink'].split(','):
-                    self.add_entry_to_results(
-                        i, i.split('/')[-1], surv['DataType']
-                    )
+                    if self.tables:
+                        pass
+                    else:
+                        self.add_entry_to_results(
+                            i, i.split('/')[-1], surv['DataType']
+                        )
 
 ### End

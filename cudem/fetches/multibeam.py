@@ -27,7 +27,7 @@
 ##
 ### Code:
 
-import os
+import os, sys
 import re
 from tqdm import tqdm
 from io import StringIO
@@ -55,13 +55,11 @@ class Multibeam(fetches.FetchModule):
     
     def __init__(
             self, processed=True, survey_id=None, exclude_survey_id=None, ship_id=None,
-            exclude_ship_id=None, min_year=None, max_year=None, exclude=None,
-            make_datalist=False, want_inf=True, want_vdatum=False, inf_only=False, **kwargs
+            exclude_ship_id=None, exclude=None, make_datalist=False, want_inf=True,
+            want_vdatum=False, inf_only=False, tables=False, **kwargs
     ):
         super().__init__(name='multibeam', **kwargs)
         self.processed_p = processed
-        self.min_year = utils.int_or(min_year)
-        self.max_year = utils.int_or(max_year)
         self.survey_id = survey_id
         self.exclude_survey_id = exclude_survey_id
         self.ship_id = ship_id
@@ -74,7 +72,8 @@ class Multibeam(fetches.FetchModule):
             self.want_inf = True
             
         self.want_vdatum = want_vdatum
-
+        self.tables = tables
+        
         ## various multibeam URLs
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
@@ -231,9 +230,11 @@ class Multibeam(fetches.FetchModule):
 
         else:
             utils.echo_error_msg(
-                'failed to fetch multibeam request'
+                f'failed to fetch multibeam request, {_req.status_code}'
             )
 
+        #print(these_surveys)
+            
         with tqdm(
                 total=len(these_surveys.keys()),
                 desc='scanning NCEI Multibeam datasets',

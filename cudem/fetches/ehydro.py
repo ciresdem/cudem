@@ -86,15 +86,13 @@ class eHydro(fetches.FetchModule):
     """
 
     def __init__(self, where='1=1', inc=None, survey_name=None, index=False,
-                 tables=False, min_year=None, max_year=None, **kwargs):
+                 tables=False, **kwargs):
         super().__init__(name='ehydro', **kwargs)
         self.where = where
         self.survey_name = survey_name
         self.inc = utils.str2inc(inc)
         self.index = index
         self.tables = tables
-        self.min_year = utils.int_or(min_year)
-        self.max_year = utils.int_or(max_year)
         
         ## Various EHydro URLs
         self._ehydro_gj_api_url = ('https://opendata.arcgis.com/datasets/'
@@ -150,9 +148,16 @@ class eHydro(fetches.FetchModule):
                         year = time.gmtime(
                             int(str(feature['attributes']['surveydatestart'])[:10])
                         ).tm_year
+                        start_date = time.gmtime(
+                            int(str(feature['attributes']['surveydatestart'])[:10])
+                        ).tm_year
+                        end_date = time.gmtime(
+                            int(str(feature['attributes']['surveydateend'])[:10])
+                        ).tm_year
                         url = feature['attributes']['sourcedatalocation']
                         dtype = feature['attributes']['surveytype']
                         line = '{},{}'.format(sid,year)
+                        #line = '{},{},{}'.format(sid,start_date,end_date)
                         if sid is not None:
                             print(line)                            
                     else:

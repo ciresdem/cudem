@@ -28,6 +28,8 @@
 ### Code:
 
 import os
+import time
+import json
 from cudem import utils
 from cudem.fetches import fetches
 
@@ -127,6 +129,13 @@ class HydroNOS(fetches.FetchModule):
             features = _req.json()
             if 'features' in features.keys():
                 for feature in features['features']:
+                    year = feature['attributes']['SURVEY_YEAR']
+                    if self.min_year is not None and int(year) < self.min_year:
+                        continue
+
+                    if self.max_year is not None and int(year) > self.max_year:
+                        continue
+
                     if self.index:
                         print(json.dumps(feature['attributes'], indent=4))
                     elif self.tables:
