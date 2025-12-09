@@ -125,6 +125,12 @@ class Blend(grits.Grits):
                  binary_dilation=True, binary_pulse=False,
                  fill_holes=False, aux_dems=None, sub_buffer_cells=0,
                  slope_scale=.5, **kwargs):
+        """
+        slope_scale:
+            0.0 -> disable slope gating (classic behavior)
+            0–1 -> slope threshold in normalized slope units; higher = only
+                   steeper regions allowed to keep random src points.
+        """
         super().__init__(**kwargs)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
@@ -139,7 +145,7 @@ class Blend(grits.Grits):
         
         self.fill_holes = fill_holes
         self.sub_buffer_cells = utils.int_or(sub_buffer_cells, 0)
-        self.slope_scale = utils.float_or(slope_scale, 1.)
+        self.slope_scale = utils.float_or(slope_scale, 0.5)
         
         self.aux_dems = aux_dems.split(',')
         
@@ -203,14 +209,14 @@ class Blend(grits.Grits):
         
         if self.sub_buffer_cells is not None:
             combined_sub_mask = self.binary_closed_dilation(
-                combined_mask,
-                iterations=self.sub_buffer_cells
+                combined_mask, iterations=self.sub_buffer_cells
             )
+        else:
+            combined_sub_mask = np.zeros_like(combined_mask, dtype=bool)
             
         if self.buffer_cells is not None:
             combined_mask = self.binary_closed_dilation(
-                combined_mask,
-                iterations=self.buffer_cells
+                combined_mask, iterations=self.buffer_cells
             )
             
         ## load the src dem
@@ -232,63 +238,84 @@ class Blend(grits.Grits):
         return(combined_arr, src_arr, combined_mask, src_mask, combined_sub_mask)
 
     
-    def _compute_slope(self, src_arr, buffer_mask):
-        """Compute normalised slope in seam."""
-
+    def _compute_slope(self, src_arr):
+        """Compute normalized slope over the whole array."""
         tmp = src_arr.copy()
         tmp[~np.isfinite(tmp)] = np.nan
 
         if np.all(np.isnan(tmp)):
-            return(None)
+            return None
 
         gy, gx = np.gradient(tmp)
         slope = np.sqrt(gx * gx + gy * gy)
 
         m = np.nanmax(np.abs(slope))
-        if m == 0:
-            return(None)
+        if m == 0 or not np.isfinite(m):
+            return None
 
         slope_norm = np.abs(slope) / m
         slope_norm[np.isnan(slope_norm)] = 0.0
-        return(slope_norm)
+        return slope_norm
 
     
     def blend_data(self):
         ## combined_arr is the aux_data, src_arr is the src dem data
-        ## combined mask is the combined data + buffer
+        ## combined_mask is the combined data + buffer
         ## src_mask is the src data
         combined_arr, src_arr, combined_mask, src_mask, combined_sub_mask = self.init_data()
         buffer_mask = combined_mask & src_mask
-        sub_buffer_mask = combined_sub_mask & src_mask
+        sub_buffer_mask = combined_sub_mask & src_mask   # core seam: no randomization
             
         ## combined_arr now has a nan buffer between aux and src data               
         combined_arr[~combined_mask] = src_arr[~combined_mask]
 
-        ## generate a distance transform and normalize the results
-        ## to values between 0 (near combined) and 1 (near src)
-        dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
-        #slope_n = self._compute_slope(src_arr, buffer_mask)
+        ## initial distance transform
+        dt = scipy.ndimage.distance_transform_cdt(
+            combined_mask, metric='taxicab'
+        )
 
-        ## random src mask
+        ## slope-aware random src mask in the OUTER buffer only
         if self.sub_buffer_cells > 0:
-            random_arr = np.random.rand(*combined_arr.shape)
-            random_mask = random_arr > .985
-            #random_mask[slope_n < .25] = False
-            #random_mask = slope_n > .15
-            random_mask[sub_buffer_mask] = False
-            #slope_n[combined_sub_mask] = 0#self.slope_scale
-            combined_arr[(buffer_mask) & (random_mask)] = src_arr[(buffer_mask) & (random_mask)]
-            combined_mask[random_mask] = True
-            dt = scipy.ndimage.distance_transform_cdt(combined_mask, metric='taxicab')
-            
-        dt = dt[buffer_mask]
-        dt = (dt - np.min(dt)) / (np.max(dt) - np.min(dt))
+            slope_norm = self._compute_slope(src_arr)
 
-        # if slope_n is not None and dt.size:
-        #     # Option 1: aggressive slope–distance mix
-        #     if self.slope_scale not in (0, 0.0):
-        #         #dt = (1.0 - self.slope_scale) * dt + self.slope_scale * slope_n[(src_mask) & (combined_mask)]
-        #         dt += (self.slope_scale * slope_n[buffer_mask])
+            random_arr = np.random.rand(*combined_arr.shape)
+            random_mask = random_arr > 0.985  # base density of random picks
+
+            # never randomize in core seam
+            random_mask[sub_buffer_mask] = False
+
+            # if slope gating is enabled, only allow flips in steeper areas
+            if slope_norm is not None and self.slope_scale > 0.0:
+                thresh = float(np.clip(self.slope_scale, 0.0, 1.0))
+                low_slope = slope_norm < thresh
+
+                # ⬅️ CHANGE: gate ONLY in the OUTER buffer (buffer_mask & ~sub_buffer_mask)
+                outer_mask = buffer_mask & (~sub_buffer_mask)
+                random_mask[low_slope & outer_mask] = False
+
+            # only apply randomization where both src + combined_mask are valid (buffer region)
+            valid_random = random_mask & buffer_mask
+
+            # inject source values in the outer buffer; this helps preserve shape
+            combined_arr[valid_random] = src_arr[valid_random]
+            combined_mask[valid_random] = True
+
+            # recompute distance transform after randomization
+            dt = scipy.ndimage.distance_transform_cdt(
+                combined_mask, metric='taxicab'
+            )
+            
+        ## extract and normalize dt in the seam/buffer region
+        dt_vals = dt[buffer_mask].astype(np.float32)
+        if dt_vals.size > 0:
+            dt_min = np.min(dt_vals)
+            dt_max = np.max(dt_vals)
+            if dt_max > dt_min:
+                dt_norm = (dt_vals - dt_min) / (dt_max - dt_min)
+            else:
+                dt_norm = np.zeros_like(dt_vals, dtype=np.float32)
+        else:
+            dt_norm = np.zeros(0, dtype=np.float32)
 
         ## interpolate the buffer and extract just the buffer area and calculate the
         ## difference between the src data and the interp data
@@ -302,13 +329,15 @@ class Blend(grits.Grits):
         interp_data_in_buffer = interp_arr[buffer_mask]
         src_data_in_buffer = src_arr[buffer_mask]
         interp_arr = None
+
         buffer_diffs = interp_data_in_buffer - src_data_in_buffer
         buffer_diffs[np.isnan(buffer_diffs)] = 0
 
-        ## apply the normalize results to the differences and set and write out the results
-        combined_arr[buffer_mask] = src_arr[buffer_mask] + (buffer_diffs * dt)
+        ## apply the normalized results to the differences and set and write out the results
+        combined_arr[buffer_mask] = src_arr[buffer_mask] + (buffer_diffs * dt_norm)
         combined_arr[~src_mask] = np.nan
         combined_arr[np.isnan(combined_arr)] = self.ds_config['ndv']
+
         srcwin = (
             self.buffer_cells,
             self.buffer_cells,
@@ -336,3 +365,4 @@ class Blend(grits.Grits):
 
 
 ### End
+
