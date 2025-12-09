@@ -707,7 +707,7 @@ class PointPixels():
 
         
     def __call__(
-            self, points, weight=None, uncertainty=None,
+            self, points, weight=1, uncertainty=0,
             mode='mean'
     ):
         out_arrays = {
@@ -730,6 +730,9 @@ class PointPixels():
         else:
             self.init_gt()
 
+        weight = utils.float_or(weight, 1)
+        uncertainty = utils.float_or(weight, 0)
+            
         #######################################################################
         ## convert the points to pixels based on the geotransform
         ## and calculate the local srcwin of the points

@@ -85,6 +85,7 @@ from osgeo import osr
 import cudem
 from cudem.datalists import dlim
 from cudem.datalists import xyzfile
+from cudem.datalists import gdalfile
 from cudem import pointz
 from cudem import regions
 from cudem import utils
@@ -685,7 +686,7 @@ class Waffle:
                     self.stack = self.data._stacks(out_name=stack_bn)
                     #, mode=self.stack_mode)#supercede=self.supercede)
                     
-                self.stack_ds = dlim.GDALFile(
+                self.stack_ds = gdalfile.GDALFile(
                     fn=self.stack,
                     band_no=1,
                     weight_mask=3,

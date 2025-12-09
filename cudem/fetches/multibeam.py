@@ -211,6 +211,7 @@ class Multibeam(fetches.FetchModule):
 
                 self.date = date                    
                 if survey in these_surveys.keys():
+                    these_surveys[survey]['date'] = date
                     mod_url = data_url.split(' ')[0]
                     if version in these_surveys[survey].keys():
                         these_surveys[survey][version].append(
@@ -227,20 +228,19 @@ class Multibeam(fetches.FetchModule):
                     these_surveys[survey] = {version: [
                         [data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']
                     ]}
+                    these_surveys[survey]['date'] = date
 
         else:
             utils.echo_error_msg(
                 f'failed to fetch multibeam request, {_req.status_code}'
             )
-
-        #print(these_surveys)
-            
+                
+        #else:
         with tqdm(
                 total=len(these_surveys.keys()),
                 desc='scanning NCEI Multibeam datasets',
                 leave=self.verbose
         ) as pbar:
-
             for key in these_surveys.keys():
                 pbar.update()
                 want_generated = False
@@ -255,12 +255,12 @@ class Multibeam(fetches.FetchModule):
                                 v2_gen = [v2_url, v2[1], v2[2]]
                                 if not self.inf_only:
                                     self.add_entry_to_results(*v2_gen)
-                                    
+
                                 inf_url = self.inf_url(v2_gen)
                             else:
                                 if not self.inf_only:
                                     self.add_entry_to_results(*v2)
-                                    
+
                                 inf_url = self.inf_url(v2)
 
                             if self.want_inf:
@@ -279,12 +279,12 @@ class Multibeam(fetches.FetchModule):
                                 v1_gen = [v1_url, v1[1], v1[2]]
                                 if not self.inf_only:
                                     self.add_entry_to_results(*v1_gen)
-                                    
+
                                 inf_url = self.inf_url(v1_gen)
                             else:
                                 if not self.inf_only:
                                     self.add_entry_to_results(*v1)
-                                    
+
                                 inf_url = self.inf_url(v1)
 
                             if self.want_inf:
@@ -305,12 +305,12 @@ class Multibeam(fetches.FetchModule):
                                 survs_gen = [survs_url, survs[1], survs[2]]
                                 if not self.inf_only:
                                     self.add_entry_to_results(*survs_gen)
-                                    
+
                                 inf_url = self.inf_url(survs_gen)
                             else:
                                 if not self.inf_only:
                                     self.add_entry_to_results(*survs)
-                                    
+
                                 inf_url = self.inf_url(survs)
 
                             if self.want_inf:
@@ -321,6 +321,17 @@ class Multibeam(fetches.FetchModule):
                                     'mb_inf'
                                 )
 
+        if self.tables:
+            for entry in self.results:
+                survey, src_data, mb_fmt, mb_perc, mb_date \
+                    = self.parse_entry_inf(entry)
+                
+                print(survey, mb_date)
+            # for key in these_surveys.keys():
+            #     if these_surveys[key]['date'] is None:
+                
+            #     print(key, these_surveys[key]['date'])
+                                
         if self.make_datalist:
             s_got = []
             with open('mb_inf.txt', 'w') as mb_inf_txt:
@@ -349,6 +360,7 @@ class Multibeam(fetches.FetchModule):
             inf_url = utils.fn_basename2(entry[0])
         else:
             inf_url = entry[0]
+            
         return(inf_url)            
 
     
@@ -357,6 +369,7 @@ class Multibeam(fetches.FetchModule):
 
         
     def parse_entry_inf(self, entry, keep_inf=False, out_dir=None):
+        print(entry)
         src_data = os.path.basename(entry['dst_fn'])
         if src_data[-3:] == 'fbt':
             src_mb = utils.fn_basename2(src_data)

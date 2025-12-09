@@ -3981,7 +3981,7 @@ class ElevationDataset:
             )
             yield(
                 point_array(
-                    points, weight=self.weight, uncertainty=self.uncertainty, mode='sums')
+                    points, weight=self.weight, uncertainty=self.uncertainty, mode='sums' if want_sums else 'mean')
             )
 
         if self.verbose:
@@ -5841,8 +5841,8 @@ See `datalists_usage` for full cli options.
                     this_archive = this_datalist.archive_xyz(dirname=archive_dirname) 
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
-                elif want_tables:
-                    this_datalist._archive_xyz_test()
+                # elif want_tables:
+                #     this_datalist._archive_xyz_test()
                 else:
                     try:
                         # process and dump each dataset independently

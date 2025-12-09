@@ -189,7 +189,7 @@ class Blend(grits.Grits):
         src_region, ds_config = self.init_region(self.src_dem)
         x_inc = ds_config['geoT'][1]
         y_inc = ds_config['geoT'][5] * -1
-        
+
         src_region.buffer(
             x_bv=(x_inc * self.buffer_cells),
             y_bv=(y_inc * self.buffer_cells)
@@ -207,10 +207,11 @@ class Blend(grits.Grits):
                 mod=aux_fn,
                 src_region=src_region,
                 x_inc=x_inc,
-                y_inc=y_inc
+                y_inc=y_inc,
+                dst_srs=ds_config['proj']
             )._acquire_module().initialize()
             
-            for arrs, srcwin, gt in aux_ds.array_yield:
+            for arrs, srcwin, gt in aux_ds.yield_array(want_sums=False):
                 ## supercede
                 combined_arr[
                     srcwin[1]:srcwin[1] + srcwin[3],
