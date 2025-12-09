@@ -291,7 +291,7 @@ class Blend(grits.Grits):
         slope_norm = self._compute_slope(src_arr)
 
         random_arr = np.random.rand(*combined_arr.shape)
-        random_mask = random_arr > 0.985  # base density of random picks
+        random_mask = random_arr < self.random_scale  # base density of random picks
 
         # never randomize in core seam
         random_mask[sub_buffer_mask] = False
