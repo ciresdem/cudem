@@ -120,33 +120,45 @@ def interpolate_array(
 
 
 class Blend(grits.Grits):
-    def __init__(self,  weight_threshold=None, buffer_cells=1, gap_fill_cells=None,
-                 weight_thresholds=None, buffer_sizes=None, gap_fill_sizes=None,
-                 binary_dilation=True, binary_pulse=False,
-                 fill_holes=False, aux_dems=None, sub_buffer_cells=0,
-                 slope_scale=.5, **kwargs):
-        """
+    """Blend data together
+
         slope_scale:
             0.0 -> disable slope gating (classic behavior)
             0–1 -> slope threshold in normalized slope units; higher = only
                    steeper regions allowed to keep random src points.
-        """
+
+        random_scale:
+            0.0 -> disable random point insertion
+            0-1 -> higher = inlcude more random points
+    """
+    
+    def __init__(
+            self,
+            weight_threshold=None,
+            weight_thresholds=None,
+            buffer_cells=1,
+            buffer_sizes=None,
+            binary_dilation=True,
+            binary_pulse=False,
+            sub_buffer_cells=0,
+            slope_scale=.5,
+            random_scale=.025,
+            aux_dems=None,
+            **kwargs
+    ):        
         super().__init__(**kwargs)
         self.weight_threshold = utils.float_or(weight_threshold, 1)
-        self.buffer_cells = utils.int_or(buffer_cells, 1)
-        self.gap_fill_cells = utils.int_or(gap_fill_cells, 0)
-        
         self.weight_thresholds = weight_thresholds
+        
+        self.buffer_cells = utils.int_or(buffer_cells, 1)
         self.buffer_sizes = buffer_sizes
-        self.gap_fill_sizes = gap_fill_sizes
         
         self.binary_dilation = binary_dilation
         self.binary_pulse = binary_pulse
         
-        self.fill_holes = fill_holes
         self.sub_buffer_cells = utils.int_or(sub_buffer_cells, 0)
-        self.slope_scale = utils.float_or(slope_scale, 0.5)
-        
+        self.slope_scale = np.clip(utils.float_or(slope_scale, 0.5), 0.0, 1.0)
+        self.random_scale = np.clip(utils.float_or(random_scale, .025), 0.0, 1.0)
         self.aux_dems = aux_dems.split(',')
         
 
@@ -244,18 +256,18 @@ class Blend(grits.Grits):
         tmp[~np.isfinite(tmp)] = np.nan
 
         if np.all(np.isnan(tmp)):
-            return None
+            return(None)
 
         gy, gx = np.gradient(tmp)
         slope = np.sqrt(gx * gx + gy * gy)
 
         m = np.nanmax(np.abs(slope))
         if m == 0 or not np.isfinite(m):
-            return None
+            return(None)
 
         slope_norm = np.abs(slope) / m
         slope_norm[np.isnan(slope_norm)] = 0.0
-        return slope_norm
+        return(slope_norm)
 
     
     def blend_data(self):
@@ -275,35 +287,31 @@ class Blend(grits.Grits):
         )
 
         ## slope-aware random src mask in the OUTER buffer only
-        if self.sub_buffer_cells > 0:
-            slope_norm = self._compute_slope(src_arr)
+        slope_norm = self._compute_slope(src_arr)
 
-            random_arr = np.random.rand(*combined_arr.shape)
-            random_mask = random_arr > 0.985  # base density of random picks
+        random_arr = np.random.rand(*combined_arr.shape)
+        random_mask = random_arr > 0.985  # base density of random picks
 
-            # never randomize in core seam
-            random_mask[sub_buffer_mask] = False
+        # never randomize in core seam
+        random_mask[sub_buffer_mask] = False
 
-            # if slope gating is enabled, only allow flips in steeper areas
-            if slope_norm is not None and self.slope_scale > 0.0:
-                thresh = float(np.clip(self.slope_scale, 0.0, 1.0))
-                low_slope = slope_norm < thresh
+        # if slope gating is enabled, only allow flips in steeper areas
+        if slope_norm is not None:
+            low_slope = slope_norm < self.slope_scale
+            outer_mask = buffer_mask & (~sub_buffer_mask)
+            random_mask[low_slope & outer_mask] = False
 
-                # ⬅️ CHANGE: gate ONLY in the OUTER buffer (buffer_mask & ~sub_buffer_mask)
-                outer_mask = buffer_mask & (~sub_buffer_mask)
-                random_mask[low_slope & outer_mask] = False
+        # only apply randomization where both src + combined_mask are valid (buffer region)
+        valid_random = random_mask & buffer_mask
 
-            # only apply randomization where both src + combined_mask are valid (buffer region)
-            valid_random = random_mask & buffer_mask
+        # inject source values in the outer buffer; this helps preserve shape
+        combined_arr[valid_random] = src_arr[valid_random]
+        combined_mask[valid_random] = True
 
-            # inject source values in the outer buffer; this helps preserve shape
-            combined_arr[valid_random] = src_arr[valid_random]
-            combined_mask[valid_random] = True
-
-            # recompute distance transform after randomization
-            dt = scipy.ndimage.distance_transform_cdt(
-                combined_mask, metric='taxicab'
-            )
+        # recompute distance transform after randomization
+        dt = scipy.ndimage.distance_transform_cdt(
+            combined_mask, metric='taxicab'
+        )
             
         ## extract and normalize dt in the seam/buffer region
         dt_vals = dt[buffer_mask].astype(np.float32)
