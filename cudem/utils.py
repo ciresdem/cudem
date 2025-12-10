@@ -1585,9 +1585,12 @@ def echo_msg2(msg, prefix='cudem', level='info', nl='', bold=False, use_tqdm=Tru
         level = f'\033[33m\033[1m{level.upper()}\033[m'
     elif level.lower() == 'error':
         level = f'\033[31m\033[1m{level.upper()}\033[m'
+    elif level.lower() == 'debug':
+        level = f'\033[35m\033[1m{level.upper()}\033[m'
     else:
         level = f'\033[36m\033[1m{level.upper()}\033[m'
 
+    #if __echo_level__ < 0:
     sys.stderr.write('\x1b[2K\r')
     #msg = _init_msg(msg, len(prefix))
     if bold:

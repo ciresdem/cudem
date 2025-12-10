@@ -1976,7 +1976,8 @@ def sample_warp(
                 os.makedirs(os.path.dirname(dst_dem))
 
     if verbose:
-        desc = 'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
+        desc = '{}: warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
+            utils._command_name(),
             src_dem,
             out_region,
             x_sample_inc,

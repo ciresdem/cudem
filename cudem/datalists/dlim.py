@@ -1136,6 +1136,7 @@ class ElevationDataset:
                         f'could not set transformation on {self.fn}, {e}'
                     )
 
+            #self.set_yield(use_blocks=False)
             self.set_yield()
 
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
@@ -4020,25 +4021,25 @@ class ElevationDataset:
     def blocks_yield_xyz(self, out_name=None):
         """yield the result of `_stacks` as an xyz object"""
 
-        stacked_fn = self._blocks(out_name=out_name)
+        #stacked_fn = self._blocks(out_name=out_name)
 
-        # gbt = globato(
-        #     region=self.region, x_inc=self.x_inc,
-        #     y_inc=self.y_inc, dst_srs=self.dst_srs,
-        #     cache_dir=self.cache_dir
-        # )
-        # #if os.path.exists(gbt.fn):
-        # #    gbt.load()
-        # #else:
-        # gbt.create()
+        gbt = globato(
+            region=self.region, x_inc=self.x_inc,
+            y_inc=self.y_inc, dst_srs=self.dst_srs,
+            cache_dir=self.cache_dir
+        )
+        #if os.path.exists(gbt.fn):
+        #    gbt.load()
+        #else:
+        gbt.create()
 
-        # for this_entry in self.parse():
-        #     gbt.add_dataset_entry(this_entry)
-        #     gbt.block_entry(this_entry)
-        #     gbt.finalize()
+        for this_entry in self.parse():
+            gbt.add_dataset_entry(this_entry)
+            gbt.block_entry(this_entry)
+            gbt.finalize()
             
-        # gbt.close()
-        # stacked_fn = gbt.fn
+        gbt.close()
+        stacked_fn = gbt.fn
         
         sds = h5.File(stacked_fn, 'r')
         sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
@@ -5059,7 +5060,9 @@ class DatasetFactory(factory.CUDEMFactory):
                      else utils.float_or(x) if n < 4 \
                      else utils.str_or(x) \
                      for n, x in enumerate(this_entry)]
-
+            
+            #utils.echo_debug_msg(f'initial parsed entry: {entry}')
+            
         except Exception as e:
             utils.echo_error_msg(
                 'could not parse entry {}, {}'.format(
@@ -5146,9 +5149,10 @@ class DatasetFactory(factory.CUDEMFactory):
                 self.kwargs['fn'] = os.path.join(
                     os.path.dirname(self.kwargs['parent'].fn), entry[0]
                 )
+                self.kwargs['fn'] = os.path.relpath(self.kwargs['fn'])
             else:
                 self.kwargs['fn'] = entry[0]
-            
+
         ## weight - entry[2]
         ## inherit weight of parent
         if len(entry) < 3:

@@ -383,9 +383,7 @@ class Datalist(ElevationDataset):
             count = len(dl_layer)
             with tqdm(
                     total=len(dl_layer),
-                    desc='parsing {} datasets from datalist json {}.json @ {}'.format(
-                        count, self.fn, self.weight
-                    ),
+                    desc=f'{utils._command_name()}: parsing {count} datasets from datalist json {self.fn}.json @ {self.weight}',
                     leave=self.verbose
             ) as pbar:
                 for l,feat in enumerate(dl_layer):
@@ -488,7 +486,7 @@ class Datalist(ElevationDataset):
             with open(self.fn, 'r') as op:
                 with tqdm(
                         total=count,
-                        desc=f'parsing datalist {self.fn}...',
+                        desc=f'{utils._command_name()}: parsing datalist {self.fn}...',
                         leave=False
                 ) as pbar:
                     for l, this_line in enumerate(op):
