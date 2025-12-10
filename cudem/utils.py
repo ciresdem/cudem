@@ -1537,7 +1537,7 @@ def echo_warning_msg2(msg, prefix='cudem'):
     #msg = _init_msg(msg, len(prefix))
     #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
     tqdm.write(
-        '{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg),
+        f'{prefix}: \033[33m\033[1mwarning\033[m, {msg}',
         file=sys.stderr
     )
     sys.stderr.flush()
@@ -1560,14 +1560,14 @@ def echo_error_msg2(msg, prefix='cudem'):
     #msg = _init_msg(msg, len(prefix))
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
     tqdm.write(
-        '{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg),
+        f'{prefix}: \033[31m\033[1merror\033[m, {msg}',
         file=sys.stderr
     )
     #tqdm.write(traceback.format_exc())
     sys.stderr.flush()
 
     
-def echo_msg2(msg, prefix='cudem', nl=True, bold=False):
+def echo_msg2(msg, prefix='cudem', level='info', nl='', bold=False, use_tqdm=True, dst_port=sys.stderr):
     """echo `msg` to stderr using `prefix`
 
     >> echo_msg2('message', 'test')
@@ -1576,25 +1576,33 @@ def echo_msg2(msg, prefix='cudem', nl=True, bold=False):
     Args:
       msg (str): a message
       prefix (str): a prefix for the message
-      nl (bool): append a newline to the message
+      level (str): the message level, e.g. `info`
+      nl (bool): append contents of `nl` to end of message, e.g. '\n'
+      bold (bool): message will be bold
     """
-    
-    #msg = _init_msg(msg, len(prefix))
-    #sys.stderr.flush()
+
+    if level.lower() == 'warning':
+        level = f'\033[33m\033[1m{level.upper()}\033[m'
+    elif level.lower() == 'error':
+        level = f'\033[31m\033[1m{level.upper()}\033[m'
+    else:
+        level = f'\033[36m\033[1m{level.upper()}\033[m'
+
     sys.stderr.write('\x1b[2K\r')
     #msg = _init_msg(msg, len(prefix))
     if bold:
-        #sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
+        message = f'\033[1m{msg}\033[m{nl}'
+    else:
+        message = f'{msg}{nl}'
+
+    if use_tqdm:
         tqdm.write(
-            '{}: \033[1m{}\033[m'.format(prefix, msg),
-            file=sys.stderr
+            f'{prefix}: [{level}] {message}',
+            file=dst_port
         )
     else:
-        #sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
-        tqdm.write(
-            '{}: {}'.format(prefix, msg),
-            file=sys.stderr
-        )
+        sys.stderr.write(f'{prefix}: {message}')
+        
     sys.stderr.flush()
 
 
@@ -1605,18 +1613,27 @@ def echo_msg2(msg, prefix='cudem', nl=True, bold=False):
 ## lambda runs: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
 ##
 ###############################################################################
-echo_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
-echo_msg_bold = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), bold = True)
-echo_msg_inline = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), nl = False)
+echo_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='info')
+echo_msg_bold = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='info', bold=True)
+echo_msg_inline = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='info', nl=False)
 
+#echo_msg = lambda m: logger.info(m)
+#echo_msg_bold = lambda m: logger.info(f'\033[1m{m}\033[m')
 ###############################################################################
 ##
 ## echo error message `m` to sys.stderr using
 ## auto-generated prefix
 ##
 ###############################################################################
-echo_error_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv[0]))
-echo_warning_msg = lambda m: echo_warning_msg2(m, prefix = os.path.basename(sys.argv[0]))
+#echo_debug_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv[0]))
+#echo_error_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv[0]))
+#echo_warning_msg = lambda m: echo_warning_msg2(m, prefix = os.path.basename(sys.argv[0]))
+echo_debug_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='debug')
+echo_error_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='error')
+echo_warning_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='warning')
+
+#echo_error_msg = lambda m: logger.error(m)
+#echo_warning_msg = lambda m: logger.warning(m)
 
 ###############################################################################
 ##

@@ -29,6 +29,11 @@
 ## Grits modules are sub-classes of the Grits class.
 ## Define a new sub-class to create a new DEM filter.
 ##
+## TODO:
+##
+## grits to be input/output grids; including input a datalist and output a globato
+## move to waffles? just add a waffles option for a pre-made waffle/stack?
+##
 ### Code:
 
 import os, sys
@@ -54,6 +59,7 @@ class Grits:
             self,
             src_dem: str = None,
             dst_dem: str = None,
+            src_region: any = None,
             band: int = 1,
             min_z: float = None,
             max_z: float = None,
@@ -69,6 +75,7 @@ class Grits:
     ):
         self.src_dem = src_dem
         self.dst_dem = dst_dem
+        self.src_region = src_region
         self.band = utils.int_or(band, 1)
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
@@ -91,7 +98,11 @@ class Grits:
             else:
                 self.dst_dem = 'grits_filtered.tif'
 
-                
+        #self.init_ds(src_ds = self.src_dem)
+        # if self.src_region is None:
+        #     self.src_region, _ = self._init_region(src_ds = self.src_dem)
+
+            
     def __call__(self):
         return(self.generate())
 
@@ -103,7 +114,8 @@ class Grits:
         )
 
         return(self.src_region, ds_config)
-        
+
+    
     def init_ds(self, src_ds: any = None):
         self.ds_config = gdalfun.gdal_infos(src_ds)
         self.ds_band = src_ds.GetRasterBand(self.band)
@@ -184,13 +196,72 @@ class Grits:
                 
         return(copy_ds)
 
+    
+    def extract_src_array(self, buffer_cells=0):
+        """return the array from self.src_dem within the given region"""
         
+        src_region = self.src_region.copy()
+        x_inc = self.ds_config['geoT'][1]
+        y_inc = self.ds_config['geoT'][5] * -1
+        
+        src_region.buffer(
+            x_bv=(x_inc * buffer_cells),
+            y_bv=(y_inc * buffer_cells)
+        )
+
+        xcount, ycount, dst_gt = src_region.geo_transform(
+            x_inc=self.ds_config['geoT'][1],
+            y_inc=self.ds_config['geoT'][5],
+            node='grid'
+        )
+        
+        src_arr = np.full((ycount, xcount), np.nan)        
+        with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+            if src_ds is not None:
+                srcwin = src_region.srcwin(self.gt, xcount, ycount, node='grid')
+                
+                src_arr[
+                    srcwin[1]:srcwin[1]+srcwin[3],
+                    srcwin[0]:srcwin[0]+srcwin[2]
+                ] = self.ds_band.ReadAsArray()
+
+                src_arr[src_arr == self.ds_config['ndv']] = np.nan
+                if src_region.zmin is not None:
+                    src_arr[src_arr < src_region.zmin] = np.nan
+                    
+                if src_region.zmax is not None:
+                    src_arr[src_arr > src_region.zmax] = np.nan
+
+                # if src_region.wmin is not None:
+                #     src_arr[src_arr > src_region.wmin] = np.nan
+
+                # if src_region.wmax is not None:
+                #     src_arr[src_arr > src_region.wmax] = np.nan
+
+                # if src_region.umin is not None:
+                #     src_arr[src_arr > src_region.umin] = np.nan
+
+                # if src_region.umax is not None:
+                #     src_arr[src_arr > src_region.umax] = np.nan
+                    
+        return(src_arr)
+
+    
     def _density(self, src_arr):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
         dd = nonzero / src_arr.size
         
         return(dd)
 
+
+    def _combine_for_output(self):
+        with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+            if src_ds is not None:
+                pass
+            
+    def split_by_region(self):
+        pass
+    
     
     def split_by_z(self):
         """Split the filtered DEM by z-value"""
@@ -414,6 +485,13 @@ Options:
 \t\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
 \t\t\t\tThis can be set multiple times to perform multiple filters.
 
+  -R, --region\t\t\tRestrict processing to the desired REGION 
+\t\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
+\t\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
+\t\t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
+\t\t\t\tIf a vector file is supplied, will use each region found therein.
+\t\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
   -N, --min_z\t\t\tMinimum z value (filter data above this value)
   -X, --max_z\t\t\tMaximum z value (filter data below this value)
   -Wn, --min_weight\t\tMinimum weight value (filter data above this value)
@@ -450,6 +528,7 @@ def grits_cli(argv = sys.argv):
     weight_mask = None
     count_mask = None
     filters = []
+    i_regions = []
     
     while i < len(argv):
         arg = argv[i]
@@ -477,6 +556,12 @@ def grits_cli(argv = sys.argv):
                 )
             else:
                 filters.append(module)
+
+        elif arg == '--region' or arg == '-R':
+            i_regions.append(str(argv[i + 1]))
+            i = i + 1
+        elif arg[:2] == '-R':
+            i_regions.append(str(arg[2:]))
                 
         elif arg == '--min_z' or arg == '-N':
             min_z = utils.float_or(argv[i + 1])
@@ -545,6 +630,9 @@ def grits_cli(argv = sys.argv):
             '''must specify a grits -M module.'''
         )
         sys.exit(-1)
+
+    if not i_regions: i_regions = [None]
+    these_regions = regions.parse_cli_region(i_regions, True)
         
     ## load the user wg json and run grits with that.
     if wg_user is not None:

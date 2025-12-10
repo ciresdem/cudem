@@ -939,25 +939,6 @@ class ElevationDataset:
         self.stack_node = stack_node # yield avg x/y data instead of center
         self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
         self._init_stack_mode()
-        # self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal'] # options for input data mask
-        # if self.mask is not None:
-        #     if isinstance(self.mask, str):
-        #         self.mask = {'mask': self.mask}
-                
-        #     for kpam, kval in kwargs.items():
-        #         if kpam not in self.__dict__:
-        #             if kpam in self.mask_keys:
-        #                 self.mask[kpam] = kval
-
-        #     for kpam, kval in self.mask.items():
-        #         if kpam in kwargs:
-        #             del kwargs[kpam]
-
-        #     self.mask['ogr_or_gdal'] \
-        #         = gdalfun.ogr_or_gdal(self.mask['mask'])
-        #     for key in self.mask_keys:
-        #         if key not in self.mask.keys():
-        #             self.mask[key] = None
 
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
@@ -1156,13 +1137,6 @@ class ElevationDataset:
                     )
 
             self.set_yield()
-
-        # ## initialize filters
-        # if isinstance(self.stack_fltrs, str):
-        #     self.stack_fltrs = [':'.join(self.stack_fltrs.split('/'))]
-
-        # if self.stack_fltrs is not None:
-        #     self.stack_fltrs = [x for y in self.stack_fltrs for x in y.split('::')]
 
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
             self.pnt_fltrs = [self.pnt_fltrs]
@@ -3965,214 +3939,37 @@ class ElevationDataset:
         output arrays are weighted sums; get the actual values with:
         weight = weight / count
         z = (z / weight) / count
-        x = (z / weight) / count
-        y = (z / weight) / count
+        x = (x / weight) / count
+        y = (y / weight) / count
 
         """
 
         count = 0
         for points in self.transform_and_yield_points():
             count += points.size
-            xcount, ycount, dst_gt = self.region.geo_transform(
+            xcount, ycount, _ = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
+            
             point_array = pointz.PointPixels(
-                src_region=self.region, x_size=xcount, y_size=ycount, verbose=self.verbose
+                src_region=self.region,
+                x_size=xcount,
+                y_size=ycount,
+                verbose=self.verbose
             )
             yield(
                 point_array(
-                    points, weight=self.weight, uncertainty=self.uncertainty, mode='sums' if want_sums else 'mean')
+                    points,
+                    weight=self.weight,
+                    uncertainty=self.uncertainty,
+                    mode='sums' if want_sums else 'mean'
+                )
             )
 
         if self.verbose:
             utils.echo_msg_bold(
                 f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
             )    
-
-            
-        # out_arrays = {
-        #     'z':None,
-        #     'count':None,
-        #     'weight':None,
-        #     'uncertainty': None,
-        #     'mask':None,
-        #     'x': None,
-        #     'y': None
-        # }
-        # count = 0
-        # this_weight = self.weight if self.weight is not None else 1
-        # for points in self.transform_and_yield_points():
-        #     xcount, ycount, dst_gt = self.region.geo_transform(
-        #         x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-        #     )
-        #     ###################################################################
-        #     ## convert the points to pixels based on the geotransform
-        #     ## and calculate the local srcwin of the points
-        #     ## pixel_x and pixel_y are the location of the points_* of the srcwin
-        #     ###################################################################
-        #     points_x = np.array(points['x'])
-        #     points_y = np.array(points['y'])
-            
-        #     pixel_x = np.floor((points_x - dst_gt[0]) / dst_gt[1]).astype(int)
-        #     pixel_y = np.floor((points_y - dst_gt[3]) / dst_gt[5]).astype(int)
-        #     pixel_z = np.array(points['z'])
-        #     try:
-        #         pixel_w = np.array(points['w'])
-        #     except:
-        #         pixel_w = np.ones(pixel_z.shape)
-
-        #     try:
-        #         pixel_u = np.array(points['u'])
-        #     except:
-        #         pixel_u = np.zeros(pixel_z.shape)
-
-        #     ###################################################################
-        #     ## remove pixels that will break the srcwin
-        #     ###################################################################
-        #     out_idx = np.nonzero(
-        #         (pixel_x >= xcount) \
-        #         | (pixel_x < 0) \
-        #         | (pixel_y >= ycount) \
-        #         | (pixel_y < 0)
-        #     )
-        #     pixel_x = np.delete(pixel_x, out_idx)
-        #     pixel_y = np.delete(pixel_y, out_idx)
-        #     pixel_z = np.delete(pixel_z, out_idx)
-        #     pixel_w = np.delete(pixel_w, out_idx)
-        #     pixel_u = np.delete(pixel_u, out_idx)
-        #     points_x = np.delete(points_x, out_idx)
-        #     points_y = np.delete(points_y, out_idx)
-        #     if len(pixel_x) == 0 or len(pixel_y) == 0:
-        #         continue
-            
-        #     points = None
-        #     pixel_w[np.isnan(pixel_w)] = 1
-        #     pixel_u[np.isnan(pixel_u)] = 0
-            
-        #     ###################################################################
-        #     ## set the srcwin of the incoming points
-        #     ###################################################################
-        #     this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
-        #                    int(max(pixel_x) - min(pixel_x))+1,
-        #                    int(max(pixel_y) - min(pixel_y))+1)
-        #     count += len(pixel_x)
-
-        #     ###################################################################
-        #     ## adjust the pixels to the srcwin and stack together
-        #     ###################################################################
-        #     pixel_x = pixel_x - this_srcwin[0]
-        #     pixel_y = pixel_y - this_srcwin[1]
-        #     pixel_xy = np.vstack((pixel_y, pixel_x)).T
-
-        #     ###################################################################
-        #     ## find the non-unique x/y points and mean/min/max their z values
-        #     ## together while calculating the std for uncertainty
-        #     ## dup_idx are the indices of duplicate values (points in the same
-        #     ## cell). unq_idx are the indices of the unique values.
-        #     ###################################################################
-        #     unq, unq_idx, unq_inv, unq_cnt = np.unique(
-        #         pixel_xy, axis=0, return_inverse=True,
-        #         return_index=True, return_counts=True
-        #     )
-        #     cnt_msk = unq_cnt > 1
-        #     cnt_idx, = np.nonzero(cnt_msk)
-        #     idx_msk = np.in1d(unq_inv, cnt_idx)
-        #     idx_idx, = np.nonzero(idx_msk)
-        #     srt_idx = np.argsort(unq_inv[idx_msk])
-        #     dup_idx = np.split(
-        #         idx_idx[srt_idx], np.cumsum(unq_cnt[cnt_msk])[:-1]
-        #     )
-
-        #     ###################################################################
-        #     ## set the output arrays; set to the target grid
-        #     ## arrays will hold weighted-sums
-        #     ###################################################################
-        #     ww = pixel_w[unq_idx] * this_weight
-        #     zz = pixel_z[unq_idx] * ww 
-        #     uu = pixel_u[unq_idx]
-        #     xx = points_x[unq_idx] * ww
-        #     yy = points_y[unq_idx] * ww
-
-        #     ###################################################################
-        #     ## min/max/sum the duplicates (values in the same cell)
-        #     ## min and max get the count reset to 1, the count is accumulated
-        #     ## in mean, mixed
-        #     ###################################################################
-        #     if np.any([len(dup) for dup in dup_idx]):
-        #         if self.stack_mode == 'min':
-        #             dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
-        #             dup_stds = np.zeros(dup_stack.shape)
-        #             dup_stack_x = [np.min(pixel_x[dup]) for dup in dup_idx]
-        #             dup_stack_y = [np.min(pixel_y[dup]) for dup in dup_idx]
-        #             dup_counts = [1 for dup in dup_idx]
-        #         elif self.stack_mode == 'max':
-        #             dup_stack = [np.max(pixel_z[dup]) for dup in dup_idx]
-        #             dup_stds = np.zeros(dup_stack.shape)
-        #             dup_stack_x = [np.max(pixel_x[dup]) for dup in dup_idx]
-        #             dup_stack_y = [np.max(pixel_y[dup]) for dup in dup_idx]
-        #             dup_counts = [1 for dup in dup_idx]
-        #         else:
-        #             dup_stack = [np.sum((pixel_z[dup] * (pixel_w[dup] * this_weight))) \
-        #                          for dup in dup_idx]
-        #             dup_stack_x = [np.sum((points_x[dup] * (pixel_w[dup] * this_weight))) \
-        #                            for dup in dup_idx]
-        #             dup_stack_y = [np.sum((points_y[dup] * (pixel_w[dup] * this_weight))) \
-        #                            for dup in dup_idx]
-        #             dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
-        #             dup_w = [np.sum((pixel_w[dup] * this_weight)) for dup in dup_idx]
-        #             #dup_counts = [np.sum(unq_cnt[dup]) for dup in dup_idx]
-                    
-        #         ww[cnt_msk] = dup_w
-        #         zz[cnt_msk] = dup_stack
-        #         yy[cnt_msk] = dup_stack_y
-        #         xx[cnt_msk] = dup_stack_x
-        #         uu[cnt_msk] = np.sqrt(
-        #             np.power(uu[cnt_msk], 2) + np.power(dup_stds, 2)
-        #         )
-        #         #cc[cnt_msk] = dup_counts
-
-        #     ## make the output arrays to yield
-        #     out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
-        #     out_x[unq[:,0], unq[:,1]] = xx
-        #     out_x[out_x == 0] = np.nan
-        #     out_arrays['x'] = out_x
-
-        #     out_y = np.zeros((this_srcwin[3], this_srcwin[2]))
-        #     out_y[unq[:,0], unq[:,1]] = yy
-        #     out_y[out_y == 0] = np.nan
-        #     out_arrays['y'] = out_y
-            
-        #     out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
-        #     out_z[unq[:,0], unq[:,1]] = zz
-        #     out_z[out_z == 0] = np.nan
-        #     out_arrays['z'] = out_z
-            
-        #     out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-        #     out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
-
-        #     out_w = np.ones((this_srcwin[3], this_srcwin[2]))
-        #     out_w[unq[:,0], unq[:,1]] = ww #* this_weight)
-        #     out_arrays['weight'] = out_w            
-        #     #out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
-        #     #out_arrays['weight'][unq[:,0], unq[:,1]] = (ww * this_weight)
-        #     #out_arrays['weight'][:] = self.weight if self.weight is not None else 1
-        #     #out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
-        #     #out_arrays['weight'][unq[:,0], unq[:,1]] *= ww
-        #     #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
-            
-        #     out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-        #     out_arrays['uncertainty'][unq[:,0], unq[:,1]] \
-        #         = np.sqrt(
-        #             uu**2 \
-        #             + (self.uncertainty if self.uncertainty is not None else 0)**2
-        #         )
-            
-        #     yield(out_arrays, this_srcwin, dst_gt)
-
-        # if self.verbose:
-        #     utils.echo_msg_bold(
-        #         f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
-        #     )    
 
             
     def stacks_yield_xyz(self, out_name=None, ndv=-9999, fmt='GTiff'):
@@ -4276,10 +4073,21 @@ class ElevationDataset:
                         
                     yield(out_xyz)
         sds.close()
- 
+
+        
     ###########################################################################       
     ## Data Dump/Export/Archive
     ###########################################################################
+    def _xyz_dump(self, this_xyz, dst_port=sys.stdout, encode=False):
+        this_xyz.dump(
+            include_w=True if self.weight is not None else False,
+            include_u=True if self.uncertainty is not None else False,
+            dst_port=dst_port,
+            encode=encode,
+            precision=self.dump_precision
+        )
+
+        
     def dump_xyz(self, dst_port=sys.stdout, encode=False):
         """dump the XYZ data from the dataset.
 
@@ -4288,13 +4096,7 @@ class ElevationDataset:
         """
 
         for this_xyz in self.xyz_yield:
-            this_xyz.dump(
-                include_w=True if self.weight is not None else False,
-                include_u=True if self.uncertainty is not None else False,
-                dst_port=dst_port,
-                encode=encode,
-                precision=self.dump_precision
-            )
+            self._xyz_dump(this_xyz, dst_port=dst_port, encode=encode)
 
             
     def dump_xyz_direct(self, dst_port=sys.stdout, encode=False):
@@ -4305,15 +4107,24 @@ class ElevationDataset:
         """
         
         for this_xyz in self.yield_xyz():
-            this_xyz.dump(
-                include_w=True if self.weight is not None else False,
-                include_u=True if self.uncertainty is not None else False,
-                dst_port=dst_port,
-                encode=encode,
-                precision=self.dump_precision
-            )
+            self._xyz_dump(this_xyz, dst_port=dst_port, encode=encode)
 
 
+    def dump_positions(self, dst_port=sys.stdout, encode=False):
+        for arrs, srcwin, gt in this_entry.array_yield:            
+
+            #np.vstack(arrs['pixel_x'], arrs['pixel_y'], arrs['z'])
+            #l = f'{}'
+            l = 'non'
+            dst_port.write(l.encode('utf-8') if encode else l)
+            # this_xyz.dump(
+            #     include_w=True if self.weight is not None else False,
+            #     include_u=True if self.uncertainty is not None else False,
+            #     dst_port=dst_port,
+            #     encode=encode,
+            #     precision=self.dump_precision
+            # )
+            
     ###########################################################################
     ## Data export 
     ###########################################################################
@@ -4411,7 +4222,7 @@ class ElevationDataset:
 
     
     def export_stack_as_gdal(self, fmt='GTiff'):
-        """export the stack h5 to gdal multi-band or seperate file(s)
+        """export the stack h5 to gdal multi-band or separate file(s)
         """
         
         num_bands = len(stack_grp)
@@ -4469,11 +4280,11 @@ class ElevationDataset:
                         srcwin[1], srcwin[1] + srcwin[3], 1
                 ):
                     mask_grp[key][
-                        srcwin[1]:srcwin[1]+srcwin[3],
-                        srcwin[0]:srcwin[0]+srcwin[2]
+                        srcwin[1]:srcwin[1] + srcwin[3],
+                        srcwin[0]:srcwin[0] + srcwin[2]
                     ][np.isnan(mask_grp[key][
-                        srcwin[1]:srcwin[1]+srcwin[3],
-                        srcwin[0]:srcwin[0]+srcwin[2]
+                        srcwin[1]:srcwin[1] + srcwin[3],
+                        srcwin[0]:srcwin[0] + srcwin[2]
                     ])] = 0
                     #if np.all(mask_grp[key][mask_grp[key] == 0]):
                     #    continue
@@ -4481,8 +4292,8 @@ class ElevationDataset:
                     #ii += 1
                     mask_band = mask_dataset.GetRasterBand(i+1)
                     mask_band.WriteArray(
-                        mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
-                                      srcwin[0]:srcwin[0]+srcwin[2]]
+                        mask_grp[key][srcwin[1]:srcwin[1] + srcwin[3],
+                                      srcwin[0]:srcwin[0] + srcwin[2]]
                     )
                     md = {}
                     for attrs_key in mask_grp[key].attrs.keys():

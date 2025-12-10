@@ -705,7 +705,9 @@ class PointPixels():
             x_count=self.x_size, y_count=self.y_size
         )
 
-        
+
+    ### todo: allow input of 'out_arrays' for appending
+    ### and concluding the stack here instead of _stacks() to file.
     def __call__(
             self, points, weight=1, uncertainty=0,
             mode='mean'
