@@ -34,9 +34,12 @@ import os
 import json
 import copy
 #from tqdm import tqdm
+from osgeo import ogr
+
 from cudem import utils
 from cudem import regions
 from cudem import gdalfun
+from cudem import vdatums
 from cudem import fetches
 from cudem.datalists.dlim import ElevationDataset
 
@@ -84,7 +87,7 @@ class Fetcher(ElevationDataset):
 
         self.fetch_module = fetches.fetches.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
-            callback=callback, verbose=False,
+            callback=callback, verbose=True,
             outdir=outdir,
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
@@ -252,7 +255,7 @@ class Fetcher(ElevationDataset):
                             #this_ds.remote = True
                             this_ds.initialize()
                             for ds in this_ds.parse():
-                                ds.initialize()
+                                #ds.initialize()
                                 self.data_entries.append(ds)
                                 yield(ds)
                         else:
@@ -1670,10 +1673,10 @@ class VDatumFetcher(Fetcher):
             v_gtx = utils.p_f_unzip(
                 os.path.join(
                     self.fetch_module._outdir, result['dst_fn']
-                ), [result['data_type']], outdir=self.fetch_module._outdir
+                ), [result['data_type']], outdir=self.fetch_module._outdir, verbose=self.verbose
             )[0]
-            utils.run_cmd(
-                f'gdalwarp {v_gtx} {src_tif} -t_srs epsg:4269 --config CENTER_LONG 0',
+            status = utils.run_cmd(
+                f'gdalwarp "{v_gtx}" "{src_tif}" -t_srs epsg:4269 --config CENTER_LONG 0',
                 verbose=self.verbose
             )
 

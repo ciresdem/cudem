@@ -609,6 +609,16 @@ def polygonize_mask_multibands2(
 ## Datalist convenience functions
 ## data_list is a list of dlim supported datasets
 ###############################################################################
+def get_factory_exts():
+    fmts = []
+    for key in DatasetFactory()._modules.keys():
+        if key != '_factory' and int(key) > 0:
+            for f in DatasetFactory()._modules[key]['fmts']:
+                if f not in fmts:
+                    fmts.append(f)
+                    
+    return(fmts)
+
 def make_datalist(data_list, want_weight, want_uncertainty, region,
                   src_srs, dst_srs, x_inc, y_inc, sample_alg,
                   verbose):
@@ -708,6 +718,8 @@ def init_data(data_list,
               mask=None):
     """initialize a datalist object from a list of supported dataset entries"""
 
+    from . import datalists
+    
     try:
         #utils.echo_msg(data_list[0])
         xdls = []
@@ -760,7 +772,7 @@ def init_data(data_list,
         #utils.echo_msg(region)
 
         if len(xdls) > 1:
-            this_datalist = Scratch(
+            this_datalist = datalists.Scratch(
                 fn=xdls,
                 data_format=-3,
                 weight=None if not want_weight else 1,
@@ -1136,7 +1148,7 @@ class ElevationDataset:
                         f'could not set transformation on {self.fn}, {e}'
                     )
 
-            self.set_yield(use_blocks=True)
+            self.set_yield(use_blocks=False)
             #self.set_yield()
 
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
@@ -1489,12 +1501,13 @@ class ElevationDataset:
                 = (f'+proj=pipeline{uc} +step '
                    f'{self.transform["src_horz_crs"].to_proj4()} '
                    '+inv +step +proj=vgridshift '
-                   f'+grids={os.path.abspath(self.transform["trans_fn"])} '
+                   f'+grids="{os.path.abspath(self.transform["trans_fn"])}" '
                    f'+inv +step {self.transform["dst_horz_crs"].to_proj4()}')
             self.transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
                 (f'+proj=pipeline{uc} +step +proj=vgridshift '
-                 f'+grids={os.path.abspath(self.transform["trans_fn"])} +inv')
+                 f'+grids="{os.path.abspath(self.transform["trans_fn"])}" +inv')
             )
+            utils.echo_debug_msg(self.transform['pipeline'])
         else:
             utils.echo_error_msg(
                 ('failed to generate vertical transformation grid between '
@@ -4049,9 +4062,9 @@ class ElevationDataset:
         
         sds = h5.File(stacked_fn, 'r')
         sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
-        sds_stack = sds['stack']
+        sds_stack = sds['block']
         #sds_stack = sds['sums']
-        stack_shape = sds['stack']['z'].shape
+        stack_shape = sds['block']['z'].shape
         srcwin = (0, 0, stack_shape[1], stack_shape[0])
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_stack['z'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
@@ -4059,7 +4072,7 @@ class ElevationDataset:
             if np.all(np.isnan(sz)):
                 continue
 
-            sw = sds_stack['weights'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            sw = sds_stack['weight'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
             su = sds_stack['uncertainty'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
             sc = sds_stack['count'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
 
@@ -5055,6 +5068,11 @@ class DatasetFactory(factory.CUDEMFactory):
         #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
         #utils.echo_msg(self.kwargs['fn'])
         this_entry = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+        
+        if os.path.exists(self.kwargs['fn']):
+            if os.path.isfile(self.kwargs['fn']) or self.kwargs['fn'].split('.')[-1] in get_factory_exts():
+                this_entry = [self.kwargs['fn']]
+
         #utils.echo_msg(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 \
@@ -5074,6 +5092,7 @@ class DatasetFactory(factory.CUDEMFactory):
             )
             return(self)
 
+        utils.echo_debug_msg(entry)
         ## data format - entry[1]
         ## guess format based on fn if not specified otherwise
         ## parse the format for dataset specific opts.
@@ -5105,6 +5124,7 @@ class DatasetFactory(factory.CUDEMFactory):
             
         ## parse the entry format options
         opts = factory.fmod2dict(str(entry[1]), {})
+        utils.echo_debug_msg(opts)
         if '_module' in opts.keys():# and len(opts.keys()) > 1:
             entry[1] = int(opts['_module'])
             self.mod_args = {i:opts[i] for i in opts if i!='_module'}

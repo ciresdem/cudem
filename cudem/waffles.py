@@ -5998,7 +5998,8 @@ class WaffleDEM:
                 
         return(True)
 
-    
+
+    ## todo make these 'processes' grits modules?
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None,
                 region = None, node='pixel', clip_str = None, upper_limit = None,
                 lower_limit = None, size_limit = None, proximity_limit = None,

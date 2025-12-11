@@ -1647,7 +1647,7 @@ def gdal_cut_trans(src_gdal, src_region, dst_gdal, node='pixel',
         )
                 
     gdal_translate_cmd = (
-        'gdal_translate {} {} -srcwin {} {} {} {} {}'.format(
+        'gdal_translate "{}" "{}" -srcwin {} {} {} {} {}'.format(
             src_gdal, dst_gdal,
             region_srcwin[0], region_srcwin[1],
             region_srcwin[2], region_srcwin[3],

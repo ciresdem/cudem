@@ -33,7 +33,7 @@ from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
 import pyproj
-from tqdm import tqdm
+#from tqdm import tqdm
 
 from cudem import regions
 from cudem import gdalfun
@@ -592,7 +592,7 @@ class VerticalTransform:
                                 utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                                 
                             utils.run_cmd(
-                                'gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0 -r cubicspline {}'.format(
+                                'gdalwarp "{}" "{}" -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0 -r cubicspline {}'.format(
                                     _trans_grid,
                                     '_{}'.format(os.path.basename(_trans_grid)),
                                     self.src_region.format('te'),
@@ -695,6 +695,8 @@ class VerticalTransform:
                     epsg_in = cv                    
                 else:
                     tg, tv = self._tidal_transform(_tidal_frames[self.epsg_in]['name'], 'tss')
+                    utils.echo_debug_msg(f'tss-tg: {tg}')
+                    utils.echo_debug_msg(f'tss-tv: {tv}')
                     ## crd here outputs navd88 geoid09
                     #cg, cv = self._cdn_transform(name='geoid', geoid='geoid09', invert=False)
                     cg, cv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
@@ -1097,7 +1099,7 @@ def vdatums_cli(argv = sys.argv):
             #print(gdalfun.gdal_get_srs(src_grid))
             out_h, out_v = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(src_grid))
             
-            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {} {}'.format(
+            utils.run_cmd('gdalwarp "{}" "{}" -te {} -ts {} {} -s_srs epsg:4326 -t_srs {} {}'.format(
                 _trans_grid, out_trans_grid,
                 src_region.format('te'),
                 src_infos['nx'],
