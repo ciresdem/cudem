@@ -27,7 +27,7 @@
 ##
 ### Code:
 
-from tqdm import tqdm
+#from tqdm import tqdm
 from cudem.fetches import fetches
 from cudem.fetches import FRED
 
@@ -155,7 +155,7 @@ class NauticalCharts(fetches.FetchModule):
                 './/{*}has',
                 namespaces=this_xml.namespaces
             )
-            with tqdm(
+            with utils.ccp(
                     total=len(charts),
                     desc=f'scanning for CHARTS ({dt}) datasets',
                     leave=self.verbose
@@ -212,7 +212,7 @@ class NauticalCharts(fetches.FetchModule):
             self.where.append("DataType = 'ENC'")
 
         _results = FRED._filter_FRED(self)
-        with tqdm(
+        with utils.ccp(
                 total=len(_results),
                 desc='scanning CHARTS datasets',
                 leave=self.verbose

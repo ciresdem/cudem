@@ -27,7 +27,7 @@
 ##
 ### Code:
 
-from tqdm import tqdm
+#from tqdm import tqdm
 from cudem import utils
 from cudem import regions
 from cudem.fetches import fetches
@@ -142,7 +142,7 @@ class ETOPO(fetches.FetchModule):
             page = fetches.Fetch(this_url, verbose=True).fetch_html()
             rows = page.xpath('//a[contains(@href, ".tif")]/@href')
             with tqdm(
-                    desc=f'scanning for ETOPO {dtype} datasets',
+                    desc=f'{utils.get_calling_module_name()}: scanning for ETOPO {dtype} datasets',
                     leave=self.verbose
             ) as pbar:            
                 for i, row in enumerate(rows):
@@ -215,9 +215,9 @@ class ETOPO(fetches.FetchModule):
             )
 
         _results = FRED._filter_FRED(self)
-        with tqdm(
+        with utils.ccp(
                 total=len(_results),
-                desc='scanning ETOPO datasets',
+                desc=f'scanning ETOPO datasets',
                 leave=self.verbose
         ) as pbar:
             for surv in _results:

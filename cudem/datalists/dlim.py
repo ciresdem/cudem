@@ -98,7 +98,7 @@ import copy
 import json
 import glob
 import math
-from tqdm import tqdm
+#from tqdm import tqdm
 import traceback
 import warnings
 
@@ -152,7 +152,7 @@ def scan_mask_bands(
     mask_level = utils.int_or(mask_level, 0)
     src_infos = gdalfun.gdal_infos(src_ds)
     band_infos = {}    
-    with tqdm(
+    with utils.ccp(
             desc='scanning mask bands.',
             total=src_ds.RasterCount,
             leave=verbose
@@ -229,7 +229,7 @@ def ogr_mask_footprints(
     [layer.SetFeature(feature) for feature in layer]
     ds = layer = None
     ## generate a footprint of each group of bands from src_infos
-    with tqdm(
+    with utils.ccp(
             desc='generating mask footprints',
             total=len(src_infos.keys()),
             leave=verbose
@@ -243,7 +243,7 @@ def ogr_mask_footprints(
             utils.run_cmd(footprint_cmd, verbose=False)
             pbar.update()
             
-    with tqdm(
+    with utils.ccp(
             desc='setting mask metadata',
             total=len(src_infos.keys()),
             leave=verbose
@@ -294,7 +294,7 @@ def merge_mask_bands_by_name(
     m_ds.SetProjection(gdalfun.osr_wkt(src_infos['proj']))
     m_ds.SetDescription(src_ds.GetDescription())
 
-    with tqdm(
+    with utils.ccp(
             desc='generating merged mask dataset.',
             total=len(band_infos.keys()),
             leave=verbose
@@ -322,7 +322,7 @@ def merge_mask_bands_by_name(
                         )
                     )
 
-            with tqdm(
+            with utils.ccp(
                     desc='merging {} mask bands.'.format(m),
                     total=len(band_infos[m]['bands']),
                     leave=verbose
@@ -397,7 +397,7 @@ def polygonize_mask_multibands(
 
     #field_names_to_delete = ['DN', 'Name', 'Uncertainty']
     
-    with tqdm(
+    with utils.ccp(
             desc='polygonizing mask bands.',
             total=src_ds.RasterCount,
             leave=verbose
@@ -450,7 +450,7 @@ def polygonize_mask_multibands(
                             defn = layer.GetLayerDefn()
 
                         out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
-                        with tqdm(
+                        with utils.ccp(
                                 desc='creating feature {}...'.format(this_band_name),
                                 total=len(this_band_md.keys()),
                                 leave=verbose
@@ -526,7 +526,7 @@ def polygonize_mask_multibands2(
     #layer.StartTransaction()
     defn = None
     
-    with tqdm(
+    with utils.ccp(
             desc='polygonizing mask bands.',
             total=len(band_infos.keys()),
             leave=verbose
@@ -557,7 +557,7 @@ def polygonize_mask_multibands2(
                 if 'Title' not in this_md.keys():
                     tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
 
-                with tqdm(
+                with utils.ccp(
                         desc='polygonizing {} mask bands from {}.'.format(
                             len(band_infos[m]['bands']), m,
                         ),
@@ -582,7 +582,7 @@ def polygonize_mask_multibands2(
                         defn = layer.GetLayerDefn()
 
                     out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
-                    with tqdm(
+                    with utils.ccp(
                             desc='creating feature {}...'.format(m),
                             total=len(this_md.keys()),
                             leave=verbose
@@ -1136,8 +1136,8 @@ class ElevationDataset:
                         f'could not set transformation on {self.fn}, {e}'
                     )
 
-            #self.set_yield(use_blocks=False)
-            self.set_yield()
+            self.set_yield(use_blocks=False)
+            #self.set_yield()
 
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
             self.pnt_fltrs = [self.pnt_fltrs]
@@ -1433,7 +1433,7 @@ class ElevationDataset:
         ## if the transformation grid already exists, skip making a new one,
         ## otherwise, make the new one here with `vdatums.VerticalTransform()`
         if not os.path.exists(self.transform['trans_fn']):
-            with tqdm(
+            with utils.ccp(
                     desc='generating vertical transformation grid {} from {} to {}'.format(
                         self.transform['trans_fn'], self.transform['src_vert_epsg'],
                         self.transform['dst_vert_epsg']
@@ -1928,7 +1928,7 @@ class ElevationDataset:
         def remove_empty_mask_bands(m_ds):
             if m_ds.RasterCount > 0:
                 good_bands = []
-                with tqdm(
+                with utils.ccp(
                         total=m_ds.RasterCount,
                         desc='checking mask bands',
                         leave=self.verbose
@@ -1940,7 +1940,7 @@ class ElevationDataset:
                            and not np.isnan(band_infos['zr'][1]):
                             good_bands.append(band_num)
 
-                pbar = tqdm(desc='writing mask to vrt', total=100, leave=self.verbose)
+                pbar = utils.ccp(desc='writing mask to vrt', total=100, leave=self.verbose)
                 pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
                 band_count = len(good_bands)
                 msk_ds = gdal.GetDriverByName(fmt).CreateCopy(
@@ -1958,7 +1958,7 @@ class ElevationDataset:
                     v_band.SetDescription(m_band.GetDescription())
                     v_band.SetMetadata(m_band.GetMetadata())
 
-                pbar = tqdm(desc='writing vrt to disk', total=100, leave=self.verbose)
+                pbar = utils.ccp(desc='writing vrt to disk', total=100, leave=self.verbose)
                 pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
                 msk_ds = gdal.GetDriverByName(fmt).CreateCopy(
                     mask_fn, vrt_ds, 0, options=msk_opts, callback=pbar_update
@@ -2453,7 +2453,7 @@ class ElevationDataset:
 
         if self.want_mask:
             ## output the mask raster to disk
-            pbar = tqdm(desc='writing mask to disk', total=100, leave=self.verbose)
+            pbar = utils.ccp(desc='writing mask to disk', total=100, leave=self.verbose)
             pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
             msk_ds = gdal.GetDriverByName(fmt).CreateCopy(
                 mask_fn, m_ds, 0, options=msk_opts, callback=pbar_update
@@ -2564,7 +2564,7 @@ class ElevationDataset:
                 # out_band = out_ds.GetRasterBand(1)
                 # bm_band = out_ds.GetRasterBand(8)
                 # srcwin = (0, 0, out_ds.RasterXSize, out_ds.RasterYSize)
-                # with tqdm(
+                # with utils.ccp(
                 #         total=srcwin[1] + srcwin[3],
                 #         desc=f'applying filtered results to binary mask',
                 #         leave=self.verbose
@@ -2588,7 +2588,7 @@ class ElevationDataset:
             out_band = out_ds.GetRasterBand(1)
             srcwin = (0, 0, out_ds.RasterXSize, out_ds.RasterYSize)
             msk_ds = gdal.Open(out_mask_fn, 1)
-            with tqdm(
+            with utils.ccp(
                     total=srcwin[1] + srcwin[3],
                     desc=f'applying filtered results to data mask',
                     leave=self.verbose
@@ -3634,14 +3634,16 @@ class ElevationDataset:
 
                 if len(points) > 0:
                     ## apply any dlim filters to the points
-                    #utils.echo_msg(points)
+                    #utils.echo_debug_msg(points)
                     if isinstance(self.pnt_fltrs, list):
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
                                 point_filter = pointz.PointFilterFactory(
-                                    mod=f, points=points, region=self.region,
+                                    mod=f,
+                                    points=points,
+                                    region=self.region,
                                     xyinc=[self.x_inc, self.y_inc],
-                                    cache_dir=self.cache_dir
+                                    cache_dir=self.cache_dir,
                                 )._acquire_module()
                                 if point_filter is not None:
                                     points = point_filter()
@@ -4022,8 +4024,9 @@ class ElevationDataset:
         """yield the result of `_stacks` as an xyz object"""
 
         #stacked_fn = self._blocks(out_name=out_name)
-
-        gbt = globato(
+        from . import globato
+        
+        gbt = globato.globato(
             region=self.region, x_inc=self.x_inc,
             y_inc=self.y_inc, dst_srs=self.dst_srs,
             cache_dir=self.cache_dir
@@ -4031,15 +4034,15 @@ class ElevationDataset:
         #if os.path.exists(gbt.fn):
         #    gbt.load()
         #else:
-        gbt.create()
+        #gbt.create()
 
-        for this_entry in self.parse():
-            gbt.add_dataset_entry(this_entry)
-            gbt.block_entry(this_entry)
-            gbt.finalize()
-            
-        gbt.close()
-        stacked_fn = gbt.fn
+        #for this_entry in self.parse():
+        #    gbt.add_dataset_entry(this_entry)
+        #    gbt.block_entry(this_entry)            
+        #    gbt.finalize()
+        #    
+        #gbt.close()
+        stacked_fn = gbt(self.parse())
         
         sds = h5.File(stacked_fn, 'r')
         sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
@@ -4239,7 +4242,7 @@ class ElevationDataset:
         if self.dst_srs is not None:
             stack_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
 
-        with tqdm(
+        with utils.ccp(
                 total=len(stack_grp.keys()),
                 desc='converting CSG stack to GeoTIFF',
                 leave=self.verbose
@@ -4268,7 +4271,7 @@ class ElevationDataset:
         if self.dst_srs is not None:
             mask_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
 
-        with tqdm(
+        with utils.ccp(
                 total=len(mask_keys),
                 desc='converting CSG mask to GeoTiff',
                 leave=self.verbose
@@ -4542,7 +4545,7 @@ class ElevationDataset:
     def process_buildings(self, this_bing, verbose=True):
         bldg_geoms = []
         if this_bing is not None:
-            with tqdm(
+            with utils.ccp(
                     total=len(this_bing.results),
                     desc='processing buildings',
                     leave=verbose
@@ -4613,7 +4616,7 @@ class ElevationDataset:
             
         cst_geoms = []
         if this_cst is not None:
-            with tqdm(
+            with utils.ccp(
                     total=len(this_cst.results),
                     desc='processing coastline',
                     leave=verbose
@@ -4743,9 +4746,6 @@ class CUDEMFile(ElevationDataset):
         
         yield(points)
                 
-
-            
-                          
 
 ###############################################################################
 ## Datasets Factory - module parser

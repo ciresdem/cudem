@@ -34,7 +34,7 @@ import os
 import copy
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
+#from tqdm import tqdm
 
 from osgeo import ogr
 
@@ -381,9 +381,9 @@ class Datalist(ElevationDataset):
 
             dl_layer.SetSpatialFilter(_boundsGeom)
             count = len(dl_layer)
-            with tqdm(
+            with utils.ccp(
                     total=len(dl_layer),
-                    desc=f'{utils._command_name()}: parsing {count} datasets from datalist json {self.fn}.json @ {self.weight}',
+                    desc=f'parsing {count} datasets from datalist json {self.fn}.json @ {self.weight}',
                     leave=self.verbose
             ) as pbar:
                 for l,feat in enumerate(dl_layer):
@@ -484,9 +484,9 @@ class Datalist(ElevationDataset):
                 count = sum(1 for _ in f)
 
             with open(self.fn, 'r') as op:
-                with tqdm(
+                with utils.ccp(
                         total=count,
-                        desc=f'{utils._command_name()}: parsing datalist {self.fn}...',
+                        desc=f'parsing datalist {self.fn}...',
                         leave=False
                 ) as pbar:
                     for l, this_line in enumerate(op):

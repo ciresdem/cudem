@@ -32,8 +32,8 @@ import os
 import sys
 import shutil
 import math
-from tqdm import tqdm
-from tqdm import trange
+#from tqdm import tqdm
+#from tqdm import trange
 
 from osgeo import gdal
 from osgeo import osr
@@ -1244,18 +1244,18 @@ def flatten_no_data_zones(src_arr, src_config, size_threshold=1,
 
     ## get the total number of cells in each group
     mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
-    for i in trange(
-            0, n,
-            desc='{}: flattening data voids greater than {} cells'.format(
-                os.path.basename(sys.argv[0]), size_threshold
-            ),
+    #for i in trange(
+    with utils.ccp(
+            desc=f'flattening data voids greater than {size_threshold} cells',
             leave=verbose
-    ):
-        if mn[i] >= size_threshold:
-            i += 1
-            ll = expand_for(l==i)
-            flat_value = np.nanpercentile(src_arr[ll], 5)
-            src_arr[l==i] = flat_value
+    ) as pbar:
+        for i in range(0, n):
+            if mn[i] >= size_threshold:
+                i += 1
+                ll = expand_for(l==i)
+                flat_value = np.nanpercentile(src_arr[ll], 5)
+                src_arr[l==i] = flat_value
+                pbar.update()
 
     src_arr[np.isnan(src_arr)] = src_config['ndv']
 
@@ -1616,7 +1616,7 @@ def gdal_cut2(src_gdal, src_region, dst_gdal, node='pixel',
                 if out_ds_config['proj'] is not None:
                     clip_ds.SetProjection(out_ds_config['proj'])
 
-                with tqdm(
+                with utils.ccp(
                         desc='clipping raster bands',
                         total=src_ds.RasterCount,
                         leave=verbose
@@ -1988,7 +1988,7 @@ def sample_warp(
             src_srs,
             dst_srs
         )
-        pbar = tqdm(desc=desc, total=100, leave=True)
+        pbar = utils.ccp(desc=desc, total=100, leave=True)
         pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)
     else:
         pbar_update = None
@@ -2159,7 +2159,7 @@ def gdal_yield_srcwin(src_gdal, n_chunk=10, step=5, verbose=False):
     i_chunk = 0
     x_i_chunk = 0
     
-    with tqdm(
+    with utils.ccp(
             total=math.ceil(ds_config['ny']/step) * math.ceil(ds_config['nx']/step),
             desc=f'chunking {src_gdal}'
     ) as pbar:

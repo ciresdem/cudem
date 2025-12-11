@@ -31,7 +31,7 @@
 ### Code:
 
 import os
-from tqdm import tqdm
+#from tqdm import tqdm
 import numpy as np
 from osgeo import ogr
 from osgeo import gdal
@@ -158,7 +158,7 @@ class PointZ:
         fd = ogr.FieldDefn('index', ogr.OFTInteger)
         layer.CreateField(fd)
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        with tqdm(
+        with utils.ccp(
                 total=len(self.points),
                 desc='vectorizing points dataset', leave=False
         ) as pbar:

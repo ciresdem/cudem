@@ -39,7 +39,7 @@ import requests
 import urllib
 import lxml.etree
 import lxml.html as lh
-from tqdm import tqdm
+#from utils.ccp import utils.ccp
 import threading
 try:
     import Queue as queue
@@ -642,15 +642,18 @@ class Fetch:
                     with open(
                             dst_fn, 'ab' if req.status_code == 206 else 'wb'
                     ) as local_file:
-                        with tqdm(
-                                desc='fetching: {}'.format(
-                                    utils._init_msg(
-                                        self.url, len('fetching: '), 40
-                                    )
-                                ),
+                        #prefix = f'{utils.get_calling_module_name()}:'
+                        #url_msg = f'{utils._init_msg(self.url, len(prefix), 40)}'
+                        with utils.ccp(
+                                desc=self.url,
+                                # desc='fetching: {}'.format(
+                                #     utils._init_msg(
+                                #         self.url, len('fetching: '), 40
+                                #     )
+                                # ),
                                 total=req_s,
-                                unit='iB',
-                                unit_scale=True,
+                                #unit='iB',
+                                #unit_scale=True,
                                 leave=self.verbose
                         ) as pbar:
                             try:

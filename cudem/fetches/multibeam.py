@@ -29,7 +29,7 @@
 
 import os, sys
 import re
-from tqdm import tqdm
+#from tqdm import tqdm
 from io import StringIO
 from cudem import utils
 from cudem import regions
@@ -236,7 +236,7 @@ class Multibeam(fetches.FetchModule):
             )
                 
         #else:
-        with tqdm(
+        with utils.ccp(
                 total=len(these_surveys.keys()),
                 desc='scanning NCEI Multibeam datasets',
                 leave=self.verbose
@@ -493,7 +493,7 @@ class MBDB(fetches.FetchModule):
             #print(_req.url)
             #print(_req.text)
             features = _req.json()
-            with tqdm(
+            with utils.ccp(
                     total=len(features['features']),
                     desc='parsing mb surveys..',
                     leave=self.verbose
@@ -511,7 +511,7 @@ class MBDB(fetches.FetchModule):
                         else:
                             page = fetches.Fetch(feature_set_url, verbose=True).fetch_html()
                             page_mb_links = page.xpath(f'//a[contains(@href, "/MB/")]/@href')
-                            with tqdm(
+                            with utils.ccp(
                                     total=len(page_mb_links),
                                     desc='parsing mb survey datasets..',
                                     leave=self.verbose
@@ -619,7 +619,7 @@ class R2R(fetches.FetchModule):
             features = _req.json()
             #utils.echo_msg(features)
             #utils.echo_msg('found {} cruises'.format(len(features['data'])))
-            with tqdm(
+            with utils.ccp(
                     total=len(features['data']),
                     desc='parsing cruise datasets..',
                     leave=self.verbose

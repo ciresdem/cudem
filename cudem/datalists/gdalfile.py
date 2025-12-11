@@ -33,7 +33,7 @@
 import os
 import re
 import numpy as np
-from tqdm import tqdm
+#from tqdm import tqdm
 
 from osgeo import gdal
 
@@ -931,7 +931,7 @@ class BAGFile(ElevationDataset):
 
                     utils.echo_msg(f'VRBAG min resolution is {min_res}')
                     utils.echo_msg(f'VRBAG max resolution is {max_res}')
-                    with tqdm(
+                    with utils.ccp(
                             total=len(sub_datasets),
                             desc=f'parsing {len(sub_datasets)} supergrids from BAG file {self.fn}',
                             leave=True

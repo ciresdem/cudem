@@ -43,27 +43,22 @@ import tarfile
 import gzip
 import bz2
 import re
-import curses
 import io
 import json
 import traceback
-import getpass
 
-from tqdm import tqdm
 import threading
 try:
     import Queue as queue
 except: import queue as queue
 
 import numpy as np
-import cudem
 
 ###############################################################################
 ##
 ## General Utility Functions, definitions, etc.
 ##
 ###############################################################################
-
 ## Cahce directory, for use in dlim/waffles/fetches
 this_dir, this_filename = os.path.split(__file__)
 cudem_cache = lambda: os.path.abspath('./.cudem_cache')
@@ -601,15 +596,17 @@ def get_username():
     while not username:
         username = do_input('username: ')
         
-    return username
+    return(username)
 
 
 def get_password():
+    import getpass
+    
     password = ''
     while not password:
         password = getpass.getpass('password: ')
         
-    return password
+    return(password)
 
 
 def get_outliers(
@@ -1129,11 +1126,19 @@ def yield_srcwin(
     x_i_chunk = 0
 
     assert step > 0    
-    with tqdm(
+    # with tqdm(
+    #         total=(math.ceil((n_size[0] + (n_chunk-n_edge)) / step) \
+    #                * math.ceil((n_size[1] +  (n_chunk-n_edge)) / step)),
+    #         desc='{}: {} @ chunk:{}/step:{}...'.format(
+    #             get_calling_module_name(), msg, int_or(n_chunk), int_or(step)
+    #         ),
+    #         leave=verbose
+    # ) as pbar:
+    with ccp(
             total=(math.ceil((n_size[0] + (n_chunk-n_edge)) / step) \
                    * math.ceil((n_size[1] +  (n_chunk-n_edge)) / step)),
-            desc='{}: {} @ chunk:{}/step:{}...'.format(
-                _command_name(), msg, int_or(n_chunk), int_or(step)
+            desc='{} @ chunk:{}/step:{}...'.format(
+                msg, int_or(n_chunk), int_or(step)
             ),
             leave=verbose
     ) as pbar:
@@ -1273,8 +1278,8 @@ def run_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
     """
     out = None
     width = int(_terminal_width()) - 55
-    with tqdm(
-            desc='cmd: `{}...`'.format(cmd.rstrip()[:width]),
+    with ccp(
+            desc='`{}...`'.format(cmd.rstrip()[:width]),
             leave=verbose
             #desc='cmd: `{}...`'.format(cmd.rstrip())
     ) as pbar:
@@ -1340,7 +1345,7 @@ def yield_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
       str: each line of output from the cmd
     """
     
-    if verbose: echo_msg('running cmd: {}...'.format(cmd.rstrip()))    
+    if verbose: echo_msg('running cmd {}...'.format(cmd.rstrip()))    
     if data_fun is not None:
         pipe_stdin = subprocess.PIPE
     else: pipe_stdin = None
@@ -1365,7 +1370,7 @@ def yield_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
     p.stdout.close()
     if verbose:
         echo_msg(
-            'ran cmd: {} and returned {}.'.format(
+            'ran cmd {}, and returned {}.'.format(
                 cmd.rstrip(), p.returncode)
         )
 
@@ -1405,6 +1410,8 @@ def config_check(chk_config_file=True, chk_vdatum=False,
       dict: a dictionary of gathered results.
     """
 
+    import cudem
+    
     def check_config_file(ccc):
         pass
     
@@ -1466,6 +1473,22 @@ def config_check(chk_config_file=True, chk_vdatum=False,
 ## TODO: add threading and verbosity
 ##
 ###############################################################################
+use_tqdm = True
+if use_tqdm:
+    from tqdm import tqdm
+
+#dst_port = open('test.log', 'a')
+dst_port = sys.stderr
+msg_level = 1
+
+msg_levels = {
+    'debug': 0,
+    'info': 1,
+    'proc': 2,
+    'warning': 3,
+    'error': 4
+}
+
 def _terminal_width():
     #cols = 40
     #try:
@@ -1520,54 +1543,53 @@ def _init_msg(msg, prefix_len, buff_len=6):
         return('{}'.format(msg))
 
     
-def echo_warning_msg2(msg, prefix='cudem'):
-    """echo warning msg to stderr using `prefix`
+# def echo_warning_msg2(msg, prefix='cudem'):
+#     """echo warning msg to stderr using `prefix`
 
-    >> echo_warning_msg2('message', 'test')
-    test: warning, message
+#     >> echo_warning_msg2('message', 'test')
+#     test: warning, message
     
-    Args:
-      msg (str): a message
-      prefix (str): a prefix for the message
-    """
+#     Args:
+#       msg (str): a message
+#       prefix (str): a prefix for the message
+#     """
 
-    #msg = _init_msg(msg, len(prefix) + 9)
-    #sys.stderr.flush()
-    sys.stderr.write('\x1b[2K\r')
-    #msg = _init_msg(msg, len(prefix))
-    #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
-    tqdm.write(
-        f'{prefix}: \033[33m\033[1mwarning\033[m, {msg}',
-        file=sys.stderr
-    )
-    sys.stderr.flush()
-
-    
-def echo_error_msg2(msg, prefix='cudem'):
-    """echo error msg to stderr using `prefix`
-
-    >> echo_error_msg2('message', 'test')
-    test: error, message
-
-    Args:
-      msg (str): a message
-      prefix (str): a prefix for the message
-    """
-
-    #msg = _init_msg(msg, len(prefix) + 7)
-    #sys.stderr.flush()
-    sys.stderr.write('\x1b[2K\r')
-    #msg = _init_msg(msg, len(prefix))
-    #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
-    tqdm.write(
-        f'{prefix}: \033[31m\033[1merror\033[m, {msg}',
-        file=sys.stderr
-    )
-    #tqdm.write(traceback.format_exc())
-    sys.stderr.flush()
+#     #msg = _init_msg(msg, len(prefix) + 9)
+#     #sys.stderr.flush()
+#     sys.stderr.write('\x1b[2K\r')
+#     #msg = _init_msg(msg, len(prefix))
+#     #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+#     tqdm.write(
+#         f'{prefix}: \033[33m\033[1mwarning\033[m, {msg}',
+#         file=sys.stderr
+#     )
+#     sys.stderr.flush()
 
     
-def echo_msg2(msg, prefix='cudem', level='info', nl='', bold=False, use_tqdm=True, dst_port=sys.stderr):
+# def echo_error_msg2(msg, prefix='cudem'):
+#     """echo error msg to stderr using `prefix`
+
+#     >> echo_error_msg2('message', 'test')
+#     test: error, message
+
+#     Args:
+#       msg (str): a message
+#       prefix (str): a prefix for the message
+#     """
+
+#     #msg = _init_msg(msg, len(prefix) + 7)
+#     #sys.stderr.flush()
+#     sys.stderr.write('\x1b[2K\r')
+#     #msg = _init_msg(msg, len(prefix))
+#     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
+#     tqdm.write(
+#         f'{prefix}: \033[31m\033[1merror\033[m, {msg}',
+#         file=sys.stderr
+#     )
+#     #tqdm.write(traceback.format_exc())
+#     sys.stderr.flush()
+
+def echo_msg2(msg, prefix='cudem', level='info', nl='\n', bold=False, use_tqdm=False, dst_port=sys.stderr):
     """echo `msg` to stderr using `prefix`
 
     >> echo_msg2('message', 'test')
@@ -1581,32 +1603,56 @@ def echo_msg2(msg, prefix='cudem', level='info', nl='', bold=False, use_tqdm=Tru
       bold (bool): message will be bold
     """
 
-    if level.lower() == 'warning':
-        level = f'\033[33m\033[1m{level.upper()}\033[m'
-    elif level.lower() == 'error':
-        level = f'\033[31m\033[1m{level.upper()}\033[m'
-    elif level.lower() == 'debug':
-        level = f'\033[35m\033[1m{level.upper()}\033[m'
-    else:
-        level = f'\033[36m\033[1m{level.upper()}\033[m'
+    if level.lower() in msg_levels.keys() and msg_levels[level.lower()] >= msg_level:
+    
+        if level.lower() == 'warning':
+            level = f'\033[33m\033[1m{level.upper()}\033[m'
+        elif level.lower() == 'error':
+            level = f'\033[31m\033[1m{level.upper()}\033[m'
+        elif level.lower() == 'debug':
+            level = f'\033[35m\033[1m{level.upper()}\033[m'
+        else:
+            level = f'\033[36m\033[1m{level.upper()}\033[m'
 
-    #if __echo_level__ < 0:
-    sys.stderr.write('\x1b[2K\r')
-    #msg = _init_msg(msg, len(prefix))
-    if bold:
-        message = f'\033[1m{msg}\033[m{nl}'
-    else:
-        message = f'{msg}{nl}'
+        if use_tqdm: nl = ''
 
-    if use_tqdm:
-        tqdm.write(
-            f'{prefix}: [{level}] {message}',
-            file=dst_port
-        )
-    else:
-        sys.stderr.write(f'{prefix}: {message}')
-        
-    sys.stderr.flush()
+        #if __echo_level__ < 0:
+        dst_port.write('\x1b[2K\r')
+        #msg = _init_msg(msg, len(prefix))
+        if bold:
+            message = f'\033[1m{msg}\033[m{nl}'
+        else:
+            message = f'{msg}{nl}'
+
+        if use_tqdm:
+            tqdm.write(
+                f'[ {level} ] {prefix}: {message}',
+                file=dst_port
+            )
+        else:
+            dst_port.write(f'[ {level} ] {prefix}: {message}')
+
+        dst_port.flush()
+
+
+def get_calling_module_name(stack_level=1):
+    """
+    Returns the name of the module that called the current function.
+    """
+
+    import inspect
+    # inspect.stack() returns a list of frame records.
+    # The first element (index 0) is the current frame.
+    # The second element (index 1) is the caller's frame.
+    caller_frame = inspect.stack()[stack_level]
+
+    # The filename of the caller's module is at index 1 of the frame record.
+    caller_filename = caller_frame.filename
+
+    # Use inspect.getmodulename() to extract the module name from the filename.
+    module_name = inspect.getmodulename(caller_filename)
+
+    return(module_name)
 
 
 ###############################################################################    
@@ -1616,9 +1662,11 @@ def echo_msg2(msg, prefix='cudem', level='info', nl='', bold=False, use_tqdm=Tru
 ## lambda runs: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
 ##
 ###############################################################################
-echo_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='info')
-echo_msg_bold = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='info', bold=True)
-echo_msg_inline = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='info', nl=False)
+#echo_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='info')
+echo_msg = lambda m: echo_msg2(m, prefix = get_calling_module_name(stack_level=2), level='info', use_tqdm=use_tqdm, dst_port=dst_port)
+#echo_msg_bold = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='info', bold=True)
+echo_msg_bold = lambda m: echo_msg2(m, prefix = get_calling_module_name(stack_level=2), level='info', bold=True, use_tqdm=use_tqdm, dst_port=dst_port)
+echo_msg_inline = lambda m: echo_msg2(m, prefix = get_calling_module_name(stack_level=2), level='info', nl=False, use_tqdm=use_tqdm, dst_port=dst_port)
 
 #echo_msg = lambda m: logger.info(m)
 #echo_msg_bold = lambda m: logger.info(f'\033[1m{m}\033[m')
@@ -1631,9 +1679,9 @@ echo_msg_inline = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]),
 #echo_debug_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv[0]))
 #echo_error_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv[0]))
 #echo_warning_msg = lambda m: echo_warning_msg2(m, prefix = os.path.basename(sys.argv[0]))
-echo_debug_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='debug')
-echo_error_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='error')
-echo_warning_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), level='warning')
+echo_debug_msg = lambda m: echo_msg2(m, prefix = get_calling_module_name(stack_level=2), level='debug', use_tqdm=use_tqdm, dst_port=dst_port)
+echo_error_msg = lambda m: echo_msg2(m, prefix = get_calling_module_name(stack_level=2), level='error', use_tqdm=use_tqdm, dst_port=dst_port)
+echo_warning_msg = lambda m: echo_msg2(m, prefix = get_calling_module_name(stack_level=2), level='warning', use_tqdm=use_tqdm, dst_port=dst_port)
 
 #echo_error_msg = lambda m: logger.error(m)
 #echo_warning_msg = lambda m: logger.warning(m)
@@ -1689,7 +1737,7 @@ _command_name = lambda: os.path.basename(sys.argv[0])
 ## Depreciated, just using tqdm now...
 ##
 ###############################################################################
-class CliProgress():
+class ccp():
     """Cudem Absolute Minimum Progress Indicator
 
     Minimal progress indication to use with CLI.
@@ -1718,8 +1766,8 @@ class CliProgress():
     True
     """
 
-    def __init__(self, message=None, end_message=None, total=0,
-                 sleep=2, verbose=True): 
+    def __init__(self, desc=None, message=None, end_message=None, total=0,
+                 sleep=2, verbose=True, leave=True): 
         self.thread = threading.Thread(target=self.updates)
         self.thread_is_alive = False
         self.tw = 7
@@ -1730,7 +1778,16 @@ class CliProgress():
         self.sleep = int_or(sleep)
 
         self.message = message
+        if desc is not None:
+            self.message = desc
+
+        self.message = f'{get_calling_module_name(stack_level=2)}: {self.message}'
+            
         self.end_message = end_message
+
+        if self.end_message is not None:
+            self.end_message = f'{get_calling_module_name(stack_level=2)}: {self.message}'
+            
         self.total = total
         self._init_opm()
         
@@ -1750,11 +1807,11 @@ class CliProgress():
         
         self.perc = lambda p: ((p[0]/p[1]) * 100.)
         
-        if self.opm is not None and self.verbose:
-            self._clear_stderr()
-            sys.stderr.write(
-                '\r {}  {}\n'.format(" " * (self.tw - 1), self.opm)
-            )
+        # if self.opm is not None and self.verbose:
+        #     self._clear_stderr()
+        #     sys.stderr.write(
+        #         '\r {}  {}\n'.format(" " * (self.tw - 1), self.opm)
+        #     )
 
             
     def updates(self):
@@ -1794,6 +1851,7 @@ class CliProgress():
         else:
             return(True)
 
+        
     def write(self, msg, nl=True, bold=False):
         sys.stderr.write('\x1b[2K\r')
         if bold:
@@ -1814,6 +1872,8 @@ class CliProgress():
 
             
     def _terminal_width(self):
+        import curses
+        
         cols = 40
         try:
             cols = shutil.get_terminal_size().columns
@@ -1922,6 +1982,14 @@ def physical_cpu_count():
         # It will only get logical cores, but it's better than nothing.
         return mp.cpu_count()
 
+if use_tqdm:
+    class ccp(tqdm):
+        def __init__(self, **kwargs):
+            kwargs['desc'] = f'[ \033[32m\033[1mPROC\033[m ] {get_calling_module_name(stack_level=2)}: {kwargs["desc"]}'
+            kwargs['file'] = dst_port
+            super().__init__(**kwargs)
+
+            
 # A dictionary for converting numpy array dtypes into carray identifiers.
 # For integers & floats, does not hangle character/string arrays.
 # Reference: https://docs.python.org/3/library/array.html

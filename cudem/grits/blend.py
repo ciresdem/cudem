@@ -208,7 +208,8 @@ class Blend(grits.Grits):
                 src_region=src_region,
                 x_inc=x_inc,
                 y_inc=y_inc,
-                dst_srs=ds_config['proj']
+                dst_srs=ds_config['proj'],
+                verbose=True
             )._acquire_module().initialize()
             
             for arrs, srcwin, gt in aux_ds.yield_array(want_sums=False):
