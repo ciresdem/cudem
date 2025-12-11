@@ -62,8 +62,8 @@ import json
 import time
 import glob
 import traceback
-from tqdm import tqdm
-from tqdm import trange
+#from tqdm import tqdm
+#from tqdm import trange
 
 import numpy as np
 import h5py as h5
@@ -1373,7 +1373,7 @@ class grid_scipy(threading.Thread):
         ):
             self.scipy_q.put(this_srcwin)
 
-        self.pbar = tqdm(
+        self.pbar = utils.ccp(
             desc=f'gridding data to {self.mod}',
             total=self.scipy_q.qsize()
         )
@@ -2131,7 +2131,7 @@ class WafflesGDALGrid(Waffle):
             layer.CreateField(fd)
             
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        with tqdm(desc='vectorizing stack', leave=self.verbose) as pbar:
+        with utils.ccp(desc='vectorizing stack', leave=self.verbose) as pbar:
             for this_xyz in self.stack_ds.yield_xyz():
                 pbar.update()
                 f.SetField(0, this_xyz.x)
@@ -2158,7 +2158,7 @@ class WafflesGDALGrid(Waffle):
                     self.ycount
                 )
             )
-        _prog = tqdm(
+        _prog = utils.ccp(
             desc=f'running GDAL GRID {self.alg_str} algorithm',
             leave=self.verbose
         )
@@ -2745,7 +2745,7 @@ class WafflesCoastline(Waffle):
     def _load_osm_coast(self):
         this_cst = self.fetch_data('osm:q=coastline', check_size=False)
         if this_cst is not None:
-            with tqdm(
+            with utils.ccp(
                     total=len(this_cst.results),
                     desc='processing osm coastline',
                     leave=True
@@ -2799,7 +2799,7 @@ class WafflesCoastline(Waffle):
     def _load_enc_coast(self):
         this_cst = self.fetch_data('charts')
         if this_cst is not None:
-            with tqdm(
+            with utils.ccp(
                     total=len(this_cst.results),
                     desc='processing charts coastline',
                     leave=True
@@ -3122,7 +3122,7 @@ class WafflesCoastline(Waffle):
         )
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        with tqdm(
+        with utils.ccp(
                 total=len(this_osm.results),
                 desc='processing OSM buildings',
                 leave=self.verbose
@@ -3184,7 +3184,7 @@ class WafflesCoastline(Waffle):
         this_bing = self.fetch_data("bing_bfp", check_size=True)
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        with tqdm(
+        with utils.ccp(
                 total=len(this_bing.results),
                 desc='processing BING buildings',
                 leave=self.verbose
@@ -3539,7 +3539,7 @@ class WafflesLakes(Waffle):
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        with tqdm(
+        with utils.ccp(
                 total=len(nfeatures),
                 desc='applying labels.',
                 leave=self.verbose
@@ -3619,7 +3619,7 @@ class WafflesLakes(Waffle):
         utils.echo_msg('using Lake IDS: {}'.format(self.lk_ids))
         
         lk_regions = self.p_region.copy()
-        with tqdm(
+        with utils.ccp(
                 total=len(self.lk_layer),
                 desc=f'processing {lk_features} lakes',
                 leave=self.verbose
@@ -3715,7 +3715,7 @@ class WafflesLakes(Waffle):
 
             ## assign max depth from globathy
             msk_arr = msk_band.ReadAsArray()
-            with tqdm(
+            with utils.ccp(
                     total=len(self.lk_ids),
                     desc='Assigning Globathy Depths to rasterized lakes...',
                     leave=self.verbose
@@ -4068,7 +4068,7 @@ class WafflesCUDEM(Waffle):
         #     self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre)
         # )
         # ## initial data to pass through surface (stack)
-        stack_data_entry = (f'{self.stack},200:band_no=1:weight_mask=3:'
+        stack_data_entry = (f'"{self.stack}",200:band_no=1:weight_mask=3:'
                             'uncertainty_mask=4:sample=average,1')
         pre_data = [stack_data_entry]
          
@@ -4082,7 +4082,7 @@ class WafflesCUDEM(Waffle):
 
             if pre_clip is None:
                 coast_data = [
-                    (f'{self.stack},200:band_no=1:weight_mask=3:'
+                    (f'"{self.stack}",200:band_no=1:weight_mask=3:'
                      'uncertainty_mask=4:sample=cubicspline,1')]
                 coastline = self.generate_coastline(pre_data=coast_data)
                 #utils.echo_msg_bold(coastline)
@@ -4091,7 +4091,7 @@ class WafflesCUDEM(Waffle):
         ## Grid/Stack the data `pre` times concluding in full
         ## resolution with data > min_weight
         pre_surfaces = []
-        with tqdm(
+        with utils.ccp(
                 total=self.pre_count+1,
                 desc='generating CUDEM surfaces',
                 leave=self.verbose
@@ -4115,8 +4115,8 @@ class WafflesCUDEM(Waffle):
                     _pre_unc_name = f'{_pre_name_plus}_u.tif' \
                         if self.want_uncertainty \
                            else None
-                    pre_data_entry = (f'{_pre_name_plus}.tif,200'
-                                      f':uncertainty_mask={_pre_unc_name}'
+                    pre_data_entry = (f'"{_pre_name_plus}.tif",200'
+                                      f':uncertainty_mask="{_pre_unc_name}"'
                                       f':sample=cubicspline:check_path=True'
                                       f',{pre_weight-.1}')
 
@@ -4500,7 +4500,7 @@ class WafflesUncertainty(Waffle):
         stack_ds = gdal.Open(self.stack)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        with tqdm(
+        with utils.ccp(
                 total=len(sub_regions),
                 desc=f'analyzing {len(sub_regions)} sub-regions',
                 leave=self.verbose
@@ -4569,7 +4569,7 @@ class WafflesUncertainty(Waffle):
         all_trains = [x for s in trains for x in s[:5]]
         tot_trains = len(all_trains)
         
-        with tqdm(
+        with utils.ccp(
                 desc='performing SPLIT-SAMPLE simulation',
                 leave=False,
                 total=tot_trains

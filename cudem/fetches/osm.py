@@ -29,7 +29,7 @@
 
 import os
 import numpy as np
-from tqdm import tqdm
+#from tqdm import tqdm
 from osgeo import ogr
 from cudem import utils
 from cudem import regions
@@ -79,7 +79,7 @@ def process_coastline(
             
     cst_geoms = []
     if this_cst is not None:
-        with tqdm(
+        with utils.ccp(
                 total=len(this_cst.results),
                 desc='processing coastline',
                 leave=verbose
@@ -228,7 +228,7 @@ class osmCoastline:
         if self.this_osm is None:
             self.this_osm = self.fetch()
 
-        with tqdm(
+        with utils.ccp(
                 total=len(self.this_osm.results),
                 desc='processing coastline',
                 leave=self.verbose
@@ -271,7 +271,7 @@ class osmCoastline:
                 
         lk_geoms = []
         if self.this_osm is not None:
-            with tqdm(
+            with utils.ccp(
                     total=len(self.this_osm.results),
                     desc=f'processing {self.q}',
                     leave=self.verbose
@@ -371,7 +371,7 @@ def polygonize_osm_coastline(
         )
         
     has_feature = False
-    with tqdm(
+    with utils.ccp(
             total=len(line_ds),
             desc='polygonizing osm coastline',
             leave=verbose

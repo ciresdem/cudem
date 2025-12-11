@@ -181,7 +181,7 @@ class TheNationalMap(fetches.FetchModule):
                 self._tnm_api_products_url, verbose=self.verbose
             ).fetch_req(params=_data, timeout=60, read_timeout=60)
             if _req is not None and _req.status_code == 200:
-                utils.echo_msg(_req.url)
+                utils.echo_debug_msg(_req.url)
                 response_text = _req.text
                 if response_text.startswith("{errorMessage"):
                     continue
@@ -416,7 +416,7 @@ class TheNationalMapOLD(fetches.FetchModule):
                         if _req is not None and _req.status_code == 200:
                             try:
                                 _results = _req.json()
-                                utils.echo_msg(_results.keys())
+                                utils.echo_debug_msg(_results.keys())
                                 bbox = _results['spatial']['boundingBox']
                                 geom =  regions.Region().from_list(
                                     [float(bbox['minX']), float(bbox['maxX']),
@@ -504,7 +504,7 @@ class TheNationalMapOLD(fetches.FetchModule):
                             utils.echo_error_msg('error, {}'.format(e))
 
                     if len(_dataset_results) > 0:
-                        #utils.echo_msg(_dataset_results)
+                        utils.echo_debug_msg(_dataset_results)
                         for item in _dataset_results['items']:
                             p_dir = '_'.join(item['title'].split(' '))
                             if _data['prodFormats'] is None:
