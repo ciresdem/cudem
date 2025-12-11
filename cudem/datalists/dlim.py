@@ -1136,7 +1136,7 @@ class ElevationDataset:
                         f'could not set transformation on {self.fn}, {e}'
                     )
 
-            self.set_yield(use_blocks=False)
+            self.set_yield(use_blocks=True)
             #self.set_yield()
 
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
@@ -4031,18 +4031,21 @@ class ElevationDataset:
             y_inc=self.y_inc, dst_srs=self.dst_srs,
             cache_dir=self.cache_dir
         )
-        #if os.path.exists(gbt.fn):
-        #    gbt.load()
-        #else:
-        #gbt.create()
+        if os.path.exists(gbt.fn):
+            gbt.load()
+        else:
+            gbt.create()
 
-        #for this_entry in self.parse():
-        #    gbt.add_dataset_entry(this_entry)
-        #    gbt.block_entry(this_entry)            
-        #    gbt.finalize()
-        #    
-        #gbt.close()
-        stacked_fn = gbt(self.parse())
+        for this_entry in self.parse():
+            #utils.echo_msg_bold(this_entry)
+            gbt.add_dataset_entry(this_entry)
+            gbt.block_entry(this_entry)
+            
+        gbt.finalize()
+           
+        gbt.close()
+        #stacked_fn = gbt(self.parse())
+        stacked_fn = gbt.fn
         
         sds = h5.File(stacked_fn, 'r')
         sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]

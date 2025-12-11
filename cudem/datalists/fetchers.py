@@ -33,7 +33,7 @@
 import os
 import json
 import copy
-from tqdm import tqdm
+#from tqdm import tqdm
 from cudem import utils
 from cudem import regions
 from cudem import gdalfun
@@ -206,7 +206,7 @@ class Fetcher(ElevationDataset):
     
     def parse(self):
         #self.init_fetch_module()
-        with tqdm(
+        with utils.ccp(
                 total=len(self.fetch_module.results),
                 desc='parsing datasets from datalist fetches {} @ {}'.format(
                     self.fetch_module, self.weight
