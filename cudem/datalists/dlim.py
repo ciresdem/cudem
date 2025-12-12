@@ -2174,10 +2174,14 @@ class ElevationDataset:
                 ## Read the saved accumulated rasters at the incoming srcwin
                 ## and set ndv to zero
                 for key in stack_keys:
+                    #utils.echo_debug_msg(f'stack key: {key}')
+                    #utils.echo_debug_msg(stacked_bands[key])
+                    #utils.echo_debug_msg(srcwin)
                     stacked_data[key] = stacked_bands[key].ReadAsArray(
                         srcwin[0], srcwin[1], srcwin[2], srcwin[3]
                     )
                     if mode != 'min' and mode != 'max':
+                        #utils.echo_debug_msg(stacked_data[key])
                         stacked_data[key][np.isnan(stacked_data[key])] = 0
 
                     if key == 'count':
@@ -4763,6 +4767,15 @@ class CUDEMFile(ElevationDataset):
         yield(points)
                 
 
+class FactoryDatalists(ElevationDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        
+class CRMDatalist(FactoryDatalists):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)    
+        
 ###############################################################################
 ## Datasets Factory - module parser
 ###############################################################################                

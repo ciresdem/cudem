@@ -283,7 +283,7 @@ class DAV_old(fetches.FetchModule):
                                     index_shps = utils.p_unzip(
                                         index_zipfile, ['shp', 'shx', 'dbf', 'prj'],
                                         outdir=self._outdir,
-                                        verbose=True
+                                        verbose=self.verbose
                                     )
                                     index_shp = None
                                     for v in index_shps:
@@ -597,7 +597,7 @@ class DAV(fetches.FetchModule):
                         index_shps = utils.p_unzip(
                             index_zipfile, ['shp', 'shx', 'dbf', 'prj'],
                             outdir=self._outdir,
-                            verbose=True
+                            verbose=self.verbose
                         )
                         index_shp = None
                         for v in index_shps:

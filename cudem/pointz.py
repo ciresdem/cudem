@@ -136,7 +136,7 @@ class PointZ:
         associated pixel-z-data at the x/y locations of the points
         """
         
-        pa = PointPixels(x_size=x_size, y_size=y_size)
+        pa = PointPixels(x_size=x_size, y_size=y_size, ppm=True)
         point_arrays, _, _ = pa(points, mode='mean')
         point_pixels = point_arrays['z'][point_arrays['pixel_y'],
                                          point_arrays['pixel_x']]
@@ -568,7 +568,9 @@ class RQOutlierZ(PointZOutlier):
             if (self.region is not None or self.xyinc is not None) and self.resample_raster:
                 # vrt_options = gdal.BuildVRTOptions(resampleAlg='cubic') # Example option
                 # vrt_ds = gdal.BuildVRT('tmp.vrt', raster, options=vrt_options)
-                
+
+                ## todo: use cell count instead of xyinc here
+                ##       to make sure the output aligns with the src_dem
                 try:
                     raster = [gdalfun.sample_warp(
                         raster, _raster, self.xyinc[0], self.xyinc[1],
@@ -681,6 +683,7 @@ class PointPixels():
             x_size=None,
             y_size=None,
             verbose=True,
+            ppm=False,
             **kwargs
     ):
 
@@ -688,6 +691,7 @@ class PointPixels():
         self.x_size = utils.int_or(x_size, 10)
         self.y_size = utils.int_or(y_size, 10)
         self.verbose = verbose
+        self.ppm = ppm
 
         
     def init_region_from_points(self, points):
@@ -766,16 +770,18 @@ class PointPixels():
                              | (pixel_x < 0) \
                              | (pixel_y >= self.y_size) \
                              | (pixel_y < 0))
-        ### commented out for pmm! maybe put back...
-        # pixel_x = np.delete(pixel_x, out_idx)
-        # pixel_y = np.delete(pixel_y, out_idx)
-        # pixel_z = np.delete(pixel_z, out_idx)
-        # pixel_w = np.delete(pixel_w, out_idx)
-        # pixel_u = np.delete(pixel_u, out_idx)
-        # points_x = np.delete(points_x, out_idx)
-        # points_y = np.delete(points_y, out_idx)
-        # if len(pixel_x) == 0 or len(pixel_y) == 0:
-        #     continue
+
+        if not self.ppm:
+            ##commented out for pmm! maybe put back...
+            pixel_x = np.delete(pixel_x, out_idx)
+            pixel_y = np.delete(pixel_y, out_idx)
+            pixel_z = np.delete(pixel_z, out_idx)
+            pixel_w = np.delete(pixel_w, out_idx)
+            pixel_u = np.delete(pixel_u, out_idx)
+            points_x = np.delete(points_x, out_idx)
+            points_y = np.delete(points_y, out_idx)
+            #if len(pixel_x) == 0 or len(pixel_y) == 0:
+            #    continue
 
         points = None
         pixel_w[np.isnan(pixel_w)] = 1

@@ -166,7 +166,7 @@ class OGRFile(ElevationDataset):
                             else:
                                 elev = utils.float_or(f.GetField(self.elev_field))
 
-                            if elev is not None:                                
+                            if elev is not None:
                                 xyz.append(elev)
                             else:
                                 continue
@@ -180,11 +180,17 @@ class OGRFile(ElevationDataset):
                                     
                             else:
                                 elev = utils.float_or(f.GetField(self.elev_field))
+
+                            if elev is not None:
+                                xyz.append(elev)
+                            else:
+                                continue
                                 
                             if isinstance(xyz[0], list):
                                 for x in xyz:
                                     #for xx in x:
-                                    x[2] = elev
+                                    if utils.float_or(x) is not None:
+                                        x[2] = elev
 
                     if isinstance(xyzs[0], list):
                         #[x.append(weight if weight is not None else 1) for x in xyzs]
@@ -197,9 +203,10 @@ class OGRFile(ElevationDataset):
                         points = np.rec.fromrecords(
                             xyzs, names='x, y, z, w, u'
                         )
+                        #points = points[points['z'] is not None]
                         if self.z_scale is not None:
                             points['z'] *= self.z_scale
-                            
+
                         yield(points)
 
                         # for x in xyzs:
