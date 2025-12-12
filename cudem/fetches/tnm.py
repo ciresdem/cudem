@@ -29,6 +29,7 @@
 
 import os
 from cudem import utils
+from cudem import regions
 from cudem.fetches import fetches
 from cudem.fetches import FRED
 

@@ -3701,8 +3701,8 @@ class ElevationDataset:
                     continue
                 
                 if os.path.exists(data_mask['data_mask']):
-                    # if self.verbose:
-                    #     utils.echo_msg(f'using mask dataset: {data_mask} to array')
+                    if self.verbose:
+                        utils.echo_msg(f'using mask dataset: {data_mask} to array')
                         
                     src_mask = gdal.Open(data_mask['data_mask'])
                     if src_mask is not None:
@@ -3736,7 +3736,14 @@ class ElevationDataset:
                         mask_data[mask_data==mask_infos['ndv']] = np.nan
                         
                     out_mask = ((np.isnan(mask_data)) & (z_mask))
-                        
+
+                    if data_mask['invert']:
+                        if not np.all(np.isnan(out_mask)):
+                            continue
+                    else:
+                        if not np.any(out_mask):
+                            continue    
+                    
                     for arr in out_arrays.keys():
                         if out_arrays[arr] is not None:                                
                             if data_mask['invert']:

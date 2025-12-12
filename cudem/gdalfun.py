@@ -762,7 +762,10 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
                 1
             )
             gdal_nan(ds_config, dst_fn, nodata=0)
-            clip_layer = utils.fn_basename2(os.path.basename(mask_fn))
+            clip_layer = ogr_get_layer_name()
+            if clip_layer is None:
+                clip_layer = utils.fn_basename2(os.path.basename(mask_fn))
+                
             # mask_fn = ogr_clip2(
             #     mask_fn, dst_region=region, layer=clip_layer, verbose=verbose
             # )
@@ -850,6 +853,17 @@ def ogr_wktgeoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile
     ds = None
 
     return(out)
+
+def ogr_get_layer_name(ogr_fn):
+    layer_name = None
+    ds = ogr.Open(ogr_fn, 0)
+    if ds is not None:
+        layer = ds.GetLayer()
+        layer_name = layer.GetName()
+
+    ds = None
+    
+    return(layer_name)
 
 
 def ogr_geoms(ogr_fn):

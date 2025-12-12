@@ -181,18 +181,31 @@ class Fetcher(ElevationDataset):
         )
 
         if self.mask is None and self.mask_coast:
-            coast_mask = self.process_coastline(
-                self.fetch_coastline(
-                    chunks=False, verbose=False
-                ),
-                return_geom=False,
-                landmask_is_watermask=True,
-                include_landmask=False,
-                line_buffer=self.coast_buffer,
-                verbose=False
-            )
+            from cudem.fetches import osm
+            this_osm = osm.osmCoastline(region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir)
+            coast_mask = this_osm(return_geom=False, overwrite=False)
+
+            this_osm_water = osm.osmCoastline(region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir, q='water')
+            water_mask = this_osm_water(return_geom=False, overwrite=False)
+
+            # coast_mask = self.process_coastline(
+            #     self.fetch_coastline(
+            #         chunks=False, verbose=False
+            #     ),
+            #     return_geom=False,
+            #     landmask_is_watermask=True,
+            #     include_landmask=False,
+            #     line_buffer=self.coast_buffer,
+            #     verbose=False
+            # )
             if coast_mask is not None:
                 self.fetches_params['mask'] = f'mask_fn={coast_mask}:invert={self.invert_coast}'
+
+            if water_mask is not None:
+                if self.fetches_params['mask'] is not None:                    
+                    self.fetches_params['mask'] = f'{self.fetches_params["mask"]};mask_fn={water_mask}:invert={self.invert_coast}'
+                else:
+                    self.fetches_params['mask'] = f'mask_fn={water_mask}:invert={self.invert_coast}'
         
         
     def generate_inf(self):
@@ -313,8 +326,9 @@ class NEDFetcher(Fetcher):
     )
 
     
-    def __init__(self, coast_buffer=0.00001, **kwargs):
+    def __init__(self, coast_buffer=0.00001, remove_flat=True, **kwargs):
         super().__init__(**kwargs)
+        self.remove_flat = remove_flat
         self.coast_buffer = utils.float_or(coast_buffer, 0.00001)
 
         
@@ -324,25 +338,25 @@ class NEDFetcher(Fetcher):
         ## todo: merge the coast mask with user input self.mask
         coast_mask = None
         ned_mask = self.mask
-        if self.mask is None:
-            coast_mask = self.process_coastline(
-                self.fetch_coastline(
-                    chunks=False, verbose=False
-                ),
-                return_geom=False,
-                landmask_is_watermask=True,
-                include_landmask=False,
-                line_buffer=self.coast_buffer,
-                verbose=False
-            )
-            if coast_mask is not None:
-                ned_mask = {'mask': coast_mask, 'invert_mask': True}
+        # if self.mask is None:
+        #     coast_mask = self.process_coastline(
+        #         self.fetch_coastline(
+        #             chunks=False, verbose=False
+        #         ),
+        #         return_geom=False,
+        #         landmask_is_watermask=True,
+        #         include_landmask=False,
+        #         line_buffer=self.coast_buffer,
+        #         verbose=False
+        #     )
+        #     if coast_mask is not None:
+        #         ned_mask = {'mask': coast_mask, 'invert_mask': True}
         
         src_dem = os.path.join(self.fetch_module._outdir, result['dst_fn'])
             
         self.fetches_params['mod'] = src_dem
         self.fetches_params['mask'] = ned_mask
-        self.fetches_params['remove_flat'] = True
+        self.fetches_params['remove_flat'] = self.remove_flat
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
         if coast_mask is not None:
