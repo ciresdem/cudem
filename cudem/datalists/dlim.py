@@ -3701,9 +3701,7 @@ class ElevationDataset:
                     continue
                 
                 if os.path.exists(data_mask['data_mask']):
-                    if self.verbose:
-                        utils.echo_msg(f'using mask dataset: {data_mask} to array')
-                        
+                    utils.echo_debug_msg(f'using mask dataset: {data_mask} to array')                        
                     src_mask = gdal.Open(data_mask['data_mask'])
                     if src_mask is not None:
                         mask_band = src_mask.GetRasterBand(1)
@@ -3735,8 +3733,8 @@ class ElevationDataset:
                     if not np.isnan(mask_infos['ndv']):
                         mask_data[mask_data==mask_infos['ndv']] = np.nan
                         
-                    out_mask = ((np.isnan(mask_data)) & (z_mask))
-
+                    out_mask = ((~np.isnan(mask_data)) & (z_mask))
+                    
                     for arr in out_arrays.keys():
                         if out_arrays[arr] is not None:
                             if data_mask['invert']:

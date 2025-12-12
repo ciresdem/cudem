@@ -199,13 +199,13 @@ class Fetcher(ElevationDataset):
             #     verbose=False
             # )
             if coast_mask is not None:
-                self.fetches_params['mask'] = f'mask_fn={coast_mask}:invert={self.invert_coast}'
+                self.fetches_params['mask'] = [f'mask_fn={coast_mask}:invert={self.invert_coast}']
 
             if water_mask is not None:
                 if self.fetches_params['mask'] is not None:                    
-                    self.fetches_params['mask'] = f'{self.fetches_params["mask"]};mask_fn={water_mask}:invert={self.invert_coast}'
+                    self.fetches_params['mask'].append(f'mask_fn={water_mask}:invert={self.invert_coast}')
                 else:
-                    self.fetches_params['mask'] = f'mask_fn={water_mask}:invert={self.invert_coast}'
+                    self.fetches_params['mask'] = [f'mask_fn={water_mask}:invert={self.invert_coast}']
         
         
     def generate_inf(self):
