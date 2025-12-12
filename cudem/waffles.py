@@ -1790,7 +1790,7 @@ class GMTSurface(Waffle):
         ## mrl: removed -rp and switched p_region to ps_region
         ## (pre 6.5.0 will shift the grid otherwise)
         dem_surf_cmd += (
-            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}{}{}'.format(
+            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G"{}.tif=gd+n{}:GTiff" -T{} -Z{} {}{}{}{}{}{}{}'.format(
                 self.ps_region.format('gmt') if not self.pixel_node else self.p_region.format('gmt'),
                 self.xinc, self.yinc,
                 self.name, self.ndv, self.tension, self.relaxation,
@@ -1982,7 +1982,7 @@ class WafflesMBGrid(Waffle):
             )
             return(None, -1)
 
-        num_msk_cmd = 'gmt grdmath -V {} 0 MUL 1 ADD 0 AND = {}'.format(
+        num_msk_cmd = 'gmt grdmath -V "{}" 0 MUL 1 ADD 0 AND = "{}"'.format(
             num_grd, dst_msk
         )
         return(
@@ -2006,7 +2006,7 @@ class WafflesMBGrid(Waffle):
         dst_gdal = '{}.{}'.format(
             os.path.basename(src_grd).split('.')[0], gdalfun.gdal_fext(dst_fmt)
         )        
-        grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
+        grd2gdal_cmd = 'gmt grdconvert "{}" "{}"=gd+n{}:{} -V'.format(
             src_grd, dst_gdal, self.ndv, dst_fmt
         )
         out, status = utils.run_cmd(
@@ -2032,7 +2032,7 @@ class WafflesMBGrid(Waffle):
         dst_gdal = '{}.{}'.format(
             os.path.basename(src_grd).split('.')[0], galfun.gdal_fext(dst_fmt)
         )
-        grdsample_cmd = 'gmt grdsample {} -T -G{}=gd+n{}:{} -V'.format(
+        grdsample_cmd = 'gmt grdsample "{}" -T -G{}=gd+n{}:{} -V'.format(
             src_grd, dst_gdal, self.ndv, dst_fmt
         )        
         out, status = utils.run_cmd(
@@ -2984,13 +2984,13 @@ class WafflesCoastline(Waffle):
                         continue
                     
                     utils.run_cmd(
-                        'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
+                        'ogr2ogr -update -append nhdArea_merge.shp "{}" NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
                             gdb, self.p_region.format('ul_lr')
                         ),
                         verbose=self.verbose
                     )
                     utils.run_cmd(
-                        'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterbody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
+                        'ogr2ogr -update -append nhdArea_merge.shp "{}" NHDWaterbody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
                             gdb, self.p_region.format('ul_lr')
                         ),
                         verbose=self.verbose
@@ -2998,7 +2998,7 @@ class WafflesCoastline(Waffle):
 
                     if self.want_nhd_plus:
                         utils.run_cmd(
-                            'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterbody -clipdst {} 2>/dev/null'.format(
+                            'ogr2ogr -update -append nhdArea_merge.shp "{}" NHDPlusBurnWaterbody -clipdst {} 2>/dev/null'.format(
                                 gdb, self.p_region.format('ul_lr')
                             ),
                             verbose=self.verbose
@@ -3151,7 +3151,7 @@ class WafflesCoastline(Waffle):
                         continue
 
                     out, status = utils.run_cmd(
-                        (f'gdal_rasterize -burn -1 -l multipolygons {osm_file} '
+                        (f'gdal_rasterize -burn -1 -l multipolygons "{osm_file}" '
                          f'bldg_osm.tif -te {self.p_region.format("te")} '
                          f'-ts {self.ds_config["nx"]} '
                          f'{self.ds_config["ny"]} -ot Int32 -q'),
@@ -3324,11 +3324,10 @@ class WafflesCoastline(Waffle):
             tmp_ds = None
             
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0{}" {}.shp {}_tmp_c.shp'.format(
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0{}" "{}.shp" "{}_tmp_c.shp"'.format(
                 os.path.basename(self.name),
-                ' order by ST_AREA(geometry) desc limit {}'.format(poly_count) \
-                if poly_count is not None \
-                else '',
+                ' order by ST_AREA(geometry) desc limit {}'.format(
+                    poly_count if poly_count is not None else ''),
                 self.name,
                 self.name
             ),
@@ -3336,7 +3335,7 @@ class WafflesCoastline(Waffle):
         )        
         utils.remove_glob(f'{self.name}_tmp_c.*')
         utils.run_cmd(
-            'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
+            'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" "{}.shp"'.format(
                 os.path.basename(self.name), self.name),
             verbose=self.verbose
         )        

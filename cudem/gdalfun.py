@@ -767,7 +767,7 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
             #     mask_fn, dst_region=region, layer=clip_layer, verbose=verbose
             # )
             
-            gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
+            gr_cmd = 'gdal_rasterize -burn {} -l {} "{}" "{}"{}'\
                 .format(1, clip_layer, mask_fn, dst_fn, ' -i' if invert else '')
             out, status = utils.run_cmd(gr_cmd, verbose=verbose)
             return(dst_fn)
@@ -1677,7 +1677,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply=None, invert=False,
     )
     tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', temp_dir=cache_dir)    
     out, status = utils.run_cmd(
-        'ogr2ogr {} {} -clipsrc {} -nlt POLYGON -skipfailures -makevalid'.format(
+        'ogr2ogr "{}" "{}" -clipsrc {} -nlt POLYGON -skipfailures -makevalid'.format(
             tmp_ply, src_ply, g_region.format('ul_lr')
         ),
         verbose=verbose
@@ -1689,7 +1689,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply=None, invert=False,
             if src_ds is not None:
                 band_count = src_ds.RasterCount
                 
-        gr_cmd = 'gdal_rasterize -b {} -burn {} -l {} {} {}{}'\
+        gr_cmd = 'gdal_rasterize -b {} -burn {} -l {} "{}" "{}"{}'\
             .format(
                 band_count,
                 gi['ndv'],

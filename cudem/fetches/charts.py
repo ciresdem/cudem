@@ -28,6 +28,7 @@
 ### Code:
 
 #from tqdm import tqdm
+from cudem import utils
 from cudem.fetches import fetches
 from cudem.fetches import FRED
 
