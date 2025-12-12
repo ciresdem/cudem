@@ -762,7 +762,7 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
                 1
             )
             gdal_nan(ds_config, dst_fn, nodata=0)
-            clip_layer = ogr_get_layer_name()
+            clip_layer = ogr_get_layer_name(mask_fn)
             if clip_layer is None:
                 clip_layer = utils.fn_basename2(os.path.basename(mask_fn))
                 
