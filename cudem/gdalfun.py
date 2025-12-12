@@ -2387,7 +2387,6 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band=1):
             except:
                 z = ds_nd
 
-            outs = []
             if x > ds_gt[0] and y < float(ds_gt[3]):
                 xpos, ypos = utils._geo2pixel(
                     x, y, ds_gt, node='pixel'
@@ -2399,13 +2398,13 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band=1):
                 if g != ds_nd:
                     d = z - g
                     m = z + g
+                outs = []
                 for i in out_form:
                     outs.append(vars()[i])
 
                 #print(g)
                 #print(outs)
-                
-            yield(outs)
+                yield(outs)
                 
         tgrid = None
 
