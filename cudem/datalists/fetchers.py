@@ -1322,7 +1322,7 @@ class GEDTM30Fetcher(Fetcher):
 
 
 class HRDEMFetcher(Fetcher):
-    """GEDTM30 Data Fetcher
+    """HRDEM Data Fetcher
     """
     
     __doc__ = '''{}

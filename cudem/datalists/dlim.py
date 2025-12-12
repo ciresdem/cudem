@@ -3737,15 +3737,8 @@ class ElevationDataset:
                         
                     out_mask = ((np.isnan(mask_data)) & (z_mask))
 
-                    if data_mask['invert']:
-                        if not np.all(np.isnan(out_mask)):
-                            continue
-                    else:
-                        if not np.any(out_mask):
-                            continue    
-                    
                     for arr in out_arrays.keys():
-                        if out_arrays[arr] is not None:                                
+                        if out_arrays[arr] is not None:
                             if data_mask['invert']:
                                 if arr == 'count':
                                     #out_arrays[arr][~np.isnan(mask_data)] = 0
@@ -3768,6 +3761,7 @@ class ElevationDataset:
                     mask_count += np.count_nonzero(~out_mask) \
                         if data_mask['invert'] \
                            else np.count_nonzero(out_mask)
+
                     mask_data = None
                     
                 src_mask = mask_band = None

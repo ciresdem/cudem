@@ -802,8 +802,9 @@ class PointPixels():
         pixel_y = pixel_y - this_srcwin[1]
         pixel_xy = np.vstack((pixel_y, pixel_x)).T
 
-        out_arrays['pixel_x'] = pixel_x
-        out_arrays['pixel_y'] = pixel_y
+        #utils.echo_msg_bold(pixel_x.shape)
+        #out_arrays['pixel_x'] = pixel_x
+        #out_arrays['pixel_y'] = pixel_y
 
         #######################################################################
         ## find the non-unique x/y points and mean/min/max
@@ -841,7 +842,10 @@ class PointPixels():
             xx = points_x[unq_idx]
             yy = points_y[unq_idx]
             #u = np.zeros(zz.shape)
-        
+
+        px = pixel_x[unq_idx]
+        py = pixel_y[unq_idx]
+            
         #######################################################################
         ## min/max/sum the duplicates (values in the same cell)
         ## min and max get the count reset to 1, the count is accumulated
@@ -902,6 +906,12 @@ class PointPixels():
         out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
         out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
 
+        out_arrays['pixel_x'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+        out_arrays['pixel_x'][unq[:,0], unq[:,1]] = px
+        
+        out_arrays['pixel_y'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+        out_arrays['pixel_y'][unq[:,0], unq[:,1]] = py
+        
         if mode == 'sums':
             out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
             out_arrays['weight'][unq[:,0], unq[:,1]] = ww #* weight)
