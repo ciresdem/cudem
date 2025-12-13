@@ -3845,7 +3845,7 @@ class WafflesCUDEM(Waffle):
             pre_smoothing=None,
             weight_levels=None,
             inc_levels=None,
-            landmask=False,
+            landmask=True,
             invert_landmask=True,
             filter_outliers=None,
             want_supercede=False,
