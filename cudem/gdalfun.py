@@ -726,7 +726,7 @@ def ogr_polygonize(src_ds, dst_srs='epsg:4326', ogr_format='ESRI Shapefile',
 
 def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
                   dst_srs='epsg:4326', invert=True, verbose=True,
-                  temp_dir=utils.cudem_cache()):
+                  temp_dir='./'):
     dst_fn = utils.make_temp_fn(
         '{}.tif'.format(mask_fn), region=region, inc=x_inc, temp_dir=temp_dir
     )

@@ -102,6 +102,7 @@ class Grits:
         # if self.src_region is None:
         #     self.src_region, _ = self._init_region(src_ds = self.src_dem)
 
+        utils.set_cache(self.cache_dir)
             
     def __call__(self):
         return(self.generate())
