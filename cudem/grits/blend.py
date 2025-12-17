@@ -456,8 +456,8 @@ class Blend(grits.Grits):
 
             if slope_norm is not None:
                 low_slope = slope_norm < self.slope_scale                
-                random_mask[low_slope & outer_mask] = False
-                #random_mask[outer_mask][low_slope] = False
+                #random_mask[low_slope & outer_mask] = False
+                random_mask[outer_mask][low_slope] = False
                 slope_norm = outer_mask = low_slope = None
                 
         # only apply randomization where both src + combined_mask are valid (buffer region)
