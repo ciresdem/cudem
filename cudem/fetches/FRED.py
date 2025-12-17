@@ -30,10 +30,8 @@
 
 import os
 import json
-from tqdm import tqdm
-
+#from tqdm import tqdm
 from osgeo import ogr
-
 from cudem import utils
 from cudem import regions
 
@@ -218,9 +216,9 @@ class FRED:
         else:
             close_p = False
 
-        with tqdm(
+        with utils.ccp(
                 total=len(layers),
-                desc='filtering {}'.format(self.FREDloc),
+                desc=f'filtering {self.FREDloc}',
                 leave=self.verbose
         ) as pbar:
             for i, layer in enumerate(layers):

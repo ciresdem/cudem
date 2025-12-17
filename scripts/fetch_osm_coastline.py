@@ -35,8 +35,8 @@ def fetch_coastline(this_region):
     if this_region is not None and this_region.valid_p():
         utils.echo_msg('fetching coastline for region {}'.format(this_region))
         cache_dir = utils.cudem_cache()
-        this_cst = fetches.OpenStreetMap(src_region=this_region, verbose=True, outdir=cache_dir, q='coastline')#.run()
-        fr = fetches.fetch_results(this_cst)
+        this_cst = fetches.osm.OpenStreetMap(src_region=this_region, verbose=True, outdir=cache_dir, chunks=True, q='coastline')#.run()
+        fr = fetches.fetches.fetch_results(this_cst)
         fr.daemon=True
         fr.start()
         fr.join()
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     invert_watermask = False
     line_buffer = 0.0000001
     dst_ogr = None
-    union_result = False
+    union_result = True
     i = 1
     
     while i < len(sys.argv):
@@ -138,7 +138,7 @@ if __name__ == '__main__':
                     if dst_ogr is None:
                         dst_ogr = os.path.basename(utils.fn_basename2(cst_osm)) + '_coast.shp'
                         
-                    out = fetches.polygonize_osm_coastline(
+                    out = fetches.osm.polygonize_osm_coastline(
                         cst_osm, dst_ogr,
                         include_landmask = include_landmask,
                         landmask_is_watermask = invert_watermask,

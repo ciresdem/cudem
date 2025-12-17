@@ -33,7 +33,7 @@ from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
 import pyproj
-from tqdm import tqdm
+#from tqdm import tqdm
 
 from cudem import regions
 from cudem import gdalfun
@@ -433,13 +433,13 @@ class VerticalTransform:
         from cudem import waffles # we want waffles for some interpolation
 
         ## fetch the input tidal datum from VDatum
-        v_in = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
+        v_in = fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
         v_in._outdir = self.cache_dir
         v_in.run()
 
         if vdatum_tidal_out is not None:
             ## fetch the output tidal datum from VDatum if necessary
-            v_out = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
+            v_out = fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
             v_out._outdir = self.cache_dir
             v_out.run()
 
@@ -553,11 +553,11 @@ class VerticalTransform:
         geoid = 'g2018' if geoid is None else geoid
         ## fetch the cdn transformation grids
         if epsg is not None:
-            cdn_results = fetches.search_proj_cdn(
+            cdn_results = fetches.vdatum.search_proj_cdn(
                 self.src_region, epsg=epsg, cache_dir=self.cache_dir, verbose=self.verbose
             )
         else:
-            cdn_results = fetches.search_proj_cdn(
+            cdn_results = fetches.vdatum.search_proj_cdn(
                 self.src_region, cache_dir=self.cache_dir, verbose=self.verbose
             )
 
@@ -581,7 +581,7 @@ class VerticalTransform:
                 if epsg == dst_code or np.any([g in _result['name'] for g in _geoids.keys()]):
                     if src_code in _htdp_reference_frames.keys():
                         _trans_grid = os.path.join(self.cache_dir, _result['name'])
-                        if fetches.Fetch(
+                        if fetches.fetches.Fetch(
                                 _result['url'], verbose=self.verbose
                         ).fetch_file(_trans_grid) == 0:
                             tmp_infos = gdalfun.gdal_infos(_trans_grid)
@@ -592,7 +592,7 @@ class VerticalTransform:
                                 utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                                 
                             utils.run_cmd(
-                                'gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0 -r cubicspline {}'.format(
+                                'gdalwarp "{}" "{}" -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0 -r cubicspline {}'.format(
                                     _trans_grid,
                                     '_{}'.format(os.path.basename(_trans_grid)),
                                     self.src_region.format('te'),
@@ -695,6 +695,8 @@ class VerticalTransform:
                     epsg_in = cv                    
                 else:
                     tg, tv = self._tidal_transform(_tidal_frames[self.epsg_in]['name'], 'tss')
+                    utils.echo_debug_msg(f'tss-tg: {tg}')
+                    utils.echo_debug_msg(f'tss-tv: {tv}')
                     ## crd here outputs navd88 geoid09
                     #cg, cv = self._cdn_transform(name='geoid', geoid='geoid09', invert=False)
                     cg, cv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
@@ -1097,7 +1099,7 @@ def vdatums_cli(argv = sys.argv):
             #print(gdalfun.gdal_get_srs(src_grid))
             out_h, out_v = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(src_grid))
             
-            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {} {}'.format(
+            utils.run_cmd('gdalwarp "{}" "{}" -te {} -ts {} {} -s_srs epsg:4326 -t_srs {} {}'.format(
                 _trans_grid, out_trans_grid,
                 src_region.format('te'),
                 src_infos['nx'],

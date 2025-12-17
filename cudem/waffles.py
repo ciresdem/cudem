@@ -62,8 +62,8 @@ import json
 import time
 import glob
 import traceback
-from tqdm import tqdm
-from tqdm import trange
+#from tqdm import tqdm
+#from tqdm import trange
 
 import numpy as np
 import h5py as h5
@@ -83,7 +83,10 @@ from osgeo import ogr
 from osgeo import osr
 
 import cudem
-from cudem import dlim
+from cudem.datalists import dlim
+from cudem.datalists import xyzfile
+from cudem.datalists import gdalfile
+from cudem import pointz
 from cudem import regions
 from cudem import utils
 from cudem import xyzfun
@@ -91,8 +94,7 @@ from cudem import gdalfun
 from cudem import vdatums
 from cudem import factory
 from cudem import fetches
-from cudem import grits
-from cudem import perspecto
+from cudem.grits import grits
 from cudem import srsfun
 
 ## Data cache directory, hold temp data, fetch data, etc here.
@@ -346,8 +348,8 @@ class Waffle:
                         if 'stacks' in grits_filter.kwargs.keys():
                             if grits_filter.kwargs['stacks']:
                                 stack_fltr.append(f)
-                elif f.split(':')[0] in dlim.PointFilterFactory._modules.keys():
-                    point_filter = dlim.PointFilterFactory(mod=f)._acquire_module()
+                elif f.split(':')[0] in pointz.PointFilterFactory._modules.keys():
+                    point_filter = pointz.PointFilterFactory(mod=f)._acquire_module()
                     if point_filter is not None:
                         point_fltr.append(f)
 
@@ -684,7 +686,7 @@ class Waffle:
                     self.stack = self.data._stacks(out_name=stack_bn)
                     #, mode=self.stack_mode)#supercede=self.supercede)
                     
-                self.stack_ds = dlim.GDALFile(
+                self.stack_ds = gdalfile.GDALFile(
                     fn=self.stack,
                     band_no=1,
                     weight_mask=3,
@@ -1005,8 +1007,9 @@ class WafflesStacks(Waffle):
         z_band = z_ds.GetRasterBand(1)
         z_band.SetNoDataValue(self.ndv)
         for arrs, srcwin, gt in self.stack_ds.yield_array():
-            arrs['z'][np.isnan(arrs['z'])] = self.ndv
-            z_band.WriteArray(arrs['z'], srcwin[0], srcwin[1])
+            out_z = (arrs['z'] / arrs['weight']) / arrs['count']
+            out_z[np.isnan(out_z)] = self.ndv
+            z_band.WriteArray(out_z, srcwin[0], srcwin[1])
             
         z_ds = None
         if self.verbose:
@@ -1370,7 +1373,7 @@ class grid_scipy(threading.Thread):
         ):
             self.scipy_q.put(this_srcwin)
 
-        self.pbar = tqdm(
+        self.pbar = utils.ccp(
             desc=f'gridding data to {self.mod}',
             total=self.scipy_q.qsize()
         )
@@ -1729,6 +1732,7 @@ class GMTSurface(Waffle):
     convergence=[val/None] - gridding convergence
     blockmean=[True/False] - pipe the data through gmt blockmean before gridding
     geographic=[True/Faslse] - data/grid are geographic
+    pixel_node=[True/False] - grid in pixel-node
 
     < gmt-surface:tension=.35:relaxation=1:max_radius=None:aspect=None:breakline=None:convergence=None:blockmean=False:geographic=True >
     """
@@ -1755,6 +1759,7 @@ class GMTSurface(Waffle):
         self.geographic = geographic
         self.pixel_node = pixel_node
 
+        self.gc = utils.config_check(chk_config_file=False)
         
     def run(self):
         if self.gc['GMT'] is None:
@@ -1773,7 +1778,7 @@ class GMTSurface(Waffle):
         dem_surf_cmd = ('')
         if self.blockmean:
             dem_surf_cmd = (
-                'gmt blockmean {} -I{:.16f}/{:.16f}+e{}{} -V |'.format(
+                'gmt blockmean {} -I{:.16f}/{:.16f}+e{}{}{} -V |'.format(
                     self.ps_region.format('gmt') if not self.pixel_node else self.p_region.format('gmt'),
                     self.xinc, self.yinc,
                     ' -W' if self.want_weight else '',
@@ -1785,7 +1790,7 @@ class GMTSurface(Waffle):
         ## mrl: removed -rp and switched p_region to ps_region
         ## (pre 6.5.0 will shift the grid otherwise)
         dem_surf_cmd += (
-            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}{}{}'.format(
+            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G"{}.tif=gd+n{}:GTiff" -T{} -Z{} {}{}{}{}{}{}{}'.format(
                 self.ps_region.format('gmt') if not self.pixel_node else self.p_region.format('gmt'),
                 self.xinc, self.yinc,
                 self.name, self.ndv, self.tension, self.relaxation,
@@ -1977,7 +1982,7 @@ class WafflesMBGrid(Waffle):
             )
             return(None, -1)
 
-        num_msk_cmd = 'gmt grdmath -V {} 0 MUL 1 ADD 0 AND = {}'.format(
+        num_msk_cmd = 'gmt grdmath -V "{}" 0 MUL 1 ADD 0 AND = "{}"'.format(
             num_grd, dst_msk
         )
         return(
@@ -2001,7 +2006,7 @@ class WafflesMBGrid(Waffle):
         dst_gdal = '{}.{}'.format(
             os.path.basename(src_grd).split('.')[0], gdalfun.gdal_fext(dst_fmt)
         )        
-        grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
+        grd2gdal_cmd = 'gmt grdconvert "{}" "{}"=gd+n{}:{} -V'.format(
             src_grd, dst_gdal, self.ndv, dst_fmt
         )
         out, status = utils.run_cmd(
@@ -2027,7 +2032,7 @@ class WafflesMBGrid(Waffle):
         dst_gdal = '{}.{}'.format(
             os.path.basename(src_grd).split('.')[0], galfun.gdal_fext(dst_fmt)
         )
-        grdsample_cmd = 'gmt grdsample {} -T -G{}=gd+n{}:{} -V'.format(
+        grdsample_cmd = 'gmt grdsample "{}" -T -G{}=gd+n{}:{} -V'.format(
             src_grd, dst_gdal, self.ndv, dst_fmt
         )        
         out, status = utils.run_cmd(
@@ -2126,7 +2131,7 @@ class WafflesGDALGrid(Waffle):
             layer.CreateField(fd)
             
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        with tqdm(desc='vectorizing stack', leave=self.verbose) as pbar:
+        with utils.ccp(desc='vectorizing stack', leave=self.verbose) as pbar:
             for this_xyz in self.stack_ds.yield_xyz():
                 pbar.update()
                 f.SetField(0, this_xyz.x)
@@ -2153,7 +2158,7 @@ class WafflesGDALGrid(Waffle):
                     self.ycount
                 )
             )
-        _prog = tqdm(
+        _prog = utils.ccp(
             desc=f'running GDAL GRID {self.alg_str} algorithm',
             leave=self.verbose
         )
@@ -2605,15 +2610,15 @@ class WafflesCoastline(Waffle):
 
         
     def fetch_data(self, fetches_module, check_size=True):
-        this_fetches = fetches.FetchesFactory(
+        this_fetches = fetches.fetches.FetchesFactory(
             mod=fetches_module,
             src_region=self.wgs_region,
             verbose=self.verbose,
             outdir=self.cache_dir,
-            callback=fetches.fetches_callback
+            callback=fetches.fetches.fetches_callback
         )._acquire_module()        
         this_fetches.run()
-        fr = fetches.fetch_results(this_fetches, check_size=check_size)
+        fr = fetches.fetches.fetch_results(this_fetches, check_size=check_size)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -2740,7 +2745,7 @@ class WafflesCoastline(Waffle):
     def _load_osm_coast(self):
         this_cst = self.fetch_data('osm:q=coastline', check_size=False)
         if this_cst is not None:
-            with tqdm(
+            with utils.ccp(
                     total=len(this_cst.results),
                     desc='processing osm coastline',
                     leave=True
@@ -2749,7 +2754,7 @@ class WafflesCoastline(Waffle):
                     if cst_result[-1] == 0:
                         pbar.update()
                         cst_osm = cst_result[1]
-                        out = fetches.polygonize_osm_coastline(
+                        out = fetches.osm.polygonize_osm_coastline(
                             cst_osm, utils.make_temp_fn(
                                 utils.fn_basename2(cst_osm) + '_coast.shp',
                                 temp_dir=self.cache_dir
@@ -2794,7 +2799,7 @@ class WafflesCoastline(Waffle):
     def _load_enc_coast(self):
         this_cst = self.fetch_data('charts')
         if this_cst is not None:
-            with tqdm(
+            with utils.ccp(
                     total=len(this_cst.results),
                     desc='processing charts coastline',
                     leave=True
@@ -2966,22 +2971,26 @@ class WafflesCoastline(Waffle):
                 co=self.co
             )
             for i, tnm_result in enumerate(this_tnm.results):
+                #utils.echo_msg_bold(tnm_result)
                 if tnm_result[-1] == 0:
                     #tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
                     tnm_zip = tnm_result[1]
                     if not os.path.exists(tnm_zip):
                         break
 
-                    tnm_zips = utils.unzip(tnm_zip, self.cache_dir, verbose=False)
+                    tnm_zips = utils.unzip(tnm_zip, outdir=os.path.dirname(tnm_zip), verbose=False)
                     gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
+                    if 'GDB' not in gdb:
+                        continue
+                    
                     utils.run_cmd(
-                        'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
+                        'ogr2ogr -update -append nhdArea_merge.shp "{}" NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
                             gdb, self.p_region.format('ul_lr')
                         ),
                         verbose=self.verbose
                     )
                     utils.run_cmd(
-                        'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterbody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
+                        'ogr2ogr -update -append nhdArea_merge.shp "{}" NHDWaterbody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
                             gdb, self.p_region.format('ul_lr')
                         ),
                         verbose=self.verbose
@@ -2989,7 +2998,7 @@ class WafflesCoastline(Waffle):
 
                     if self.want_nhd_plus:
                         utils.run_cmd(
-                            'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterbody -clipdst {} 2>/dev/null'.format(
+                            'ogr2ogr -update -append nhdArea_merge.shp "{}" NHDPlusBurnWaterbody -clipdst {} 2>/dev/null'.format(
                                 gdb, self.p_region.format('ul_lr')
                             ),
                             verbose=self.verbose
@@ -3113,7 +3122,7 @@ class WafflesCoastline(Waffle):
         )
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        with tqdm(
+        with utils.ccp(
                 total=len(this_osm.results),
                 desc='processing OSM buildings',
                 leave=self.verbose
@@ -3142,7 +3151,7 @@ class WafflesCoastline(Waffle):
                         continue
 
                     out, status = utils.run_cmd(
-                        (f'gdal_rasterize -burn -1 -l multipolygons {osm_file} '
+                        (f'gdal_rasterize -burn -1 -l multipolygons "{osm_file}" '
                          f'bldg_osm.tif -te {self.p_region.format("te")} '
                          f'-ts {self.ds_config["nx"]} '
                          f'{self.ds_config["ny"]} -ot Int32 -q'),
@@ -3175,7 +3184,7 @@ class WafflesCoastline(Waffle):
         this_bing = self.fetch_data("bing_bfp", check_size=True)
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        with tqdm(
+        with utils.ccp(
                 total=len(this_bing.results),
                 desc='processing BING buildings',
                 leave=self.verbose
@@ -3315,11 +3324,10 @@ class WafflesCoastline(Waffle):
             tmp_ds = None
             
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0{}" {}.shp {}_tmp_c.shp'.format(
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0{}" "{}.shp" "{}_tmp_c.shp"'.format(
                 os.path.basename(self.name),
-                ' order by ST_AREA(geometry) desc limit {}'.format(poly_count) \
-                if poly_count is not None \
-                else '',
+                ' order by ST_AREA(geometry) desc limit {}'.format(
+                    poly_count if poly_count is not None else ''),
                 self.name,
                 self.name
             ),
@@ -3327,7 +3335,7 @@ class WafflesCoastline(Waffle):
         )        
         utils.remove_glob(f'{self.name}_tmp_c.*')
         utils.run_cmd(
-            'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
+            'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" "{}.shp"'.format(
                 os.path.basename(self.name), self.name),
             verbose=self.verbose
         )        
@@ -3383,13 +3391,13 @@ class WafflesLakes(Waffle):
     def _fetch_lakes(self):
         """fetch hydrolakes polygons"""
 
-        this_lakes = fetches.HydroLakes(
+        this_lakes = fetches.hydrolakes.HydroLakes(
             src_region=self.p_region,
             verbose=self.verbose,
             outdir=self.cache_dir
         )
         this_lakes.run()
-        fr = fetches.fetch_results(this_lakes, check_size=False)
+        fr = fetches.fetches.fetch_results(this_lakes, check_size=False)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -3411,7 +3419,7 @@ class WafflesLakes(Waffle):
         
         _globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
         globathy_zip = os.path.join(self.cache_dir, 'globathy_parameters.zip')
-        fetches.Fetch(
+        fetches.fetches.Fetch(
             _globathy_url, verbose=self.verbose
         ).fetch_file(globathy_zip, check_size=False)
         globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
@@ -3444,7 +3452,7 @@ class WafflesLakes(Waffle):
         if gmrt_region is None:
             gmrt_region = self.p_region
         
-        this_gmrt = fetches.GMRT(
+        this_gmrt = fetches.gmrt.GMRT(
             src_region=gmrt_region,
             verbose=self.verbose,
             layer='topo',
@@ -3452,7 +3460,7 @@ class WafflesLakes(Waffle):
         )
         this_gmrt.run()
 
-        fr = fetches.fetch_results(this_gmrt)
+        fr = fetches.fetches.fetch_results(this_gmrt)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -3472,7 +3480,7 @@ class WafflesLakes(Waffle):
         if cop_region is None:
             cop_region = self.p_region
             
-        this_cop = fetches.CopernicusDEM(
+        this_cop = fetches.copernicus.CopernicusDEM(
             src_region=cop_region,
             verbose=self.verbose,
             datatype='1',
@@ -3480,7 +3488,7 @@ class WafflesLakes(Waffle):
         )
         this_cop.run()
 
-        fr = fetches.fetch_results(this_cop, check_size=False)
+        fr = fetches.fetches.fetch_results(this_cop, check_size=False)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -3530,7 +3538,7 @@ class WafflesLakes(Waffle):
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        with tqdm(
+        with utils.ccp(
                 total=len(nfeatures),
                 desc='applying labels.',
                 leave=self.verbose
@@ -3610,7 +3618,7 @@ class WafflesLakes(Waffle):
         utils.echo_msg('using Lake IDS: {}'.format(self.lk_ids))
         
         lk_regions = self.p_region.copy()
-        with tqdm(
+        with utils.ccp(
                 total=len(self.lk_layer),
                 desc=f'processing {lk_features} lakes',
                 leave=self.verbose
@@ -3706,7 +3714,7 @@ class WafflesLakes(Waffle):
 
             ## assign max depth from globathy
             msk_arr = msk_band.ReadAsArray()
-            with tqdm(
+            with utils.ccp(
                     total=len(self.lk_ids),
                     desc='Assigning Globathy Depths to rasterized lakes...',
                     leave=self.verbose
@@ -3837,7 +3845,7 @@ class WafflesCUDEM(Waffle):
             pre_smoothing=None,
             weight_levels=None,
             inc_levels=None,
-            landmask=False,
+            landmask=True,
             invert_landmask=True,
             filter_outliers=None,
             want_supercede=False,
@@ -3956,6 +3964,7 @@ class WafflesCUDEM(Waffle):
             dst_srs=self.dst_srs,
             srs_transform=self.srs_transform,
             clobber=True,
+            cache_dir=self.cache_dir,
             verbose=True)._acquire_module()
         coastline.initialize()
         coastline.generate()
@@ -4059,7 +4068,7 @@ class WafflesCUDEM(Waffle):
         #     self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre)
         # )
         # ## initial data to pass through surface (stack)
-        stack_data_entry = (f'{self.stack},200:band_no=1:weight_mask=3:'
+        stack_data_entry = (f'"{self.stack}",200:band_no=1:weight_mask=3:'
                             'uncertainty_mask=4:sample=average,1')
         pre_data = [stack_data_entry]
          
@@ -4072,7 +4081,7 @@ class WafflesCUDEM(Waffle):
 
             if pre_clip is None:
                 coast_data = [
-                    (f'{self.stack},200:band_no=1:weight_mask=3:'
+                    (f'"{self.stack}",200:band_no=1:weight_mask=3:'
                      'uncertainty_mask=4:sample=cubicspline,1')]
                 coastline = self.generate_coastline(pre_data=coast_data)
                 #utils.echo_msg_bold(coastline)
@@ -4081,7 +4090,7 @@ class WafflesCUDEM(Waffle):
         ## Grid/Stack the data `pre` times concluding in full
         ## resolution with data > min_weight
         pre_surfaces = []
-        with tqdm(
+        with utils.ccp(
                 total=self.pre_count+1,
                 desc='generating CUDEM surfaces',
                 leave=self.verbose
@@ -4105,8 +4114,8 @@ class WafflesCUDEM(Waffle):
                     _pre_unc_name = f'{_pre_name_plus}_u.tif' \
                         if self.want_uncertainty \
                            else None
-                    pre_data_entry = (f'{_pre_name_plus}.tif,200'
-                                      f':uncertainty_mask={_pre_unc_name}'
+                    pre_data_entry = (f'"{_pre_name_plus}.tif",200'
+                                      f':uncertainty_mask="{_pre_unc_name}"'
                                       f':sample=cubicspline:check_path=True'
                                       f',{pre_weight-.1}')
 
@@ -4179,6 +4188,7 @@ class WafflesCUDEM(Waffle):
                     fltr=self.pre_smoothing if pre != 0 else None,
                     #fltr=last_fltr,
                     percentile_limit=self.flatten if pre == 0 else None,
+                    cache_dir=self.cache_dir,
                 )._acquire_module()
                 pre_surface.initialize()
                 pre_surface.generate()
@@ -4455,7 +4465,7 @@ class WafflesUncertainty(Waffle):
         
         out_inner = '{}_inner.xyz'.format(sub_bn)
         out_outer = '{}_outer.xyz'.format(sub_bn)
-        xyz_ds = dlim.XYZFile(
+        xyz_ds = xyzfile.XYZFile(
             fn=o_xyz,
             data_format=168,
             src_region=sub_region
@@ -4489,7 +4499,7 @@ class WafflesUncertainty(Waffle):
         stack_ds = gdal.Open(self.stack)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        with tqdm(
+        with utils.ccp(
                 total=len(sub_regions),
                 desc=f'analyzing {len(sub_regions)} sub-regions',
                 leave=self.verbose
@@ -4558,7 +4568,7 @@ class WafflesUncertainty(Waffle):
         all_trains = [x for s in trains for x in s[:5]]
         tot_trains = len(all_trains)
         
-        with tqdm(
+        with utils.ccp(
                 desc='performing SPLIT-SAMPLE simulation',
                 leave=False,
                 total=tot_trains
@@ -5987,7 +5997,8 @@ class WaffleDEM:
                 
         return(True)
 
-    
+
+    ## todo make these 'processes' grits modules?
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None,
                 region = None, node='pixel', clip_str = None, upper_limit = None,
                 lower_limit = None, size_limit = None, proximity_limit = None,
@@ -6167,6 +6178,7 @@ class WaffleDEM:
                     dst_srs=self.dst_srs,
                     srs_transform=self.srs_transform,
                     clobber=True,
+                    cache_dir=self.cache_dir,
                     verbose=self.verbose
                 )._acquire_module()
                 self.coast.initialize()
@@ -6186,6 +6198,10 @@ class WaffleDEM:
                     )
                     if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
                         os.replace(tmp_clip, self.fn)
+                        if self.verbose:
+                            utils.echo_msg(
+                                f'{tmp_clip} -> {self.fn}'
+                            )
                         self.initialize()
                         if self.verbose:
                             utils.echo_msg(
@@ -7153,12 +7169,12 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
             wg['cache_dir'] = os.path.join(
                 utils.str_or(argv[i + 1], os.path.expanduser('~')),
-                '.cudem_cache'
+                'cudem_cache'
             )
             i = i + 1
         elif arg[:2] == '-D': wg['cache_dir'] = os.path.join(
                 utils.str_or(arg[2:], os.path.expanduser('~')),
-                '.cudem_cache'
+                'cudem_cache'
         )
         elif arg == '--nodata' or arg == '-N' or arg == '-ndv':
             wg['ndv'] = utils.float_or(argv[i + 1], -9999)

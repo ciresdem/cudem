@@ -133,6 +133,9 @@ from cudem import fetches
 from cudem import grits
 from cudem import vrbag
 from cudem import srsfun
+from cudem import pointz
+#from cudem import datalists_factory
+#from cudem.fetches import fetches
 
 # cshelph
 import pandas as pd
@@ -396,16 +399,21 @@ def polygonize_mask_multibands(
     dst_layer = '{}_sm'.format(
         utils.fn_basename2(src_ds.GetDescription()) \
         if output is None \
-        else output
+        else os.path.basename(output)
     )
-    dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
-    utils.remove_glob('{}.*'.format(dst_layer))
+    dst_vector = os.path.join(
+        os.path.dirname(output) if output is not None else '',
+        f'{dst_layer}.{gdalfun.ogr_fext(ogr_format)}'
+    )
+    #dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
+    #utils.remove_glob('{}.*'.format(dst_layer))
+    utils.remove_glob('{}.*'.format(utils.fn_basename2(dst_vector)))
     srs = srsfun.osr_srs(src_ds.GetProjectionRef())
     driver = ogr.GetDriverByName(ogr_format)
     ds = driver.CreateDataSource(dst_vector)
     if ds is not None: 
         layer = ds.CreateLayer(
-            'footprints', srs, ogr.wkbMultiPolygon
+            dst_layer, srs, ogr.wkbMultiPolygon
         )
         [layer.SetFeature(feature) for feature in layer]
     else:
@@ -415,6 +423,8 @@ def polygonize_mask_multibands(
     layer.StartTransaction()
     defn = None
 
+    #field_names_to_delete = ['DN', 'Name', 'Uncertainty']
+    
     with tqdm(
             desc='polygonizing mask bands.',
             total=src_ds.RasterCount,
@@ -429,8 +439,8 @@ def polygonize_mask_multibands(
             field_names = [field.name for field in layer.schema]
             this_band_md = {k.title():v for k,v in this_band_md.items()}            
             for k in this_band_md.keys():
-                if k[:9] not in field_names:
-                    layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+                if k not in field_names:
+                    layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
 
             if 'Title' not in this_band_md.keys():
                 if 'Title' not in field_names:
@@ -447,7 +457,7 @@ def polygonize_mask_multibands(
                     tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
                     tmp_name = str(this_band_name)                                    
                     for k in this_band_md.keys():
-                        tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+                        tmp_layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
 
                     if 'Title' not in this_band_md.keys():
                         tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
@@ -475,7 +485,7 @@ def polygonize_mask_multibands(
                         ) as feat_pbar:
                             for k in this_band_md.keys():
                                 feat_pbar.update()
-                                out_feat.SetField(k[:9], this_band_md[k])
+                                out_feat.SetField(k, this_band_md[k])
 
                             if 'Title' not in this_band_md.keys():
                                 out_feat.SetField('Title', tmp_name)
@@ -483,13 +493,21 @@ def polygonize_mask_multibands(
                             out_feat.SetField('DN', b)
                             status = layer.CreateFeature(out_feat)
                             #layer.SetFeature(out_feat)
-
+                
                 # if verbose:
                 #     utils.echo_msg('polygonized {}'.format(this_band_name))
                 tmp_ds = tmp_layer = None
                 
-    layer.CommitTransaction()            
+    layer.CommitTransaction()
     ds = src_ds = None
+    
+    ds = ogr.Open(dst_vector, 1)
+    field_names_to_delete = ['DN', 'Name', 'Uncertainty']
+    for fnd in field_names_to_delete:
+        ds.ExecuteSQL(f'ALTER TABLE {dst_layer} DROP COLUMN {fnd}')
+
+    ds = None
+
     return(dst_layer, ogr_format)
 
 
@@ -813,794 +831,7 @@ def init_data(data_list,
         )
         return(None)
     
-    
-###############################################################################
-## PointZ filters
-##
-## filter points and return the result
-###############################################################################
-class PointZ:
-    """Point Data.
-
-    points is an array of xyz data.
-    in this class we manipulate such arrays and return
-    the manipulated array
-    """
-
-    def __init__(self, points=None, region=None, verbose=False, xyinc=None, cache_dir='.', **kwargs):
-        # if isinstance(points, np.ndarray):
-        #     self.points = np.rec.fromrecords(points, names='x, y, z')
-        # elif isinstance(points, np.core.records.recarray):
-        #     self.points = points
-        # elif isinstance(points, pd.DataFrame):
-        #     self.points = points
         
-        self.points = points
-        if self.points is not None and len(self.points) > 0:
-            self.region = self.init_region(region)
-        else:
-            self.region = region
-
-        if xyinc is not None:
-            self.xyinc = [utils.str2inc(x) for x in xyinc]
-            
-        self.verbose = verbose
-        self.cache_dir = cache_dir
-        self.kwargs = kwargs
-        #utils.echo_msg(self.kwargs)
-
-        
-    def __call__(self):
-        if self.verbose:
-            utils.echo_msg(f'filtering points using {self}')
-
-        if len(self.points) == 0 or self.points is None:
-            return(self.points)
-
-        outliers = self.run()
-        # if self.verbose:
-        #     utils.echo_msg(f'filtered {len(outliers)} records')
-            
-        return(self.points)
-
-
-    def run(self):
-        pass
-    
-    def init_region(self, region):
-        """Initialize the data-region AOI
-        """
-        
-        if region is None:
-            region = regions.Region().from_list(
-                [np.min(self.points['x']), np.max(self.points['x']),
-                 np.min(self.points['y']), np.max(self.points['y'])]
-            )
-            
-        return(region)
-
-    
-    def fetch_data(self, fetches_module, check_size=True):
-        """Fetch data from a fetches module for the data-region
-        """
-        
-        this_fetches = fetches.FetchesFactory(
-            mod=fetches_module,
-            src_region=self.region,
-            verbose=self.verbose,
-            #outdir='./',
-            callback=fetches.fetches_callback
-        )._acquire_module()        
-        this_fetches.run()
-        fr = fetches.fetch_results(this_fetches, check_size=check_size)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-        
-        return(fr)
-
-    
-    def point_pixels(self, points, x_size = 50, y_size = 50):
-        """bin the points to a grid of x_size/y_size and return the 
-        associated pixel-z-data at the x/y locations of the points
-        """
-        
-        pa = PointPixels(x_size=x_size, y_size=y_size)
-        point_arrays, point_srcwin, point_gt = pa(points)
-        point_pixels = point_arrays['z'][point_arrays['pixel_y'],
-                                         point_arrays['pixel_x']]
-        
-        return(point_pixels)
-
-    
-    def vectorize_points(self):
-        """Make a point vector OGR DataSet Object from points
-        """
-
-        dst_ogr = 'points_dataset'
-        ogr_ds = gdal.GetDriverByName('Memory').Create(
-            '', 0, 0, 0, gdal.GDT_Unknown
-        )
-        layer = ogr_ds.CreateLayer(
-            dst_ogr, geom_type=ogr.wkbPoint
-        )
-        fd = ogr.FieldDefn('index', ogr.OFTInteger)
-        layer.CreateField(fd)
-        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        with tqdm(
-                total=len(self.points),
-                desc='vectorizing points dataset', leave=False
-        ) as pbar:
-            for index, this_row in enumerate(self.points):
-                pbar.update()
-                f.SetField(0, index)
-                g = ogr.CreateGeometryFromWkt(
-                    f'POINT ({this_row["x"]} {this_row["y"]})'
-                )
-                f.SetGeometryDirectly(g)
-                layer.CreateFeature(f)
-            
-        return(ogr_ds)
-
-
-    def mask_to_raster(self):
-        data_mask = gdalfun.ogr2gdal_mask(
-            self.mask_fn,
-            region=self.region,
-            x_inc=self.xyinc[0],
-            y_inc=self.xyinc[1],
-            #dst_srs=self.dst_srs,
-            #invert=True,
-            verbose=self.verbose,
-            temp_dir=self.cache_dir
-        )
-        
-        return(data_mask)
-    
-## check if regions overlap before vectorizing points
-class PointZVectorMask(PointZ):
-    """Filter data using a vector mask
-
-    <mask:mask_fn=path:invert=False>
-    """
-    
-    def __init__(self, mask_fn=None, invert=False, **kwargs):
-        super().__init__(**kwargs)
-        self.mask_fn = mask_fn
-        self.invert = invert
-        #self.vectorize_points = vectorize_points
-        #if self.xyinc is None:
-        #    self.vectorize_points = True
-        
-        if self.verbose:
-            utils.echo_msg(f'masking with {mask_fn}')
-
-            
-    def mask_points(self, points, invert=False):
-        """mask points by rasterizing the input vector mask
-        and querying that with the point data
-        """
-
-        if self.verbose:
-            utils.echo_msg(
-                f'using mask dataset: {self.mask_fn} to xyz'
-            )
-        ogr_or_gdal = gdalfun.ogr_or_gdal(self.mask_fn)
-        if ogr_or_gdal == 1:
-            mask_raster = self.mask_to_raster()
-        else:
-            mask_raster = self.mask_fn
-            
-        smoothed_depth = gdalfun.gdal_query(
-            points, mask_raster, 'g'
-        ).flatten()
-
-        outliers = smoothed_depth == 0
-
-        if invert:
-            return(points[outliers], outliers)
-        else:
-            return(points[~outliers], outliers)
-
-        
-    def filter_mask(self, points, invert = False):
-        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
-        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        outliers = np.zeros(points.shape)
-
-        points_region = regions.Region().from_list(
-            [points.x.min(), points.y.min(),
-             points.x.max(), points.y.max()]
-        )
-        
-        if self.mask_fn is not None:
-            ## vectorize the points
-            mask_ds = ogr.Open(self.mask_fn, 0)
-            if mask_ds is not None:
-                mask_layer = mask_ds.GetLayer()
-                mask_geom = gdalfun.ogr_union_geom(
-                    mask_layer, verbose=False
-                )
-                mask_region = regions.Region().from_list(
-                    mask_geom.GetEnvelope()
-                )
-
-                if regions.regions_intersect_p(points_region, mask_region):                
-                    ogr_ds = self.vectorize_points()
-                    if ogr_ds is not None:
-                        for f in mask_layer:
-                            mask_geom = f.geometry()                        
-                            points_layer = ogr_ds.GetLayer()
-                            points_layer.SetSpatialFilter(mask_geom)
-                            for f in points_layer:
-                                idx = f.GetField('index')
-                                outliers[idx] = 1
-
-                            points_layer.SetSpatialFilter(None)
-                        ogr_ds = points_layer = None
-                        
-                    else:
-                        utils.echo_warning_msg(
-                            f'could not vectorize {len(self.points)} points for masking'
-                        )
-                        
-                mask_ds = mask_layer = None
-                
-            else:
-                utils.echo_warning_msg(
-                    f'could not load mask {self.mask_fn}'
-                )
-
-        else:
-            utils.echo_warning_msg(
-                f'no vector mask was specified {self.mask_fn}'
-            )
-                
-        outliers = outliers == 1
-        if self.verbose:
-            utils.echo_msg_bold(
-                f'found {np.count_nonzero(outliers)} outliers @ {self.mask_fn}'
-            )
-            
-        if invert:
-            return(points[outliers], outliers)
-        else:
-            return(points[~outliers], outliers)
-
-        
-    def run(self):
-        #if self.vectorize_points:
-        self.points, outliers = self.filter_mask(
-            self.points, invert=self.invert
-        )
-
-        #else:
-        #    self.points, outliers = self.mask_points(
-        #        self.points, invert=self.invert
-        #    )
-
-        #return(self.points)
-        return(outliers)
-
-    
-class PointZOutlier(PointZ):
-    """XYZ outlier filter.
-
-    Find and remove outliers from the points dataset based on
-    their residual percentile. 
-
-    <outlierz:percentile=98:multipass=4:invert=False:res=50>
-    """
-    
-    def __init__(
-            self, percentile=98, max_percentile=99.9,
-            multipass=4, percentage=False, invert=False,
-            res=50, max_res=5000, **kwargs
-    ):
-        super().__init__(**kwargs)
-        self.percentile = utils.float_or(percentile, 98)
-        self.max_percentile = utils.float_or(max_percentile, 99)
-        self.multipass = utils.int_or(multipass, 1)
-        self.percentage = percentage
-        self.invert = invert
-        self.res = res
-        self.max_res = max_res
-
-        
-    def point_residuals(self, points, percentage=False, res=50):
-        point_pixels = self.point_pixels(
-            points, x_size=res, y_size=res
-        )
-        if percentage:
-            residuals =  np.abs(
-                (points['z'] - point_pixels) / point_pixels
-            ) * 100
-        else:
-            residuals = np.abs(points['z'] - point_pixels)
-            
-        return(residuals)
-
-    
-    def find_outliers(
-            self, residuals, percentile=98, percentile_is_threshold=False
-    ):
-        if percentile_is_threshold:
-            outlier_threshold = percentile
-        else:
-            outlier_threshold = np.percentile(residuals, percentile)
-
-        outliers = residuals > outlier_threshold
-        if self.verbose:
-            utils.echo_msg_bold(
-                f'found {np.count_nonzero(outliers)} outliers @ {percentile}'
-            )
-        
-        return(outliers)
-
-    
-    def filter_points(
-            self, points, percentile=92, res=50, percentage=False, invert=False
-    ):
-        residuals = self.point_residuals(
-            points, percentage=percentage, res=res
-        )
-        if residuals is not None:
-            outliers = self.find_outliers(
-                residuals, percentile=percentile, percentile_is_threshold=percentage
-            )
-
-            if invert:
-                return(points[outliers], outliers)
-            else:
-                return(points[~outliers], outliers)
-        else:
-            return(points, None)
-        
-        
-    def run(self):
-        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
-        res_it = np.linspace(self.max_res, self.res, self.multipass)
-        for mpass in range(0, self.multipass):
-            self.points, outliers = self.filter_points(
-                self.points, percentile=percs_it[mpass],
-                res=res_it[mpass], percentage=self.percentage,
-                invert=self.invert
-            )
-            if np.count_nonzero(outliers) == 0:
-                break
-            
-        #return(self.points)
-        return(outliers)
-
-    
-## todo: remove the gmrt or other fetched rasters after processing...
-class RQOutlierZ(PointZOutlier):
-    """xyz outlier filter, using a reference raster
-
-    This will use a reference raster dataset, GMRT by default, to determine
-    residual percentages of the input points dataset and remove points which
-    have a residual percentage above the given threshold.
-
-    <rq:threshold=5>
-    """
-    
-    def __init__(self, threshold=10, raster=None, scaled_percentile=False,
-                 resample_raster=True, **kwargs):
-        if 'percentile' in kwargs.keys():
-            del kwargs['percentile']
-        if 'percentage' in kwargs.keys():
-            del kwargs['percentage']
-        if 'multipass' in kwargs.keys():
-            del kwargs['multipass']
-            
-        super().__init__(
-            percentile=threshold, percentage=True, multipass=1,
-            **kwargs
-        )
-        self.threshold = threshold
-        self.resample_raster = resample_raster
-        self.fetches_modules = ['gmrt', 'CUDEM', 'etopo:datatype=surface']
-        self.raster = self.init_raster(raster)            
-        self.scaled_percentile = scaled_percentile
-
-        
-    def __str__(self):
-        return(f'< rq >: {self.raster}')
-        
-    def mask_gmrt(self, raster):
-        #this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
-        if os.path.exists(f'{raster}_swath.tif'):
-            return(f'{raster}_swath.tif')
-
-        this_fetch = fetches.FetchesFactory(
-            mod='gmrt',
-            src_region=self.region,
-            verbose=self.verbose,
-            callback=fetches.fetches_callback
-        )._acquire_module()        
-
-        swath_masks = []
-        if fetches.Fetch(
-                this_fetch._gmrt_swath_poly_url,
-                verbose=self.verbose
-        ).fetch_file(
-                os.path.join(
-                    this_fetch._outdir, 'gmrt_swath_polygons.zip'
-                )
-            ) == 0:
-                swath_shps = utils.p_unzip(
-                    os.path.join(
-                        this_fetch._outdir, 'gmrt_swath_polygons.zip'
-                    ),
-                    exts=['shp', 'shx', 'prj', 'dbf'],
-                    outdir=this_fetch._outdir,
-                    verbose=self.verbose
-                )
-
-                for v in swath_shps:
-                    if '.shp' in v:
-                        swath_masks.append(v)
-                        break
-                    
-        if len(swath_masks) > 0:
-            for swath_ply in swath_masks:
-                gdalfun.gdal_clip(raster, f'{raster}_swath.tif', src_ply=swath_ply, invert=True,
-                                  verbose=True, cache_dir=this_fetch._outdir)
-
-            return(f'{raster}_swath.tif')
-
-        return(None)
-
-    
-    def set_raster_fn(self, raster):
-        ## raster is not a local file, create a unique name to use
-        if (self.region is not None or self.xyinc is not None) and self.resample_raster:
-            _raster = utils.append_fn(
-                f'rq_raster_{raster}', self.region,
-                self.xyinc[0], res=1 if not all(self.xyinc) else None
-            )
-            _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
-            if not os.path.exists(os.path.dirname(_raster)):
-                os.makedirs(os.path.dirname(_raster))
-            
-            if os.path.exists(_raster) and os.path.isfile(_raster):
-                return([_raster])
-
-        return(raster)                
-
-        
-    def init_raster(self, raster):
-
-        if raster is not None and isinstance(raster, str):
-            if os.path.exists(raster) and os.path.isfile(raster):
-                return([raster])
-            
-        elif raster is None:
-            if (self.region is not None or self.xyinc is not None) and self.resample_raster:
-                _raster = utils.append_fn(
-                    f'rq_raster_{raster}', self.region,
-                    self.xyinc[0], res=1 if not all(self.xyinc) else None
-                )
-                _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
-                if not os.path.exists(os.path.dirname(_raster)):
-                    os.makedirs(os.path.dirname(_raster))
-
-                if os.path.exists(_raster) and os.path.isfile(_raster):
-                    return([_raster])
-                
-            raster = []
-            # try gmrt all
-            this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
-            raster_ = [x[1] for x in this_fetch.results]
-            raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
-            
-            # try etopo
-            this_fetch = self.fetch_data('etopo:datatype=surface', self.region.copy().buffer(pct=1))
-            raster.extend([x[1] for x in this_fetch.results])
-            #raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_])
-
-            # try gmrt swath
-            this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
-            raster_ = [x[1] for x in this_fetch.results]
-            raster_ = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster_]
-            gmrt_swath = self.mask_gmrt(raster_[0])
-            if gmrt_swath is not None:
-                raster.extend([gmrt_swath])
-
-            # try cudem 1/3
-            this_fetch = self.fetch_data('CUDEM:datatype=13:keep_footprints=True', self.region.copy().buffer(pct=1))
-            raster.extend([x[1] for x in this_fetch.results])        
-
-            # try cudem 1/9
-            this_fetch = self.fetch_data('CUDEM:datatype=19:keep_footprints=True', self.region.copy().buffer(pct=1))
-            raster.extend([x[1] for x in this_fetch.results])        
-            
-            #utils.echo_msg_bold(raster)
-            if (self.region is not None or self.xyinc is not None) and self.resample_raster:
-                # vrt_options = gdal.BuildVRTOptions(resampleAlg='cubic') # Example option
-                # vrt_ds = gdal.BuildVRT('tmp.vrt', raster, options=vrt_options)
-                
-                try:
-                    raster = [gdalfun.sample_warp(
-                        raster, _raster, self.xyinc[0], self.xyinc[1],
-                        sample_alg='cubic', src_region=self.region,
-                        verbose=self.verbose,
-                        co=["COMPRESS=DEFLATE", "TILED=YES"]
-                    )[0]]
-                except Exception as e:
-                    utils.echo_warning_msg(f'failed to process stacked rasters, falling back to GMRT, {e}')
-                    this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
-                    raster = [x[1] for x in this_fetch.results]
-                    raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
-                    if self.xyinc is not None and self.resample_raster:
-                        raster = [gdalfun.sample_warp(
-                            raster[0], _raster, self.xyinc[0], self.xyinc[1],
-                            sample_alg='bilinear',
-                            verbose=self.verbose,
-                            co=["COMPRESS=DEFLATE", "TILED=YES"]
-                        )[0]]
-
-        elif any(raster in item for item in self.fetches_modules):
-            _raster = [item for item in self.fetches_modules if raster in item][0]
-            #elif raster.split(':')[0] in self.fetches_modules:
-            this_fetch = self.fetch_data(_raster, self.region)
-            raster = [x[1] for x in this_fetch.results]
-            raster = [gdalfun.gmt_grd2gdal(x, verbose=False) if x.split('.')[-1] == 'grd' else x for x in raster]
-            if self.xyinc is not None and self.resample_raster:
-                raster = [gdalfun.sample_warp(
-                    raster, _raster, self.xyinc[0], self.xyinc[1],
-                    sample_alg='bilinear', src_region=self.region,
-                    verbose=self.verbose,
-                    co=["COMPRESS=DEFLATE", "TILED=YES"]
-                )[0]]
-
-        else:
-            utils.echo_warning_msg(f'could not parse rq raster {raster}')
-
-        #utils.echo_msg_bold(raster)
-        return(raster)
-
-
-    ## todo: allow for multiple rasters
-    def point_residuals(self, points, percentage=True, res=50):
-        if len(self.raster) == 0:
-            return(None)
-
-        #smoothed_depth = []
-        #utils.echo_msg(self.raster)
-        #for r in self.raster:
-        smoothed_depth = gdalfun.gdal_query(
-            points, self.raster[0], 'g'
-        ).flatten()
-        #utils.echo_msg(smoothed_depth)
-        #smoothed_depth += smoothed_depth.flatten()
-
-        for x in self.raster:
-            x = None
-            
-        if len(smoothed_depth) == 0:
-            return(None)
-        
-        if percentage:
-            if self.scaled_percentile:
-                residuals =  np.abs(
-                    (points['z'] - smoothed_depth) / (points['z'] + smoothed_depth)
-                ) * 100
-            else:
-                residuals =  np.abs(
-                    (points['z'] - smoothed_depth) / smoothed_depth
-                ) * 100
-        else:
-            residuals = np.abs(points['z'] - smoothed_depth)
-
-        #utils.echo_msg(residuals)
-        return(residuals)
-
-    
-class PointFilterFactory(factory.CUDEMFactory):
-    _modules = {
-        'outlierz': {
-            'name': 'outlierz', 'call': PointZOutlier
-        },
-        'rq': {
-            'name': 'rq', 'call': RQOutlierZ
-        },
-        'vector_mask': {
-            'name': 'vector_mask', 'call': PointZVectorMask
-        },
-    }
-
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        
-class PointPixels():
-    """Return the data as an array which coincides with the 
-    desired region, x_size and y_size
-
-    incoming data are numpy rec-arrays of x,y,z<w,u> points
-    """
-
-    def __init__(
-            self,
-            src_region=None,
-            x_size=None,
-            y_size=None,
-            verbose=True,
-            **kwargs
-    ):
-
-        self.src_region = src_region
-        self.x_size = utils.int_or(x_size, 10)
-        self.y_size = utils.int_or(y_size, 10)
-        self.verbose = verbose
-
-        
-    def init_region_from_points(self, points):
-        if self.src_region is None:
-            self.src_region = regions.Region().from_list(
-                [np.min(points['x']), np.max(points['x']),
-                 np.min(points['y']), np.max(points['y'])]
-            )        
-
-        self.init_gt()
-
-        
-    def init_gt(self):
-        self.dst_gt = self.src_region.geo_transform_from_count(
-            x_count=self.x_size, y_count=self.y_size
-        )
-
-        
-    def __call__(
-            self, points, weight=None, uncertainty=None,
-            stack_mode='mean'
-    ):
-        out_arrays = {
-            'z':None,
-            'count':None,
-            'weight':None,
-            'uncertainty': None,
-            'mask':None,
-            'x': None,
-            'y': None,
-            'pixel_x': None,
-            'pixel_y': None
-        }
-        count = 0
-        if len(points) == 0:
-            return(out_arrays, None, None)
-        
-        if self.src_region is None:
-            self.init_region_from_points(points)
-            
-        ## convert the points to pixels based on the geotransform
-        ## and calculate the local srcwin of the points
-        pixel_x = np.floor(
-            (points['x'] - self.dst_gt[0]) / self.dst_gt[1]
-        ).astype(int)
-        pixel_y = np.floor(
-            (points['y'] - self.dst_gt[3]) / self.dst_gt[5]
-        ).astype(int)
-        points_x = np.array(points['x'])
-        points_y = np.array(points['y'])
-        pixel_z = np.array(points['z'])
-        try:
-            pixel_w = np.array(points['w'])
-        except:
-            pixel_w = np.ones(pixel_z.shape)
-
-        try:
-            pixel_u = np.array(points['u'])
-        except:
-            pixel_u = np.zeros(pixel_z.shape)
-
-        ## remove pixels that will break the srcwin
-        out_idx = np.nonzero((pixel_x >= self.x_size) \
-                             | (pixel_x < 0) \
-                             | (pixel_y >= self.y_size) \
-                             | (pixel_y < 0))
-        ### commented out for pmm! maybe put back...
-        # pixel_x = np.delete(pixel_x, out_idx)
-        # pixel_y = np.delete(pixel_y, out_idx)
-        # pixel_z = np.delete(pixel_z, out_idx)
-        # pixel_w = np.delete(pixel_w, out_idx)
-        # pixel_u = np.delete(pixel_u, out_idx)
-        # points_x = np.delete(points_x, out_idx)
-        # points_y = np.delete(points_y, out_idx)
-        # if len(pixel_x) == 0 or len(pixel_y) == 0:
-        #     continue
-
-        points = None
-        pixel_w[np.isnan(pixel_w)] = 1
-        pixel_u[np.isnan(pixel_u)] = 0
-
-        ## set the srcwin of the incoming points
-        this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
-                       int(max(pixel_x) - min(pixel_x))+1,
-                       int(max(pixel_y) - min(pixel_y))+1)
-        count += len(pixel_x)
-
-        ## adjust the pixels to the srcwin and stack together
-        pixel_x = pixel_x - this_srcwin[0]
-        pixel_y = pixel_y - this_srcwin[1]
-        pixel_xy = np.vstack((pixel_y, pixel_x)).T
-
-        out_arrays['pixel_x'] = pixel_x
-        out_arrays['pixel_y'] = pixel_y
-        
-        ## find the non-unique x/y points and mean/min/max
-        ## their z values together while calculating the std
-        ## for uncertainty
-        unq, unq_idx, unq_inv, unq_cnt = np.unique(
-            pixel_xy, axis=0, return_inverse=True,
-            return_index=True, return_counts=True
-        )
-        cnt_msk = unq_cnt > 1
-        cnt_idx, = np.nonzero(cnt_msk)
-        idx_msk = np.in1d(unq_inv, cnt_idx)
-        idx_idx, = np.nonzero(idx_msk)
-        srt_idx = np.argsort(unq_inv[idx_msk])
-        dup_idx = np.split(
-            idx_idx[srt_idx],
-            np.cumsum(unq_cnt[cnt_msk])[:-1]
-        )
-        zz = pixel_z[unq_idx]
-        ww = pixel_w[unq_idx]
-        uu = pixel_u[unq_idx]
-        xx = points_x[unq_idx]
-        yy = points_y[unq_idx]
-        #u = np.zeros(zz.shape)
-        if np.any([len(dup) for dup in dup_idx]):
-            if stack_mode == 'min':
-                dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
-                dup_stds = np.zeros(dup_stack.shape)
-            elif stack_mode == 'max':
-                dup_stack = [np.max(pixel_z[dup]) for dup in dup_idx]
-                dup_stds = np.zeros(dup_stack.shape)
-            else:
-                dup_stack = [np.mean(pixel_z[dup]) for dup in dup_idx]
-                dup_stack_x = [np.mean(points_x[dup]) for dup in dup_idx]
-                dup_stack_y = [np.mean(points_y[dup]) for dup in dup_idx]
-                dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
-
-            zz[cnt_msk] = dup_stack
-            #uu[cnt_msk] = np.sqrt(dup_stds)
-            uu[cnt_msk] = np.sqrt(np.power(uu[cnt_msk],2) + np.power(dup_stds,2))
-
-        ## make the output arrays to yield
-        out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_x[unq[:,0], unq[:,1]] = xx
-        out_x[out_x == 0] = np.nan
-        out_arrays['x'] = out_x
-
-        out_y = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_y[unq[:,0], unq[:,1]] = yy
-        out_y[out_y == 0] = np.nan
-        out_arrays['y'] = out_y
-
-        out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_z[unq[:,0], unq[:,1]] = zz
-        out_z[out_z == 0] = np.nan
-        out_arrays['z'] = out_z
-
-        out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
-
-        out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
-        out_arrays['weight'][:] = weight if weight is not None else 1
-        out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
-        #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
-
-        out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-        #out_arrays['uncertainty'][:] = self.uncertainty if self.uncertainty is not None else 0
-        out_arrays['uncertainty'][unq[:,0], unq[:,1]] \
-            = np.sqrt(uu**2 + (uncertainty if uncertainty is not None else 0)**2)                
-
-        return(out_arrays, this_srcwin, self.dst_gt)
-
-
 ###############################################################################
 ## INF files and processing
 ###############################################################################
@@ -1962,7 +1193,7 @@ class ElevationDataset:
                     dst_srs=self.dst_srs,
                     invert=True,
                     verbose=True,
-                    temp_dir=self.cache_dir
+                    temp_dir=self.cache_dir,
                 )
                 opts['ogr_or_gdal'] = 0
             else:    
@@ -2010,8 +1241,13 @@ class ElevationDataset:
 
         return(_params)
 
+
+    def _sub_init(self):
+        pass
+        
     
     def initialize(self):
+        self._sub_init()
         self._fn = None # temp filename holder
         self.data_region = None # self.region and inf.region reduced
         self.inf_region = None # inf region
@@ -2055,11 +1291,11 @@ class ElevationDataset:
                     check_hash=True if self.data_format == -1 else False
                 )
             except:
-                utils.echo_error_msg(
-                    f'could not parse dataset {self.fn}'
-                )
-                return(self)
-                
+               utils.echo_error_msg(
+                   f'could not parse dataset {self.fn}'
+               )
+               return(self)
+             
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
@@ -2127,7 +1363,8 @@ class ElevationDataset:
                 if self.fn not in fmts:
                     if not self.fn.startswith('http') \
                        and not self.fn.startswith('/vsicurl/') \
-                       and not self.fn.startswith('BAG'):
+                       and not self.fn.startswith('BAG') \
+                       and not ':' in self.fn:
                         if not utils.fn_url_p(self.fn):
                             if self.data_format > -10:
                                 if not os.path.exists(self.fn):
@@ -2198,7 +1435,7 @@ class ElevationDataset:
         return(self.echo_())
 
     
-    def set_yield(self):
+    def set_yield(self, use_blocks=False):
         """set the yield strategy, either default (all points) or mask or stacks
 
         This sets both `self.array_yeild` and `self.xyz_yield`.
@@ -2229,13 +1466,17 @@ class ElevationDataset:
                 self.y_inc = utils.str2inc(self.y_inc)
 
             #out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
-            out_name = utils.make_temp_fn(
-                utils.append_fn(
-                    'dlim_stacks', self.region, self.x_inc
-                ), temp_dir=self.cache_dir
-            )
-            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name)
-            #, fmt='GTiff')#, mode=self.stack_mode)
+            # out_name = utils.make_temp_fn(
+            #     utils.append_fn(
+            #         'dlim_stacks', self.region, self.x_inc
+            #     ), temp_dir=self.cache_dir
+            # )
+            
+            out_name = os.path.join(self.cache_dir, utils.append_fn('globato', self.region, self.x_inc))
+            if not use_blocks:
+                self.xyz_yield = self.stacks_yield_xyz(out_name=out_name)
+            else:
+                self.xyz_yield = self.blocks_yield_xyz(out_name=out_name)
 
             
     ## initialize transfom
@@ -2691,7 +1932,7 @@ class ElevationDataset:
         dataset object
         """
 
-        if self.region is not None:
+        if self.region is not None and self.inf_region is not None:
             # try:
             #     inf_region = regions.Region().from_string(self.infos.wkt)
             # except:
@@ -2907,22 +2148,16 @@ class ElevationDataset:
 
             return(msk_ds)
 
+        ## average and supercede funcs are for 'mixed mode'
         def average(weight_above, stacked_data, arrs):
             ## average of incoming data with existing data above weight_threshold
-            # weight_above = (arrs['weight'] >= wt) \
-            #     & (arrs['weight'] >= tmp_stacked_weight) \
-            #     & (~weight_above_sup)
-            # if self.want_mask:
-            #     m_array[(weight_above) & (arrs['count'] != 0)] = 1
-            #     m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
-
             stacked_data['count'][weight_above] += arrs['count'][weight_above]
             stacked_data['z'][weight_above] \
-                += (arrs['z'][weight_above] * arrs['weight'][weight_above])
+                += arrs['z'][weight_above]# * arrs['weight'][weight_above])
             stacked_data['x'][weight_above] \
-                += (arrs['x'][weight_above] * arrs['weight'][weight_above])
+                += arrs['x'][weight_above]# * arrs['weight'][weight_above])
             stacked_data['y'][weight_above] \
-                += (arrs['y'][weight_above] * arrs['weight'][weight_above])
+                += arrs['y'][weight_above]# * arrs['weight'][weight_above])
             stacked_data['src_uncertainty'][weight_above] \
                 = np.sqrt(np.power(stacked_data['src_uncertainty'][weight_above], 2) \
                           + np.power(arrs['uncertainty'][weight_above], 2))
@@ -2931,23 +2166,23 @@ class ElevationDataset:
             ## accumulate variance * weight
             stacked_data['uncertainty'][weight_above] \
                 += arrs['weight'][weight_above] \
-                * np.power((arrs['z'][weight_above] \
-                            - (stacked_data['z'][weight_above] \
-                               / stacked_data['weights'][weight_above])), 2)
+                * np.power(
+                    (((arrs['z'][weight_above] / arrs['weight'][weight_above]) \
+                      / arrs['count'][weight_above])\
+                     - ((stacked_data['z'][weight_above] / stacked_data['weights'][weight_above]) \
+                        / stacked_data['count'][weight_above])), 2)
 
             return(stacked_data)
 
         
         def supercede(weight_above_sup, stacked_data, arrs, sup=True):
-            # supercede existing data below weight_threshold
-
             stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
             stacked_data['z'][weight_above_sup] \
-                = (arrs['z'][weight_above_sup] * arrs['weight'][weight_above_sup])
+                = arrs['z'][weight_above_sup]# * arrs['weight'][weight_above_sup])
             stacked_data['x'][weight_above_sup] \
-                = (arrs['x'][weight_above_sup] * arrs['weight'][weight_above_sup])
+                = arrs['x'][weight_above_sup]# * arrs['weight'][weight_above_sup])
             stacked_data['y'][weight_above_sup] \
-                = (arrs['y'][weight_above_sup] * arrs['weight'][weight_above_sup])
+                = arrs['y'][weight_above_sup]# * arrs['weight'][weight_above_sup])
             stacked_data['src_uncertainty'][weight_above_sup] \
                 = arrs['uncertainty'][weight_above_sup]
             stacked_data['weights'][weight_above_sup] \
@@ -2955,6 +2190,7 @@ class ElevationDataset:
             stacked_data['uncertainty'][weight_above_sup] \
                 = np.array(stacked_data['src_uncertainty'][weight_above_sup])
 
+                    
             return(stacked_data)
 
 
@@ -3137,11 +2373,11 @@ class ElevationDataset:
                     #stacked_data['count'] = arrs['count']
                     #tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     
-                    tmp_stacked_weight = stacked_data['weights']
+                    tmp_stacked_weight = stacked_data['weights'].copy()
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    #sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
                     sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
                     
-                    #sup_mask = arrs['weight'] > (stacked_data['weights'])
                     if self.want_mask:
                         # remove the mask from superceded bands
                         reset_mask_bands(
@@ -3154,7 +2390,6 @@ class ElevationDataset:
                     
                     ## higher weight supercedes lower weight
                     ## (first come first served atm)
-
                     stacked_data['count'][(sup_mask)] = arrs['count'][(sup_mask)]
                     stacked_data['z'][(sup_mask)] = arrs['z'][(sup_mask)]
                     stacked_data['weights'][(sup_mask)] = tmp_arrs_weight[(sup_mask)]
@@ -3177,10 +2412,11 @@ class ElevationDataset:
                     ###############################################################
                     wt = 1
                     if 'weight_threshold' in self.stack_mode_args.keys():
-                        wts = [utils.float_or(x) for x in self.stack_mode_args['weight_threshold'].split('/')]
+                        wts = [utils.float_or(x) \
+                               for x in self.stack_mode_args['weight_threshold'].split('/')]
                     else:
                         wts = [wt]
-
+                    
                     wts.sort()
                     wt_masks = []
 
@@ -3188,12 +2424,14 @@ class ElevationDataset:
                     wt_pairs.reverse()
                     # reset tmp_stacked_weight
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    #tmp_stacked_weight = stacked_data['weights'].copy()
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
                     ## ABOVE
                     ## all weights above max(wts) will supercede all weights below
                     ## data in each weight range will be averaged
-                    # mask is above max(wts)
+                    ## mask is above max(wts)
+                    #utils.echo_msg_bold(arrs['weight'])
                     weight_above_sup = (tmp_arrs_weight >= max(wts)) & \
                         (tmp_stacked_weight < max(wts))
                     if self.want_mask:
@@ -3223,9 +2461,9 @@ class ElevationDataset:
                     ## average
                     stacked_data = average(weight_above, stacked_data, arrs)
 
+                    ## mask is between wt_pair
                     for wt_pair in wt_pairs:
-                        # mask is between wt_pair
-                        # reset tmp_stacked_weight
+                        ## reset tmp_stacked_weight
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
@@ -3247,11 +2485,11 @@ class ElevationDataset:
                             
                         stacked_data = supercede(weight_between_sup, stacked_data, arrs)
 
-                        # reset tmp_stacked_weight
+                        ## reset tmp_stacked_weight
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
-                        arrs_mask = (tmp_arrs_weight >= min(wt_pair)) & \
+                        arrs_weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
                             (tmp_arrs_weight < max(wt_pair)) & \
                             (tmp_arrs_weight >= tmp_stacked_weight)
                         #tsw_mask = (tmp_stacked_weight > min(wt_pair)) & \
@@ -3259,7 +2497,7 @@ class ElevationDataset:
                         #tsw_mask = (arrs['weight'] >= tmp_stacked_weight)
                         #weight_below = (arrs['weight'] <= min(wt_pair)) & \
                         #    (tmp_stacked_weight < min(wt_pair))
-                        weight_between = (arrs_mask) & (~weight_between_sup)
+                        weight_between = (arrs_weight_between) & (~weight_between_sup)
 
                         if self.want_mask:
                             m_array[(weight_between) & (arrs['count'] != 0)] = 1
@@ -3268,9 +2506,10 @@ class ElevationDataset:
                         ## average
                         stacked_data = average(weight_between, stacked_data, arrs)
 
-                    # reset tmp_stacked_weight
+                    ## reset tmp_stacked_weight
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    
                     ## BELOW
                     # mask is below max(wts)
                     weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
@@ -3338,9 +2577,12 @@ class ElevationDataset:
                         m_all_array[arrs['count'] != 0] = 1
                     
                     ## accumulate incoming z*weight and uu*weight
-                    stacked_data['z'] += (arrs['z'] * arrs['weight'])
-                    stacked_data['x'] += (arrs['x'] * arrs['weight'])
-                    stacked_data['y'] += (arrs['y'] * arrs['weight'])
+                    # stacked_data['z'] += (arrs['z'] * arrs['weight'])
+                    # stacked_data['x'] += (arrs['x'] * arrs['weight'])
+                    # stacked_data['y'] += (arrs['y'] * arrs['weight'])
+                    stacked_data['z'] += arrs['z']
+                    stacked_data['x'] += arrs['x']
+                    stacked_data['y'] += arrs['y']
                     stacked_data['src_uncertainty'] \
                         = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) \
                                   + np.power(arrs['uncertainty'], 2))
@@ -3353,9 +2595,12 @@ class ElevationDataset:
                     ## accumulate variance * weight
                     stacked_data['uncertainty'] += arrs['weight'] \
                         * np.power(
-                            (arrs['z'] \
+                            ((arrs['z'] \
+                              / arrs['weight'] \
+                              / arrs['count']) \
                              - (stacked_data['z'] \
-                                / stacked_data['weights'])),
+                                / stacked_data['weights'] \
+                                / stacked_data['count'])),
                             2
                         )
 
@@ -3398,7 +2643,10 @@ class ElevationDataset:
             #msk_ds = remove_empty_mask_bands(m_ds)
             ###################################################################
             m_ds = None
-            
+
+        #######################################################################
+        ## finalize the stacked_data weighted sums
+        #######################################################################
         ## by scan-line
         srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
         for y in range(
@@ -3411,28 +2659,28 @@ class ElevationDataset:
                 stacked_data[key][stacked_data[key] == ndv] = np.nan
 
             stacked_data['weights'][stacked_data['weights'] == 0] = 1
-            if mode != 'supercede':
-                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                if mode == 'mean' or mode == 'mixed':
-                    ## average the accumulated arrays for finalization
-                    ## x, y, z and u are weighted sums, so divide by weights
-                    stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) \
-                        / stacked_data['count']
-                    stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) \
-                        / stacked_data['count']
-                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) \
-                        / stacked_data['count']
-                        
-                ## apply the source uncertainty with the sub-cell variance uncertainty
-                ## caclulate the standard error (sqrt( uncertainty / count))
-                stacked_data['uncertainty'] = np.sqrt(
-                    (stacked_data['uncertainty'] / stacked_data['weights']) \
-                    / stacked_data['count']
-                )
-                stacked_data['uncertainty'] = np.sqrt(
-                    np.power(stacked_data['src_uncertainty'], 2) \
-                    + np.power(stacked_data['uncertainty'], 2)
-                )
+            #if mode != 'supercede':
+            stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+            #if mode == 'mean' or mode == 'mixed':
+            ## average the accumulated arrays for finalization
+            ## x, y, z and u are weighted sums, so divide by weights
+            stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) \
+                / stacked_data['count']
+            stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) \
+                / stacked_data['count']
+            stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) \
+                / stacked_data['count']
+
+            ## apply the source uncertainty with the sub-cell variance uncertainty
+            ## caclulate the standard error (sqrt( uncertainty / count))
+            stacked_data['uncertainty'] = np.sqrt(
+                (stacked_data['uncertainty'] / stacked_data['weights']) \
+                / stacked_data['count']
+            )
+            stacked_data['uncertainty'] = np.sqrt(
+                np.power(stacked_data['src_uncertainty'], 2) \
+                + np.power(stacked_data['uncertainty'], 2)
+            )
 
             ## write out final rasters
             for key in stack_keys:
@@ -3472,7 +2720,7 @@ class ElevationDataset:
         ## todo: move this out of here, so we have original stack saved, maybe a new band of 'bin_mask'
         for f in self.stack_fltrs:
             utils.echo_msg(f'filtering stacks module with {f}')
-            grits_filter = grits.GritsFactory(
+            grits_filter = grits.grits_factory.GritsFactory(
                 mod=f,
                 src_dem=out_file,
                 uncertainty_mask=4,
@@ -3543,6 +2791,7 @@ class ElevationDataset:
                 f'generated stack: {os.path.basename(out_file)}'
             )
             if self.want_mask:
+
                 utils.echo_msg(
                     f'generated mask: {os.path.basename(mask_fn)}'
                 )
@@ -3551,52 +2800,255 @@ class ElevationDataset:
 
     
     ## todo: mixed mode
-    ## todo: stack_mode
-    def _stacks_h5(self, out_name=None, ndv=-9999):
-        """stack and mask incoming arrays (from `self.array_yield`) 
+    def _blocks(self, out_name=None, ndv=-9999):
+        """block and mask incoming arrays (from `self.array_yield`) 
         together
 
         -----------
         Parameters:
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
-        mask_level (int): the granularity of the mask, 0 is every file
 
         --------
         Returns:
         out_name.csg - an hdf5 file containing the stack, sums and mask, with datasets:
-        DEM:
-          x
-          y
-          z
-        stacks:
-          x
-          y
-          z
-          weights
-          count
-          uncertainty
-          src uncertainty
-        sums:
-          x
-          y
-          z
-          weights
+        blocks:
+          \dtm: 
+            \\x
+            \\y
+            \\z
+            \\weight
+            \\count
+            \\uncertainty
+            \\src uncertainty
+          \sums:
+            \\x
+            \\y
+            \\z
+            \\weight
+
         data_sets:
-          ...<dataset>:
-            x
-            y
-            z
-            weights
-            count
-            uncertainty
-            src_uncertainty
-          ...
+          \...<dataset>...:
+            \\x
+            \\y
+            \\z
+            \\weight
+            \\count
+            \\uncertainty
+            \\src_uncertainty
+
         masks:
-          coast_mask
-          full_dataset_mask
-          ...<dataset mask>...
+          \coast_mask
+          \full_dataset_mask
+          \...<dataset mask>...
+
+        vertical_dataums:
+          \tidal
+          \global
         """
+
+        def load_globato(fn):
+            stack_ds = h5.File(fn, 'a', rdcc_nbytes=(1024**2)*12000)
+            if 'short_name' in stack_ds.attrs.keys():                
+                if stack_ds.attrs['short_name'] != 'globato':
+                    utils.echo_warning_msg(f'{fn} is not a globato file')
+                    return(None)
+            else:
+                return(None)
+
+            return(stack_ds)
+
+        def create_globato(out_file):
+            if not os.path.exists(os.path.dirname(out_file)):
+                os.makedirs(os.path.dirname(out_file))
+            
+            xcount, ycount, dst_gt = self.region.geo_transform(
+                x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+            )
+            if xcount <= 0 or ycount <=0:
+                utils.echo_error_msg(
+                    (f'could not create grid of {xcount}x{ycount} '
+                     f'cells with {self.x_inc}/{self.y_inc} increments on '
+                     f'region: {self.region}')
+                )
+                sys.exit(-1)
+
+            if self.verbose:
+                utils.echo_msg(
+                    (f'stacking using {self.stack_mode_name} '
+                     f'with {self.stack_mode_args} '
+                     f'to {out_file}')
+                )
+
+            lon_start = dst_gt[0] + (dst_gt[1] / 2)
+            lat_start = dst_gt[3] + (dst_gt[5] / 2)
+            lon_end = dst_gt[0] + (dst_gt[1] * xcount)
+            lat_end = dst_gt[3] + (dst_gt[5] * ycount)
+            lon_inc = dst_gt[1]
+            lat_inc = dst_gt[5]
+            stack_ds = h5.File(out_file, 'w', rdcc_nbytes=(1024**2)*12000)
+            stack_ds.attrs['short_name'] = 'globato'
+            #, rdcc_nslots=1e7)
+
+            #######################################################################
+            ## Grid Mapping 
+            #######################################################################
+            crs_dset = stack_ds.create_dataset('crs', dtype=h5.string_dtype())
+            crs_dset.attrs['GeoTransform'] = ' '.join([str(x) for x in dst_gt])
+            if self.dst_srs is not None:
+                crs_dset.attrs['crs_wkt'] = srsfun.osr_wkt(self.dst_srs)
+
+            #######################################################################
+            ## LATITUDE
+            #######################################################################
+            lat_array = np.arange(lat_start, lat_end, lat_inc)
+            lat_dset = stack_ds.create_dataset ('lat', data=lat_array)
+            lat_dset.make_scale('latitude')
+            lat_dset.attrs["long_name"] = "latitude"
+            lat_dset.attrs["units"] = "degrees_north"
+            lat_dset.attrs["standard_name"] = "latitude"
+            lat_dset.attrs["actual_range"] = [lat_end, lat_start]
+            #lat_dset.attrs[''] = ''
+
+            #######################################################################
+            ## LONGITUDE
+            #######################################################################
+            lon_array = np.arange(lon_start, lon_end, lon_inc)
+            lon_dset = stack_ds.create_dataset ('lon', data=lon_array)
+            lon_dset.make_scale('longitude')
+            lon_dset.attrs["long_name"] = "longitude"
+            lon_dset.attrs["units"] = "degrees_east" 
+            lon_dset.attrs["standard_name"]= "longitude"
+            lon_dset.attrs["actual_range"] = [lon_start, lon_end]
+
+            #######################################################################
+            ## STACK
+            #######################################################################
+            stack_grp = stack_ds.create_group('stack')
+            stacked_data = {
+                'z': None,
+                'count': None,
+                'weights': None,
+                'uncertainty': None,
+                'src_uncertainty': None,
+                'x': None,
+                'y': None
+            }
+
+            for key in stacked_data.keys():
+                stack_dset = stack_grp.create_dataset(
+                    key, data=np.full((ycount, xcount), np.nan),
+                    compression='lzf', maxshape=(ycount, xcount),
+                    chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
+                    dtype=np.float32
+                )
+                stack_dset.dims[0].attach_scale(lat_dset)
+                stack_dset.dims[1].attach_scale(lon_dset)
+                stack_dset.attrs['grid_mapping'] = "crs"
+
+            #######################################################################
+            ## SUMS
+            #######################################################################
+            sums_grp = stack_ds.create_group('sums')
+            sums_data = {
+                'z': None,
+                'count': None,
+                'weights': None,
+                'uncertainty': None,
+                'src_uncertainty': None,
+                'x': None,
+                'y': None
+            }
+                
+            for key in sums_data.keys():
+                sums_dset = sums_grp.create_dataset(
+                    key, data=np.full((ycount, xcount), np.nan),
+                    compression='lzf', maxshape=(ycount, xcount),
+                    chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
+                    dtype=np.float32
+                )
+                sums_dset.dims[0].attach_scale(lat_dset)
+                sums_dset.dims[1].attach_scale(lon_dset)
+                sums_dset.attrs['grid_mapping'] = "crs"            
+
+            #######################################################################
+            ## MASK
+            #######################################################################
+            mask_grp = stack_ds.create_group('mask')
+
+            ## mask the coastline 1 = water; 0 = land
+            mask_coast_dset = mask_grp.create_dataset(
+                'coast_mask', data=np.zeros((ycount,xcount)),
+                compression='lzf', maxshape=(ycount, xcount),
+                chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*(min(100, ycount)),
+                dtype=np.uint8
+            )
+            mask_coast_dset.dims[0].attach_scale(lat_dset)
+            mask_coast_dset.dims[1].attach_scale(lon_dset)
+            mask_coast_dset.attrs['grid_mapping'] = "crs"
+
+            ## set first dataset to hold the data mask for all the data
+            mask_all_dset = mask_grp.create_dataset(
+                'full_dataset_mask', data=np.zeros((ycount,xcount)),
+                compression='lzf', maxshape=(ycount, xcount),
+                chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*(min(100, ycount)),
+                dtype=np.uint8
+            )
+            mask_all_dset.dims[0].attach_scale(lat_dset)
+            mask_all_dset.dims[1].attach_scale(lon_dset)
+            mask_all_dset.attrs['grid_mapping'] = "crs"
+
+            #######################################################################
+            ## datasets
+            #######################################################################
+            datasets_grp = stack_ds.create_group('datasets')                
+            
+            return(stack_ds)
+        
+        ## average and supercede funcs are for 'mixed mode'
+        def average(weight_above, stacked_data, arrs):
+            ## average of incoming data with existing data above weight_threshold
+            stacked_data['count'][weight_above] += arrs['count'][weight_above]
+            stacked_data['z'][weight_above] \
+                += arrs['z'][weight_above]# * arrs['weight'][weight_above])
+            stacked_data['x'][weight_above] \
+                += arrs['x'][weight_above]# * arrs['weight'][weight_above])
+            stacked_data['y'][weight_above] \
+                += arrs['y'][weight_above]# * arrs['weight'][weight_above])
+            stacked_data['src_uncertainty'][weight_above] \
+                = np.sqrt(np.power(stacked_data['src_uncertainty'][weight_above], 2) \
+                          + np.power(arrs['uncertainty'][weight_above], 2))
+            stacked_data['weights'][weight_above] \
+                += arrs['weight'][weight_above]
+            ## accumulate variance * weight
+            stacked_data['uncertainty'][weight_above] \
+                += arrs['weight'][weight_above] \
+                * np.power(
+                    (((arrs['z'][weight_above] / arrs['weight'][weight_above]) \
+                      / arrs['count'][weight_above])\
+                     - ((stacked_data['z'][weight_above] / stacked_data['weights'][weight_above])\
+                        / stacked_data['count'][weight_above])), 2)
+
+            return(stacked_data)
+
+        
+        def supercede(weight_above_sup, stacked_data, arrs, sup=True):
+            stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
+            stacked_data['z'][weight_above_sup] \
+                = arrs['z'][weight_above_sup]# * arrs['weight'][weight_above_sup])
+            stacked_data['x'][weight_above_sup] \
+                = arrs['x'][weight_above_sup]# * arrs['weight'][weight_above_sup])
+            stacked_data['y'][weight_above_sup] \
+                = arrs['y'][weight_above_sup]# * arrs['weight'][weight_above_sup])
+            stacked_data['src_uncertainty'][weight_above_sup] \
+                = arrs['uncertainty'][weight_above_sup]
+            stacked_data['weights'][weight_above_sup] \
+                = arrs['weight'][weight_above_sup]
+            stacked_data['uncertainty'][weight_above_sup] \
+                = np.array(stacked_data['src_uncertainty'][weight_above_sup])
+
+                    
+            return(stacked_data)
         
         utils.set_cache(self.cache_dir)
         mode = self.stack_mode_name
@@ -3606,160 +3058,51 @@ class ElevationDataset:
             )
         else:
             mask_level = 0
-
-        if self.verbose:
-            utils.echo_msg(
-                (f'stacking using {self.stack_mode_name} '
-                 f'with {self.stack_mode_args}')
-            )
         
         ## initialize the output rasters
+        # if out_name is None:
+        #     out_name = os.path.join(self.cache_dir, '{}'.format(
+        #         utils.append_fn('dlim_stacks', self.region, self.x_inc)
+        #     ))
         if out_name is None:
             out_name = os.path.join(self.cache_dir, '{}'.format(
-                utils.append_fn('dlim_stacks', self.region, self.x_inc)
+                utils.append_fn('globato_blocks', self.region, self.x_inc)
             ))
-
+            
         ## .csg is h5 Cudem Stack Grid
         ## make option to append to existing file
-        out_file = '{}.csg'.format(out_name)
-        if os.path.exists(out_file):
-            utils.remove_glob('{}.*'.format(out_file))
-            
-        if not os.path.exists(os.path.dirname(out_file)):
-            os.makedirs(os.path.dirname(out_file))
-            
-        xcount, ycount, dst_gt = self.region.geo_transform(
-            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-        )
-        if xcount <= 0 or ycount <=0:
-            utils.echo_error_msg(
-                (f'could not create grid of {xcount}x{ycount} '
-                 f'cells with {self.x_inc}/{self.y_inc} increments on '
-                 f'region: {self.region}')
-            )
-            sys.exit(-1)
-
-        lon_start = dst_gt[0] + (dst_gt[1] / 2)
-        lat_start = dst_gt[3] + (dst_gt[5] / 2)
-        lon_end = dst_gt[0] + (dst_gt[1] * xcount)
-        lat_end = dst_gt[3] + (dst_gt[5] * ycount)
-        lon_inc = dst_gt[1]
-        lat_inc = dst_gt[5]
-        stack_ds = h5.File(out_file, 'w', rdcc_nbytes=(1024**2)*12000)
-        #, rdcc_nslots=1e7)
-
-        #######################################################################
-        ## Grid Mapping 
-        #######################################################################
-        crs_dset = stack_ds.create_dataset('crs', dtype=h5.string_dtype())
-        crs_dset.attrs['GeoTransform'] = ' '.join([str(x) for x in dst_gt])
-        if self.dst_srs is not None:
-            crs_dset.attrs['crs_wkt'] = srsfun.osr_wkt(self.dst_srs)
-
-        #######################################################################
-        ## LATITUDE
-        #######################################################################
-        lat_array = np.arange(lat_start, lat_end, lat_inc)
-        lat_dset = stack_ds.create_dataset ('lat', data=lat_array)
-        lat_dset.make_scale('latitude')
-        lat_dset.attrs["long_name"] = "latitude"
-        lat_dset.attrs["units"] = "degrees_north"
-        lat_dset.attrs["standard_name"] = "latitude"
-        lat_dset.attrs["actual_range"] = [lat_end, lat_start]
-        #lat_dset.attrs[''] = ''
-
-        #######################################################################
-        ## LONGITUDE
-        #######################################################################
-        lon_array = np.arange(lon_start, lon_end, lon_inc)
-        lon_dset = stack_ds.create_dataset ('lon', data=lon_array)
-        lon_dset.make_scale('longitude')
-        lon_dset.attrs["long_name"] = "longitude"
-        lon_dset.attrs["units"] = "degrees_east" 
-        lon_dset.attrs["standard_name"]= "longitude"
-        lon_dset.attrs["actual_range"] = [lon_start, lon_end]
-
-        #######################################################################
-        ## STACK
-        #######################################################################
-        stack_grp = stack_ds.create_group('stack')
-        stacked_data = {
-            'z': None,
-            'count': None,
-            'weights': None,
-            'uncertainty': None,
-            'src_uncertainty': None,
-            'x': None,
-            'y': None
-        }
-
-        for key in stacked_data.keys():
-            stack_dset = stack_grp.create_dataset(
-                key, data=np.full((ycount, xcount), np.nan),
-                compression='lzf', maxshape=(ycount, xcount),
-                chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
-                dtype=np.float32
-            )
-            stack_dset.dims[0].attach_scale(lat_dset)
-            stack_dset.dims[1].attach_scale(lon_dset)
-            stack_dset.attrs['grid_mapping'] = "crs"
-
-        #######################################################################
-        ## SUMS
-        #######################################################################
-        sums_grp = stack_ds.create_group('sums')
-        sums_data = {
-            'z': None,
-            'count': None,
-            'weights': None,
-            'uncertainty': None,
-            'src_uncertainty': None,
-            'x': None,
-            'y': None
-        }
-
-        for key in sums_data.keys():
-            sums_dset = sums_grp.create_dataset(
-                key, data=np.full((ycount, xcount), np.nan),
-                compression='lzf', maxshape=(ycount, xcount),
-                chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
-                dtype=np.float32
-            )
-            sums_dset.dims[0].attach_scale(lat_dset)
-            sums_dset.dims[1].attach_scale(lon_dset)
-            sums_dset.attrs['grid_mapping'] = "crs"            
-
-        #######################################################################
-        ## MASK
-        #######################################################################
-        mask_grp = stack_ds.create_group('mask')
-
-        ## mask the coastline 1 = water; 0 = land
-        mask_coast_dset = mask_grp.create_dataset(
-            'coast_mask', data=np.zeros((ycount,xcount)),
-            compression='lzf', maxshape=(ycount, xcount),
-            chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*(min(100, ycount)),
-            dtype=np.uint8
-        )
-        mask_coast_dset.dims[0].attach_scale(lat_dset)
-        mask_coast_dset.dims[1].attach_scale(lon_dset)
-        mask_coast_dset.attrs['grid_mapping'] = "crs"
+        out_file = '{}.h5'.format(out_name)
         
-        ## set first dataset to hold the data mask for all the data
-        mask_all_dset = mask_grp.create_dataset(
-            'full_dataset_mask', data=np.zeros((ycount,xcount)),
-            compression='lzf', maxshape=(ycount, xcount),
-            chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*(min(100, ycount)),
-            dtype=np.uint8
-        )
-        mask_all_dset.dims[0].attach_scale(lat_dset)
-        mask_all_dset.dims[1].attach_scale(lon_dset)
-        mask_all_dset.attrs['grid_mapping'] = "crs"
+        if os.path.exists(out_file):
+            stack_ds = load_globato(out_file)
+            if stack_ds is None:
+                utils.remove_glob('{}.*'.format(out_file))
+                stack_ds = create_globato(out_file)
+        else:
+            stack_ds = create_globato(out_file)        
 
-        #######################################################################
-        ## datasets
-        #######################################################################
-        datasets_grp = stack_ds.create_group('datasets')
+        crs_dset = stack_ds['crs']
+        dst_gt = crs_dset.attrs['GeoTransform']
+        lat_dset = stack_ds['lat']
+        lon_dset = stack_ds['lon']
+                
+        stack_grp = stack_ds['stack']
+        sums_grp = stack_ds['sums']
+        mask_grp = stack_ds['mask']
+        datasets_grp = stack_ds['datasets']
+
+        utils.echo_msg(mask_grp.keys())
+        utils.echo_msg(datasets_grp.keys())
+        mask_all_dset = mask_grp['full_dataset_mask']
+        
+        stacked_data = {}
+        for key in stack_grp.keys():
+            stacked_data[key] = stack_grp[key][...,]
+
+        sums_data = {}
+        for key in sums_grp.keys():
+            sums_data[key] = sums_grp[key][...,]
+
         datasets_data = {
             'z': None,
             'count': None,
@@ -3768,7 +3111,12 @@ class ElevationDataset:
             'x': None,
             'y': None
         }
-        
+        # datasets_data = {}
+        # for key in datasets_grp.keys():
+        #     datasets_data[key] = datasets_grp[key][...,]
+
+        ycount, xcount = stack_grp['z'].shape
+            
         #######################################################################
         ## parse each entry and process it
         #######################################################################
@@ -3787,6 +3135,7 @@ class ElevationDataset:
                 entry_name = '/'.join(entry_name.split('/')[:-mask_level])
 
             if not entry_name in mask_grp.keys():
+                #utils.echo_msg_bold('ook')
                 mask_dset = mask_grp.create_dataset(
                     entry_name, data=np.zeros((ycount,xcount)),
                     compression='lzf', maxshape=(ycount, xcount),
@@ -3798,6 +3147,8 @@ class ElevationDataset:
                 mask_dset.dims[1].attach_scale(lon_dset)
                 mask_dset.attrs['grid_mapping'] = "crs"
             else:
+                #utils.echo_msg(entry_name)
+                #utils.echo_msg(mask_grp.keys())
                 mask_dset = mask_grp[entry_name]
 
             for k in this_entry.metadata.keys():
@@ -3843,7 +3194,8 @@ class ElevationDataset:
                     ds_dset.attrs['grid_mapping'] = "crs"            
 
             else:
-                datasets_dset_grp = datasets_grp[entry_name]
+                #datasets_dset_grp = datasets_grp[entry_name]
+                continue
                 
             ###################################################################
             ## yield entry arrays for stacks
@@ -3861,10 +3213,10 @@ class ElevationDataset:
                               srcwin[0]:srcwin[0]+srcwin[2]][arrs['count'] != 0] = 1
 
                 ## update the dataset
-                if ds_dset is not None:
-                    for key in datasets_data.keys():                        
-                        datasets_dset_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
-                                               srcwin[0]:srcwin[0]+srcwin[2]] = arrs[key]
+                #if ds_dset is not None:
+                # for key in datasets_data.keys():                        
+                #     datasets_dset_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                #                            srcwin[0]:srcwin[0]+srcwin[2]] = arrs[key]
                                         
                 ## Read the saved accumulated rasters at the incoming srcwin
                 ## and set ndv to zero
@@ -3891,20 +3243,22 @@ class ElevationDataset:
                             arrs[arr_key][np.isnan(arrs[arr_key])] = 0
 
                 ## add the count to the accumulated rasters
-                sums_data['count'] += arrs['count']
+                if mode != 'mixed' and mode != 'supercede':
+                    sums_data['count'] += arrs['count']
+                    
                 tmp_arrs_weight = arrs['weight'] / arrs['count']
                 tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
                 
                 ## supercede based on weights, else do weighted mean
                 ## todo: do (weighted) mean on cells with same weight
                 if mode == 'supercede':
-                    tmp_stacked_weight = sums_data['weight']
+                    tmp_stacked_weight = sums_data['weights'] / sums_data['count']
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
 
                     sums_data['count'][(sup_mask)] = arrs['count'][(sup_mask)]
                     sums_data['z'][(sup_mask)] = arrs['z'][(sup_mask)]
-                    sums_data['weight'][(sup_mask)] = arrs['weight'][(sup_mask)]
+                    sums_data['weights'][(sup_mask)] = arrs['weight'][(sup_mask)]
                     sums_data['x'][(sup_mask)] = arrs['x'][(sup_mask)]
                     sums_data['y'][(sup_mask)] = arrs['y'][(sup_mask)]
                     sums_data['src_uncertainty'][(sup_mask)] = arrs['uncertainty'][(sup_mask)]
@@ -3941,8 +3295,8 @@ class ElevationDataset:
 
                         key_dset_arr = mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
                                                      srcwin[0]:srcwin[0]+srcwin[2]]
-                        if weight_above_sup is None:
-                            weight_above_sup = ~np.isnan(key_dset_arr)
+                        #if weight_above_sup is None:
+                        weight_above_sup = ~np.isnan(key_dset_arr)
 
                         key_dset_mask = key_dset_arr[weight_above_sup] == 1
                         if np.any(key_dset_mask):
@@ -3988,9 +3342,9 @@ class ElevationDataset:
                     
                 elif mode == 'mean':
                     ## accumulate incoming z*weight and uu*weight
-                    sums_data['z'] += (arrs['z'] * arrs['weight'])
-                    sums_data['x'] += (arrs['x'] * arrs['weight'])
-                    sums_data['y'] += (arrs['y'] * arrs['weight'])
+                    sums_data['z'] += arrs['z']# * arrs['weight'])
+                    sums_data['x'] += arrs['x']# * arrs['weight'])
+                    sums_data['y'] += arrs['y']# * arrs['weight'])
                     sums_data['src_uncertainty'] = np.sqrt(
                         np.power(sums_data['src_uncertainty'],
                                  2) + np.power(arrs['uncertainty'], 2))
@@ -4008,21 +3362,38 @@ class ElevationDataset:
                                    2)
 
                 elif mode == 'mixed':
+                    ###############################################################
+                    ## mixed mode will mean data above and below the
+                    ## weight_threshold and then the higher weighted meaned data
+                    ## will supercede the lower weighted meaned data
+                    ##
                     ## weights above threshold supercede weights below threshold,
                     ## otherwise meaned...
+                    ###############################################################
                     wt = 1
                     if 'weight_threshold' in self.stack_mode_args.keys():
-                        wt = utils.float_or(self.stack_mode_args['weight_threshold'], 1)
-
-                    # above
+                        #wt = utils.float_or(self.stack_mode_args['weight_threshold'], 1)
+                        wts = [utils.float_or(x) \
+                               for x in self.stack_mode_args['weight_threshold'].split('/')]
+                    else:
+                        wts = [wt]
+                    
+                    wts.sort()
+                    wt_pairs = utils.range_pairs(wts)
+                    wt_pairs.reverse()
+                    
                     tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                                   
+                    
+                    #utils.echo_msg_bold(tmp_stacked_weight)
+                    ## ABOVE
+                    ## all weights above max(wts) will supercede all weights below
+                    ## data in each weight range will be averaged
+                    ## mask is above max(wts)
+                    
                     # supercede existing data below weight_threshold
-                    weight_above_sup = (arrs['weight'] >= wt) & (tmp_stacked_weight < wt)
-                    #if np.any(weight_above_sup):
-                    #if self.want_mask:
-                    ## remove the mask from superceded bands
+                    weight_above_sup = (tmp_arrs_weight >= max(wts)) & \
+                        (tmp_stacked_weight < max(wts))
                     k = []
                     mask_grp.visit(
                         lambda x: k.append(x) if not isinstance(
@@ -4030,6 +3401,7 @@ class ElevationDataset:
                         ) else None
                     )
 
+                    ## adjust mask
                     for key in k:
                         if entry_name in key:
                             continue
@@ -4044,80 +3416,195 @@ class ElevationDataset:
                             key_dset_arr[key_dset_mask] = 0
                             mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
                                           srcwin[0]:srcwin[0]+srcwin[2]] = key_dset_arr
-                        
-                    sums_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
-                    sums_data['z'][weight_above_sup] = (arrs['z'][weight_above_sup] \
-                                                           * arrs['weight'][weight_above_sup])
-                    sums_data['x'][weight_above_sup] = (arrs['x'][weight_above_sup] \
-                                                           * arrs['weight'][weight_above_sup])
-                    sums_data['y'][weight_above_sup] = (arrs['y'][weight_above_sup] \
-                                                           * arrs['weight'][weight_above_sup])
-                    sums_data['src_uncertainty'][weight_above_sup] \
-                        = arrs['uncertainty'][weight_above_sup]
-                    sums_data['weights'][weight_above_sup] = arrs['weight'][weight_above_sup]
-                    sums_data['uncertainty'][weight_above_sup] \
-                        = np.array(sums_data['src_uncertainty'][weight_above_sup])
-                    
+
+                    sums_data = supercede(weight_above_sup, sums_data, arrs)
+
+                    # reset tmp_stacked_weight
                     tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                        
-                    # average of incoming data with existing data above weight_threshold
-                    weight_above = (arrs['weight'] >= wt) \
-                        & (arrs['weight'] >= tmp_stacked_weight) \
+                    
+                    weight_above = (tmp_arrs_weight >= max(wts)) \
+                        & (tmp_arrs_weight >= tmp_stacked_weight) \
                         & (~weight_above_sup)
-                    # if self.want_mask:                        
-                    #     m_array[(weight_above) & (arrs['count'] != 0)] = 1
-                    #     m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
-                        
-                    sums_data['count'][weight_above] += arrs['count'][weight_above]
-                    sums_data['z'][weight_above] \
-                        += (arrs['z'][weight_above] * arrs['weight'][weight_above])
-                    sums_data['x'][weight_above] \
-                        += (arrs['x'][weight_above] * arrs['weight'][weight_above])
-                    sums_data['y'][weight_above] \
-                        += (arrs['y'][weight_above] * arrs['weight'][weight_above])
-                    sums_data['src_uncertainty'][weight_above] \
-                        = np.sqrt(np.power(sums_data['src_uncertainty'][weight_above], 2) \
-                                  + np.power(arrs['uncertainty'][weight_above], 2))
-                    sums_data['weights'][weight_above] += arrs['weight'][weight_above]
-                    ## accumulate variance * weight
-                    sums_data['uncertainty'][weight_above] \
-                        += arrs['weight'][weight_above] \
-                        * np.power(
-                            (arrs['z'][weight_above] \
-                             - (sums_data['z'][weight_above] \
-                                / sums_data['weights'][weight_above])),
-                            2
-                        )
+
+                    ## adjust mask
+                    for key in k:
+                        if entry_name in key:
+                            continue
+
+                        key_dset_arr = mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                                                     srcwin[0]:srcwin[0]+srcwin[2]]
+                        if weight_above is None:
+                            weight_above = ~np.isnan(key_dset_arr)
+
+                        key_dset_mask = key_dset_arr[weight_above] == 1
+                        if np.any(key_dset_mask):
+                            key_dset_arr[key_dset_mask] = 0
+                            mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                                          srcwin[0]:srcwin[0]+srcwin[2]] = key_dset_arr
                     
-                    # below
+                    ## average
+                    sums_data = average(weight_above, sums_data, arrs)
+
+                    ## mask is between wt_pair
+                    for wt_pair in wt_pairs:
+                        ## reset tmp_stacked_weight
+                        tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        arrs_mask_sup = (tmp_arrs_weight >= min(wt_pair)) & \
+                            (tmp_arrs_weight < max(wt_pair))
+                        #tsw_mask_sup = (tmp_stacked_weight < max(wt_pair)) & \
+                        #    (tmp_stacked_weight > min(wt_pair))
+                        tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
+                        weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
+
+                        ## adjust mask
+                        for key in k:
+                            if entry_name in key:
+                                continue
+
+                            key_dset_arr = mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                                                         srcwin[0]:srcwin[0]+srcwin[2]]
+                            if weight_between_sup is None:
+                                weight_between_sup = ~np.isnan(key_dset_arr)
+
+                            key_dset_mask = key_dset_arr[weight_between_sup] == 1
+                            if np.any(key_dset_mask):
+                                key_dset_arr[key_dset_mask] = 0
+                                mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                                              srcwin[0]:srcwin[0]+srcwin[2]] = key_dset_arr
+                        
+                        sums_data = supercede(weight_between_sup, sums_data, arrs)
+
+                        ## reset tmp_stacked_weight
+                        tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        arrs_weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
+                            (tmp_arrs_weight < max(wt_pair)) & \
+                            (tmp_arrs_weight >= tmp_stacked_weight)
+                        
+                        weight_between = (arrs_weight_between) & (~weight_between_sup)
+
+                        ## adjust mask
+                        for key in k:
+                            if entry_name in key:
+                                continue
+
+                            key_dset_arr = mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                                                         srcwin[0]:srcwin[0]+srcwin[2]]
+                            if weight_between is None:
+                                weight_between = ~np.isnan(key_dset_arr)
+
+                            key_dset_mask = key_dset_arr[weight_between] == 1
+                            if np.any(key_dset_mask):
+                                key_dset_arr[key_dset_mask] = 0
+                                mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                                              srcwin[0]:srcwin[0]+srcwin[2]] = key_dset_arr
+                        
+                        ## average
+                        sums_data = average(weight_between, sums_data, arrs)
+
+                    ## reset tmp_stacked_weight
                     tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    weight_below = (arrs['weight'] < wt) & (tmp_stacked_weight < wt)
-                    #& (arrs['weight'] >= tmp_stacked_weight)
-                    # if self.want_mask:
-                    #     m_array[(weight_below) & (arrs['count'] != 0)] = 1
-                    #     m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
+
+                    ## BELOW
+                    # mask is below max(wts)
+                    weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
+
+                    ## adjust mask
+                    for key in k:
+                        if entry_name in key:
+                            continue
+
+                        key_dset_arr = mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                                                     srcwin[0]:srcwin[0]+srcwin[2]]
+                        if weight_below is None:
+                            weight_below = ~np.isnan(key_dset_arr)
+
+                        key_dset_mask = key_dset_arr[weight_below] == 1
+                        if np.any(key_dset_mask):
+                            key_dset_arr[key_dset_mask] = 0
+                            mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3],
+                                          srcwin[0]:srcwin[0]+srcwin[2]] = key_dset_arr
+
+                    sums_data = average(weight_below, sums_data, arrs)
+                    
+                    # sums_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
+                    # sums_data['z'][weight_above_sup] = (arrs['z'][weight_above_sup] \
+                    #                                        * arrs['weight'][weight_above_sup])
+                    # sums_data['x'][weight_above_sup] = (arrs['x'][weight_above_sup] \
+                    #                                        * arrs['weight'][weight_above_sup])
+                    # sums_data['y'][weight_above_sup] = (arrs['y'][weight_above_sup] \
+                    #                                        * arrs['weight'][weight_above_sup])
+                    # sums_data['src_uncertainty'][weight_above_sup] \
+                    #     = arrs['uncertainty'][weight_above_sup]
+                    # sums_data['weights'][weight_above_sup] = arrs['weight'][weight_above_sup]
+                    # sums_data['uncertainty'][weight_above_sup] \
+                    #     = np.array(sums_data['src_uncertainty'][weight_above_sup])
+                    
+                    # tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                    # tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                         
-                    sums_data['count'][weight_below] += arrs['count'][weight_below]
-                    sums_data['z'][weight_below] \
-                        += (arrs['z'][weight_below] * arrs['weight'][weight_below])
-                    sums_data['x'][weight_below] \
-                        += (arrs['x'][weight_below] * arrs['weight'][weight_below])
-                    sums_data['y'][weight_below] \
-                        += (arrs['y'][weight_below] * arrs['weight'][weight_below])
-                    sums_data['src_uncertainty'][weight_below] \
-                        = np.sqrt(np.power(sums_data['src_uncertainty'][weight_below], 2) \
-                                  + np.power(arrs['uncertainty'][weight_below], 2))
-                    sums_data['weights'][weight_below] += arrs['weight'][weight_below]
-                    ## accumulate variance * weight
-                    sums_data['uncertainty'][weight_below] += arrs['weight'][weight_below] \
-                        * np.power(
-                            (arrs['z'][weight_below] \
-                             - (sums_data['z'][weight_below] \
-                                / sums_data['weights'][weight_below])),
-                            2
-                        )               
+                    # # average of incoming data with existing data above weight_threshold
+                    # weight_above = (arrs['weight'] >= wt) \
+                    #     & (arrs['weight'] >= tmp_stacked_weight) \
+                    #     & (~weight_above_sup)
+                    # # if self.want_mask:                        
+                    # #     m_array[(weight_above) & (arrs['count'] != 0)] = 1
+                    # #     m_all_array[(weight_above) & (arrs['count'] != 0)] = 1
+                        
+                    # sums_data['count'][weight_above] += arrs['count'][weight_above]
+                    # sums_data['z'][weight_above] \
+                    #     += (arrs['z'][weight_above] * arrs['weight'][weight_above])
+                    # sums_data['x'][weight_above] \
+                    #     += (arrs['x'][weight_above] * arrs['weight'][weight_above])
+                    # sums_data['y'][weight_above] \
+                    #     += (arrs['y'][weight_above] * arrs['weight'][weight_above])
+                    # sums_data['src_uncertainty'][weight_above] \
+                    #     = np.sqrt(np.power(sums_data['src_uncertainty'][weight_above], 2) \
+                    #               + np.power(arrs['uncertainty'][weight_above], 2))
+                    # sums_data['weights'][weight_above] += arrs['weight'][weight_above]
+                    # ## accumulate variance * weight
+                    # sums_data['uncertainty'][weight_above] \
+                    #     += arrs['weight'][weight_above] \
+                    #     * np.power(
+                    #         (arrs['z'][weight_above] \
+                    #          - (sums_data['z'][weight_above] \
+                    #             / sums_data['weights'][weight_above])),
+                    #         2
+                    #     )
+                    
+                    # # below
+                    # tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                    # tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    # weight_below = (arrs['weight'] < wt) & (tmp_stacked_weight < wt)
+                    # #& (arrs['weight'] >= tmp_stacked_weight)
+                    # # if self.want_mask:
+                    # #     m_array[(weight_below) & (arrs['count'] != 0)] = 1
+                    # #     m_all_array[(weight_below) & (arrs['count'] != 0)] = 1
+                        
+                    # sums_data['count'][weight_below] += arrs['count'][weight_below]
+                    # sums_data['z'][weight_below] \
+                    #     += (arrs['z'][weight_below] * arrs['weight'][weight_below])
+                    # sums_data['x'][weight_below] \
+                    #     += (arrs['x'][weight_below] * arrs['weight'][weight_below])
+                    # sums_data['y'][weight_below] \
+                    #     += (arrs['y'][weight_below] * arrs['weight'][weight_below])
+                    # sums_data['src_uncertainty'][weight_below] \
+                    #     = np.sqrt(np.power(sums_data['src_uncertainty'][weight_below], 2) \
+                    #               + np.power(arrs['uncertainty'][weight_below], 2))
+                    # sums_data['weights'][weight_below] += arrs['weight'][weight_below]
+                    # ## accumulate variance * weight
+                    # sums_data['uncertainty'][weight_below] += arrs['weight'][weight_below] \
+                    #     * np.power(
+                    #         (arrs['z'][weight_below] \
+                    #          - (sums_data['z'][weight_below] \
+                    #             / sums_data['weights'][weight_below])),
+                    #         2
+                    #     )               
                     
                 ## write out results to accumulated rasters
                 sums_data['count'][sums_data['count'] == 0] = np.nan
@@ -4142,43 +3629,58 @@ class ElevationDataset:
 
         for key in sums_grp.keys():
             sums_data[key] = sums_grp[key][...]
-            sums_data[key][sums_data[key] == ndv] = np.nan
+            #sums_data[key][sums_data[key] == ndv] = np.nan
                 
         for key in stack_grp.keys():
             stacked_data[key] = stack_grp[key][...]
-            stacked_data[key][stacked_data[key] == ndv] = np.nan
+            #stacked_data[key][stacked_data[key] == ndv] = np.nan
 
         #utils.echo_msg(sums_data['count'])
         #if mode == 'mean' or mode == 'min' or mode == 'max' or mode == 'mixed':
-        if mode != 'supercede':
-            stacked_data['weights'] = sums_data['weights'] \
-                / sums_data['count']
-            if mode == 'mean' or mode == 'mixed':
-                ## average the accumulated arrays for finalization
-                ## x, y, z and u are weighted sums, so divide by weights
-                stacked_data['x'] = (sums_data['x'] / sums_data['weights']) \
-                    / sums_data['count']
-                stacked_data['y'] = (sums_data['y'] / sums_data['weights']) \
-                    / sums_data['count']
-                stacked_data['z'] = (sums_data['z'] / sums_data['weights']) \
-                    / sums_data['count']
+        #if mode != 'supercede':
+        stacked_data['count'] = sums_data['count'].copy()
+        stacked_data['weights'] = sums_data['weights'] \
+            / sums_data['count']
+        #if mode == 'mean' or mode == 'mixed':
+        ## average the accumulated arrays for finalization
+        ## x, y, z and u are weighted sums, so divide by weights
+        stacked_data['x'] = (sums_data['x'] / stacked_data['weights']) \
+            / sums_data['count']
+        stacked_data['y'] = (sums_data['y'] / stacked_data['weights']) \
+            / sums_data['count']
+        stacked_data['z'] = (sums_data['z'] / stacked_data['weights']) \
+            / sums_data['count']
 
-            ## apply the source uncertainty with the sub-cell variance uncertainty
-            ## caclulate the standard error (sqrt( uncertainty / count))
-            stacked_data['uncertainty'] \
-                = np.sqrt((sums_data['uncertainty'] / sums_data['weights']) \
-                          / sums_data['count'])
-            stacked_data['uncertainty'] \
-                = np.sqrt(np.power(sums_data['src_uncertainty'], 2) \
-                          + np.power(sums_data['uncertainty'], 2))
+        ## apply the source uncertainty with the sub-cell variance uncertainty
+        ## caclulate the standard error (sqrt( uncertainty / count))
+        stacked_data['uncertainty'] \
+            = np.sqrt((sums_data['uncertainty'] / sums_data['weights']) \
+                      / sums_data['count'])
+        stacked_data['uncertainty'] \
+            = np.sqrt(np.power(sums_data['src_uncertainty'], 2) \
+                      + np.power(sums_data['uncertainty'], 2))
+        # else:
+        #     ## supercede
+        #     stacked_data['x'] = (sums_data['x'] / sums_data['count'])
+        #     stacked_data['y'] = (sums_data['y'] / sums_data['count'])
+        #     stacked_data['z'] = (sums_data['z'] / sums_data['count'])
 
+        #     ## apply the source uncertainty with the sub-cell variance uncertainty
+        #     ## caclulate the standard error (sqrt( uncertainty / count))
+        #     stacked_data['uncertainty'] \
+        #         = np.sqrt(sums_data['uncertainty'] / sums_data['count'])
+        #     stacked_data['uncertainty'] \
+        #         = np.sqrt(np.power(sums_data['src_uncertainty'], 2) \
+        #                   + np.power(sums_data['uncertainty'], 2))
+            
+            
         ## write out final rasters
         for key in stack_grp.keys():
-            stacked_data[key][np.isnan(stacked_data[key])] = np.nan
+            #stacked_data[key][np.isnan(stacked_data[key])] = np.nan
             stack_grp[key][:] = stacked_data[key]
 
         for key in sums_grp.keys():
-            sums_data[key][np.isnan(sums_data[key])] = np.nan
+            #sums_data[key][np.isnan(sums_data[key])] = np.nan
             sums_grp[key][:] = sums_data[key]
 
         stack_ds.close()                        
@@ -4311,7 +3813,7 @@ class ElevationDataset:
                     if isinstance(self.pnt_fltrs, list):
                         if self.pnt_fltrs is not None:
                             for f in self.pnt_fltrs:
-                                point_filter = PointFilterFactory(
+                                point_filter = pointz.PointFilterFactory(
                                     mod=f, points=points, region=self.region,
                                     xyinc=[self.x_inc, self.y_inc],
                                     cache_dir=self.cache_dir
@@ -4463,7 +3965,8 @@ class ElevationDataset:
                         z_masked = True
                         if data_mask['min_z'] is not None or data_mask['max_z'] is not None:
                             if data_mask['min_z'] is not None and data_mask['max_z'] is not None:
-                                z_masked = (this_xyz.z > data_mask['min_z'] & this_xyz.z < data_mask['mask_z'])
+                                z_masked = (this_xyz.z > data_mask['min_z'] \
+                                            & this_xyz.z < data_mask['mask_z'])
                             elif data_mask['min_z'] is not None:
                                 z_masked = this_xyz.z > data_mask['min_z']
                             else:
@@ -4562,16 +4065,16 @@ class ElevationDataset:
             try:
                 points_w = points['w']
             except:
-                points_w = np.ones(points['z'].shape)
+                points_w = np.ones(points['z'].shape).astype(float)
 
-            points_w *= self.weight if self.weight is not None else 1
+            points_w *= self.weight if self.weight is not None else 1.
             points_w[np.isnan(points_w)] = 1
                 
             try:
                 points_u = points['u']
             except:
                 points_u = np.zeros(points['z'].shape)
-
+                
             points_u = np.sqrt(
                 points_u**2 \
                 + (self.uncertainty if self.uncertainty is not None else 0)**2
@@ -4590,11 +4093,11 @@ class ElevationDataset:
 
         if self.verbose:
             utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn} @ {self.weight}'
+                f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
             )
 
         
-    def yield_array(self):
+    def yield_array(self, want_sums=True):
         """Yield the data as an array which coincides with the desired 
         region, x_inc and y_inc
 
@@ -4608,168 +4111,218 @@ class ElevationDataset:
         the default value from `self.uncertainty`, otherwise the incoming 
         uncertainty values will be caluculated by 
         `np.sqrt(u**2 + self.uncertainty**2)`
+
+        output arrays are weighted sums; get the actual values with:
+        weight = weight / count
+        z = (z / weight) / count
+        x = (z / weight) / count
+        y = (z / weight) / count
+
         """
-        
-        out_arrays = {
-            'z':None,
-            'count':None,
-            'weight':None,
-            'uncertainty': None,
-            'mask':None,
-            'x': None,
-            'y': None
-        }
+
         count = 0
         for points in self.transform_and_yield_points():
+            count += points.size
             xcount, ycount, dst_gt = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
-            ## convert the points to pixels based on the geotransform
-            ## and calculate the local srcwin of the points
-            pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
-            pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
-            # points_x = dst_gt[0] + (pixel_x+0.5) * dst_gt[1] + (pixel_y+0.5) * dst_gt[2]
-            # points_y = dst_gt[3] + (pixel_x+0.5) * dst_gt[4] + (pixel_y+0.5) * dst_gt[5]
-            points_x = np.array(points['x'])
-            points_y = np.array(points['y'])
-            
-            pixel_z = np.array(points['z'])
-            try:
-                pixel_w = np.array(points['w'])
-            except:
-                pixel_w = np.ones(pixel_z.shape)
-
-            try:
-                pixel_u = np.array(points['u'])
-            except:
-                pixel_u = np.zeros(pixel_z.shape)
-                
-            ## remove pixels that will break the srcwin
-            out_idx = np.nonzero(
-                (pixel_x >= xcount) \
-                | (pixel_x < 0) \
-                | (pixel_y >= ycount) \
-                | (pixel_y < 0)
+            point_array = pointz.PointPixels(
+                src_region=self.region, x_size=xcount, y_size=ycount, verbose=self.verbose
             )
-            pixel_x = np.delete(pixel_x, out_idx)
-            pixel_y = np.delete(pixel_y, out_idx)
-            pixel_z = np.delete(pixel_z, out_idx)
-            pixel_w = np.delete(pixel_w, out_idx)
-            pixel_u = np.delete(pixel_u, out_idx)
-            points_x = np.delete(points_x, out_idx)
-            points_y = np.delete(points_y, out_idx)
-            if len(pixel_x) == 0 or len(pixel_y) == 0:
-                continue
-            
-            points = None
-            pixel_w[np.isnan(pixel_w)] = 1
-            pixel_u[np.isnan(pixel_u)] = 0
-            
-            ## set the srcwin of the incoming points
-            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
-                           int(max(pixel_x) - min(pixel_x))+1,
-                           int(max(pixel_y) - min(pixel_y))+1)
-            count += len(pixel_x)
-
-            ## adjust the pixels to the srcwin and stack together
-            pixel_x = pixel_x - this_srcwin[0]
-            pixel_y = pixel_y - this_srcwin[1]
-            pixel_xy = np.vstack((pixel_y, pixel_x)).T
-            
-            ## find the non-unique x/y points and mean/min/max their z values together
-            ## while calculating the std for uncertainty
-            unq, unq_idx, unq_inv, unq_cnt = np.unique(
-                pixel_xy, axis=0, return_inverse=True,
-                return_index=True, return_counts=True
+            yield(
+                point_array(
+                    points, weight=self.weight, uncertainty=self.uncertainty, mode='sums')
             )
-            cnt_msk = unq_cnt > 1
-            cnt_idx, = np.nonzero(cnt_msk)
-            idx_msk = np.in1d(unq_inv, cnt_idx)
-            idx_idx, = np.nonzero(idx_msk)
-            srt_idx = np.argsort(unq_inv[idx_msk])
-            dup_idx = np.split(
-                idx_idx[srt_idx], np.cumsum(unq_cnt[cnt_msk])[:-1]
-            )
-            zz = pixel_z[unq_idx]
-            ww = pixel_w[unq_idx]
-            uu = pixel_u[unq_idx]
-            xx = points_x[unq_idx]
-            yy = points_y[unq_idx]
-            #u = np.zeros(zz.shape)
-            if np.any([len(dup) for dup in dup_idx]):
-                if self.stack_mode == 'min':
-                    dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
-                    dup_stds = np.zeros(dup_stack.shape)
-                elif self.stack_mode == 'max':
-                    dup_stack = [np.max(pixel_z[dup]) for dup in dup_idx]
-                    dup_stds = np.zeros(dup_stack.shape)
-                else:
-                    dup_stack = [np.mean(pixel_z[dup]) for dup in dup_idx]
-                    dup_stack_x = [np.mean(points_x[dup]) for dup in dup_idx]
-                    dup_stack_y = [np.mean(points_y[dup]) for dup in dup_idx]
-                    dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
-                    dup_w = [np.sum(pixel_w[dup]) for dup in dup_idx]
-
-                ww[cnt_msk] = dup_w
-                zz[cnt_msk] = dup_stack
-                #uu[cnt_msk] = np.sqrt(dup_stds)
-                uu[cnt_msk] = np.sqrt(
-                    np.power(uu[cnt_msk],2) + np.power(dup_stds,2)
-                )
-                
-            ## make the output arrays to yield
-            out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
-            out_x[unq[:,0], unq[:,1]] = xx
-            out_x[out_x == 0] = np.nan
-            out_arrays['x'] = out_x
-
-            out_y = np.zeros((this_srcwin[3], this_srcwin[2]))
-            out_y[unq[:,0], unq[:,1]] = yy
-            out_y[out_y == 0] = np.nan
-            out_arrays['y'] = out_y
-            
-            out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
-            out_z[unq[:,0], unq[:,1]] = zz
-            out_z[out_z == 0] = np.nan
-            out_arrays['z'] = out_z
-            
-            out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-            out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
-            
-            out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
-            out_arrays['weight'][:] = self.weight if self.weight is not None else 1
-            #out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
-            out_arrays['weight'][unq[:,0], unq[:,1]] *= ww
-            #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
-            
-            out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-            #out_arrays['uncertainty'][:] = self.uncertainty if
-            #self.uncertainty is not None else 0
-            out_arrays['uncertainty'][unq[:,0], unq[:,1]] \
-                = np.sqrt(
-                    uu**2 \
-                    + (self.uncertainty if self.uncertainty is not None else 0)**2
-                )
-
-            ## by scan-line for h5
-            # for y in range(0, this_srcwin[3], 1):
-            #     scanline_arrays = {}
-            #     scanline_srcwin = (this_srcwin[0], this_srcwin[1]+y, this_srcwin[2], 1)
-            #     for key in out_arrays.keys():
-            #         if out_arrays[key] is not None:                        
-            #             scanline_arrays[key] = out_arrays[key][y:y+1, 0:this_srcwin[2]]
-            #         else:
-            #             scanline_arrays[key] = out_arrays[key]
-
-            #     yield(scanline_arrays, scanline_srcwin, dst_gt)
-                        
-            ## for gdal
-            yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
             utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn} @ {self.weight}'
+                f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
             )    
+
+            
+        # out_arrays = {
+        #     'z':None,
+        #     'count':None,
+        #     'weight':None,
+        #     'uncertainty': None,
+        #     'mask':None,
+        #     'x': None,
+        #     'y': None
+        # }
+        # count = 0
+        # this_weight = self.weight if self.weight is not None else 1
+        # for points in self.transform_and_yield_points():
+        #     xcount, ycount, dst_gt = self.region.geo_transform(
+        #         x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        #     )
+        #     ###################################################################
+        #     ## convert the points to pixels based on the geotransform
+        #     ## and calculate the local srcwin of the points
+        #     ## pixel_x and pixel_y are the location of the points_* of the srcwin
+        #     ###################################################################
+        #     points_x = np.array(points['x'])
+        #     points_y = np.array(points['y'])
+            
+        #     pixel_x = np.floor((points_x - dst_gt[0]) / dst_gt[1]).astype(int)
+        #     pixel_y = np.floor((points_y - dst_gt[3]) / dst_gt[5]).astype(int)
+        #     pixel_z = np.array(points['z'])
+        #     try:
+        #         pixel_w = np.array(points['w'])
+        #     except:
+        #         pixel_w = np.ones(pixel_z.shape)
+
+        #     try:
+        #         pixel_u = np.array(points['u'])
+        #     except:
+        #         pixel_u = np.zeros(pixel_z.shape)
+
+        #     ###################################################################
+        #     ## remove pixels that will break the srcwin
+        #     ###################################################################
+        #     out_idx = np.nonzero(
+        #         (pixel_x >= xcount) \
+        #         | (pixel_x < 0) \
+        #         | (pixel_y >= ycount) \
+        #         | (pixel_y < 0)
+        #     )
+        #     pixel_x = np.delete(pixel_x, out_idx)
+        #     pixel_y = np.delete(pixel_y, out_idx)
+        #     pixel_z = np.delete(pixel_z, out_idx)
+        #     pixel_w = np.delete(pixel_w, out_idx)
+        #     pixel_u = np.delete(pixel_u, out_idx)
+        #     points_x = np.delete(points_x, out_idx)
+        #     points_y = np.delete(points_y, out_idx)
+        #     if len(pixel_x) == 0 or len(pixel_y) == 0:
+        #         continue
+            
+        #     points = None
+        #     pixel_w[np.isnan(pixel_w)] = 1
+        #     pixel_u[np.isnan(pixel_u)] = 0
+            
+        #     ###################################################################
+        #     ## set the srcwin of the incoming points
+        #     ###################################################################
+        #     this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
+        #                    int(max(pixel_x) - min(pixel_x))+1,
+        #                    int(max(pixel_y) - min(pixel_y))+1)
+        #     count += len(pixel_x)
+
+        #     ###################################################################
+        #     ## adjust the pixels to the srcwin and stack together
+        #     ###################################################################
+        #     pixel_x = pixel_x - this_srcwin[0]
+        #     pixel_y = pixel_y - this_srcwin[1]
+        #     pixel_xy = np.vstack((pixel_y, pixel_x)).T
+
+        #     ###################################################################
+        #     ## find the non-unique x/y points and mean/min/max their z values
+        #     ## together while calculating the std for uncertainty
+        #     ## dup_idx are the indices of duplicate values (points in the same
+        #     ## cell). unq_idx are the indices of the unique values.
+        #     ###################################################################
+        #     unq, unq_idx, unq_inv, unq_cnt = np.unique(
+        #         pixel_xy, axis=0, return_inverse=True,
+        #         return_index=True, return_counts=True
+        #     )
+        #     cnt_msk = unq_cnt > 1
+        #     cnt_idx, = np.nonzero(cnt_msk)
+        #     idx_msk = np.in1d(unq_inv, cnt_idx)
+        #     idx_idx, = np.nonzero(idx_msk)
+        #     srt_idx = np.argsort(unq_inv[idx_msk])
+        #     dup_idx = np.split(
+        #         idx_idx[srt_idx], np.cumsum(unq_cnt[cnt_msk])[:-1]
+        #     )
+
+        #     ###################################################################
+        #     ## set the output arrays; set to the target grid
+        #     ## arrays will hold weighted-sums
+        #     ###################################################################
+        #     ww = pixel_w[unq_idx] * this_weight
+        #     zz = pixel_z[unq_idx] * ww 
+        #     uu = pixel_u[unq_idx]
+        #     xx = points_x[unq_idx] * ww
+        #     yy = points_y[unq_idx] * ww
+
+        #     ###################################################################
+        #     ## min/max/sum the duplicates (values in the same cell)
+        #     ## min and max get the count reset to 1, the count is accumulated
+        #     ## in mean, mixed
+        #     ###################################################################
+        #     if np.any([len(dup) for dup in dup_idx]):
+        #         if self.stack_mode == 'min':
+        #             dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
+        #             dup_stds = np.zeros(dup_stack.shape)
+        #             dup_stack_x = [np.min(pixel_x[dup]) for dup in dup_idx]
+        #             dup_stack_y = [np.min(pixel_y[dup]) for dup in dup_idx]
+        #             dup_counts = [1 for dup in dup_idx]
+        #         elif self.stack_mode == 'max':
+        #             dup_stack = [np.max(pixel_z[dup]) for dup in dup_idx]
+        #             dup_stds = np.zeros(dup_stack.shape)
+        #             dup_stack_x = [np.max(pixel_x[dup]) for dup in dup_idx]
+        #             dup_stack_y = [np.max(pixel_y[dup]) for dup in dup_idx]
+        #             dup_counts = [1 for dup in dup_idx]
+        #         else:
+        #             dup_stack = [np.sum((pixel_z[dup] * (pixel_w[dup] * this_weight))) \
+        #                          for dup in dup_idx]
+        #             dup_stack_x = [np.sum((points_x[dup] * (pixel_w[dup] * this_weight))) \
+        #                            for dup in dup_idx]
+        #             dup_stack_y = [np.sum((points_y[dup] * (pixel_w[dup] * this_weight))) \
+        #                            for dup in dup_idx]
+        #             dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
+        #             dup_w = [np.sum((pixel_w[dup] * this_weight)) for dup in dup_idx]
+        #             #dup_counts = [np.sum(unq_cnt[dup]) for dup in dup_idx]
+                    
+        #         ww[cnt_msk] = dup_w
+        #         zz[cnt_msk] = dup_stack
+        #         yy[cnt_msk] = dup_stack_y
+        #         xx[cnt_msk] = dup_stack_x
+        #         uu[cnt_msk] = np.sqrt(
+        #             np.power(uu[cnt_msk], 2) + np.power(dup_stds, 2)
+        #         )
+        #         #cc[cnt_msk] = dup_counts
+
+        #     ## make the output arrays to yield
+        #     out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
+        #     out_x[unq[:,0], unq[:,1]] = xx
+        #     out_x[out_x == 0] = np.nan
+        #     out_arrays['x'] = out_x
+
+        #     out_y = np.zeros((this_srcwin[3], this_srcwin[2]))
+        #     out_y[unq[:,0], unq[:,1]] = yy
+        #     out_y[out_y == 0] = np.nan
+        #     out_arrays['y'] = out_y
+            
+        #     out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
+        #     out_z[unq[:,0], unq[:,1]] = zz
+        #     out_z[out_z == 0] = np.nan
+        #     out_arrays['z'] = out_z
+            
+        #     out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+        #     out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
+
+        #     out_w = np.ones((this_srcwin[3], this_srcwin[2]))
+        #     out_w[unq[:,0], unq[:,1]] = ww #* this_weight)
+        #     out_arrays['weight'] = out_w            
+        #     #out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
+        #     #out_arrays['weight'][unq[:,0], unq[:,1]] = (ww * this_weight)
+        #     #out_arrays['weight'][:] = self.weight if self.weight is not None else 1
+        #     #out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
+        #     #out_arrays['weight'][unq[:,0], unq[:,1]] *= ww
+        #     #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
+            
+        #     out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+        #     out_arrays['uncertainty'][unq[:,0], unq[:,1]] \
+        #         = np.sqrt(
+        #             uu**2 \
+        #             + (self.uncertainty if self.uncertainty is not None else 0)**2
+        #         )
+            
+        #     yield(out_arrays, this_srcwin, dst_gt)
+
+        # if self.verbose:
+        #     utils.echo_msg_bold(
+        #         f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
+        #     )    
 
             
     def stacks_yield_xyz(self, out_name=None, ndv=-9999, fmt='GTiff'):
@@ -4817,13 +4370,33 @@ class ElevationDataset:
             = sds_x_band = sds_y_band = None
 
         
-    def stacks_yield_xyz_h5(self, out_name=None):
+    def blocks_yield_xyz(self, out_name=None):
         """yield the result of `_stacks` as an xyz object"""
 
-        stacked_fn = self._stacks(out_name=out_name)
+        stacked_fn = self._blocks(out_name=out_name)
+
+        # gbt = globato(
+        #     region=self.region, x_inc=self.x_inc,
+        #     y_inc=self.y_inc, dst_srs=self.dst_srs,
+        #     cache_dir=self.cache_dir
+        # )
+        # #if os.path.exists(gbt.fn):
+        # #    gbt.load()
+        # #else:
+        # gbt.create()
+
+        # for this_entry in self.parse():
+        #     gbt.add_dataset_entry(this_entry)
+        #     gbt.block_entry(this_entry)
+        #     gbt.finalize()
+            
+        # gbt.close()
+        # stacked_fn = gbt.fn
+        
         sds = h5.File(stacked_fn, 'r')
         sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
         sds_stack = sds['stack']
+        #sds_stack = sds['sums']
         stack_shape = sds['stack']['z'].shape
         srcwin = (0, 0, stack_shape[1], stack_shape[0])
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
@@ -4834,6 +4407,7 @@ class ElevationDataset:
 
             sw = sds_stack['weights'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
             su = sds_stack['uncertainty'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            sc = sds_stack['count'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
 
             sx = sds_stack['x'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
             sy = sds_stack['y'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
@@ -5219,7 +4793,7 @@ class ElevationDataset:
             
         time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
         time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
-        this_sst = fetches.MUR_SST(
+        this_sst = fetches.earthdata.MUR_SST(
             src_region=this_region,
             verbose=self.verbose,
             outdir=self.cache_dir,
@@ -5249,13 +4823,13 @@ class ElevationDataset:
                     f'fetching buildings for region {this_region}'
                 )
                 
-            this_bldg = fetches.BingBFP(
+            this_bldg = fetches.bingbfp.BingBFP(
                 src_region=this_region,
-                verbose=self.verbose,
+                verbose=verbose,
                 outdir=self.cache_dir
             )
             this_bldg.run()
-            fr = fetches.fetch_results(this_bldg)
+            fr = fetches.fetches.fetch_results(this_bldg)
             #, check_size=False)
             fr.daemon=True
             fr.start()
@@ -5273,9 +4847,8 @@ class ElevationDataset:
                     desc='processing buildings',
                     leave=verbose
             ) as pbar:
-                for n, bing_result in enumerate(this_bing.results):                
+                for n, bing_result in enumerate(this_bing.results):
                     if bing_result[-1] == 0:
-                        pbar.update()
                         bing_gz = bing_result[1]
                         try:
                             bing_gj = utils.gunzip(bing_gz, self.cache_dir)
@@ -5293,7 +4866,9 @@ class ElevationDataset:
                             utils.echo_error_msg(f'could not process bing bfp, {e}')
 
                         utils.remove_glob(bing_gz)
-
+                        
+                    pbar.update()
+                    
         return(bldg_geoms)
 
     
@@ -5309,7 +4884,7 @@ class ElevationDataset:
                     f'fetching coastline for region {this_region}'
                 )
                 
-            this_cst = fetches.OpenStreetMap(
+            this_cst = fetches.osm.OpenStreetMap(
                 src_region=this_region,
                 verbose=verbose,
                 outdir=self.cache_dir,
@@ -5317,7 +4892,7 @@ class ElevationDataset:
                 chunks=chunks,
             )
             this_cst.run()
-            fr = fetches.fetch_results(this_cst, check_size=False)
+            fr = fetches.fetches.fetch_results(this_cst, check_size=False)
             fr.daemon=True
             fr.start()
             fr.join()
@@ -5342,31 +4917,33 @@ class ElevationDataset:
                     desc='processing coastline',
                     leave=verbose
             ) as pbar:
-                for n, cst_result in enumerate(this_cst.results):                
+                for n, cst_result in enumerate(this_cst.results):
                     if cst_result[-1] == 0:
-                        pbar.update()
                         cst_osm = cst_result[1]
-                        out = fetches.polygonize_osm_coastline(
+                        out = fetches.osm.polygonize_osm_coastline(
                             cst_osm,
                             utils.make_temp_fn(
-                                f'{utils.fn_basename2(cst_osm)}_coast.shp',
+                                f'{utils.fn_basename2(cst_osm)}_coast.gpkg',
                                 temp_dir=self.cache_dir
                             ),
                             region=this_region,
                             include_landmask=include_landmask,
                             landmask_is_watermask=landmask_is_watermask,
-                            line_buffer=line_buffer
+                            line_buffer=line_buffer,
+                            verbose=verbose,
                         )
 
                         if out is not None:
                             cst_ds = ogr.Open(out, 0)
                             cst_layer = cst_ds.GetLayer()
                             cst_geom = gdalfun.ogr_union_geom(
-                                cst_layer, verbose=False
+                                cst_layer, verbose=verbose
                             )
                             cst_geoms.append(cst_geom)
                             cst_ds = None
                             utils.remove_glob(cst_osm)
+                            
+                    pbar.update()
                         
             if return_geom:
                 utils.remove_glob(f'{utils.fn_basename2(out)}.*')
@@ -5693,7 +5270,7 @@ class LASFile(ElevationDataset):
             self.infos.minmax = this_region.export_as_list(include_z=True)
             self.infos.wkt = this_region.export_as_wkt()
 
-        utils.echo_msg(self.get_epsg())
+        #utils.echo_msg(self.get_epsg())
         self.infos.src_srs = self.src_srs \
             if self.src_srs is not None \
                else self.get_epsg()
@@ -5899,6 +5476,7 @@ class GDALFile(ElevationDataset):
         if self.fn is None or (self.check_path and not os.path.exists(self.fn)):
             utils.echo_warning_msg(f'{self.fn} doesn\'t exist!')
             return(None)
+            return(None)    
 
         ## apply any open_options that are specified
         try:
@@ -5956,7 +5534,7 @@ class GDALFile(ElevationDataset):
         tmp_unc_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
         tmp_weight_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
         if self.remove_flat:
-            grits_filter = grits.GritsFactory(
+            grits_filter = grits.grits_factory.GritsFactory(
                 mod='flats',
                 src_dem=self.fn,
                 cache_dir=self.cache_dir,
@@ -6723,14 +6301,14 @@ class CUDEMFile(ElevationDataset):
         self.stack = stack
 
 
-    def yield_points(self):
+    def yield_points_nc(self):
 
         ## extract z, unc and weight grids
         ## process through gdalfile
         
         nc_data = nc.Dataset(self.fn, 'r')
-        stack_lat = nc_data['/stack/lat'][...,]
-        stack_lon = nc_data['/stack/lon'][...,]
+        stack_lat = nc_data['/stack/latitude'][...,]
+        stack_lon = nc_data['/stack/longitude'][...,]
         stack_h = nc_data['/stack/stack_h'][...,]
 
         stack_u = nc_data['/stack/uncertainty'][...,]
@@ -6750,6 +6328,38 @@ class CUDEMFile(ElevationDataset):
         #points = points[points.z != -9999]
         
         yield(points)
+
+    def yield_points(self):
+        data = h5.File(self.fn)
+        stack_lat = data['/stack/y'][...,]
+        stack_lon = data['/stack/x'][...,]
+        stack_h = data['/stack/z'][...,]
+
+        stack_u = data['/stack/uncertainty'][...,]
+        stack_w = data['/stack/weights'][...,]
+        counts = data['/stack/count'][...,]
+
+        data.close()
+
+        nan_m = np.isnan(stack_h)
+        stack_h = stack_h[~nan_m].flatten()                        
+        stack_lat = stack_lat[~nan_m].flatten()                        
+        stack_lon = stack_lon[~nan_m].flatten()                        
+        stack_u = stack_u[~nan_m].flatten()                        
+        stack_w = stack_w[~nan_m].flatten()                        
+        
+        dataset = np.column_stack(
+            (stack_lon, stack_lat,
+             stack_h, stack_w,
+             stack_u)
+        )
+        points = np.rec.fromrecords(
+            dataset, names='x, y, z, w, u'
+        )
+        #points = points[points.z != -9999]
+        
+        yield(points)
+        
 
         
 ## NASA SWOT Data class (hdf5)
@@ -6943,7 +6553,6 @@ class SWOT_HR_Raster(ElevationDataset):
         src_ds = gdal.Open(self.fn)
         if src_ds is not None:
             sub_datasets = src_ds.GetSubDatasets()
-
             idx = 2
             if utils.int_or(self.data_set) is not None:
                 idx = utils.int_or(self.data_set)
@@ -6974,6 +6583,136 @@ class SWOT_HR_Raster(ElevationDataset):
                 yield(gdal_ds)
 
                 
+class IceSat2_ATL24File(ElevationDataset):
+    def __init__(self, min_confidence=None, classes='40', water_surface='ortho', **kwargs):
+        super().__init__(**kwargs)
+        self.orientDict = {0:'l', 1:'r', 21:'error'}
+        self.lasers = ['gt1l', 'gt2l', 'gt3l', 'gt1r', 'gt2r', 'gt3r']
+
+        self.data_format = 304
+        self.water_surface = water_surface
+        if self.water_surface not in ['surface', 'ortho', 'ellipse']:
+            self.water_surface = 'ortho'
+        
+        self.water_surface
+        self.min_confidence = utils.float_or(min_confidence)
+        self.classes = [int(x) for x in classes.split('/')] \
+            if classes is not None \
+               else []        
+        
+    def generate_inf(self):
+        if self.src_srs is None:
+            self.infos.src_srs = 'epsg:4326+3855'
+        else:
+            self.infos.src_srs = self.src_srs
+
+        f = h5.File(self.fn, 'r')
+        these_regions = []
+        numpts = 0
+        for b in range(1, 4):
+            for p in ['l', 'r']:
+                if f'gt{b}{p}' not in list(f.keys()):
+                    continue
+                
+                y = f[f'gt{b}{p}/lat_ph'][...,]
+                x = f[f'gt{b}{p}/lon_ph'][...,]
+                z = f[f'gt{b}{p}/ortho_h'][...,]
+                this_region = regions.Region(src_srs=self.infos.src_srs).from_list(
+                    [np.min(x), np.max(x), np.min(y), np.max(y), np.min(z), np.max(z)]
+                )
+                these_regions.append(this_region)
+                numpts += len(x)
+
+        region_cnt = len(these_regions)
+        if region_cnt > 0:
+            merged_region = these_regions[0].copy()
+            for r in range(1, region_cnt):
+                merged_region = regions.regions_merge(merged_region, these_regions[r])
+
+            self.infos.minmax = merged_region.export_as_list(include_z=True)
+            self.infos.wkt = merged_region.export_as_wkt()
+            
+        self.infos.numpts = numpts 
+        
+        f.close()
+        return(self.infos)
+    
+        
+    def yield_points(self):
+        dataset = None
+
+        f = h5.File(self.fn)
+
+        for b in range(1, 4):
+            for p in ['l', 'r']:
+        
+                if f'gt{b}{p}' not in list(f.keys()):
+                    continue
+
+                lat_ph = f[f'gt{b}{p}/lat_ph'][...,]
+                lon_ph = f[f'gt{b}{p}/lon_ph'][...,]
+                ortho_h = f[f'gt{b}{p}/ortho_h'][...,]
+                surface_h = f[f'gt{b}{p}/surface_h'][...,]
+                ellipse_h = f[f'gt{b}{p}/ellipse_h'][...,]
+                class_ph = f[f'gt{b}{p}/class_ph'][...,]
+                index_seg = f[f'gt{b}{p}/index_seg'][...,]
+                index_ph = f[f'gt{b}{p}/index_ph'][...,]
+                conf_ph = f[f'gt{b}{p}/confidence'][...,]
+                low_confidence_ph = f[f'gt{b}{p}/low_confidence_flag'][...,]
+
+                ## append the laser to each record
+                laser_arr = np.empty(ortho_h.shape, dtype='object')
+                laser_arr[:] = f'gt{b}{p}'
+
+                ## append the filename to each record
+                fn_arr = np.empty(ortho_h.shape, dtype='object')
+                fn_arr[:] = self.fn
+
+                if self.water_surface == 'surface':
+                    ph_height = surface_h
+                elif self.water_surface == 'ortho':
+                    ph_height = ortho_h
+                else:
+                    ph_height = ellipse_h
+                
+                dataset = pd.DataFrame(
+                    {'latitude': lat_ph,
+                     'longitude': lon_ph,
+                     'photon_height': ph_height,
+                     'laser': laser_arr,
+                     'fn': fn_arr,
+                     'confidence': conf_ph,
+                     'low_confidence_ph': low_confidence_ph,
+                     'ph_h_classed': class_ph},
+                    columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
+                             'confidence', 'low_confidence_ph', 'ph_h_classed']
+                )
+
+                ## keep only photons with a classification mentioned in `self.classes`
+                if len(self.classes) > 0:
+                    dataset = dataset[
+                        (np.isin(dataset['ph_h_classed'], self.classes))
+                    ]
+
+                if self.min_confidence is not None:
+                    dataset = dataset[dataset['confidence'] >= self.min_confidence]
+                    
+                if dataset is None or len(dataset) == 0:
+                    continue
+                
+                ## rename the x,y,z columns for `transform_and_yield_points`
+                dataset.rename(
+                    columns={
+                        'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'
+                    },
+                    inplace=True
+                )
+                
+                yield(dataset)                
+                
+        f.close()
+
+        
 class IceSat2File(ElevationDataset):
     """IceSat2 data from NASA
 
@@ -6991,6 +6730,7 @@ class IceSat2File(ElevationDataset):
     classify_buildings: True # classify buildings using BING BFP
     classify_water: True # classify water using OSM
     reject_failed_qa: True # skip granules that failed QA
+    min_bathy_confidence: <0-1> the minimum passable ATL24 confidence level
 
     Classes:
     -1 - no classification (ATL08)
@@ -7005,6 +6745,7 @@ class IceSat2File(ElevationDataset):
         ATL06 integration)
     7 - built structure (OSM or Bing)
     8 - "urban" (WSF, if used)
+    9 - inland water surface
 
     Confidence Levels:
     0, 1, 2, 3, 4
@@ -7015,11 +6756,13 @@ class IceSat2File(ElevationDataset):
                  classes=None,
                  confidence_levels='2/3/4',
                  columns={},
-                 classify_bathymetry=True,
+                 classify_bathymetry=False,
                  classify_buildings=True,
                  classify_inland_water=True,
                  reject_failed_qa=True,
-                 classify_water=True,
+                 classify_water=False,
+                 append_atl24=False,
+                 min_bathy_confidence=None,
                  **kwargs):
         super().__init__(**kwargs)
         self.data_format = 303
@@ -7034,12 +6777,59 @@ class IceSat2File(ElevationDataset):
             if confidence_levels is not None \
                else []
         self.columns = columns
+        #self.columns = {'/gtx/heights/delta_time': 'delta_time_b'}
         self.atl_fn = None
         self.want_bathymetry = classify_bathymetry
         self.want_buildings = classify_buildings
         self.want_watermask = classify_water
         self.want_inland_water = classify_inland_water
         self.reject_failed_qa = reject_failed_qa
+        self.append_atl24 = append_atl24
+        self.min_bathy_confidence = utils.float_or(min_bathy_confidence)
+
+        self.orientDict = {0:'l', 1:'r', 21:'error'}
+        self.lasers = ['gt1l', 'gt2l', 'gt3l', 'gt1r', 'gt2r', 'gt3r']
+
+        
+    def generate_inf(self):
+        if self.src_srs is None:
+            self.infos.src_srs = 'epsg:4326+3855'
+        else:
+            self.infos.src_srs = self.src_srs
+
+        f = h5.File(self.fn, 'r')
+        these_regions = []
+        numpts = 0
+        for b in range(1, 4):
+            for p in ['l', 'r']:
+                if f'gt{b}{p}' not in list(f.keys()):
+                    continue
+
+                if 'heights' not in list(f[f'gt{b}{p}'].keys()):
+                    continue
+                
+                y = f[f'gt{b}{p}/heights/lat_ph'][...,]
+                x = f[f'gt{b}{p}/heights/lon_ph'][...,]
+                z = f[f'gt{b}{p}/heights/h_ph'][...,]
+                this_region = regions.Region(src_srs=self.infos.src_srs).from_list(
+                    [np.min(x), np.max(x), np.min(y), np.max(y), np.min(z), np.max(z)]
+                )
+                these_regions.append(this_region)
+                numpts += len(x)
+
+        region_cnt = len(these_regions)
+        if region_cnt > 0:
+            merged_region = these_regions[0].copy()
+            for r in range(1, region_cnt):
+                merged_region = regions.regions_merge(merged_region, these_regions[r])
+
+            self.infos.minmax = merged_region.export_as_list(include_z=True)
+            self.infos.wkt = merged_region.export_as_wkt()
+            
+        self.infos.numpts = numpts 
+        
+        f.close()
+        return(self.infos)
 
         
     def init_atl_h5(self):
@@ -7048,13 +6838,14 @@ class IceSat2File(ElevationDataset):
         self.atl03_f = None
         self.atl08_f = None
         self.atl24_f = None
-        self.atl13_f = None
+        #self.atl12_f = None
+        #self.atl13_f = None
 
         if self.atl03_fn is not None and os.path.exists(self.atl03_fn):
             self.atl03_f = h5.File(self.atl03_fn, 'r')            
             if 'short_name' not in self.atl03_f.attrs.keys():
                 raise UnboundLocalError(
-                    'this file does not appear to be an ATL03 file'
+                    f'{self.atl03_fn} does not appear to be an ATL03 file'
                 )
         
             if self.reject_failed_qa:
@@ -7068,30 +6859,74 @@ class IceSat2File(ElevationDataset):
                             ][...,][0]
                         )
                     )
-        
+
+            if not np.any(np.isin(list(self.atl03_f.keys()), self.lasers)):
+                raise UnboundLocalError(
+                    f'this granule ({self.atl03_fn}) has no lasers'
+                )
+            
         if self.atl08_fn is not None and os.path.exists(self.atl08_fn):
             self.atl08_f = h5.File(self.atl08_fn, 'r')
+            if self.verbose:
+                utils.echo_msg(f'Using ATL08 file: {self.atl08_fn}')
+                
             if 'short_name' not in self.atl08_f.attrs.keys():
                 utils.echo_warning_msg(
-                    'this file does not appear to be an ATL file'
+                    f'{self.atl08_fn} does not appear to be an ATL file'
                 )
                 self.atl08_f.close()
 
+        ## atl24 doesn't have the short_name attr
         if self.atl24_fn is not None and os.path.exists(self.atl24_fn):
             self.atl24_f = h5.File(self.atl24_fn, 'r')
-            if 'short_name' not in self.atl24_f.attrs.keys():
-                utils.echo_warning_msg(
-                    'this file does not appear to be an ATL file'
-                )
-                self.atl24_f.close()
+            if self.verbose:
+                utils.echo_msg(f'Using ATL24 file: {self.atl24_fn}')
                 
-        if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
-            self.atl13_f = h5.File(self.atl13_fn, 'r')
-            if 'short_name' not in self.atl13_f.attrs.keys():
-                utils.echo_warning_msg(
-                    'this file does not appear to be an ATL file'
+            # if 'short_name' not in self.atl24_f.attrs.keys():
+            #     utils.echo_warning_msg(
+            #         f'{self.atl24_fn} does not appear to be an ATL file'
+            #     )
+            #     self.atl24_f.close()
+
+        else:
+            #utils.echo_warning_msg('falling back to CSphelph to classify bathymetry')
+            utils.echo_warning_msg('falling back to classify water points only')
+            #self.want_bathymetry = True
+
+            #if self.want_watermask:
+            if isinstance(self.want_watermask, bool):
+                self.want_watermask = True
+                this_wm = self.process_coastline(
+                    self.fetch_coastline(chunks=False, verbose=self.verbose),
+                    return_geom=True,
+                    verbose=self.verbose
                 )
-                self.atl13_f.close()                
+            elif isinstance(self.want_watermask, list):
+                this_wm = self.want_watermask
+                
+
+        # if self.atl12_fn is not None and os.path.exists(self.atl12_fn):
+        #     self.atl12_f = h5.File(self.atl12_fn, 'r')
+        #     if self.verbose:
+        #         utils.echo_msg(f'Using ATL12 file: {self.atl12_fn}')
+                
+        #     if 'short_name' not in self.atl13_f.attrs.keys():
+        #         utils.echo_warning_msg(
+        #             f'{self.atl12_fn} does not appear to be an ATL file'
+        #         )
+        #         self.atl12_f.close()                
+
+        
+        # if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
+        #     self.atl13_f = h5.File(self.atl13_fn, 'r')
+        #     if self.verbose:
+        #         utils.echo_msg(f'Using ATL13 file: {self.atl13_fn}')
+                
+        #     if 'short_name' not in self.atl13_f.attrs.keys():
+        #         utils.echo_warning_msg(
+        #             f'{self.atl13_fn} does not appear to be an ATL file'
+        #         )
+        #         self.atl13_f.close()                
 
                 
     def close_atl_h5(self):
@@ -7107,8 +6942,11 @@ class IceSat2File(ElevationDataset):
         if self.atl24_f is not None:
             self.atl24_f.close()
 
-        if self.atl13_f is not None:
-            self.atl13_f.close()
+        # if self.atl12_f is not None:
+        #     self.atl12_f.close()
+            
+        # if self.atl13_f is not None:
+        #     self.atl13_f.close()
 
             
     def yield_points(self):
@@ -7121,14 +6959,20 @@ class IceSat2File(ElevationDataset):
         self.atl03_fn = self.fn
         self.atl08_fn = None
         self.atl24_fn = None
-        self.atl13_fn = None
+        # self.atl12_fn = None
+        # self.atl13_fn = None
+
+        ## only fetch atl08/atl24 if classes are desired
         if len(self.classes) > 0:
             atl08_result = self.fetch_atlxx(short_name='ATL08')
             self.atl08_fn = atl08_result
-            atl13_result = self.fetch_atlxx(short_name='ATL13')
-            self.atl13_fn = atl13_result
             atl24_result = self.fetch_atlxx(short_name='ATL24')
             self.atl24_fn = atl24_result
+
+            # atl12_result = self.fetch_atlxx(short_name='ATL12')
+            # self.atl12_fn = atl12_result
+            # atl13_result = self.fetch_atlxx(short_name='ATL13')
+            # self.atl13_fn = atl13_result
 
         try:
             self.init_atl_h5()
@@ -7140,102 +6984,166 @@ class IceSat2File(ElevationDataset):
             return
 
         ## fetch and process buildings, if wanted
-        this_bing = None
+        #this_bing = None
         if self.want_buildings:
             if isinstance(self.want_buildings, bool):
                 this_bing = self.process_buildings(
-                    self.fetch_buildings(verbose=False),
-                    verbose=False
+                    self.fetch_buildings(verbose=self.verbose),
+                    verbose=self.verbose
                 )
             elif isinstance(self.want_buildings, list):
                 this_bing = self.want_buildings         
 
         ## fetch and process watermask, if wanted
-        this_wm = None
+        #this_wm = None
         if self.want_watermask:
             if isinstance(self.want_watermask, bool):
                 this_wm = self.process_coastline(
-                    self.fetch_coastline(chunks=False, verbose=False),
+                    self.fetch_coastline(chunks=False, verbose=self.verbose),
                     return_geom=True,
-                    verbose=False
+                    verbose=self.verbose
                 )
             elif isinstance(self.want_watermask, list):
-                this_wm = self.want_watermask                
+                this_wm = self.want_watermask
+
+        ## fetch and process watermask, if wanted
+        #this_wm = None
+        # if self.want_watermask:
+        #     this_wm = self._load_gmrt()
+        #     # if isinstance(self.want_watermask, bool):
+        #     #     this_wm = self.process_coastline(
+        #     #         self.fetch_coastline(chunks=False, verbose=self.verbose),
+        #     #         return_geom=True,
+        #     #         verbose=self.verbose
+        #     #     )
+        #     # elif isinstance(self.want_watermask, list):
+        #     #     this_wm = self.want_watermask                
+                
 
         ## parse through the icesat2 file by laser number
         for i in range(1, 4):
-            #try:
-            dataset = self.read_atl_data('{}'.format(i))
-            if dataset is None or len(dataset) == 0:
-                continue
+            for orient in range(2):
+                #try:
+                ## selects the strong beams only [we can include weak beams later on]
+                if f'gt{i}{self.orientDict[orient]}' not in list(self.atl03_f.keys()):
+                    #utils.echo_warning_msg(f'could not find laser gt{i}{self.orientDict[orient]} in {self.atl03_fn}')
+                    continue
 
-            ## keep only photons with confidence levels mentioned
-            ## in `self.confidence_levels`
-            if len(self.confidence_levels) > 0:
-                dataset = dataset[
-                    (np.isin(dataset['confidence'], self.confidence_levels))
-                ]
-
-            if dataset is None or len(dataset) == 0:
-                continue
-
-            ## re-classify photons based on buildings/watermask/bathymetry
-            if self.want_buildings and this_bing is not None:
-                dataset = self.classify_buildings(dataset, this_bing)
-
-            if self.want_watermask and this_wm is not None:
-                dataset = self.classify_water(dataset, this_wm)
-
-            # if self.want_bathymetry:
-            #     dataset = self.classify_bathymetry(dataset)
+                if 'heights' not in list(self.atl03_f[f'gt{i}{self.orientDict[orient]}'].keys()):
+                    #utils.echo_warning_msg(f'laser gt{i}{self.orientDict[orient]} in {self.atl03_fn} has no heights')
+                    continue
                 
-            if dataset is None or len(dataset) == 0:
-                continue
+                dataset = self.read_atl_data('{}'.format(i), orientation=orient)
+                if dataset is None or len(dataset) == 0:
+                    continue
 
-            ## keep only photons with a classification mentioned in `self.classes`
-            if len(self.classes) > 0:
-                dataset = dataset[
-                    (np.isin(dataset['ph_h_classed'], self.classes))
-                ]
+                ## keep only photons with confidence levels mentioned
+                ## in `self.confidence_levels`
+                if len(self.confidence_levels) > 0:
+                    dataset = dataset[
+                        (np.isin(dataset['confidence'], self.confidence_levels))
+                    ]
+
+                ## reduce the dataset to the input region for faster masking
+                #dataset = dataset[(dataset['longitude'] >= self.region.xmin) & (dataset['longitude'] <= self.region.xmax)]
+                #dataset = dataset[(dataset['latitude'] >= self.region.ymin) & (dataset['latitude'] <= self.region.ymax)]
+                    
+                if dataset is None or len(dataset) == 0:
+                    continue
                 
-            if dataset is None or len(dataset) == 0:
-                continue
+                ## re-classify photons based on buildings/watermask/bathymetry
+                if self.want_buildings and this_bing is not None:
+                    #dataset = self.classify_buildings(dataset, this_bing)
+                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_bing, classification=7)
 
-            ## rename the x,y,z columns for `transform_and_yield_points`
-            dataset.rename(
-                columns={
-                    'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'
-                },
-                inplace=True
-            )
-            yield(dataset)
+                #utils.echo_msg(f'this_wm: {this_wm}')
+                if self.want_watermask and this_wm is not None:
+                    #dataset = self.classify_water(dataset, this_wm)
+                    dataset = self.classify_by_mask_geoms(dataset, mask_geoms=this_wm, classification=41, except_classes=[40])
+
+                if dataset is None or len(dataset) == 0:
+                    continue
+                
+                # ## bathymetry is classified in `read_atl_data` using ATL24 now...
+                # if self.want_bathymetry:
+                #     dataset = self.classify_bathymetry(dataset)
+                    
+                # if dataset is None or len(dataset) == 0:
+                #     continue
+
+                ## keep only photons with a classification mentioned in `self.classes`
+                if len(self.classes) > 0:
+                    dataset = dataset[
+                        (np.isin(dataset['ph_h_classed'], self.classes))
+                    ]
+
+                if dataset is None or len(dataset) == 0:
+                    continue
+
+                ## rename the x,y,z columns for `transform_and_yield_points`
+                dataset.rename(
+                    columns={
+                        'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'
+                    },
+                    inplace=True
+                )
+                yield(dataset)
 
         self.close_atl_h5()
 
+        
+    def fetch_data(self, fetches_module, check_size=True):
+        this_fetches = fetches.fetches_factory.FetchesFactory(
+            mod=fetches_module,
+            src_region=self.region,
+            verbose=self.verbose,
+            outdir=self.cache_dir,
+            callback=fetches.fetches.fetches_callback
+        )._acquire_module()        
+        this_fetches.run()
+        fr = fetches.fetches.fetch_results(this_fetches, check_size=check_size)
+        fr.daemon = True
+        fr.start()
+        fr.join()
 
+        return(fr)
+
+
+    def _load_gmrt(self):
+        """GMRT - Global low-res.
+        """
+        
+        this_gmrt = self.fetch_data('gmrt:layer=topo')        
+        gmrt_result = this_gmrt.results[0]
+        if gmrt_result[-1] == 0:
+            gmrt_tif = gmrt_result[1]
+
+            return(gmrt_tif)
+
+        
     def fetch_atlxx(self, short_name='ATL08'):
         """fetch an associated ATLxx file"""
 
-        #utils.echo_msg(self.atl03_fn)
-        atlxx_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
-        this_atlxx = fetches.IceSat2(
+        atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('_')[1:4])
+        this_atlxx = fetches.earthdata.IceSat2(
             src_region=None,
             verbose=self.verbose,
             outdir=self.cache_dir,
             short_name=short_name,
-            filename_filter=atlxx_filter
+            filename_filter=atlxx_filter,
+            version='',
+            #subset=True if 'subset' in self.fn else False,
         )
         this_atlxx.run()
         if len(this_atlxx.results) == 0:
-            atlxx_filter = '_'.join(
-                utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1]
-            )
-            this_atlxx = fetches.IceSat2(
+            atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('_')[1:3])
+            this_atlxx = fetches.earthdata.IceSat2(
                 src_region=None,
                 verbose=self.verbose,
                 outdir=self.cache_dir,
                 short_name=short_name,
-                filename_filter=atlxx_filter
+                filename_filter=atlxx_filter,
+                version='',
             )
             this_atlxx.run()
             if len(this_atlxx.results) == 0:
@@ -7245,7 +7153,6 @@ class IceSat2File(ElevationDataset):
                 )
                 return(None)
         else:
-            #utils.echo_msg(this_atlxx.results)
             if this_atlxx.fetch_entry(
                     this_atlxx.results[0], check_size=True
             ) == 0:
@@ -7254,104 +7161,9 @@ class IceSat2File(ElevationDataset):
                 ))
 
             
-    def read_atl_data(self, laser_num, orientation=None):
-        """Read data from an ATL03 file
-
-        Adapted from 'cshelph' https://github.com/nmt28/C-SHELPh.git 
-        and 'iVert' https://github.com/ciresdem/ivert.git
-
-        laser_num is 1, 2 or 3
-        surface is 'mean_tide', 'geoid' or 'ellipsoid'
-        """
-
-        if orientation is None:
-            orientation = self.atl03_f['/orbit_info/sc_orient'][0]
-            
-        ## selects the strong beams only [we can include weak beams later on]
-        orientDict = {0:'l', 1:'r', 21:'error'}
-        laser = 'gt' + laser_num + orientDict[orientation]
-
-        ## for 'subsets', where heights don't come through
-        if 'heights' not in self.atl03_f['/{}'.format(laser)].keys():
-            return(None)
-        
-        ## Read in the required photon level data
-        photon_h = self.atl03_f['/' + laser + '/heights/h_ph'][...,]
-        latitude = self.atl03_f['/' + laser + '/heights/lat_ph'][...,]
-        longitude = self.atl03_f['/' + laser + '/heights/lon_ph'][...,]
-        ph_count = self.atl03_f['/' + laser + '/heights/ph_id_count'][...,]
-        conf = self.atl03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
-        qual = self.atl03_f['/' + laser + '/heights/quality_ph/'][...,0]
-        dist_ph_along = self.atl03_f['/' + laser + '/heights/dist_ph_along'][...,]
-        this_N = latitude.shape[0]
-
-        ## Read in the geolocation level data
-        segment_ph_cnt = self.atl03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
-        segment_id = self.atl03_f['/' + laser + '/geolocation/segment_id'][...,]
-        segment_dist_x = self.atl03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
-        ref_elev = self.atl03_f['/' + laser + '/geolocation/ref_elev'][...,]
-        ref_azimuth = self.atl03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
-        ref_photon_index = self.atl03_f['/' + laser + '/geolocation/reference_photon_index'][...,]
-        ph_index_beg = self.atl03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
-        altitude_sc = self.atl03_f['/' + laser + '/geolocation/altitude_sc'][...,]
-
-        ## Read in the geoid data
-        photon_geoid = self.atl03_f['/' + laser + '/geophys_corr/geoid'][...,]
-        photon_geoid_f2m = self.atl03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
-
-        ## Create a dictionary with (segment_id --> index into ATL03 photons)
-        ## lookup pairs, for the starting photon of each segment
-        #segment_indices = ph_index_beg+(ref_photon_index-1)
-        #segment_index_dict = dict(zip(segment_id, ph_index_beg+ref_photon_index-1))
-        segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
-        segment_index_dict = dict(zip(segment_id, segment_indices))
-        ph_segment_ids = segment_id[
-            np.searchsorted(segment_indices, np.arange(0.5, len(photon_h), 1))-1
-        ]
-        
-        ## Compute the total along-track distances.
-        #segment_dist_dict = dict(zip(segment_id, segment_dist_x))
-
-        ## Determine where in the array each segment index needs to look.
-        #ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]),
-        #ph_segment_ids)))
-        #dist_x = ph_segment_dist_x + dist_ph_along
-
-        ## meantide/geoid heights
-        h_geoid_dict = dict(zip(segment_id, photon_geoid))
-        ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))        
-        h_meantide_dict = dict(zip(segment_id, photon_geoid_f2m))
-        ph_h_meantide = np.array(list(map((lambda pid: h_meantide_dict[pid]), ph_segment_ids)))
-        photon_h_geoid = photon_h - ph_h_geoid
-        photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
-
-        ## setup classifications
-        ph_h_classed = np.zeros(photon_h.shape)
-        ph_h_classed[:] = -1
-
-        ## append the laser to each record
-        laser_arr = np.empty(photon_h.shape, dtype='object')
-        laser_arr[:] = laser
-
-        ## append the filename to each record
-        fn_arr = np.empty(photon_h.shape, dtype='object')
-        fn_arr[:] = self.fn
-        
-        ## ref values
-        h_ref_elev_dict = dict(zip(segment_id, ref_elev))
-        ph_ref_elev = np.array(
-            list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids))
-        )#.astype(float)        
-        h_ref_azimuth_dict = dict(zip(segment_id, ref_azimuth))
-        ph_ref_azimuth = np.array(
-            list(map((lambda pid: h_ref_azimuth_dict[pid]), ph_segment_ids))
-        )#.astype(float)
-        h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
-        ph_altitude_sc = np.array(
-            list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids))
-        )#.astype(float)
-
-        ## Read in the ATL08 data
+    def apply_atl08_classifications(
+            self, ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids
+    ):
         if self.atl08_f is not None:
             ## classed flag (signal_photons)
             atl08_classed_pc_flag  = self.atl08_f[
@@ -7382,30 +7194,209 @@ class IceSat2File(ElevationDataset):
             ph_h_classed[atl08_ph_index[class_mask]] \
                 = atl08_classed_pc_flag[atl08_segment_id_msk][class_mask]
 
-        ## Read in the ATL24 data
-        ## todo: check re subsets
+            #utils.echo_msg_bold(np.count_nonzero(ph_h_classed==1))
+            
+        return(ph_h_classed)
+
+
+    def apply_atl24_classifications(
+            self, ph_h_classed, ph_h_bathy_conf, latitude, longitude, photon_h, photon_h_meantide,
+            photon_h_geoid, laser, geoseg_beg, geoseg_end, ph_segment_ids
+    ):
         if self.atl24_f is not None:
-            atl24_classed_pc_flag  = self.atl24_f['/' + laser + '/class_ph'][...,]
-            atl24_classed_pc_indx = self.atl24_f['/' + laser + '/index_ph'][...,]
-            atl24_longitude = self.atl24_f['/' + laser + '/lon_ph'][...,]
-            atl24_latitude = self.atl24_f['/' + laser + '/lat_ph'][...,]
-            atl24_surface_h = self.atl24_f['/' + laser + '/surface_h'][...,]
-            atl24_ellipse_h = self.atl24_f['/' + laser + '/ellipse_h'][...,]
-            atl24_ortho_h = self.atl24_f['/' + laser + '/ortho_h'][...,]
+            ## some atl24 files don't have all the lasers, so make sure
+            ## it exists before proceding
+            if laser in self.atl24_f.keys():            
+                lat_ph = self.atl24_f[f'{laser}/lat_ph'][...,]
+                lon_ph = self.atl24_f[f'{laser}/lon_ph'][...,]
+                ortho_h = self.atl24_f[f'{laser}/ortho_h'][...,]
+                ellipse_h = self.atl24_f[f'{laser}/ellipse_h'][...,]
+                surface_h = self.atl24_f[f'{laser}/surface_h'][...,]
+                class_ph = self.atl24_f[f'{laser}/class_ph'][...,]
+                index_seg = self.atl24_f[f'{laser}/index_seg'][...,]
+                index_ph = self.atl24_f[f'{laser}/index_ph'][...,]
+                conf_ph = self.atl24_f[f'{laser}/confidence'][...,]
 
-            class_40_mask = atl24_classed_pc_flag == 40
-            ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
+                #if 'subset' in self.atl03_fn:
+                ## determine the original `geosed_id` to determine the subset indices
+                orig_segment_id = np.arange(geoseg_beg, geoseg_end+1, 1)
+                orig_segment_id_msk = np.isin(orig_segment_id, ph_segment_ids)
+                index_seg_orig = orig_segment_id[index_seg]
+                segment_id_msk = np.isin(index_seg_orig, ph_segment_ids)
+                if len(index_ph[segment_id_msk]) > 0:
+                    ## check for previous index
+                    index_ph = index_ph - np.min(index_ph[segment_id_msk])
+                    index_msk = (index_ph[segment_id_msk] > 0) & (index_ph[segment_id_msk] < np.max(index_ph[segment_id_msk]))
+                    class_msk = class_ph[segment_id_msk][index_msk] >= 40
+                    ph_msk = (class_msk)
+                    if self.min_bathy_confidence is not None:
+                        confidence_msk = conf_ph[segment_id_msk][index_msk] >= self.min_bathy_confidence
+                        ph_msk = (class_msk) & (confidence_msk)
 
-            # we also need to change the lon/lat/height values to the
-            # updated bathymetry values (we'll just do it to class 40)
-            longitude[atl24_classed_pc_indx[class_40_mask]] = atl24_longitude[class_40_mask]
-            latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
-            photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
-            photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
+                    ph_h_classed[index_ph[segment_id_msk][index_msk][ph_msk]] = class_ph[segment_id_msk][index_msk][ph_msk]
+                    ph_h_bathy_conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
+                    # we also need to change the lon/lat/height values to the
+                    # updated/refracted bathymetry values (we'll just do it to class 40)
+                    class_msk = class_ph[segment_id_msk][index_msk] == 40
+                    ph_class = (class_msk)
+                    if self.min_bathy_confidence is not None:
+                        ph_msk = (class_msk) & (confidence_msk)
 
-        if self.atl13_f is not None:
-            atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
-            ph_h_classed[atl13_refid] = 44
+                    longitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lon_ph[segment_id_msk][index_msk][ph_msk]
+                    latitude[index_ph[segment_id_msk][index_msk][ph_msk]] = lat_ph[segment_id_msk][index_msk][ph_msk]
+                    photon_h[index_ph[segment_id_msk][index_msk][ph_msk]] = ellipse_h[segment_id_msk][index_msk][ph_msk]
+                    photon_h_meantide[index_ph[segment_id_msk][index_msk][ph_msk]] = surface_h[segment_id_msk][index_msk][ph_msk]
+                    photon_h_geoid[index_ph[segment_id_msk][index_msk][ph_msk]] = ortho_h[segment_id_msk][index_msk][ph_msk]
+                    #conf[index_ph[segment_id_msk][index_msk][ph_msk]] = conf_ph[segment_id_msk][index_msk][ph_msk]
+
+        return(ph_h_classed, ph_h_bathy_conf, latitude, longitude, photon_h, photon_h_meantide, photon_h_geoid)
+    
+    
+    def read_atl_data(self, laser_num, orientation=None):
+        """Read data from an ATL03 file
+
+        Adapted from 'cshelph' https://github.com/nmt28/C-SHELPh.git 
+        and 'iVert' https://github.com/ciresdem/ivert.git
+
+        laser_num is 1, 2 or 3
+        surface is 'mean_tide', 'geoid' or 'ellipsoid'
+        """
+
+        if orientation is None:
+            orientation = self.atl03_f['/orbit_info/sc_orient'][0]
+            
+        ## selects the strong beams only [we can include weak beams later on]
+        #orientDict = {0:'l', 1:'r', 21:'error'}
+        laser = 'gt' + laser_num + self.orientDict[orientation]
+
+        ## for 'subsets', where heights don't come through
+        if 'heights' not in self.atl03_f['/{}'.format(laser)].keys():
+            return(None)
+        
+        ## Read in the required photon level data
+        photon_h = self.atl03_f['/' + laser + '/heights/h_ph'][...,]
+        latitude = self.atl03_f['/' + laser + '/heights/lat_ph'][...,]
+        longitude = self.atl03_f['/' + laser + '/heights/lon_ph'][...,]
+        ph_count = self.atl03_f['/' + laser + '/heights/ph_id_count'][...,]
+        conf = self.atl03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
+        qual = self.atl03_f['/' + laser + '/heights/quality_ph/'][...,0]
+        dist_ph_along = self.atl03_f['/' + laser + '/heights/dist_ph_along'][...,]
+        delta_time = self.atl03_f['/' + laser + '/heights/delta_time'][...,]
+        this_N = latitude.shape[0]
+
+        ## Read in the geolocation level data
+        segment_ph_cnt = self.atl03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
+        segment_id = self.atl03_f['/' + laser + '/geolocation/segment_id'][...,]
+        segment_dist_x = self.atl03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
+        ref_elev = self.atl03_f['/' + laser + '/geolocation/ref_elev'][...,]
+        ref_azimuth = self.atl03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
+        ref_photon_index = self.atl03_f['/' + laser + '/geolocation/reference_photon_index'][...,]
+        ph_index_beg = self.atl03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
+        altitude_sc = self.atl03_f['/' + laser + '/geolocation/altitude_sc'][...,]
+        surf_type = self.atl03_f['/' + laser + '/geolocation/surf_type'][...,]
+        
+        ## Read in the geophysical correction
+        photon_geoid = self.atl03_f['/' + laser + '/geophys_corr/geoid'][...,]
+        photon_geoid_f2m = self.atl03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
+        photon_dem_h = self.atl03_f['/' + laser + '/geophys_corr/dem_h'][...,]
+
+        ## Read in the geosegment info for subsets
+        geoseg_beg = self.atl03_f['ancillary_data/start_geoseg'][...,][0]
+        geoseg_end = self.atl03_f['ancillary_data/end_geoseg'][...,][0]
+                    
+        ## Create a dictionary with (segment_id --> index into ATL03 photons)
+        ## lookup pairs, for the starting photon of each segment
+        #segment_indices = ph_index_beg+(ref_photon_index-1)
+        #segment_index_dict = dict(zip(segment_id, ph_index_beg+ref_photon_index-1))
+        segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
+        segment_index_dict = dict(zip(segment_id, segment_indices))
+        ph_segment_ids = segment_id[
+            np.searchsorted(segment_indices, np.arange(0.5, len(photon_h), 1))-1
+        ]
+        
+        ## Compute the total along-track distances.
+        segment_dist_dict = dict(zip(segment_id, segment_dist_x))
+
+        ## Determine where in the array each segment index needs to look.
+        ph_segment_dist_x = np.array(
+            list(map((lambda pid: segment_dist_dict[pid]), ph_segment_ids))
+        )
+        dist_x = ph_segment_dist_x + dist_ph_along
+
+        ## meantide/geoid/dem heights
+        h_geoid_dict = dict(zip(segment_id, photon_geoid))
+        ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))        
+        h_meantide_dict = dict(zip(segment_id, photon_geoid_f2m))
+        ph_h_meantide = np.array(list(map((lambda pid: h_meantide_dict[pid]), ph_segment_ids)))
+        photon_h_geoid = photon_h - ph_h_geoid
+        photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
+
+        h_dem_dict = dict(zip(segment_id, photon_dem_h))
+        ph_h_dem = np.array(list(map((lambda pid: h_dem_dict[pid]), ph_segment_ids)))
+        photon_h_dem = ph_h_dem - (ph_h_geoid + ph_h_meantide)
+        
+        ## setup classifications asn bathy confidence
+        ph_h_classed = np.zeros(photon_h.shape)
+        ph_h_classed[:] = -1
+
+        ph_h_bathy_conf = np.zeros(photon_h.shape)
+        ph_h_bathy_conf[:] = -1
+
+        ## append the laser to each record
+        laser_arr = np.empty(photon_h.shape, dtype='object')
+        laser_arr[:] = laser
+
+        ## append the filename to each record
+        fn_arr = np.empty(photon_h.shape, dtype='object')
+        fn_arr[:] = self.fn
+        
+        ## ref values
+        h_ref_elev_dict = dict(zip(segment_id, ref_elev))
+        ph_ref_elev = np.array(
+            list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids))
+        )#.astype(float)        
+        h_ref_azimuth_dict = dict(zip(segment_id, ref_azimuth))
+        ph_ref_azimuth = np.array(
+            list(map((lambda pid: h_ref_azimuth_dict[pid]), ph_segment_ids))
+        )#.astype(float)
+        h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
+        ph_altitude_sc = np.array(
+            list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids))
+        )#.astype(float)
+        h_surf_type_dict = dict(zip(segment_id, surf_type))
+        ph_surf_type = np.array(
+            list(map((lambda pid: h_surf_type_dict[pid]), ph_segment_ids))
+        )#.astype(float)
+        
+        ## classify the photons
+        ## Read in the ATL08 data and classify points based on the ATL08 classifications
+        ph_h_classed = self.apply_atl08_classifications(
+            ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids
+        )
+        
+        ## classify phtons as water surface if dem_h is below zero
+        #ph_h_classed[photon_h_dem < 0] = 41
+        
+        ## classify bathymetry and water-surface points based on ATL24
+        ## classifications...
+        ph_h_classed, ph_h_bathy_conf, latitude, longitude, photon_h, photon_h_meantide, photon_h_geoid = self.apply_atl24_classifications(
+            ph_h_classed, ph_h_bathy_conf, latitude, longitude, photon_h, photon_h_meantide,
+            photon_h_geoid, laser, geoseg_beg, geoseg_end, ph_segment_ids
+        )
+
+        ## classify inland water based on ATL13 classifications
+        # if self.atl13_f is not None:
+        #     atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
+        #     ph_h_classed[atl13_refid] = 44
+
+        ## classify water based on ATL12 classifications
+        # if self.atl13_f is not None:
+        #     atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
+        #     ph_h_classed[atl13_refid] = 44
+        
+        ## classify water points based on the 'surf_type' parameter to
+        ## remove ATL08 bare-earth clasification over water
+        ph_surf_type = [x[1] for x in ph_surf_type]
             
         ## set the photon height, either 'mean_tide' or 'geoid', else ellipsoid
         if self.water_surface == 'mean_tide':
@@ -7426,10 +7417,14 @@ class IceSat2File(ElevationDataset):
              'ref_elevation':ph_ref_elev,
              'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_altitude_sc,
+             'delta_time':delta_time,
+             'bathy_confidence':ph_h_bathy_conf,
+             'ph_surf_type':ph_surf_type,
+             'photon_h_dem':photon_h_dem,
              'ph_h_classed': ph_h_classed},
             columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
                      'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt',
-                     'ph_h_classed']
+                     'delta_time', 'bathy_confidence', 'ph_surf_type', 'photon_h_dem', 'ph_h_classed']
         )
 
         ## Process extra columns specified in `self.columns`
@@ -7459,6 +7454,84 @@ class IceSat2File(ElevationDataset):
 
         return(dataset)        
 
+    
+    def append_atl24_to_dataset(dataset):
+        if self.atl24_f is not None:
+            orientDict = {0:'l', 1:'r', 21:'error'}
+            laser = 'gt' + f'{i}' + orientDict[orient]
+            atl24_classed_pc_flag  = self.atl24_f[
+                f'/{laser}/class_ph'
+            ][...,]
+            atl24_lat_ph = self.atl24_f[
+                f'/{laser}/lat_ph'
+            ][...,]
+            atl24_lon_ph = self.atl24_f[
+                f'/{laser}/lon_ph'
+            ][...,]
+            atl24_suface_h = self.atl24_f[
+                f'/{laser}/surface_h'
+            ][...,]
+            atl24_ortho_h = self.atl24_f[
+                f'/{laser}/ortho_h'
+            ][...,]
+            atl24_ellipse_h = self.atl24_f[
+                f'/{laser}/ellipse_h'
+            ][...,]
+
+            atl24_ph_segment_id = self.atl24_f[
+                f'/{laser}/index_seg'
+            ][...,] # photon src 20 m seg id
+            atl24_classed_pc_indx = self.atl24_f[
+                f'/{laser}/index_ph'
+            ][...,]
+            atl24_conf = self.atl24_f[
+                f'/{laser}/confidence'
+            ][...,]
+
+            if self.water_surface == 'mean_tide':
+                atl24_ph_height = atl24_surface_h
+            elif self.water_surface == 'geoid':
+                atl24_ph_height = atl24_ortho_h
+            else:
+                atl24_ph_height = atl24_ellipse_h
+
+            ## append the laser to each record
+
+            laser_arr = np.empty(atl24_ortho_h.shape, dtype='object')
+            laser_arr[:] = laser
+
+            ## append the filename to each record
+            fn_arr = np.empty(atl24_ortho_h.shape, dtype='object')
+            fn_arr[:] = self.fn
+
+            class_mask = (atl24_classed_pc_flag == 40) | (atl24_classed_pc_flag == 41)
+            if self.region is not None:
+                lat_mask = (atl24_lat_ph >= self.region.ymin) & (atl24_lat_ph <= self.region.ymax)
+                lon_mask = (atl24_lon_ph >= self.region.xmin) & (atl24_lon_ph <= self.region.xmax)
+                dataset_mask = class_mask & lat_mask & lon_mask
+            else:
+                dataset_mask = class_mask
+
+            atl24_dataset = pd.DataFrame(
+                {'latitude': atl24_lat_ph[dataset_mask],
+                 'longitude': atl24_lon_ph[dataset_mask],
+                 'photon_height': atl24_ph_height[dataset_mask],
+                 'laser': laser_arr[dataset_mask],
+                 'fn': fn_arr[dataset_mask],
+                 'confidence': atl24_conf[dataset_mask],
+                 'ph_h_classed': atl24_classed_pc_flag[dataset_mask]},
+                columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
+                         'confidence', 'ph_h_classed']
+            )
+            for column in dataset.columns:
+                if column not in atl24_dataset.columns:
+                    tmp_data = np.zeros(atl24_ortho_h.shape)
+                    tmp_data[:] = -1
+
+                    atl24_dataset[column] = tmp_data
+
+            dataset = pd.concat([dataset, atl24_dataset], ignore_index=True)
+    
     
     def classify_bathymetry(
             self, dataset, thresh=95, min_buffer=-40, max_buffer=5,
@@ -7579,9 +7652,9 @@ class IceSat2File(ElevationDataset):
                                 bath_height = [x for x in bath_height if ~np.isnan(x)]
                                 
                                 for n, id in enumerate(geo_df.ids.values):
-                                    dataset.at[id, 'ph_h_classed'] = 4
-                                    #dataset.at[id, 'latitude'] = lat_wgs84[n]
-                                    #dataset.at[id, 'longitude'] = lon_wgs84[n]
+                                    dataset.at[id, 'ph_h_classed'] = 40
+                                    dataset.at[id, 'latitude'] = lat_wgs84[n]
+                                    dataset.at[id, 'longitude'] = lon_wgs84[n]
                                     dataset.at[id, 'photon_height'] = geo_df.depth.values[n] * -1
                             
                                 return(dataset)
@@ -7675,7 +7748,41 @@ class IceSat2File(ElevationDataset):
                 #[dataset.at[f.GetField('index'), 'ph_h_classed'] = 7 for f in icesat_layer]
                 for f in icesat_layer:
                     idx = f.GetField('index')
-                    dataset.at[idx, 'ph_h_classed'] = 5
+                    #bathy_mask = dataset.at[idx, 'ph_h_classed'] == 40
+                    #utils.echo_msg_bold(idx)
+                    #utils.echo_msg_bold(dataset.at[idx, 'ph_h_classed'])
+                    if dataset.at[idx, 'ph_h_classed'] != 40:
+                        dataset.at[idx, 'ph_h_classed'] = 41
+
+                icesat_layer.SetSpatialFilter(None)
+
+        ogr_df = None
+        return(dataset)
+
+    def classify_by_mask_geoms(self, dataset, mask_geoms=[], classification=-1, except_classes=[]):
+        """classify water photons using OSM coastline 
+        """
+
+        ## vectorize the photons
+        ogr_df = self._vectorize_df(dataset)
+        
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        with tqdm(
+                total=len(mask_geoms),
+                desc='classifying water photons',
+                leave=False
+        ) as pbar:
+            for n, wm_geom in enumerate(mask_geoms):                
+                pbar.update()
+                icesat_layer = ogr_df.GetLayer()
+                icesat_layer.SetSpatialFilter(wm_geom)
+                #utils.echo_msg(len(icesat_layer))
+                for f in icesat_layer:
+                    idx = f.GetField('index')
+                    #except_mask = dataset.at[idx, 'ph_h_classed']
+                    if dataset.at[idx, 'ph_h_classed'] not in except_classes:
+                        dataset.at[idx, 'ph_h_classed'] = classification
 
                 icesat_layer.SetSpatialFilter(None)
 
@@ -7925,7 +8032,7 @@ class MBSParser(ElevationDataset):
                 '{}.grd*'.format(ofn)
             )
             
-            grits_filter = grits.GritsFactory(
+            grits_filter = grits.grits_factory.GritsFactory(
                 mod='outliers:multipass=2',
                 src_dem='{}.tif'.format(ofn),
                 cache_dir=self.cache_dir,
@@ -8318,8 +8425,8 @@ class OGRFile(ElevationDataset):
                         #[x.append(unc if unc is not None else 0) for x in xyzs]
                         
                         for x in xyzs:
-                            x.append(weight if weight is not None else 1)
-                            x.append(unc if unc is not None else 0)
+                            x.append(weight if weight is not None else 1.)
+                            x.append(unc if unc is not None else 0.)
                             
                         points = np.rec.fromrecords(
                             xyzs, names='x, y, z, w, u'
@@ -9042,7 +9149,7 @@ class Fetcher(ElevationDataset):
                  outdir=None,
                  check_size=True,
                  want_single_metadata_name=False,
-                 callback=fetches.fetches_callback,
+                 callback=fetches.fetches.fetches_callback,
                  **kwargs
     ):
         super().__init__(**kwargs)
@@ -9055,7 +9162,7 @@ class Fetcher(ElevationDataset):
         if self.dst_srs is not None:
             self.wgs_region.warp(self.wgs_srs)
 
-        self.fetch_module = fetches.FetchesFactory(
+        self.fetch_module = fetches.fetches_factory.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
             callback=callback, verbose=False,
             outdir=outdir,
@@ -9079,26 +9186,36 @@ class Fetcher(ElevationDataset):
             os.makedirs(os.path.dirname(self.outdir))
 
         self.outdir = os.path.abspath(self.outdir)        
-        self.cache_dir = self.outdir                
-        try:
-            self.fetch_module.run()
-        except:
-            utils.echo_warning_msg(
-                f'fetch module {self.fn} returned zero results'
-            )
-            self.fetch_module.results = []
+        ##self.cache_dir = self.outdir                
+        # try:
+        #     self.fetch_module.run()
+        # except Exception as e:
+        #     utils.echo_warning_msg(
+        #         f'fetch module {self.fn} returned zero results, {e}'
+        #     )
+        #     self.fetch_module.results = []
 
         ## breaks when things not set...
         # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
 
         self._reset_params()
 
+
+    def _sub_init(self):
+        if len(self.fetch_module.results) == 0:
+            try:
+                self.fetch_module.run()
+            except Exception as e:
+                utils.echo_warning_msg(
+                    f'fetch module {self.fn} returned zero results, {e}'
+                )
+                self.fetch_module.results = []
         
     def init_fetch_module(self):
-        self.fetch_module = fetches.FetchesFactory(
+        self.fetch_module = fetches.fetches_factory.FetchesFactory(
             mod=self.fn,
             src_region=self.region,
-            callback=fetches.fetches_callback,
+            callback=fetches.fetches.fetches_callback,
             verbose=self.verbose,
             outdir=outdir
         )._acquire_module() # the fetches module
@@ -9110,9 +9227,9 @@ class Fetcher(ElevationDataset):
 
         try:
             self.fetch_module.run()
-        except:
+        except Exception as e:
             utils.echo_warning_msg(
-                f'fetch module {self.fn} returned zero results'
+                f'fetch module {self.fn} returned zero results, {e}'
             )
             self.fetch_module.results = []
 
@@ -9267,7 +9384,7 @@ class NEDFetcher(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <ned> - {}'''.format(
-        __doc__, fetches.NED.__doc__
+        __doc__, fetches.tnm.NED.__doc__
     )
 
     
@@ -9313,7 +9430,7 @@ class DNRFetcher(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <wadnr> - {}'''.format(
-        __doc__, fetches.waDNR.__doc__
+        __doc__, fetches.wadnr.waDNR.__doc__
     )
     
     def __init__(self, **kwargs):
@@ -9347,7 +9464,7 @@ class DAVFetcher_CoNED(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <CoNED> - {}'''.format(
-        __doc__, fetches.CoNED.__doc__
+        __doc__, fetches.dav.CoNED.__doc__
     )
     
     
@@ -9417,7 +9534,7 @@ class DAVFetcher_SLR(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <SLR> - {}'''.format(
-        __doc__, fetches.SLR.__doc__
+        __doc__, fetches.dav.SLR.__doc__
     )
 
     
@@ -9492,7 +9609,7 @@ class SWOTFetcher(Fetcher):
 
     __doc__ = '''{}    
     Fetches Module: <swot> - {}'''.format(
-        __doc__, fetches.SWOT.__doc__
+        __doc__, fetches.earthdata.SWOT.__doc__
     )
 
     
@@ -9509,7 +9626,7 @@ class SWOTFetcher(Fetcher):
         self.fetches_params['apply_geoid'] = apply_geoid
         self.fetches_params['classes'] = classes
         self.fetches_params['anc_classes'] = anc_classes
-        self.fetches_params['classes_qual'] = clases_qual
+        self.fetches_params['classes_qual'] = classes_qual
         self.fetches_params['remove_class_flags'] = remove_class_flags
 
         
@@ -9539,10 +9656,10 @@ class SWOTFetcher(Fetcher):
             #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
             #swot_pixc_vec_fn = pixc_vec_result
             self.fetches_params['data_format'] = 202
-            yield(DatasetFactory(**self.fetches_params).acquire_module())
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
         elif 'L2_HR_Raster' in result['data_type']:
-            self.fetch_module['data_format'] = 203
-            yield(DatasetFactory(**self.fetches_params).acquire_module())
+            self.fetches_params['data_format'] = 203
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
         else:
             utils.echo_warning_msg(
                 (f'{result["data_type"]} is not a currently supported '
@@ -9552,97 +9669,98 @@ class SWOTFetcher(Fetcher):
             
 class IceSat2Fetcher(Fetcher):
     """IceSat2 data from NASA
-
-    See `fetches --modules icesat2` for fetching parameters
-
-    Parameters:
     
-    # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
-    water_surface: 'geoid' 
-    classes: None # return only data with the specified classes, e.g. '2/3/4'
-    confidence_levels: None # return only data with the specified confidence 
-                       levels, e.g. '2/3/4'
-    columns: {} # the additional columns to export in transform_and_yield_points
-    classify_bathymetry: True # extract bathymetry with CShelph
-    classify_buildings: True # classify buildings with BING BFP
-    classify_water: True # classify water using OSM
-    reject_failed_qa: True # skip granules that failed QA
-
-    Classes:
-    -1 - no classification (ATL08)
-    0 - noise / atmosphere (ATL08)
-    1 - ground surface (ATL08)
-    2 - canopy (ATL08)
-    3 - canopy top (ATL08)
-    4 - bathymetry floor surface (CShelph, future ATL24)
-    5 - bathymetry water surface (CShelph, future ATL24)
-    6 - ice surface (ATL06) (unused for now, just planning ahead for 
-                             possible future ATL06 integration)
-    7 - built structure (OSM or Bing)
-    8 - "urban" (WSF, if used)
-
-    Confidence Levels:
-    0, 1, 2, 3, 4
     """
 
     __doc__ = '''{}    
+    DLIM Module: <IceSat2File> - {}'''.format(
+        __doc__, IceSat2File.__doc__
+    )
+    
+    __doc__ = '''{}    
     Fetches Module: <icesat2> - {}'''.format(
-        __doc__, fetches.IceSat2.__doc__
+        __doc__, fetches.earthdata.IceSat2.__doc__
     )
 
     
     def __init__(self,
-                 water_surface='geoid',
+                 water_surface=None,
                  classes=None,
                  confidence_levels=None,
                  columns={},
-                 classify_bathymetry=True,
+                 classify_bathymetry=False,
                  classify_buildings=True,
                  classify_water=True,
                  reject_failed_qa=True,
+                 min_bathy_confidence=None,
                  **kwargs):
         super().__init__(**kwargs)
-        self.fetches_params['water_suface'] = water_surface
-        self.fetches_params['classes'] = classes
-        self.fetches_params['confidence_levels'] = confidence_levels
-        self.fetches_params['columns'] = columns
-        self.fetches_params['classify_bathymetry'] = classify_bathymetry
-        self.fetches_params['classify_buildings'] = classify_buildings
-        self.fetches_params['classify_water'] = classify_water
-        self.fetches_params['reject_failed_qa'] = reject_failed_qa        
+        self.water_surface = water_surface
+        self.classes = classes
+        self.confidence_levels = confidence_levels
+        self.columns = columns
+        self.classify_bathymetry = classify_bathymetry
+        self.classify_buildings = classify_buildings
+        self.classify_water = classify_water
+        self.reject_failed_qa = reject_failed_qa
+        self.min_bathy_confidence = min_bathy_confidence        
+        self.data_format = -111
+        self.fetches_params['classify_bathymetry'] = self.classify_bathymetry
+        self.fetches_params['classify_buildings'] = self.classify_buildings
+        self.fetches_params['classify_water'] = self.classify_water
+
+        if self.fetches_params['classify_buildings']:
+            self.fetches_params['classify_buildings'] \
+                = self.process_buildings(self.fetch_buildings(verbose=self.verbose), verbose=self.verbose)
+
+        if self.fetches_params['classify_water']:
+            self.fetches_params['classify_water'] = self.process_coastline(
+                self.fetch_coastline(chunks=False, verbose=self.verbose),
+                return_geom=True, verbose=self.verbose
+            )
 
         
     def yield_ds(self, result):
         icesat2_fn= os.path.join(
             self.fetch_module._outdir, result['dst_fn']
         )
-        if self.fetches_params['classify_buildings']:
-            self.fetches_params['classify_buildings'] \
-                = self.process_buildings(self.fetch_buildings(verbose=True))
 
-        if self.fetches_params['classify_water']:
-            self.fetches_params['classify_water'] = self.process_coastline(
-                self.fetch_coastline(chunks=False, verbose=False),
-                return_geom=True, verbose=False
-            )
-            
-        if 'processed_zip' in result['data_type']:
-            icesat2_h5s = utils.p_unzip(
-                icesat2_fn,
-                exts=['h5'],
-                outdir=self.cache_dir,
-                verbose=self.verbose
-            )
-            for icesat2_h5 in icesat2_h5s:
-                self.fetches_params['fn'] = icesat2_h5
-                yield(IceSat2File(**self.fetches_params)._acquire_module())
-                yield(sub_ds)
-            
-        else:
+        if result['data_type'].lower() == 'atl03' or \
+           'NSIDC_CPRD' in result['data_type'].upper():
+            self.fetches_params['water_suface'] = self.water_surface if self.water_surface is not None else 'geoid'
+            self.fetches_params['classes'] = self.classes
+            self.fetches_params['confidence_levels'] = self.confidence_levels
+            self.fetches_params['columns'] = self.columns
+            self.fetches_params['reject_failed_qa'] = self.reject_failed_qa
+            self.fetches_params['min_bathy_confidence'] = self.min_bathy_confidence
+
+            if 'processed_zip' in result['data_type']:
+                icesat2_h5s = utils.p_unzip(
+                    icesat2_fn,
+                    exts=['h5'],
+                    outdir=self.cache_dir,
+                    verbose=self.verbose
+                )
+                for icesat2_h5 in icesat2_h5s:
+                    self.fetches_params['fn'] = icesat2_h5
+                    yield(IceSat2File(**self.fetches_params)._acquire_module())
+                    yield(sub_ds)
+
+            else:
+                self.fetches_params['fn'] = icesat2_fn
+                self.fetches_params['data_format'] = 303
+                #yield(IceSat2File(**self.fetches_params)._acquire_module())
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())
+                
+        elif result['data_type'].lower() == 'atl24':
+            self.fetches_params['water_suface'] = self.water_surface if self.water_surface is not None else 'ortho'
+            self.fetches_params['classes'] = self.classes
+            self.fetches_params['min_confidence'] = self.min_bathy_confidence
             self.fetches_params['fn'] = icesat2_fn
-            self.fetches_params['data_format'] = 303
-            #yield(IceSat2File(**self.fetches_params)._acquire_module())
+            self.fetches_params['data_format'] = 304
             yield(DatasetFactory(**self.fetches_params)._acquire_module())
+        else:
+            utils.echo_warning_msg(f'{icesat2_fn}({result["dst_fn"]} - {result["data_type"]} cannot be processed')
 
             
 class GMRTFetcher(Fetcher):
@@ -9656,7 +9774,7 @@ class GMRTFetcher(Fetcher):
     
     __doc__ = '''{}    
     Fetches Module: <gmrt> - {}'''.format(
-        __doc__, fetches.GMRT.__doc__
+        __doc__, fetches.gmrt.GMRT.__doc__
     )
 
     
@@ -9676,7 +9794,7 @@ class GMRTFetcher(Fetcher):
             gdalfun.gdal_set_ndv(src_ds, verbose=False)
 
         if self.swath_only:
-            if fetches.Fetch(
+            if fetches.fetches.Fetch(
                     self.fetch_module._gmrt_swath_poly_url,
                     verbose=self.verbose
             ).fetch_file(
@@ -9719,7 +9837,7 @@ class GEBCOFetcher(Fetcher):
     
     __doc__ = '''{}    
     Fetches Module: <gebco> - {}'''.format(
-        __doc__, fetches.GEBCO.__doc__
+        __doc__, fetches.gebco.GEBCO.__doc__
     )
 
     
@@ -9742,7 +9860,7 @@ class GEBCOFetcher(Fetcher):
         
         ## fetch the TID zip if needed
         if self.exclude_tid:
-            if fetches.Fetch(
+            if fetches.fetches.Fetch(
                     self.fetch_module._gebco_urls['gebco_tid']['geotiff'],
                     verbose=self.verbose
             ).fetch_file(
@@ -9835,7 +9953,7 @@ class CopernicusFetcher(Fetcher):
     
     __doc__ = '''{}    
     Fetches Module: <copernicus> - {}'''.format(
-        __doc__, fetches.CopernicusDEM.__doc__
+        __doc__, fetches.copernicus.CopernicusDEM.__doc__
     )
 
     
@@ -9872,7 +9990,7 @@ class FABDEMFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <fabdem> - {}'''.format(
-        __doc__, fetches.FABDEM.__doc__
+        __doc__, fetches.fabdem.FABDEM.__doc__
     )
 
     
@@ -9900,7 +10018,7 @@ class MarGravFetcher(Fetcher):
     
     __doc__ = '''{}    
     Fetches Module: <mar_grav> - {}'''.format(
-        __doc__, fetches.MarGrav.__doc__
+        __doc__, fetches.margrav.MarGrav.__doc__
     )
 
     
@@ -9988,7 +10106,7 @@ class ChartsFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <charts> - {}'''.format(
-        __doc__, fetches.Charts.__doc__
+        __doc__, fetches.charts.Charts.__doc__
     )
 
                                         
@@ -10036,7 +10154,7 @@ class MBSFetcher(Fetcher):
 
     __doc__ = '''{}
     Fetches Module: <multibeam> - {}'''.format(
-        __doc__, fetches.Multibeam.__doc__
+        __doc__, fetches.multibeam.Multibeam.__doc__
     )
 
                                         
@@ -10068,7 +10186,7 @@ class HydroNOSFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <hydronos> - {}'''.format(
-        __doc__, fetches.HydroNOS.__doc__
+        __doc__, fetches.hydronos.HydroNOS.__doc__
     )
 
                                         
@@ -10130,7 +10248,7 @@ class CSBFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <csb> - {}'''.format(__doc__, fetches.CSB.__doc__)
+    Fetches Module: <csb> - {}'''.format(__doc__, fetches.csb.CSB.__doc__)
 
                                         
     def __init__(self, **kwargs):
@@ -10146,7 +10264,7 @@ class R2RFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-    Fetches Module: <r2r> - {}'''.format(__doc__, fetches.R2R.__doc__)
+    Fetches Module: <r2r> - {}'''.format(__doc__, fetches.multibeam.R2R.__doc__)
 
                                         
     def __init__(self, **kwargs):
@@ -10179,7 +10297,7 @@ class EMODNetFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <emodnet> - {}'''.format(
-        __doc__, fetches.EMODNet.__doc__
+        __doc__, fetches.emodnet.EMODNet.__doc__
     )
 
                                         
@@ -10203,7 +10321,7 @@ class GEDTM30Fetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <gedtm30> - {}'''.format(
-        __doc__, fetches.GEDTM30.__doc__
+        __doc__, fetches.gedtm30.GEDTM30.__doc__
     )
 
                                         
@@ -10233,7 +10351,7 @@ class HRDEMFetcher(Fetcher):
     
     __doc__ = '''{}
     Fetches Module: <hrdem> - {}'''.format(
-        __doc__, fetches.HRDEM.__doc__
+        __doc__, fetches.hrdem.HRDEM.__doc__
     )
 
                                         
@@ -10250,7 +10368,7 @@ class eHydroFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.eHydro.__doc__)
+    Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.ehydro.eHydro.__doc__)
 
                                         
     def __init__(self, want_contours=True, **kwargs):
@@ -10339,7 +10457,7 @@ class BlueTopoFetcher(Fetcher):
 
     __doc__ = '''{}
     Fetches Module: <bluetopo> - {}'''.format(
-        __doc__, fetches.BlueTopo.__doc__
+        __doc__, fetches.bluetopo.BlueTopo.__doc__
     )
 
     
@@ -10382,7 +10500,7 @@ class NGSFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <ngs> - {}'''.format(__doc__, fetches.NGS.__doc__)
+    Fetches Module: <ngs> - {}'''.format(__doc__, fetches.ngs.NGS.__doc__)
 
     
     def __init__(self, datum = 'geoidHt', **kwargs):
@@ -10434,7 +10552,7 @@ class TidesFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <tides> - {}'''.format(__doc__, fetches.Tides.__doc__)
+    Fetches Module: <tides> - {}'''.format(__doc__, fetches.tides.Tides.__doc__)
 
     
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', **kwargs):
@@ -10503,7 +10621,7 @@ class WaterServicesFetcher(Fetcher):
 
     __doc__ = '''{}
     Fetches Module: <waterservices> - {}'''.format(
-        __doc__, fetches.WaterServices.__doc__
+        __doc__, fetches.waterservices.WaterServices.__doc__
     )
 
     
@@ -10560,7 +10678,7 @@ class VDatumFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-    Fetches Module: <vdatum> - {}'''.format(__doc__, fetches.VDATUM.__doc__)
+    Fetches Module: <vdatum> - {}'''.format(__doc__, fetches.vdatum.VDATUM.__doc__)
 
     
     def __init__(self, **kwargs):
@@ -10673,7 +10791,11 @@ class DatasetFactory(factory.CUDEMFactory):
               'fmts': ['h5'],
               'description': 'An HDF5 IceSat2 ATL03 datafile',
               'call': IceSat2File},
-        304: {'name': 'cudem',
+        304: {'name': 'icesat2_atl24',
+              'fmts': ['h5'],
+              'description': 'An HDF5 IceSat2 ATL24 datafile',
+              'call': IceSat2_ATL24File},
+        310: {'name': 'cudem',
               'fmts': ['csg', 'nc', 'h5'],
               'description': 'A netCDF/h5 CUDEM file',
               'call': CUDEMFile},
@@ -10977,6 +11099,8 @@ class DatasetFactory(factory.CUDEMFactory):
         if self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
         else:
+            #utils.echo_msg(self.kwargs['parent'])
+            #utils.echo_msg(self.kwargs['parent'].fn)
             if self.mod_name >= -2 \
                and os.path.dirname(self.kwargs['parent'].fn) \
                != os.path.dirname(entry[0]) and \
@@ -11217,7 +11341,7 @@ Examples:
         DatasetFactory._modules
     ),
     grits_modules=factory._cudem_module_short_desc(
-        grits.GritsFactory._modules
+        grits.grits_factory.GritsFactory._modules
     ),
     point_filter_modules=factory._cudem_module_short_desc(
         PointFilterFactory._modules
@@ -11491,22 +11615,22 @@ See `datalists_usage` for full cli options.
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
                 else:
-                    #try:
-                    # process and dump each dataset independently
-                    if want_separate: 
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else:
-                        # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #   utils.echo_error_msg('Killed by user')
-                    #   break
-                    # except BrokenPipeError:
-                    #   utils.echo_error_msg('Pipe Broken')
-                    #   break
-                    # except Exception as e:
-                    #   utils.echo_error_msg(e)
-                    #   print(traceback.format_exc())
+                    try:
+                        # process and dump each dataset independently
+                        if want_separate: 
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else:
+                            # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                      utils.echo_error_msg('Killed by user')
+                      break
+                    except BrokenPipeError:
+                      utils.echo_error_msg('Pipe Broken')
+                      break
+                    except Exception as e:
+                      utils.echo_error_msg(e)
+                      print(traceback.format_exc())
                     
 ### End

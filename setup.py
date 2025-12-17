@@ -31,7 +31,7 @@ with open('README.md', 'r', encoding='utf-8') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '2.5.0',
+    version = '2.6.0',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -39,7 +39,11 @@ setuptools.setup(
     author = 'CIRES Coastal DEM Team',
     author_email = 'matthew.love@colorado.edu',
     url = 'http://ciresgroups.colorado.edu/coastalDEM',
-    packages = ['cudem'],
+    #packages=setuptools.find_namespace_packages(where='cudem/', include=['cudem']),
+    #package_dir={'': 'cudem'},
+    #packages = ['cudem', 'cudem.perspecto'],
+    packages = setuptools.find_packages(),
+    #package_dir = {'cudem': ''},
     package_data = {'cudem': ['data/*.geojson', 'data/*_errs.dat.gz']},
     classifiers = [
         'Programming Language :: Python :: 3',
@@ -80,7 +84,7 @@ setuptools.setup(
             'dlim = cudem.dlim:datalists_cli',
             'waffles = cudem.waffles:waffles_cli',
             'fetches = cudem.fetches:fetches_cli',
-            'perspecto = cudem.perspecto:perspecto_cli',
+            'perspecto = cudem.perspecto.perspecto_factory:perspecto_cli',
             'vdatums = cudem.vdatums:vdatums_cli',
             'grits = cudem.grits:grits_cli',
             'vrbag = cudem.vrbag:vrbag_cli',

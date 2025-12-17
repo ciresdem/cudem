@@ -459,7 +459,7 @@ class Region:
         return(eg)
 
     
-    def export_as_wkt(self):
+    def export_as_wkt(self, flatten=True):
         """convert a region to wkt
 
         Returns:
@@ -472,10 +472,10 @@ class Region:
               [self.ymax, self.xmin],
               [self.ymin, self.xmin]]
 
-        return(create_wkt_polygon(eg))
+        return(create_wkt_polygon(eg, flatten=flatten))
 
     
-    def export_as_geom(self):
+    def export_as_geom(self, flatten=True):
         """convert a region to an OGR geometry
 
         Returns:
@@ -483,7 +483,7 @@ class Region:
         """
 
         if self.wkt is None:
-            self.wkt = self.export_as_wkt()
+            self.wkt = self.export_as_wkt(flatten=flatten)
             
         if self.wkt is not None:
             return(ogr.CreateGeometryFromWkt(self.wkt))
@@ -651,13 +651,21 @@ class Region:
           list: the center point [xc, yc]
         """
 
+        # if self.valid_p():
+        #     return([self.xmin + ((self.xmax-self.xmin)/2),
+        #             self.ymax + ((self.ymax-self.ymin)/2)])
+        
+        # else:
+        #     return(None)        
+
         if self.valid_p():
-            return([self.xmin + ((self.xmax-self.xmin)/2),
-                    self.ymax + ((self.ymax-self.ymin)/2)])
+            return([(self.xmax+self.xmin)/2,
+                    (self.ymax+self.ymin)/2])
         
         else:
             return(None)        
 
+        
         
     def chunk(self, inc, n_chunk=10):
         """chunk the xy region [xmin, xmax, ymin, ymax] into 
@@ -1058,7 +1066,7 @@ def gdal_ogr_regions(src_ds):
     return(these_regions)
 
 
-def create_wkt_polygon(coords, xpos=1, ypos=0):
+def create_wkt_polygon(coords, xpos=1, ypos=0, flatten=True):
     """convert coords to Wkt
 
     Args:
@@ -1074,6 +1082,9 @@ def create_wkt_polygon(coords, xpos=1, ypos=0):
     for coord in coords: ring.AddPoint(coord[xpos], coord[ypos])
     poly = ogr.Geometry(ogr.wkbPolygon)
     poly.AddGeometry(ring)
+    if flatten:
+        poly.FlattenTo2D()
+        
     poly_wkt = poly.ExportToWkt()
     poly = None
     
@@ -1127,8 +1138,6 @@ def ogr_wkts(src_ds):
                         if len(src_r) > 3:  r.wmax = utils.float_or(src_r[3])
 
                     these_regions.append(r)
-                else:
-                    f_no_geom += 1
 
         poly = None
 

@@ -28,11 +28,9 @@
 ##
 ### Code:
 
-
 import sys
 from cudem.utils import float_or
 from cudem.utils import str_or
-
 
 class XYZPoint:
     """represnting an xyz data point"""

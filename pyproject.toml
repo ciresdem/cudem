@@ -1,0 +1,52 @@
+[project]
+name = 'cudem'
+version = '2.6.5'
+dependencies = [
+	     'numpy', # all
+             'scipy', # waffles/convex hulls
+             'requests[security]', # fetches/nsidc
+             'lxml', # fetches xml parsing
+             'matplotlib', # uncertainty plots
+             'laspy[lazrs,laszip]', # dlim/lasfile support
+	     'pyproj', # all
+             'h5py', # nsidc
+             'boto3', # for amazon/bluetopo
+             'tqdm', # progress bar
+             'mercantile', # for MS building footprints
+             'utm', # for cshelph
+             'pandas', # for cshelph
+             'netCDF4', # for netcdf outputs
+]
+
+requires-python = '>=3.0'
+authors = [
+	{name = 'Matthew Love', email = 'matthew.love@colorado.edu'},
+]
+maintainers = [
+	{name = 'Matthew Love', email = 'matthew.love@colorado.edu'},
+]
+description = 'Modules and scripts for utilizing geographic data Digital Elevation Models'
+readme = 'README.md'
+license = 'MIT'
+classifiers = [
+            'Programming Language :: Python :: 3',
+            'Operating System :: OS Independent',
+]
+
+#[project.entry-points."cudem"]
+[project.scripts]
+regions = 'cudem.regions:regions_cli'
+dlim = 'cudem.datalists.dlim:datalists_cli'
+#dlim = 'cudem.dlim:datalists_cli'
+waffles = 'cudem.waffles:waffles_cli'
+fetches = 'cudem.fetches.fetches:fetches_cli'
+vdatums = 'cudem.vdatums:vdatums_cli'
+perspecto = 'cudem.perspecto.perspecto:perspecto_cli'
+grits = 'cudem.grits.grits:grits_cli'
+
+#[tools.setuptools.packages.find]
+#where=['cudem']
+
+[tool.setuptools.package-data]
+cudem = ['data/*_errs.dat.gz', 'data/*.geojson', 'fetches/data/*.geojson']
+

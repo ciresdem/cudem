@@ -32,8 +32,8 @@ import os
 import sys
 import shutil
 import math
-from tqdm import tqdm
-from tqdm import trange
+#from tqdm import tqdm
+#from tqdm import trange
 
 from osgeo import gdal
 from osgeo import osr
@@ -46,6 +46,7 @@ import scipy
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
+from cudem import vrbag
 
 gc = utils.config_check()
 gdal.DontUseExceptions()
@@ -609,6 +610,27 @@ def ogr_union_geom(src_layer, geom_type=ogr.wkbMultiPolygon,
 
     return(multi)
 
+def ogr_union_geom2(src_layer, geom_type=ogr.wkbMultiPolygon,
+                    verbose=True):        
+    multi = ogr.Geometry(geom_type)
+    feats = src_layer.GetFeatureCount()#len(src_layer)
+    # [multi.AddGeometry(f.geometry().ExportToWkt()) for f in src_layer]
+    # if verbose:
+    #     utils.echo_msg(f'unioned {feats} features')
+        
+    #if feats > 0:
+    # with tqdm(
+    #         total=len(feats),
+    #         desc=f'unioning {feats} features...'
+    # ) as pbar:
+    for f in src_layer:
+        f_geom = f.geometry()
+        print(f_geom)
+        f_geom_wkt = f_geom
+        multi.AddGeometry(f_geom)
+
+    return(multi.ExportToWkt())
+
 
 def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
     """check if the OGR file is empty or not"""
@@ -704,7 +726,7 @@ def ogr_polygonize(src_ds, dst_srs='epsg:4326', ogr_format='ESRI Shapefile',
 
 def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
                   dst_srs='epsg:4326', invert=True, verbose=True,
-                  temp_dir=utils.cudem_cache()):
+                  temp_dir='./'):
     dst_fn = utils.make_temp_fn(
         '{}.tif'.format(mask_fn), region=region, inc=x_inc, temp_dir=temp_dir
     )
@@ -740,12 +762,15 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
                 1
             )
             gdal_nan(ds_config, dst_fn, nodata=0)
-            clip_layer = utils.fn_basename2(os.path.basename(mask_fn))
+            clip_layer = ogr_get_layer_name(mask_fn)
+            if clip_layer is None:
+                clip_layer = utils.fn_basename2(os.path.basename(mask_fn))
+                
             # mask_fn = ogr_clip2(
             #     mask_fn, dst_region=region, layer=clip_layer, verbose=verbose
             # )
             
-            gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
+            gr_cmd = 'gdal_rasterize -burn {} -l {} "{}" "{}"{}'\
                 .format(1, clip_layer, mask_fn, dst_fn, ' -i' if invert else '')
             out, status = utils.run_cmd(gr_cmd, verbose=verbose)
             return(dst_fn)
@@ -753,6 +778,109 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
         #else:
         #    self.mask = None
 
+
+def ogr_geoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):
+    dirname = os.path.dirname(out)
+    dst_layer = os.path.basename(utils.fn_basename2(out))
+    dst_vector = os.path.join(dirname, dst_layer + '.{}'.format(ogr_fext(ogr_format)))
+    if os.path.exists(out):
+        utils.remove_glob(f'{utils.fn_basename2(out)}*')
+        
+    osr_prj_file('{}.prj'.format(utils.fn_basename2(out)), dst_srs)
+    driver = ogr.GetDriverByName(ogr_format)
+    ds = driver.CreateDataSource(dst_vector)
+    if ds is not None: 
+        layer = ds.CreateLayer(
+           dst_layer, None, ogr.wkbMultiPolygon
+        )
+        [layer.SetFeature(feature) for feature in layer]
+    else:
+        layer = None
+
+    for g in geoms:
+        #out_feature = ogr.Feature(layer.GetLayerDefn())        
+        #layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+
+        # print(geoms)
+
+        # multi = ogr.Geometry(ogr.wkbMultiPolygon)
+        # for g in geoms:
+        #     print(g)
+        #     multi.AddGeometry(g)
+
+        #[multi.AddGeometry(g) for g in geoms]
+
+        #print(multi)
+        #for i, geom in enumerate(geoms):
+        out_feature = ogr.Feature(layer.GetLayerDefn())
+        #out_feature.SetGeometry(multi)
+        out_feature.SetGeometry(g)
+        #layer.SetFeature(out_feature)
+
+        #out_feature.SetField('DN', 1)
+        layer.CreateFeature(out_feature)
+
+    ds = None
+
+    return(out)
+
+
+def ogr_wktgeoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):
+    dirname = os.path.dirname(out)
+    dst_layer = os.path.basename(utils.fn_basename2(out))
+    dst_vector = os.path.join(dirname, dst_layer + '.{}'.format(ogr_fext(ogr_format)))
+    #dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
+    if os.path.exists(out):
+        utils.remove_glob(f'{utils.fn_basename2(out)}*')
+        
+    osr_prj_file('{}.prj'.format(utils.fn_basename2(out)), dst_srs)
+    driver = ogr.GetDriverByName(ogr_format)
+    ds = driver.CreateDataSource(dst_vector)
+    if ds is not None: 
+        layer = ds.CreateLayer(
+           dst_layer, None, ogr.wkbMultiPolygon
+        )
+        [layer.SetFeature(feature) for feature in layer]
+    else:
+        layer = None
+
+    for g in geoms:
+        out_feature = ogr.Feature(layer.GetLayerDefn())
+        gg = ogr.CreateGeometryFromWkt(g)
+        out_feature.SetGeometry(gg)
+        layer.CreateFeature(out_feature)
+
+    ds = None
+
+    return(out)
+
+def ogr_get_layer_name(ogr_fn):
+    layer_name = None
+    ds = ogr.Open(ogr_fn, 0)
+    if ds is not None:
+        layer = ds.GetLayer()
+        layer_name = layer.GetName()
+
+    ds = None
+    
+    return(layer_name)
+
+
+def ogr_geoms(ogr_fn):
+    out_geoms = []
+    ds = ogr.Open(ogr_fn, 0)
+    if ds is not None:
+        layer = ds.GetLayer()
+        for f in layer:
+            if f:
+                geom = f.GetGeometryRef()
+                if geom is not None and not geom.IsEmpty():
+                    out_geoms.append(geom.ExportToWkt())
+        
+        ds = None
+        
+    return(out_geoms)
+    
         
 ###############################################################################        
 ## GDAL
@@ -994,8 +1122,10 @@ def gdal_infos(src_gdal, region=None, scan=False, band=1):
                     f'invalid band {band} for data source {src_gdal}'
                 )
         else:
-            utils.echo_warning_msg(f'could not load gdal file {src_gdal}')
-                
+            utils.echo_warning_msg(
+                f'could not load raster {src_gdal}'
+            )
+
     return(ds_config)
 
 
@@ -1128,18 +1258,18 @@ def flatten_no_data_zones(src_arr, src_config, size_threshold=1,
 
     ## get the total number of cells in each group
     mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
-    for i in trange(
-            0, n,
-            desc='{}: flattening data voids greater than {} cells'.format(
-                os.path.basename(sys.argv[0]), size_threshold
-            ),
+    #for i in trange(
+    with utils.ccp(
+            desc=f'flattening data voids greater than {size_threshold} cells',
             leave=verbose
-    ):
-        if mn[i] >= size_threshold:
-            i += 1
-            ll = expand_for(l==i)
-            flat_value = np.nanpercentile(src_arr[ll], 5)
-            src_arr[l==i] = flat_value
+    ) as pbar:
+        for i in range(0, n):
+            if mn[i] >= size_threshold:
+                i += 1
+                ll = expand_for(l==i)
+                flat_value = np.nanpercentile(src_arr[ll], 5)
+                src_arr[l==i] = flat_value
+                pbar.update()
 
     src_arr[np.isnan(src_arr)] = src_config['ndv']
 
@@ -1500,7 +1630,7 @@ def gdal_cut2(src_gdal, src_region, dst_gdal, node='pixel',
                 if out_ds_config['proj'] is not None:
                     clip_ds.SetProjection(out_ds_config['proj'])
 
-                with tqdm(
+                with utils.ccp(
                         desc='clipping raster bands',
                         total=src_ds.RasterCount,
                         leave=verbose
@@ -1531,7 +1661,7 @@ def gdal_cut_trans(src_gdal, src_region, dst_gdal, node='pixel',
         )
                 
     gdal_translate_cmd = (
-        'gdal_translate {} {} -srcwin {} {} {} {} {}'.format(
+        'gdal_translate "{}" "{}" -srcwin {} {} {} {} {}'.format(
             src_gdal, dst_gdal,
             region_srcwin[0], region_srcwin[1],
             region_srcwin[2], region_srcwin[3],
@@ -1559,10 +1689,9 @@ def gdal_clip(src_gdal, dst_gdal, src_ply=None, invert=False,
     g_region = regions.Region().from_geo_transform(
         geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny']
     )
-    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', temp_dir=cache_dir)
-    
+    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', temp_dir=cache_dir)    
     out, status = utils.run_cmd(
-        'ogr2ogr {} {} -clipsrc {} -nlt MULTIPOLYGON -skipfailures -makevalid'.format(
+        'ogr2ogr "{}" "{}" -clipsrc {} -nlt POLYGON -skipfailures -makevalid'.format(
             tmp_ply, src_ply, g_region.format('ul_lr')
         ),
         verbose=verbose
@@ -1574,7 +1703,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply=None, invert=False,
             if src_ds is not None:
                 band_count = src_ds.RasterCount
                 
-        gr_cmd = 'gdal_rasterize -b {} -burn {} -l {} {} {}{}'\
+        gr_cmd = 'gdal_rasterize -b {} -burn {} -l {} "{}" "{}"{}'\
             .format(
                 band_count,
                 gi['ndv'],
@@ -1861,7 +1990,7 @@ def sample_warp(
                 os.makedirs(os.path.dirname(dst_dem))
 
     if verbose:
-        desc = 'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
+        desc = 'warping DEM {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
             src_dem,
             out_region,
             x_sample_inc,
@@ -1872,7 +2001,7 @@ def sample_warp(
             src_srs,
             dst_srs
         )
-        pbar = tqdm(desc=desc, total=100, leave=True)
+        pbar = utils.ccp(desc=desc, total=100, leave=True)
         pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)
     else:
         pbar_update = None
@@ -2043,7 +2172,7 @@ def gdal_yield_srcwin(src_gdal, n_chunk=10, step=5, verbose=False):
     i_chunk = 0
     x_i_chunk = 0
     
-    with tqdm(
+    with utils.ccp(
             total=math.ceil(ds_config['ny']/step) * math.ceil(ds_config['nx']/step),
             desc=f'chunking {src_gdal}'
     ) as pbar:

@@ -20,7 +20,7 @@
 ###############################################################################
 ### Code:
 
-__version__ = "2.5.0"
+__version__ = "2.6.5"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
@@ -29,20 +29,22 @@ __credits__ = "CIRES"
 import os
 import sys
 from osgeo import gdal
-from cudem import utils
-from cudem import regions
-from cudem import xyzfun
-from cudem import gdalfun
-from cudem import factory
-from cudem import vdatums
-from cudem import fetches
-from cudem import grits
-from cudem import vrbag
-from cudem import waffles
-from cudem import dlim
-from cudem import htdpfun
-from cudem import perspecto
-from cudem import srsfun
+from . import utils
+from . import regions
+from . import xyzfun
+from . import gdalfun
+from . import factory
+from . import vdatums
+from . import fetches
+from . import grits
+from . import vrbag
+from . import pointz
+from . import waffles
+#from . import dlim
+from . import datalists
+from . import htdpfun
+from . import perspecto
+from . import srsfun
 
 gc = utils.config_check() # cudem config file holding foriegn programs and versions
 if gc['platform'] == 'linux':

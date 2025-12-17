@@ -1,4 +1,4 @@
-# dlim
+# dlim - DataLists IMproved
 
 process various elevation datasets.
 
@@ -193,7 +193,8 @@ datasets (datalist, zip, fetches, etc), are negative format numbers, e.g. -1 for
 ### Load and process data to xyz using the Python API
 
 ```python
-from cudem import regions, dlim
+from cudem import regions
+from cudem.datalists import dlim
 
 # set the region
 r = regions.Region().from_string('-R-119.25/-119/34/34.25')
@@ -216,6 +217,108 @@ d = dlim.init_data(['my_hydronos.xyz', 'ned'], region=r, xyinc=('1s','1s'), dst_
 # dump the xyz data, include the uncertainty
 # the dumped xyz data will be in wgs84 at 1 arc-second blocks
 d.dump_xyz(include_u=True)
+```
+
+### Process IceSat2 data into a list of pandas dataframes
+```python
+import os
+from cudem import regions
+from cudem.fetches import fetches
+from cudem.fetches import earthdata
+from cudem.datalists import icesat2file
+
+region = regions.Region().from_list([-124.5, -124.24, 44.75, 45.0]) 
+tstart = "2024-06-28"
+tend = "2024-08-30"
+
+is2_03 = earthdata.IceSat2(
+    src_region=region, outdir="cache", time_start=tstart, time_end=tend,
+    subset=True, short_name="ATL03", version="006"
+)
+js_03 = is2_03.harmony_make_request()
+ 
+is2_08 = earthdata.IceSat2(
+    src_region=region, outdir="cache", time_start=tstart, time_end=tend,
+    subset=True, short_name="ATL08", version="006"
+)
+js_08 = is2_08.harmony_make_request()
+
+is2_24 = earthdata.IceSat2(
+    src_region=region, outdir="cache", time_start=tstart, time_end=tend,
+    subset=True, short_name="ATL24", version="006"
+)
+js_24 = is2_24.harmony_make_request()
+ 
+jid_03 = js_03['jobID']
+jid_08 = js_08['jobID']
+jid_24 = js_24['jobID']
+
+js_24 = is2_24.harmony_ping_for_status(jid_24)
+js_03 = is2_03.harmony_ping_for_status(jid_03)
+js_08 = is2_08.harmony_ping_for_status(jid_08)
+
+# Keep repeating until status = "successful" for each one. Should get 4 ATL03 granules and 3 of each ATL08 and ATL24
+ofiles_03 = [os.path.join("cache", of['title']) for of in js_03['links'] if of['title'].startswith("ATL")]
+ofiles_08 = [os.path.join("cache", of['title']) for of in js_08['links'] if of['title'].startswith("ATL")]
+ofiles_24 = [os.path.join("cache", of['title']) for of in js_24['links'] if of['title'].startswith("ATL")]
+
+hrefs_03 = [of['href'] for of in js_03['links'] if of['title'].startswith("ATL")]
+hrefs_08 = [of['href'] for of in js_08['links'] if of['title'].startswith("ATL")]
+hrefs_24 = [of['href'] for of in js_24['links'] if of['title'].startswith("ATL")]
+
+for href, of in zip(hrefs_03, ofiles_03):
+    fetches.Fetch(href, headers=is2_03.headers).fetch_file(of)
+
+for href, of in zip(hrefs_08, ofiles_08):
+    fetches.Fetch(href, headers=is2_08.headers).fetch_file(of)
+
+for href, of in zip(hrefs_24, ofiles_24):
+    fetches.Fetch(href, headers=is2_24.headers).fetch_file(of)
+
+
+while js_24['status'] != 'successful' or js_03['status'] != 'successful' or js_08['status'] != 'successful':
+    ofiles_03 = [os.path.join("cache", of['title']) for of in js_03['links'] if of['title'].startswith("ATL")]
+    ofiles_08 = [os.path.join("cache", of['title']) for of in js_08['links'] if of['title'].startswith("ATL")]
+    ofiles_24 = [os.path.join("cache", of['title']) for of in js_24['links'] if of['title'].startswith("ATL")]
+    
+    hrefs_03 = [of['href'] for of in js_03['links'] if of['title'].startswith("ATL")]
+    hrefs_08 = [of['href'] for of in js_08['links'] if of['title'].startswith("ATL")]
+    hrefs_24 = [of['href'] for of in js_24['links'] if of['title'].startswith("ATL")]
+    
+    # Fetch the files
+    for href, of in zip(hrefs_03, ofiles_03):
+        fetches.Fetch(href, headers=is2_03.headers).fetch_file(of)
+
+    for href, of in zip(hrefs_08, ofiles_08):
+        fetches.Fetch(href, headers=is2_08.headers).fetch_file(of)
+
+    for href, of in zip(hrefs_24, ofiles_24):
+        fetches.Fetch(href, headers=is2_24.headers).fetch_file(of)
+
+    js_24 = is2_24.harmony_ping_for_status(jid_24)
+    js_03 = is2_03.harmony_ping_for_status(jid_03)
+    js_08 = is2_08.harmony_ping_for_status(jid_08)
+
+
+dfs = []
+for atl03_granule in ofiles_03:
+    ds = icesat2file.IceSat2_ATL03(
+        fn=atl03_granule,
+        src_region=region,
+        src_srs="EPSG:4326+3855",
+        dst_srs="EPSG:4326+3855",
+        classes="1/40",
+        confidence_levels="4",
+        columns={},
+        classify_buildings=True,
+        classify_water=True,
+        min_bathy_confidence=0.01,
+        cache_dir='cache',
+        verbose=True
+    )
+    ds = ds.initialize()
+    for df in ds.yield_points():
+        dfs.append(df)
 ```
 
 ### Process fetches dataset `hydronos` to input region and output to an xyz file, including weights and uncertainty

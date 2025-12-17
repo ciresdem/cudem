@@ -137,4 +137,5 @@ if __name__ == '__main__':
         if not cmd_exists('pip') and install_dep:
             os.system('sudo dnf install python3-pip')
             
-        os.system('pip install --user --upgrade ./')
+        #os.system('pip install --user --upgrade ./')
+        os.system('pip install --upgrade ./')
