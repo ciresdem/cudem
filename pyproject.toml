@@ -1,6 +1,6 @@
 [project]
 name = 'cudem'
-version = '2.6.1'
+version = '2.6.5'
 dependencies = [
 	     'numpy', # all
              'scipy', # waffles/convex hulls

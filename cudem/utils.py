@@ -61,7 +61,7 @@ import numpy as np
 ###############################################################################
 ## Cahce directory, for use in dlim/waffles/fetches
 this_dir, this_filename = os.path.split(__file__)
-cudem_cache = lambda: os.path.abspath('./.cudem_cache')
+cudem_cache = lambda: os.path.abspath('./cudem_cache')
 cudem_data = os.path.join(this_dir, 'data')
 def set_cache(cache_dir: str):
     if not os.path.exists(cache_dir):

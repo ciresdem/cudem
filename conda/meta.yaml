@@ -1,4 +1,4 @@
-{% set version = "2.6.1" %}
+{% set version = "2.6.5" %}
 
 package:
   name: cudem
@@ -7,7 +7,7 @@ package:
 source:
   git_url: https://github.com/ciresdem/cudem.git
   path: ./
-  #git_rev: 2.6.1
+  #git_rev: 2.6.5
   #git_depth: 1
 
 build:

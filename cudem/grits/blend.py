@@ -93,7 +93,11 @@ def interpolate_array(
                 srcwin[0]:srcwin[0]+points_array.shape[1]
             ] = points_array
 
-        elif len(point_indices[0]):
+        elif len(point_indices[0]) <= 3:
+            # elif len(point_indices[0]):
+            continue
+        
+        else:
             point_values = points_array[point_indices]
             xi, yi = np.mgrid[
                 0:srcwin_buff[2],
@@ -196,6 +200,7 @@ def generate_slope_array(
     slope_norm[np.isnan(slope_norm)] = 0.0
     return(slope_norm)
 
+
 class Blend(grits.Grits):
     """Blend data together
 
@@ -212,23 +217,19 @@ class Blend(grits.Grits):
     def __init__(
             self,
             weight_threshold=None,
-            weight_thresholds=None,
             buffer_cells=1,
-            buffer_sizes=None,
             binary_dilation=True,
             binary_pulse=False,
             sub_buffer_cells=0,
             slope_scale=.5,
             random_scale=.025,
+            interp_method='linear',
             aux_dems=None,
             **kwargs
     ):        
         super().__init__(**kwargs)
-        self.weight_threshold = utils.float_or(weight_threshold, 1)
-        self.weight_thresholds = weight_thresholds
-        
+        self.weight_threshold = utils.float_or(weight_threshold, 1)        
         self.buffer_cells = utils.int_or(buffer_cells, 1)
-        self.buffer_sizes = buffer_sizes
         
         self.binary_dilation = binary_dilation
         self.binary_pulse = binary_pulse
@@ -236,9 +237,16 @@ class Blend(grits.Grits):
         self.sub_buffer_cells = utils.int_or(sub_buffer_cells, 0)
         self.slope_scale = np.clip(utils.float_or(slope_scale, 0.5), 0.0, 1.0)
         self.random_scale = np.clip(utils.float_or(random_scale, .025), 0.0, 1.0)
-        self.aux_dems = aux_dems.split(',')
-        
+        if utils.str_or(aux_dems) is not None:
+            self.aux_dems = aux_dems.split(',')
+        else:
+            self.aux_dems = []
 
+        self.interp_method = 'linear'
+        if interp_method in ['linear', 'cubic', 'nearest']:
+            self.interp_method = interp_method
+
+        
     def binary_closed_dilation(self, arr, iterations=1, closing_iterations=1):
         closed_and_dilated_arr = arr.copy()
         struct_ = scipy.ndimage.generate_binary_structure(2, 2)
@@ -256,7 +264,46 @@ class Blend(grits.Grits):
             
         return(closed_and_dilated_arr)
 
-        
+
+    def binary_reversion(self, arr, iterations, closing_iterations):
+        reversion_arr = arr.copy()
+        closing_iterations += iterations
+            
+        struct_ = scipy.ndimage.generate_binary_structure(2, 2)
+        reversion_arr = scipy.ndimage.binary_dilation(
+            reversion_arr, iterations=closing_iterations, structure=struct_
+        )
+        erosion_iterations = max(closing_iterations-iterations, 0)
+        if erosion_iterations > 0:
+            reversion_arr = scipy.ndimage.binary_erosion(
+                reversion_arr, iterations=erosion_iterations, border_value=1, structure=struct_
+            )
+
+        return(reversion_arr)
+
+    
+    def init_weight(self, src_ds=None):
+        weight_band = None
+        if self.weight_is_fn:
+            if self.weight_threshold is None:
+                self.weight_threshold = gdalfun.gdal_percentile(
+                    self.weight_mask, perc=75
+                )
+
+            weight_ds = gdal.Open(self.weight_mask)
+            weight_band = weight_ds.GetRasterBand(1)
+
+        elif self.weight_is_band and src_ds is not None:
+            if self.weight_threshold is None:
+                self.weight_threshold = gdalfun.gdal_percentile(
+                    self.src_dem, perc=50, band=self.weight_mask
+                )
+
+            weight_band = src_ds.GetRasterBand(self.weight_mask)
+
+        return(weight_band)
+
+    
     def init_data(self):
         from cudem.datalists.dlim import DatasetFactory
         
@@ -277,8 +324,37 @@ class Blend(grits.Grits):
             y_inc=ds_config['geoT'][5],
             node='grid'
         )
-        combined_arr = np.full((ycount, xcount), np.nan)
 
+        ## load the src dem
+        src_arr = np.full((ycount, xcount), np.nan)
+        w_arr = np.full_like(src_arr, np.nan)
+        combined_arr = np.full_like(src_arr, np.nan)
+
+        with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+            if src_ds is not None:
+                self.init_ds(src_ds)
+                srcwin = (self.buffer_cells, self.buffer_cells,
+                          src_ds.RasterXSize, src_ds.RasterYSize)
+
+                weight_band = self.init_weight(src_ds)
+                w_arr[
+                    srcwin[1]:srcwin[1] + srcwin[3],
+                    srcwin[0]:srcwin[0] + srcwin[2]
+                ] = weight_band.ReadAsArray()
+                w_arr[w_arr == self.ds_config['ndv']] = np.nan
+                weights = np.unique(w_arr)[::-1] 
+                
+                src_arr[
+                    srcwin[1]:srcwin[1] + srcwin[3],
+                    srcwin[0]:srcwin[0] + srcwin[2]
+                ] = self.ds_band.ReadAsArray()
+
+                src_arr[src_arr == ds_config['ndv']] = np.nan
+
+        #combined_arr = src_arr[w_arr >= self.weight_thresholds[0]]
+        src_mask = np.isfinite(src_arr)
+
+        ## load aux data
         for aux_fn in self.aux_dems:
             aux_ds = DatasetFactory(
                 mod=aux_fn,
@@ -294,10 +370,11 @@ class Blend(grits.Grits):
                 combined_arr[
                     srcwin[1]:srcwin[1] + srcwin[3],
                     srcwin[0]:srcwin[0] + srcwin[2]
-                ] = arrs['z']
+                ] = arrs['z']            
 
+        combined_arr = np.where(w_arr >= self.weight_threshold, src_arr, combined_arr) 
         combined_mask = ~np.isnan(combined_arr)
-        
+                
         if self.sub_buffer_cells is not None:
             combined_sub_mask = self.binary_closed_dilation(
                 combined_mask, iterations=self.sub_buffer_cells
@@ -310,22 +387,6 @@ class Blend(grits.Grits):
                 combined_mask, iterations=self.buffer_cells
             )
             
-        ## load the src dem
-        src_arr = np.full((ycount, xcount), np.nan)        
-        with gdalfun.gdal_datasource(self.src_dem) as src_ds:
-            if src_ds is not None:
-                self.init_ds(src_ds)
-                srcwin = (self.buffer_cells, self.buffer_cells,
-                          src_ds.RasterXSize, src_ds.RasterYSize)
-                
-                src_arr[
-                    srcwin[1]:srcwin[1]+srcwin[3],
-                    srcwin[0]:srcwin[0]+srcwin[2]
-                ] = self.ds_band.ReadAsArray()
-
-                src_arr[src_arr == ds_config['ndv']] = np.nan
-                
-        src_mask = np.isfinite(src_arr)
         return(combined_arr, src_arr, combined_mask, src_mask, combined_sub_mask)
 
     
@@ -333,10 +394,6 @@ class Blend(grits.Grits):
         """Compute normalized slope over the whole array."""
         tmp = src_arr.copy()
         tmp[~np.isfinite(tmp)] = np.nan
-
-        # if buffer_mask is not None:
-        #     tmp[~buffer_mask] = np.nan
-        
         if np.all(np.isnan(tmp)):
             return(None)
         
@@ -382,24 +439,26 @@ class Blend(grits.Grits):
         # never randomize in core seam
         random_mask[sub_buffer_mask] = False
 
-        # if slope gating is enabled, only allow flips in steeper areas
+        ## if slope gating is enabled, only allow flips in steeper areas
         ## slope-aware random src mask in the OUTER buffer only
         if self.slope_scale > 0:
-            #slope_norm = self._compute_slope(src_arr, buffer_mask=(buffer_mask & (~sub_buffer_mask)))
-            outer_mask = buffer_mask & (~sub_buffer_mask)
-            slope_norm = generate_slope_array(
-                src_arr,
-                self.ds_config['ndv'],
-                buffer_mask=outer_mask,
-                chunk_size=self.buffer_cells * 5,
-                chunk_step=self.buffer_cells * 5,
+            slope_norm = self._compute_slope(
+                src_arr, buffer_mask=(buffer_mask & (~sub_buffer_mask))
             )
+            outer_mask = buffer_mask & (~sub_buffer_mask)
+            # slope_norm = generate_slope_array(
+            #     src_arr,
+            #     self.ds_config['ndv'],
+            #     buffer_mask=outer_mask,
+            #     chunk_size=self.buffer_cells * 5,
+            #     chunk_step=self.buffer_cells * 5,
+            # )
 
             if slope_norm is not None:
                 low_slope = slope_norm < self.slope_scale                
-                #random_mask[low_slope & outer_mask] = False
-                random_mask[outer_mask][low_slope] = False
-                slope_norm = None
+                random_mask[low_slope & outer_mask] = False
+                #random_mask[outer_mask][low_slope] = False
+                slope_norm = outer_mask = low_slope = None
                 
         # only apply randomization where both src + combined_mask are valid (buffer region)
         valid_random = random_mask & buffer_mask
@@ -430,9 +489,9 @@ class Blend(grits.Grits):
         interp_arr = interpolate_array(
             combined_arr,
             ndv=self.ds_config['ndv'],
-            method='linear',
+            method=self.interp_method,
             chunk_size=self.buffer_cells * 5,
-            chunk_step=self.buffer_cells * 5,
+            chunk_step=self.buffer_cells * 2.5,
         )
         interp_data_in_buffer = interp_arr[buffer_mask]
         src_data_in_buffer = src_arr[buffer_mask]

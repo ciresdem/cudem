@@ -2971,7 +2971,7 @@ class WafflesCoastline(Waffle):
                 co=self.co
             )
             for i, tnm_result in enumerate(this_tnm.results):
-                utils.echo_msg_bold(tnm_result)
+                #utils.echo_msg_bold(tnm_result)
                 if tnm_result[-1] == 0:
                     #tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
                     tnm_zip = tnm_result[1]
@@ -7169,12 +7169,12 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
             wg['cache_dir'] = os.path.join(
                 utils.str_or(argv[i + 1], os.path.expanduser('~')),
-                '.cudem_cache'
+                'cudem_cache'
             )
             i = i + 1
         elif arg[:2] == '-D': wg['cache_dir'] = os.path.join(
                 utils.str_or(arg[2:], os.path.expanduser('~')),
-                '.cudem_cache'
+                'cudem_cache'
         )
         elif arg == '--nodata' or arg == '-N' or arg == '-ndv':
             wg['ndv'] = utils.float_or(argv[i + 1], -9999)

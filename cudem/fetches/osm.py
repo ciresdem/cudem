@@ -151,18 +151,17 @@ class osmCoastline:
             utils.echo_error_msg(f'{self.region} is an invalid region')
             return(None)
 
-        if not return_geom:
-            if out_fn is None or not isinstance(out_fn, str):
-                out_fn = '{}.gpkg'.format(utils.append_fn(f'osm_{self.q}', self.region, 1, high_res=True))
+        if out_fn is None or not isinstance(out_fn, str):
+            out_bn = utils.append_fn(f'osm_{self.q}', self.region, 1, high_res=True)
+            out_fn = os.path.join(self.cache_dir, f'{out_bn}.gpkg')
 
-            utils.echo_msg(out_fn)
-            if not overwrite:
-                if os.path.exists(out_fn):
+        utils.echo_msg_bold(out_fn)
+        if not overwrite:
+            if os.path.exists(out_fn):
+                if not return_geom:
                     return(out_fn)
-            else:
-                utils.remove_glob(out_fn)
         else:
-            out_fn = None
+            utils.remove_glob(out_fn)
 
         if self.q == 'coastline':
             out_fn, osm_geoms = self.process(out_fn)
@@ -174,7 +173,6 @@ class osmCoastline:
         if return_geom:            
             return(osm_geoms)
         else:
-            #return(gdalfun.ogr_geoms2ogr(cst_geoms, out_fn, ogr_format='GPKG'))
             return(out_fn)
                 
                 
@@ -222,6 +220,7 @@ class osmCoastline:
         out_ds =  None
 
         return(tmp_dst)
+
     
     def process(self, out_fn):
         cst_geoms = []
@@ -234,7 +233,6 @@ class osmCoastline:
                 leave=self.verbose
         ) as pbar:
             for n, cst_result in enumerate(self.this_osm.results):
-                print(cst_result)
                 if cst_result[-1] == 0:
                     cst_osm = cst_result[1]
                     out = polygonize_osm_coastline(
@@ -249,7 +247,9 @@ class osmCoastline:
                         line_buffer=self.line_buffer,
                         verbose=self.verbose,
                     )
-
+                    
+                pbar.update()
+                    
         if out_fn is None:
             cst_ds = ogr.Open(out_fn, 0)
             cst_layer = cst_ds.GetLayer()
@@ -258,10 +258,6 @@ class osmCoastline:
             )
             cst_geoms.append(cst_geom)
             cst_ds = None
-            #utils.remove_glob(cst_osm)
-            #utils.remove_glob(f'{utils.fn_basename2(out)}.*')
-            
-            pbar.update()
             
         return(out_fn, cst_geoms)        
 

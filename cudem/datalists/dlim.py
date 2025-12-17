@@ -5480,9 +5480,13 @@ See `datalists_usage` for full cli options.
         elif arg == '-s_srs' or arg == '--s_srs' or arg == '-J':
             src_srs = argv[i + 1]
             i = i + 1
+        elif arg[:2] == '-J':
+            srs_srs = arg[2:]
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
             dst_srs = argv[i + 1]
             i = i + 1
+        elif arg[:2] == '-P':
+            dst_srs = arg[2:]
         elif arg == '-z_precision' \
              or arg == '--z-precision' \
              or arg == '-Z':
@@ -5526,7 +5530,7 @@ See `datalists_usage` for full cli options.
             archive_dirname = utils.str_or(argv[2:])
             
         elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
-            cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
+            cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache())
             i = i + 1
         elif arg[:2] == '-D': cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
             

@@ -85,6 +85,9 @@ class Fetcher(ElevationDataset):
         if self.dst_srs is not None:
             self.wgs_region.warp(self.wgs_srs)
 
+        if outdir is None:
+            outdir = self.cache_dir
+            
         self.fetch_module = fetches.fetches.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
             callback=callback, verbose=True,
@@ -182,10 +185,14 @@ class Fetcher(ElevationDataset):
 
         if self.mask is None and self.mask_coast:
             from cudem.fetches import osm
-            this_osm = osm.osmCoastline(region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir)
+            this_osm = osm.osmCoastline(
+                region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir
+            )
             coast_mask = this_osm(return_geom=False, overwrite=False)
 
-            this_osm_water = osm.osmCoastline(region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir, q='water')
+            this_osm_water = osm.osmCoastline(
+                region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir, q='water'
+            )
             water_mask = this_osm_water(return_geom=False, overwrite=False)
 
             # coast_mask = self.process_coastline(
@@ -1376,9 +1383,8 @@ class eHydroFetcher(Fetcher):
             tmp_gdb = tmp_layer = None
             v = vdatums.get_vdatum_by_name(elev_datum)
             self.fetches_params['mod'] = src_gdb
-            self.fetches_params['src_srs'] = '{}+{}'.format(
-                src_epsg, v if v is not None else '5866'
-            ) if src_epsg is not None else None
+            self.fetches_params['src_srs'] = f'{src_epsg}+{v if v is not None else "5866"}' \
+                if src_epsg is not None else None
             self.fetches_params['data_format'] \
                 = ('302:ogr_layer=SurveyPoint_HD'
                    ':elev_field=Z_label'
@@ -1387,9 +1393,7 @@ class eHydroFetcher(Fetcher):
             yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
             if self.want_contours:
-                self.metadata['name'] = '{}_contours'.format(
-                    utils.fn_basename2(self.fn)
-                )
+                self.metadata['name'] = f'{utils.fn_basename2(self.fn)}_contours'
                 self.fetches_params['data_format'] \
                     = ('302:ogr_layer=ElevationContour_ALL'
                        ':elev_field=contourElevation'
