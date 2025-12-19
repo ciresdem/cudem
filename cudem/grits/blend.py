@@ -449,17 +449,17 @@ class Blend(grits.Grits):
         ## if slope gating is enabled, only allow flips in steeper areas
         ## slope-aware random src mask in the OUTER buffer only
         if self.slope_scale > 0:
-            slope_norm = self._compute_slope(
-                src_arr, buffer_mask=(buffer_mask & (~sub_buffer_mask))
-            )
-            outer_mask = buffer_mask & (~sub_buffer_mask)
-            # slope_norm = generate_slope_array(
-            #     src_arr,
-            #     self.ds_config['ndv'],
-            #     buffer_mask=outer_mask,
-            #     chunk_size=self.buffer_cells * 5,
-            #     chunk_step=self.buffer_cells * 5,
+            # slope_norm = self._compute_slope(
+            #     src_arr, buffer_mask=(buffer_mask & (~sub_buffer_mask))
             # )
+            outer_mask = buffer_mask & (~sub_buffer_mask)
+            slope_norm = generate_slope_array(
+                src_arr,
+                self.ds_config['ndv'],
+                buffer_mask=outer_mask,
+                chunk_size=self.buffer_cells * 5,
+                chunk_step=self.buffer_cells * 5,
+            )
 
             if slope_norm is not None:
                 low_slope = slope_norm < self.slope_scale                
