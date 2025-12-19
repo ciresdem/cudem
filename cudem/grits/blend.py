@@ -377,7 +377,7 @@ class Blend(grits.Grits):
                     srcwin[0]:srcwin[0] + srcwin[2]
                 ] = arrs['z']            
 
-        if self.weight_band is not None:
+        if np.any(w_arr):
             combined_arr = np.where(w_arr >= self.weight_threshold, src_arr, combined_arr)
             
         combined_mask = ~np.isnan(combined_arr)
