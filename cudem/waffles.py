@@ -1163,7 +1163,7 @@ quite heavy on memory when large grid-size...
                     
             interpol[jinterpol] = wz
             jinterpol += 1
-        return interpol if qdim > 1  else interpol[0]
+        return(interpol if qdim > 1  else interpol[0])
 
     
 class WafflesIDW(Waffle):

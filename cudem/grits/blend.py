@@ -24,7 +24,11 @@
 ###############################################################################
 ### Commentary:
 ##
-## This grits module will blend the input data with the input raster.
+## This grits module will blend the input data with the input raster. Using a weight_threshold
+## this will take all cells over the weight threshold (either from a weight band in the input
+## or a seperate raster) and buffer around those cells. Within that buffer it will interpolate
+## from the higher weighted cells to the lower weighted cells and apply those interpolated
+## values to the source raster tapering from the higher weighted cells to the edge of the buffer.
 ##
 ### Code:
 
@@ -526,6 +530,13 @@ class Blend(grits.Grits):
             combined_arr[srcwin[1]:srcwin[1] + srcwin[3],
                          srcwin[0]:srcwin[0] + srcwin[2]]
         )
+        for b in range(1, dst_ds.RasterCount+1):
+            this_band = dst_ds.GetRasterBand(b)
+            this_arr = this_band.ReadAsArray()#*srcwin)
+            this_arr[mask] = self.ds_config['ndv']
+            this_band.WriteArray(this_arr)#, srcwin[0], srcwin[1])
+            this_band.FlushCache()
+            this_band = this_arr = None
         
         dst_ds = None
         return(self.dst_dem, 0)

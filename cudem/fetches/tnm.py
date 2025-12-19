@@ -208,9 +208,10 @@ class NED(TheNationalMap):
 
     < NED >
     """
-    
+
+    ## mrl: removed 4/5 which appear broken
     def __init__(self, **kwargs):
-        super().__init__(datasets='1/3/4/5', **kwargs)
+        super().__init__(datasets='1/3', **kwargs)
         self.data_format = 200
 
         
