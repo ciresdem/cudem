@@ -31,6 +31,7 @@ import os
 import numpy as np
 from osgeo import gdal
 from osgeo import ogr
+from osgeo import osr
 
 from cudem import utils
 from cudem import regions
