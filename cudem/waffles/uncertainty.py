@@ -1,8 +1,8 @@
-### flatten.py
+### uncertainty.py
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## flatten.py is part of CUDEM
+## uncertainty.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -26,6 +26,10 @@
 ##
 ### Code:
 
+import numpy as np
+from osgeo import gdal
+
+from cudem import utils
 from cudem import gdalfun
 from cudem.waffles.waffles import Waffle
 
