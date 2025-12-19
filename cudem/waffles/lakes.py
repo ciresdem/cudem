@@ -29,6 +29,7 @@
 import os
 
 import numpy as np
+from scipy import ndimage
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
