@@ -1,8 +1,8 @@
-### flatten.py
+### coastline.py
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## flatten.py is part of CUDEM
+## coastline.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
