@@ -34,6 +34,7 @@ from osgeo import ogr
 
 from cudem import utils
 from cudem import gdalfun
+from cudem import fetches
 from cudem.waffles.waffles import Waffle
 
 class WafflesCoastline(Waffle):
