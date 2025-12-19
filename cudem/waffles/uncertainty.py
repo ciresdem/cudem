@@ -26,6 +26,8 @@
 ##
 ### Code:
 
+import os
+
 import numpy as np
 from osgeo import gdal
 
@@ -151,9 +153,10 @@ class WafflesUncertainty(Waffle):
         """
         
         if out_prox is None:
-            out_prox = utils.make_temp_fn(
-                '{}_prox.tif'.format(self.params['mod_args']['waffles_module'])
-            )
+            out_prox = utils.make_temp_fn(f'{self.waffles_module}_prox.tif')
+            # out_prox = utils.make_temp_fn(
+            #     '{}_prox.tif'.format(self.params['mod_args']['waffles_module'])
+            # )
 
         if self.verbose:
             utils.echo_msg(
@@ -175,11 +178,11 @@ class WafflesUncertainty(Waffle):
         """
 
         if out_slope is None:
-            out_slope = utils.make_temp_fn(
-                '{}_slope.tif'.format(
-                    self.params['mod_args']['waffles_module']
-                )
-            )
+            out_slope = utils.make_temp_fn(f'{self.waffles_module}_slope.tif')
+            #     '{}_slope.tif'.format(
+            #         self.params['mod_args']['waffles_module']
+            #     )
+            # )
 
         if self.verbose:
             utils.echo_msg(
@@ -198,6 +201,8 @@ class WafflesUncertainty(Waffle):
         generate an interpolated source uncertainty raster
         """
 
+        from cudem.waffles.waffles import WaffleFactory
+        
         #gdalfun.gdal_get_array(self.stack, band=4)
         src_unc_name = '{}_src_unc'.format(self.name)
         src_unc_surface = WaffleFactory(
@@ -385,7 +390,9 @@ class WafflesUncertainty(Waffle):
 
         distance error array
         """
-            
+
+        from cudem.waffles.waffles import WaffleFactory
+        
         last_ec_d = None
         s_dp = []
         status = 0
@@ -792,9 +799,7 @@ class WafflesUncertainty(Waffle):
         unc_out = {}
         if self.verbose:
             utils.echo_msg(
-                'running UNCERTAINTY module using {}...'.format(
-                    self.params['mod_args']['waffles_module']
-                )
+                f'running UNCERTAINTY module using {self.waffles_module}...'
             )
             utils.echo_msg(
                 'using {}; accumulate is {}'.format(
