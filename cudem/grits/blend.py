@@ -341,12 +341,13 @@ class Blend(grits.Grits):
                           src_ds.RasterXSize, src_ds.RasterYSize)
 
                 weight_band = self.init_weight(src_ds)
-                w_arr[
-                    srcwin[1]:srcwin[1] + srcwin[3],
-                    srcwin[0]:srcwin[0] + srcwin[2]
-                ] = weight_band.ReadAsArray()
-                w_arr[w_arr == self.ds_config['ndv']] = np.nan
-                weights = np.unique(w_arr)[::-1] 
+                if weight_band is not None:
+                    w_arr[
+                        srcwin[1]:srcwin[1] + srcwin[3],
+                        srcwin[0]:srcwin[0] + srcwin[2]
+                    ] = weight_band.ReadAsArray()
+                    w_arr[w_arr == self.ds_config['ndv']] = np.nan
+                    weights = np.unique(w_arr)[::-1] 
                 
                 src_arr[
                     srcwin[1]:srcwin[1] + srcwin[3],
@@ -376,7 +377,9 @@ class Blend(grits.Grits):
                     srcwin[0]:srcwin[0] + srcwin[2]
                 ] = arrs['z']            
 
-        combined_arr = np.where(w_arr >= self.weight_threshold, src_arr, combined_arr) 
+        if self.weight_band is not None:
+            combined_arr = np.where(w_arr >= self.weight_threshold, src_arr, combined_arr)
+            
         combined_mask = ~np.isnan(combined_arr)
                 
         if self.sub_buffer_cells is not None:
