@@ -24,7 +24,11 @@
 ###############################################################################
 ### Commentary:
 ##
-## This grits module will blend the input data with the input raster.
+## This grits module will blend the input data with the input raster. Using a weight_threshold
+## this will take all cells over the weight threshold (either from a weight band in the input
+## or a seperate raster) and buffer around those cells. Within that buffer it will interpolate
+## from the higher weighted cells to the lower weighted cells and apply those interpolated
+## values to the source raster tapering from the higher weighted cells to the edge of the buffer.
 ##
 ### Code:
 
@@ -337,12 +341,13 @@ class Blend(grits.Grits):
                           src_ds.RasterXSize, src_ds.RasterYSize)
 
                 weight_band = self.init_weight(src_ds)
-                w_arr[
-                    srcwin[1]:srcwin[1] + srcwin[3],
-                    srcwin[0]:srcwin[0] + srcwin[2]
-                ] = weight_band.ReadAsArray()
-                w_arr[w_arr == self.ds_config['ndv']] = np.nan
-                weights = np.unique(w_arr)[::-1] 
+                if weight_band is not None:
+                    w_arr[
+                        srcwin[1]:srcwin[1] + srcwin[3],
+                        srcwin[0]:srcwin[0] + srcwin[2]
+                    ] = weight_band.ReadAsArray()
+                    w_arr[w_arr == self.ds_config['ndv']] = np.nan
+                    weights = np.unique(w_arr)[::-1] 
                 
                 src_arr[
                     srcwin[1]:srcwin[1] + srcwin[3],
@@ -372,7 +377,9 @@ class Blend(grits.Grits):
                     srcwin[0]:srcwin[0] + srcwin[2]
                 ] = arrs['z']            
 
-        combined_arr = np.where(w_arr >= self.weight_threshold, src_arr, combined_arr) 
+        if self.weight_band is not None:
+            combined_arr = np.where(w_arr >= self.weight_threshold, src_arr, combined_arr)
+            
         combined_mask = ~np.isnan(combined_arr)
                 
         if self.sub_buffer_cells is not None:
@@ -526,6 +533,13 @@ class Blend(grits.Grits):
             combined_arr[srcwin[1]:srcwin[1] + srcwin[3],
                          srcwin[0]:srcwin[0] + srcwin[2]]
         )
+        for b in range(1, dst_ds.RasterCount+1):
+            this_band = dst_ds.GetRasterBand(b)
+            this_arr = this_band.ReadAsArray()#*srcwin)
+            this_arr[mask] = self.ds_config['ndv']
+            this_band.WriteArray(this_arr)#, srcwin[0], srcwin[1])
+            this_band.FlushCache()
+            this_band = this_arr = None
         
         dst_ds = None
         return(self.dst_dem, 0)

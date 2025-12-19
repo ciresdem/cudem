@@ -2038,11 +2038,6 @@ class ElevationDataset:
             mask_level = utils.int_or(self.stack_mode_args['mask_level'], 0)
         else:
             mask_level = 0
-
-        if self.verbose:
-            utils.echo_msg(
-                f'stacking using {self.stack_mode_name} with {self.stack_mode_args}'
-            )
         
         ## initialize the output rasters
         if out_name is None:
@@ -2141,6 +2136,11 @@ class ElevationDataset:
             m_band_all.SetNoDataValue(0)
             m_band_all.SetDescription('Full Data Mask')
 
+        if self.verbose:
+            utils.echo_msg(
+                f'stacking using {self.stack_mode_name} with {self.stack_mode_args} to {out_file}'
+            )
+            
         #######################################################################            
         ## parse each entry and process it
         ## only check to add a new band per entry

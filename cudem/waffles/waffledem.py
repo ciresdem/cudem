@@ -1,0 +1,1032 @@
+### flatten.py
+##
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+##
+## flatten.py is part of CUDEM
+##
+## Permission is hereby granted, free of charge, to any person obtaining a copy 
+## of this software and associated documentation files (the "Software"), to deal 
+## in the Software without restriction, including without limitation the rights 
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
+## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
+##
+###############################################################################
+### Commentary:
+##
+### Code:
+
+import os
+
+import numpy as np
+
+from osgeo import gdal
+from osgeo import ogr
+
+from cudem import utils
+from cudem import regions
+from cudem import gdalfun
+from cudem import factory
+
+from cudem.waffles.waffles import Waffle
+
+waffles_cache = utils.cudem_cache()
+
+class WaffleDEM:
+    """WaffleDEM which holds a gdal DEM to process
+    WaffleDEM(fn='module_output.tif')
+    """
+    
+    def __init__(
+            self,
+            fn: str = 'this_waffle.tif',
+            ds_config: dict = {},
+            cache_dir: str = waffles_cache,
+            verbose: bool = True,
+            waffle: Waffle = None,
+            want_scan: bool = True,
+            co: list = ["COMPRESS=DEFLATE", "TILED=YES"]
+    ):
+        self.fn = fn # the dem filename
+        self.ds_config = ds_config # a dem config dictionary (see gdalfun.gdal_infos)
+        self.cache_dir = cache_dir # cache dir for auxiliary data
+        self.verbose = verbose # verbosity
+        self.dem_region = None # the dem regions.Region()
+        self.waffle = waffle # the waffles module that generated the DEM
+        self.want_scan = want_scan # scan DEM for min/max values
+        self.co = co
+
+        
+    def initialize(self):
+        if os.path.exists(self.fn):
+            if self.fn.endswith('csg'):
+                dem_ds = h5.File(self.fn)
+                if dem_ds is not None:
+                    dst_gt = tuple(
+                        [float(x) for x in dem_ds['crs'].attrs['GeoTransform'].split()]
+                    )
+                    self.ds_config = gdalfun.gdal_set_infos(
+                        dem_ds['lon'].size, dem_ds['lat'].size,
+                        dem_ds['lon'].size * dem_ds['lat'].size,
+                        dst_gt, dem_ds['crs'].attrs['crs_wkt'],
+                        'h5', np.nan, 'h5', None, None
+                    )
+                    self.dem_region = regions.Region().from_geo_transform(
+                        dst_gt, self.ds_config['nx'], self.ds_config['ny']
+                    )
+                    self.ds_config['zr'] \
+                        = [dem_ds['stack/z'][...].min(), dem_ds['stack/z'][...].max()]
+                    
+                    dem_ds = None
+                else:
+                    utils.echo_warning_msg(f'could not open dem: {self.fn}')
+            else:            
+                dem_ds = gdal.Open(self.fn, 1)
+                if dem_ds is not None:
+                    self.ds_config = gdalfun.gdal_infos(dem_ds, scan=self.want_scan)
+                    self.dem_region = regions.Region().from_geo_transform(
+                        self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny']
+                    )
+
+                    dem_ds = None
+                else:
+                    utils.echo_warning_msg(f'could not open dem: {self.fn}')
+            
+        return(self)
+
+    
+    def valid_p(self):
+        """check if the WAFFLES DEM appears to be valid"""
+
+        if self.fn is None or not os.path.exists(self.fn):
+            utils.echo_warning_msg(
+                f'{self.fn} does not exist'
+            )
+            return(False)
+        
+        self.initialize()
+        if self.ds_config is None:
+            utils.echo_warning_msg(
+                f'could not parse dem: {self.fn}'
+            )
+            return(False)
+        
+        if not 'zr' in self.ds_config:
+            utils.echo_msg(
+                f'dem {self.fn} has no z values?'
+            )
+            return(False)
+
+        if self.ds_config['raster_count'] == 0:
+            utils.echo_warning_msg(
+                f'dem {self.fn} has no bands'
+            )
+            return(False)
+        else:
+            band_check = []
+            for band_num in range(1, self.ds_config['raster_count']+1):
+                #band_infos = gdalfun.gdal_infos(self.fn, scan=True, band=band_num)
+                if np.isnan(self.ds_config['zr'][0]) \
+                   or np.isnan(self.ds_config['zr'][1]):
+                    band_check.append(0)
+                else:
+                    band_check.append(1)
+
+            if not np.any(band_check):
+                utils.echo_warning_msg(
+                    f'dem {self.fn} is all nan'
+                )
+                return(False)
+                
+        return(True)
+
+
+    ## todo make these 'processes' grits modules?
+    def process(self, filter_ = None, ndv = None, xsample = None, ysample = None,
+                region = None, node='pixel', clip_str = None, upper_limit = None,
+                lower_limit = None, size_limit = None, proximity_limit = None,
+                percentile_limit = None, expand_limit = None, dst_srs = None, dst_fmt = None,
+                dst_fn = None, dst_dir = None, set_metadata = True, stack_fn = None, mask_fn = None,
+                unc_fn = None, flatten_nodata_values = False, want_nc = False,
+                want_h5 = False):
+        """Process the DEM using various optional functions.
+
+        set the nodata value, srs, metadata, limits; resample, filter, clip, cut, output.
+        """
+
+        if self.verbose:
+            utils.echo_msg(
+                f'post processing DEM {self.fn}...'
+            )
+            
+        if self.ds_config is None:
+            self.initialize()
+            
+        ## set nodata value
+        if ndv is not None:
+            self.set_nodata(ndv)
+        else:
+            if self.ds_config['ndv'] is not None:
+                self.set_nodata(self.ds_config['ndv'])
+
+        ## set interpolation limits
+        self.set_interpolation_limits(
+            stack_fn=stack_fn,
+            size_limit=size_limit,
+            proximity_limit=proximity_limit,
+            percentile_limit=percentile_limit,
+            expand_limit=expand_limit
+        )
+
+        ## filtering the DEM will change the weights/uncertainty
+        if filter_ is not None:
+            self.filter_(filter_)
+
+        ## resamples all bands
+        self.resample(xsample=xsample, ysample=ysample, ndv=ndv, region=region)
+
+        ## setting limits will change the weights/uncertainty for flattened data
+        self.set_limits(upper_limit=upper_limit, lower_limit=lower_limit)
+
+        ## flatten all nodata values
+        if flatten_nodata_values:
+            flattened_fn = utils.make_temp_fn(
+                '{}_flat.tif'.format(utils.fn_basename2(self.fn)),
+                self.cache_dir
+            )
+            gdalfun.cudem_flatten_no_data_zones(
+                self.fn, dst_dem=flattened_fn, band=1, size_threshold=1
+            )
+            os.rename(flattened_fn, self.fn)
+
+        ## clip/cut
+        self.clip(clip_str=clip_str)
+        if region is not None:
+            self.cut(region=region, node='grid')#'pixel' if node == 'grid' else 'grid')
+
+        ## set projection, metadata, reformat and move to final location
+        if dst_srs is not None:
+            self.set_srs(dst_srs=dst_srs)
+
+        if set_metadata:
+            self.set_metadata(node=node)
+
+        ## put everything in a hdf5
+        if want_h5:
+            if stack_fn is not None:
+                self.stack2hd5(
+                    stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node
+                )
+
+        ## put everything in a netcdf
+        if want_nc:
+            if stack_fn is not None:
+                self.stack2nc(
+                    stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node
+                )
+            
+        ## reformat and move final output
+        self.reformat(out_fmt=dst_fmt)
+        self.move(out_fn=dst_fn, out_dir=dst_dir)
+
+        if self.verbose:
+            utils.echo_msg(
+                f'Processed DEM: {self.fn}'
+            )
+
+            
+    def set_nodata(self, ndv):
+        if self.ds_config['ndv'] != ndv:
+            gdalfun.gdal_set_ndv(
+                self.fn, ndv=ndv, convert_array=True, verbose=self.verbose
+            )
+            self.ds_config['ndv'] = ndv
+
+            if self.verbose:
+                utils.echo_msg(
+                    f'set nodata value to {ndv}.'
+                )
+
+                
+    def filter_(self, fltr=[]):
+        for f in fltr:
+            if f.split(':')[0] in grits.GritsFactory._modules.keys():
+                grits_filter = grits.GritsFactory(
+                    mod=f,
+                    src_dem=self.fn
+                )._acquire_module()
+                if grits_filter is not None:
+                    if 'stacks' in grits_filter.kwargs.keys():
+                        if grits_filter.kwargs['stacks']:
+                            continue
+
+                    grits_filter()
+                    os.replace(grits_filter.dst_dem, self.fn)
+
+                    
+    def resample(
+            self,
+            region=None,
+            xsample=None,
+            ysample=None,
+            ndv=-9999,
+            sample_alg='cubicspline'
+    ):
+        if xsample is not None or ysample is not None:
+            #warp_fn = os.path.join(self.cache_dir, '__tmp_sample.tif')
+            warp_fn = utils.make_temp_fn('__tmp_sample.tif', temp_dir = self.cache_dir)
+            if gdalfun.sample_warp(
+                    self.fn,
+                    warp_fn,
+                    xsample,
+                    ysample,
+                    src_region=region,
+                    sample_alg=sample_alg,
+                    ndv=ndv,
+                    verbose=self.verbose,
+                    co=self.co
+            )[1] == 0:
+                os.replace(warp_fn, self.fn)
+                self.initialize()
+
+            if self.verbose:
+                utils.echo_msg(
+                    'resampled data to {}/{} using {}.'.format(
+                        xsample, ysample, sample_alg
+                    )
+                )
+
+                
+    def clip(self, clip_str=None):
+        from .waffles import WaffleFactory
+        
+        ## todo: update for multi-band
+        ## todo: re-add coastline option
+        if clip_str is not None:
+            clip_args = {}
+            cp = clip_str.split(':')
+            clip_args['src_ply'] = cp[0]
+            clip_args['verbose'] = self.verbose
+            clip_args = factory.args2dict(cp[1:], clip_args)
+
+            if clip_args['src_ply'] == 'coastline':
+                self.coast = WaffleFactory(
+                    mod='coastline:polygonize=False',
+                    data=self.data_,
+                    src_region=self.p_region,
+                    xinc=self.xsample if self.xsample is not None else self.xinc,
+                    yinc=self.ysample if self.ysample is not None else self.yinc,
+                    name='tmp_coast',
+                    node=self.node,
+                    want_weight=self.want_weight,
+                    want_uncertainty=self.want_uncertainty,
+                    dst_srs=self.dst_srs,
+                    srs_transform=self.srs_transform,
+                    clobber=True,
+                    cache_dir=self.cache_dir,
+                    verbose=self.verbose
+                )._acquire_module()
+                self.coast.initialize()
+                self.coast.generate()
+                gdalfun.gdal_mask(
+                    fn,
+                    self.coast.fn, '__tmp_clip__.tif',
+                    msk_value=1,
+                    verbose=self.verbose
+                )
+                os.replace('__tmp_clip__.tif', f'{fn}')
+
+            if os.path.exists(clip_args['src_ply']):
+                if ogr.Open(clip_args['src_ply']) is not None:
+                    tmp_clip = utils.make_temp_fn(
+                        '__tmp_clip__.tif', temp_dir=self.cache_dir
+                    )
+                    if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
+                        os.replace(tmp_clip, self.fn)
+                        if self.verbose:
+                            utils.echo_msg(
+                                f'{tmp_clip} -> {self.fn}'
+                            )
+                        self.initialize()
+                        if self.verbose:
+                            utils.echo_msg(
+                                f'clipped data with {clip_str}.'
+                            )
+                    else:
+                        utils.echo_error_msg(
+                            f'clip failed, {clip_str}'
+                        )
+                else:
+                    utils.echo_error_msg(
+                        f'could not read {clip_args["src_ply"]}'
+                    )
+                    
+            else:
+                utils.echo_warning_msg(
+                    ('could not find clip ogr source/clip '
+                     f'keyword {clip_args["src_ply"]}')
+                )
+
+                
+    def cut(self, region=None, node='grid'):
+        if region is not None:
+            _tmp_cut, cut_status = gdalfun.gdal_cut_trans(
+                self.fn,
+                region,
+                utils.make_temp_fn(
+                    '__tmp_cut__.tif',
+                    temp_dir=self.cache_dir
+                ),
+                node=node,
+                co=self.co,
+                verbose=self.verbose
+            )
+            if cut_status == 0:
+                os.replace(_tmp_cut, self.fn)
+                self.initialize()
+
+                if self.verbose:
+                    utils.echo_msg(
+                        f'cut data to {region}...'
+                    )
+            else:
+                utils.echo_error_msg(
+                    f'failed to cut data to {region}...'
+                )
+
+
+    def expand_for_mask(self, stack_fn=None, cells=10):
+
+        ## expand/contract the stack to determine mask
+        if stack_fn is not None:
+            with gdalfun.gdal_datasource(stack_fn) as stack_ds:
+                stack_infos = gdalfun.gdal_infos(stack_ds)
+                this_band = stack_ds.GetRasterBand(1)
+                this_array = this_band.ReadAsArray()
+                mask_array = this_array != stack_infos['ndv']
+        
+                mask_array = utils.expand_for(
+                    mask_array, shiftx=cells, shifty=cells
+                )
+
+                mask_array = utils.expand_for(
+                    mask_array, shiftx=cells*-1, shifty=cells*-1
+                )
+
+            with gdalfun.gdal_datasource(self.fn, update=True) as dem_ds:
+                dem_infos = gdalfun.gdal_infos(dem_ds)
+                this_band = dem_ds.GetRasterBand(1)
+                this_array = this_band.ReadAsArray()
+                this_array[~mask_array] = dem_infos['ndv']
+
+                this_band.WriteArray(this_array)
+                #this_band.FlushCache()                
+
+                
+    def set_interpolation_limits(
+            self,
+            stack_fn=None,
+            size_limit=None,
+            proximity_limit=None,
+            percentile_limit=None,
+            expand_limit=None
+    ):
+        """set interpolation limits"""
+
+        if stack_fn is not None:
+            ## optionally mask nodata zones based on proximity
+            ## todo: adjust proxmimity grid to only limit areas
+            ##       where all neighbors are below proximity limit...
+            if proximity_limit is not None:
+                tmp_prox = gdalfun.gdal_proximity(
+                    stack_fn, utils.make_temp_fn('_prox.tif'), band=2
+                )
+                mn = gdalfun.gdal_get_array(tmp_prox)[0]
+                if mn is not None:
+                    with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                        if src_ds is not None:
+                            src_config = gdalfun.gdal_infos(src_ds)
+                            src_band = src_ds.GetRasterBand(1)
+                            src_array = src_band.ReadAsArray()
+                            src_array[mn >= proximity_limit] = src_band.GetNoDataValue()
+                            src_band.WriteArray(src_array)
+
+                    utils.remove_glob(tmp_prox)
+
+                    if self.verbose:
+                        utils.echo_msg(
+                            f'set proximity interpolation limit to {proximity_limit}.'
+                        )
+                else:
+                    if self.verbose:
+                        utils.echo_warning_msg(
+                            'could not set proximity limit'
+                        )
+                        
+            ## optionally mask nodata zones based on size_threshold
+            if size_limit is not None:
+                mn = nodata_count_mask(stack_fn, band=2)
+                if mn is not None:
+                    with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                        if src_ds is not None:
+                            src_config = gdalfun.gdal_infos(src_ds)
+                            src_band = src_ds.GetRasterBand(1)
+                            src_array = src_band.ReadAsArray()
+                            src_array[mn >= size_limit] = src_band.GetNoDataValue()
+                            src_band.WriteArray(src_array)
+
+                    if self.verbose:
+                        utils.echo_msg(
+                            f'set size interpolation limit to {size_limit}.'
+                        )
+                else:
+                    if self.verbose:
+                        utils.echo_warning_msg('could not set size limit')
+                        
+            ## optionally mask nodata zones based on percentile_threshold
+            if percentile_limit is not None:
+                mn = nodata_count_mask(stack_fn, band=2)
+                if mn is not None:
+                    mn[mn == 0] = np.nan
+                    mn_percentile = np.nanpercentile(mn, percentile_limit)
+                    with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                        if src_ds is not None:
+                            src_config = gdalfun.gdal_infos(src_ds)
+                            src_band = src_ds.GetRasterBand(1)
+                            src_array = src_band.ReadAsArray()
+                            src_array[mn >= mn_percentile] = src_band.GetNoDataValue()
+                            src_band.WriteArray(src_array)
+
+                    if self.verbose:
+                        utils.echo_msg(
+                            f'set percentile interpolation limit to {mn_percentile}.'
+                        )
+                else:
+                    if self.verbose:
+                        utils.echo_warning_msg('could not set percentile limit')
+
+            ## optionally mask nodata zones based on size_threshold
+            if expand_limit is not None:
+                #mn = nodata_count_mask(stack_fn, band=2)
+                #if mn is not None:
+                mask_array = None
+                with gdalfun.gdal_datasource(stack_fn) as stack_ds:
+                    stack_infos = gdalfun.gdal_infos(stack_ds)
+                    this_band = stack_ds.GetRasterBand(1)
+                    this_array = this_band.ReadAsArray()
+                    mask_array = this_array != stack_infos['ndv']
+
+                    mask_array = utils.expand_for(mask_array, shiftx=expand_limit, shifty=expand_limit)
+                    mask_array = np.invert(utils.expand_for(np.invert(mask_array), shiftx=expand_limit, shifty=expand_limit))
+                    
+                if mask_array is not None:
+                    with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                        if src_ds is not None:
+                            src_config = gdalfun.gdal_infos(src_ds)
+                            src_band = src_ds.GetRasterBand(1)
+                            src_array = src_band.ReadAsArray()
+                            src_array[~mask_array] = src_band.GetNoDataValue()
+                            src_band.WriteArray(src_array)
+
+                    if self.verbose:
+                        utils.echo_msg(
+                            f'set expandede interpolation limit to {expand_limit}.'
+                        )
+                else:
+                    if self.verbose:
+                        utils.echo_warning_msg('could not set expand limit')
+                        
+                        
+    def set_limits(self, upper_limit=None, lower_limit=None, band=1):
+        ## limit in other bands?? or chose band to limit??
+        upper_limit = utils.float_or(upper_limit)
+        lower_limit = utils.float_or(lower_limit)
+        if upper_limit is not None or lower_limit is not None:
+            dem_ds = gdal.Open(self.fn, 1)
+            if dem_ds is not None:
+                src_band = dem_ds.GetRasterBand(band)
+                band_data = src_band.ReadAsArray()
+
+                if upper_limit is not None:
+                    band_data[band_data > upper_limit] = upper_limit
+                    if self.verbose:
+                        utils.echo_msg(
+                            f'set upper limit to {upper_limit}.'
+                        )
+
+                if lower_limit is not None:
+                    band_data[band_data < lower_limit] = lower_limit
+                    if self.verbose:
+                        utils.echo_msg(
+                            f'set lower limit to {lower_limit}.'
+                        )
+
+                src_band.WriteArray(band_data)
+                
+                dem_ds = None
+                self.initialize()
+
+                
+    def set_srs(self, dst_srs=None):
+        if dst_srs is not None:
+            gdalfun.gdal_set_srs(
+                self.fn, src_srs=dst_srs, verbose=self.verbose
+            )
+            self.initialize()
+            if self.verbose:
+                utils.echo_msg(
+                    f'set SRS to {dst_srs}...'
+                )
+
+                
+    def reformat(self, out_fmt=None):
+        if out_fmt is not None:
+            if out_fmt != self.ds_config['fmt']:
+                out_fn = '{}.{}'.format(
+                    utils.fn_basename2(self.fn), gdalfun.gdal_fext(out_fmt)
+                )
+                out_ds = gdal.GetDriverByName(out_fmt).CreateCopy(
+                    out_fn, 0, co=self.co
+                )
+                if out_ds is not None:
+                    utils.remove_glob(self.fn)
+                    self.fn = out_fn
+                    self.initialize()
+
+                    if self.verbose:
+                        utils.echo_msg(
+                            f'formatted data to {out_fmt}.'
+                        )
+
+                        
+    def move(self, out_fn=None, out_dir=None):
+        if out_fn is not None:
+            _out_fn = os.path.join(os.path.dirname(self.fn), out_fn)
+            os.replace(self.fn, _out_fn)                
+            self.fn = _out_fn
+            self.initialize()
+            if self.verbose:
+                utils.echo_msg(
+                    'moved output DEM from {} to {}.'.format(
+                        os.path.basename(self.fn), os.path.abspath(out_fn)
+                    )
+                )
+            
+        if out_dir is not None:
+            _out_fn = os.path.join(out_dir, os.path.basename(self.fn))
+            os.replace(self.fn, _out_fn)
+            self.fn = _out_fn
+            self.initialize()
+            if self.verbose:
+                utils.echo_msg(
+                    'moved output DEM {} to {}.'.format(
+                        os.path.basename(self.fn), os.path.abspath(out_dir)
+                    )
+                )
+
+                
+    def set_metadata(self, cudem=False, node='pixel'):
+        """add metadata to the waffled raster
+
+        Args: 
+          cudem (bool): add CUDEM metadata
+        """
+        
+        dem_ds = gdal.Open(self.fn, 1)
+        if dem_ds is not None:
+            md = self.ds_config['metadata']
+            md['AREA_OR_POINT'] = 'Point'
+            dem_ds.SetMetadata(md)
+            dem_ds = None
+            
+        dem_ds = gdal.Open(self.fn, 1)
+        if dem_ds is not None:
+            md = self.ds_config['metadata']
+            md['TIFFTAG_DATETIME'] = '{}'.format(utils.this_date())
+
+            if node == 'pixel':
+                md['AREA_OR_POINT'] = 'Area'
+                md['NC_GLOBAL#node_offset'] = '1'
+                md['tos#node_offset'] = '1'
+            else:
+                md['AREA_OR_POINT'] = 'Point'
+                md['NC_GLOBAL#node_offset'] = '0'
+                md['tos#node_offset'] = '0'
+
+            if cudem:
+                md['TIFFTAG_COPYRIGHT'] = ('DOC/NOAA/NESDIS/NCEI > National '
+                                           'Centers for Environmental Information, '
+                                           'NESDIS, NOAA, U.S. Department of Commerce')
+                if self.ds_config['zr'][1] < 0:
+                    tb = 'Bathymetry'
+                elif self.ds_config['zr'][0] > 0:
+                    tb = 'Topography'
+                else:
+                    tb = 'Topography-Bathymetry'
+
+                srs=osr.SpatialReference(wkt=self.ds_config['proj'])
+                vdatum=srs.GetAttrValue('vert_cs')
+                md['TIFFTAG_IMAGEDESCRIPTION'] = '{}; {}'.format(
+                    tb, '' if vdatum is None else vdatum
+                )
+
+            if dem_ds.SetMetadata(md) != 0:
+                utils.echo_error_msg('failed to correctly set metadata')
+
+            dem_ds = None
+            if self.verbose:
+                utils.echo_msg(
+                    f'set DEM metadata: {md}.'
+                )
+
+    def stack2nc(self, stack_fn=None, mask_fn=None, unc_fn=None, node='pixel'):
+        def generate_dims(fn, grp):
+            dem_infos = gdalfun.gdal_infos(fn)
+            nx = dem_infos['nx']
+            ny = dem_infos['ny']
+            geoT = dem_infos['geoT']
+            proj = dem_infos['proj']
+            cstype = srsfun.srs_get_cstype(proj)
+            horz_epsg, vert_epsg = srsfun.epsg_from_input(proj)
+            if cstype == 'GEOGCS':
+                lat_name = 'lat'
+                lat_long_name = 'latitude'
+                lat_units = 'degrees_north'
+                lon_name = 'lon'
+                lon_long_name = 'longitude'
+                lon_units = 'degrees_east'
+            else:
+                lat_name = 'y'
+                lat_long_name = 'northing'
+                lat_units = 'meters'
+                lon_name = 'x'
+                lon_long_name = 'easting'
+                lon_units = 'meters'
+            
+            if node == 'pixel': # pixel-node
+                lon_start = geoT[0] + (geoT[1] / 2)
+                lat_start = geoT[3] + (geoT[5] / 2)
+                grp.GDAL_AREA_OR_POINT = 'AREA'
+                grp.node_offset = 1
+            else: # grid-node
+                lon_start = geoT[0]
+                lat_start = geoT[3]
+                grp.GDAL_AREA_OR_POINT = 'POINT'
+                grp.node_offset = 0
+
+            lon_end = geoT[0] + (geoT[1] * nx)
+            lat_end = geoT[3] + (geoT[5] * ny)
+            lon_inc = geoT[1]
+            lat_inc = geoT[5]
+
+            grp.Conventions = 'CF-1.5'
+            #nc_ds.node_offset = 1
+
+            # ************  Grid Mapping  ********
+            crs_var = grp.createVariable('crs', 'S1', (), compression='zlib')
+            crs_var.long_name = 'CRS definition'
+            crs_var.GeoTransfrom = ' '.join([str(x) for x in geoT])
+            crs_var.crs_wkt = proj
+            crs_var.spatial_ref = proj
+            crs_var.horz_crs_epsg = horz_epsg
+            crs_var.vert_crs_epsg = 'EPSG:{}'.format(vert_epsg)
+
+            # ************  LATITUDE  ************
+            lat_array = np.arange(lat_start, lat_end, lat_inc)
+            lat_dim = grp.createDimension(lat_name, ny) # lat dim
+            lat_var = grp.createVariable(
+                lat_name, 'd', (lat_name,), compression='zlib'
+            ) # lat var
+            lat_var.long_name = lat_long_name
+            lat_var.standard_name = lat_long_name
+            lat_var.units = lat_units
+            lat_var.actual_range = [lat_array.min(), lat_array.max()]
+            lat_var[:] = lat_array
+
+            # ************  LONGITUDE  ***********
+            lon_array = np.arange(lon_start, lon_end, lon_inc)
+            lon_dim = grp.createDimension(lon_name, nx) # lon dim
+            lon_var = grp.createVariable(
+                lon_name, 'd', (lon_name,), compression='zlib'
+            ) # lon_var
+            lon_var.long_name = lon_long_name
+            lon_var.standard_name = lon_long_name
+            lon_var.units = lon_units
+            lon_var.actual_range = [lon_array.min(), lon_array.max()]
+            lon_var[:] = lon_array
+
+            return(lat_name, lon_name, 'crs')
+            
+        if self.verbose:
+            utils.echo_msg('Generateing NetCDF output...')
+
+        # ************  DEM GRP **************
+        nc_ds = nc.Dataset(
+            os.path.join(
+                os.path.dirname(self.fn),
+                '{}.nc'.format(os.path.basename(utils.fn_basename2(self.fn)))
+            ),
+            'w',
+            format='NETCDF4'
+        )
+        #dem_grp = nc_ds.createGroup('dem')    
+        lat, lon, crs = generate_dims(self.fn, nc_ds)
+        dem_infos = gdalfun.gdal_infos(self.fn, scan=True)
+        horz_epsg, vert_epsg = srsfun.epsg_from_input(dem_infos['proj'])
+        dem_var = nc_ds.createVariable(
+            'z', 'f4', (lat, lon,), compression='zlib', fill_value=dem_infos['ndv']
+        ) # dem_h var
+        dem_var.units = 'meters'
+        dem_var.grid_mapping = 'crs'
+        dem_var.long_name = 'z'
+        dem_var.standard_name = 'height'
+        dem_var.positive = 'up'
+        dem_var.vert_crs_epsg = 'EPSG:{}'.format(vert_epsg)
+        dem_var.actual_range = dem_infos['zr']
+        
+        with gdalfun.gdal_datasource(self.fn) as dem_ds:
+            dem_band = dem_ds.GetRasterBand(1)
+            dem_var[:] = dem_band.ReadAsArray()
+
+        # ************  UNC GRP **************
+        if unc_fn is not None:
+            if os.path.exists(unc_fn):
+                unc_grp = nc_ds.createGroup('uncertainty')
+                lat, lon, crs = generate_dims(unc_fn, unc_grp)
+                with gdalfun.gdal_datasource(unc_fn) as unc_ds:
+                    if unc_ds is not None:
+                        for b in range(1, unc_ds.RasterCount+1):
+                            unc_infos = gdalfun.gdal_infos(unc_ds, scan=True, band=b)
+                            unc_band = unc_ds.GetRasterBand(b)
+                            unc_name = unc_band.GetDescription()
+                            unc_var = unc_grp.createVariable(
+                                unc_name,
+                                'f4',
+                                (lat, lon,),
+                                compression='zlib',
+                                fill_value=unc_infos['ndv']
+                            )
+                            unc_var[:] = unc_band.ReadAsArray()
+                            if unc_name != 'proximity':
+                                unc_var.units = 'meters'
+                            else:
+                                unc_var.units = 'cells'
+
+                            unc_var.grid_mapping = "crs"
+                            unc_var.actual_range = unc_infos['zr']
+            else:
+                utils.echo_warning_msg(
+                    f'{unc_fn} does not exist'
+                )
+            
+        # ************  MSK GRP ****************
+        if mask_fn is not None:
+            if os.path.exists(mask_fn):
+                mask_grp = nc_ds.createGroup('mask')
+                lat, lon, crs = generate_dims(mask_fn, mask_grp)
+                with gdalfun.gdal_datasource(mask_fn) as mask_ds:
+                    if mask_ds is not None:
+                        for b in range(1, mask_ds.RasterCount+1):
+                            mask_infos = gdalfun.gdal_infos(mask_ds, scan=True, band=b)
+                            mask_band = mask_ds.GetRasterBand(b)
+                            mask_var = mask_grp.createVariable(
+                                mask_band.GetDescription(),
+                                'i4',
+                                (lat, lon,),
+                                compression='zlib',
+                                fill_value=mask_infos['ndv']
+                            )
+                            mask_var.grid_mapping = "crs"
+                            mask_var[:] = mask_band.ReadAsArray()
+                            this_band_md = mask_band.GetMetadata()
+                            for k in this_band_md.keys():
+                                try:
+                                    mask_var.__setattr__(
+                                        os.path.basename(k), os.path.basename(this_band_md[k])
+                                    )
+                                except:
+                                    mask_var.__setattr__(
+                                        '_{}'.format(
+                                            os.path.basename(k)
+                                        ),
+                                        os.path.basename(this_band_md[k])
+                                    )
+                                    
+                            mask_var.actual_range = mask_infos['zr']
+            else:
+                utils.echo_warning_msg(
+                    f'{msk_fn} does not exist'
+                )
+
+        # ************  STACK  ***************
+        if stack_fn is not None:
+            if os.path.exists(stack_fn):
+                stack_grp = nc_ds.createGroup('stack')
+                lat, lon, crs = generate_dims(stack_fn, stack_grp)
+                with gdalfun.gdal_datasource(stack_fn) as stack_ds:
+                    for b, n in enumerate(
+                            ['stack_h', 'count', 'weight', 'uncertainty',
+                             'src_uncertainty', 'x', 'y']
+                    ):
+                        stack_infos = gdalfun.gdal_infos(stack_ds, scan=True, band=b+1)
+                        this_band = stack_ds.GetRasterBand(b+1)
+                        this_var = stack_grp.createVariable(
+                            n,
+                            'f4',
+                            (lat, lon,),
+                            compression='zlib',
+                            fill_value=stack_infos['ndv']
+                        )
+                        this_var[:] = this_band.ReadAsArray()
+                        this_var.short_name = n
+                        this_var.actual_range = stack_infos['zr']
+                        this_var.grid_mapping = "crs"
+            else:
+                utils.echo_warning_msg(
+                    f'{stack_fn} does not exist'
+                )
+                                
+        nc_ds.close()
+
+        
+    def stack2hd5(self, stack_fn=None, mask_fn=None, unc_fn=None, node='pixel'):
+        """put all the data into an hdf5 file"""
+
+        if self.verbose:
+            utils.echo_msg('Generating H5 output...')
+        
+        f = h5.File(
+            os.path.join(
+                os.path.dirname(self.fn),
+                '{}.h5'.format(
+                    os.path.basename(utils.fn_basename2(self.fn))
+                )
+            ),
+            'w'
+        )
+        dem_infos = gdalfun.gdal_infos(self.fn)
+        nx = dem_infos['nx']
+        ny = dem_infos['ny']
+        geoT = dem_infos['geoT']
+
+        if node == 'pixel': # pixel-node
+            lon_start = geoT[0] + (geoT[1] / 2)
+            lat_start = geoT[3] + (geoT[5] / 2)
+        else: # grid-node
+            lon_start = geoT[0]
+            lat_start = geoT[3]
+
+        lon_end = geoT[0] + (geoT[1] * nx)
+        lat_end = geoT[3] + (geoT[5] * ny)
+        lon_inc = geoT[1]
+        lat_inc = geoT[5]
+        
+        # ************  DEM  GRP *************
+        dem_grp = f.create_group('dem')
+        
+        # ************  STACK  GRP ***********
+        if stack_fn is not None:
+            stack_grp = f.create_group('stack')
+            stack_infos = gdalfun.gdal_infos(stack_fn)
+
+        # ************  MSK  GRP *************
+        if mask_fn is not None:
+            mask_grp = f.create_group('mask')
+
+        # ************  METADATA  ************
+        # f.create_dataset('geo_transform', data=geoT) # geo_transform
+        # srs info
+        # other metdata
+
+        # ************  Grid Mapping  ********
+        crs_dset = f.create_dataset('crs', dtype=h5.string_dtype())
+        crs_dset.attrs['GeoTransfrom'] = ' '.join([str(x) for x in geoT])
+        crs_dset.attrs['crs_wkt'] = self.ds_config['proj']
+        
+        # ************  LATITUDE  ************
+        lat_array = np.arange(lat_start, lat_end, lat_inc)
+        lat_dset = f.create_dataset ('lat', data=lat_array)
+        lat_dset.make_scale('latitude')
+        lat_dset.attrs["long_name"] = "latitude"
+        lat_dset.attrs["units"] = "degrees_north"
+        lat_dset.attrs["standard_name"] = "latitude"
+        lat_dset.attrs["actual_range"] = [lat_end, lat_start]
+        #lat_dset.attrs[''] = ''
+
+        # ************  LONGITUDE  ***********
+        lon_array = np.arange(lon_start, lon_end, lon_inc)
+        lon_dset = f.create_dataset ('lon', data=lon_array)
+        lon_dset.make_scale('longitude')
+        lon_dset.attrs["long_name"] = "longitude"
+        lon_dset.attrs["units"] = "degrees_east" 
+        lon_dset.attrs["standard_name"]= "longitude"
+        lon_dset.attrs["actual_range"] = [lon_start, lon_end]
+
+        # ************  DEM  *****************
+        with gdalfun.gdal_datasource(self.fn) as dem_ds:
+            dem_band = dem_ds.GetRasterBand(1)
+            #dem_dset = f.create_dataset ('z', data=dem_band.ReadAsArray())
+            dem_dset = dem_grp.create_dataset(
+                'dem_h', data=dem_band.ReadAsArray()
+            )
+            dem_dset.attrs['units'] = 'meters'
+            dem_dset.dims[0].attach_scale(lat_dset)
+            dem_dset.dims[1].attach_scale(lon_dset)
+            dem_dset.attrs['grid_mapping'] = "crs"
+            
+        # ************  Uncertainty  *********
+        if unc_fn is not None:
+            with gdalfun.gdal_datasource(unc_fn) as unc_ds:
+                unc_band = unc_ds.GetRasterBand(1)
+                unc_dset = dem_grp.create_dataset(
+                    'uncertainty', data=unc_band.ReadAsArray()
+                )
+                unc_dset.attrs['units'] = 'meters'
+                unc_dset.dims[0].attach_scale(lat_dset)
+                unc_dset.dims[1].attach_scale(lon_dset)
+                unc_dset.attrs['grid_mapping'] = "crs"
+                
+        # ************  MASK  ****************
+        if mask_fn is not None:
+            with gdalfun.gdal_datasource(mask_fn) as mask_ds:
+                if mask_ds is not None:
+                    for b in range(1, mask_ds.RasterCount+1):
+                        mask_band = mask_ds.GetRasterBand(b)
+                        mask_dset = mask_grp.create_dataset(
+                            mask_band.GetDescription(), data=mask_band.ReadAsArray()
+                        )
+                        this_band_md = mask_band.GetMetadata()
+                        for k in this_band_md.keys():
+                            mask_dset.attrs[k] = this_band_md[k]
+
+                        mask_dset.dims[0].attach_scale(lat_dset)
+                        mask_dset.dims[1].attach_scale(lon_dset)
+                        mask_dset.attrs['grid_mapping'] = "crs"
+            
+        # ************  STACK  ***************
+        if stack_fn is not None:
+            with gdalfun.gdal_datasource(stack_fn) as stack_ds:
+                for b, n in enumerate(
+                        ['stack_h', 'count', 'weight',
+                         'uncertainty', 'src_uncertainty']
+                ):
+                    this_band = stack_ds.GetRasterBand(b+1)
+                    this_dset = stack_grp.create_dataset(n, data=this_band.ReadAsArray())
+                    this_dset.dims[0].attach_scale(lat_dset)
+                    this_dset.dims[1].attach_scale(lon_dset)
+                    this_dset.attrs['short_name'] = n
+                    this_dset.attrs['grid_mapping'] = "crs"
+        f.close()
+
+
+### End

@@ -430,7 +430,7 @@ class VerticalTransform:
         This will fail over land or outside of US waters...
         """
 
-        from cudem import waffles # we want waffles for some interpolation
+        from cudem.waffles.waffles import WaffleFactory # we want waffles for some interpolation
 
         ## fetch the input tidal datum from VDatum
         v_in = fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
@@ -461,7 +461,7 @@ class VerticalTransform:
             ## grid the input tidal datum grid from VDatum to the region to fill gaps and make
             ## it the same size/shape as the output transformation grid
             if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
-                _trans_in = waffles.WaffleFactory(
+                _trans_in = WaffleFactory(
                     mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
                     xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_in),
                     cache_dir=self.cache_dir, dst_srs='epsg:4326', node='pixel', verbose=self.verbose
@@ -496,7 +496,7 @@ class VerticalTransform:
             ## grid the output tidal datum grid from VDatum to the region to fill gaps and make
             ## it the same size/shape as the output transformation grid
             if vdatum_tidal_out != 5714 and vdatum_tidal_out != 'msl':
-                _trans_out = waffles.WaffleFactory(
+                _trans_out = WaffleFactory(
                     mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_out)], src_region=self.src_region,
                     xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_out), dst_srs='epsg:4326',
                     cache_dir=self.cache_dir, node='pixel', verbose=self.verbose
