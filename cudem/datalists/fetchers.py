@@ -194,17 +194,6 @@ class Fetcher(ElevationDataset):
                 region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir, q='water'
             )
             water_mask = this_osm_water(return_geom=False, overwrite=False)
-
-            # coast_mask = self.process_coastline(
-            #     self.fetch_coastline(
-            #         chunks=False, verbose=False
-            #     ),
-            #     return_geom=False,
-            #     landmask_is_watermask=True,
-            #     include_landmask=False,
-            #     line_buffer=self.coast_buffer,
-            #     verbose=False
-            # )
             if coast_mask is not None:
                 self.fetches_params['mask'] = [f'mask_fn={coast_mask}:invert={self.invert_coast}']
 
@@ -327,8 +316,7 @@ class NEDFetcher(Fetcher):
     The National Map (TNM)
     """
 
-    __doc__ = '''{}    
-    Fetches Module: <ned> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <ned> - {}'''.format(
         __doc__, fetches.tnm.NED.__doc__
     )
 
@@ -345,20 +333,6 @@ class NEDFetcher(Fetcher):
         ## todo: merge the coast mask with user input self.mask
         coast_mask = None
         ned_mask = self.mask
-        # if self.mask is None:
-        #     coast_mask = self.process_coastline(
-        #         self.fetch_coastline(
-        #             chunks=False, verbose=False
-        #         ),
-        #         return_geom=False,
-        #         landmask_is_watermask=True,
-        #         include_landmask=False,
-        #         line_buffer=self.coast_buffer,
-        #         verbose=False
-        #     )
-        #     if coast_mask is not None:
-        #         ned_mask = {'mask': coast_mask, 'invert_mask': True}
-        
         src_dem = os.path.join(self.fetch_module._outdir, result['dst_fn'])
             
         self.fetches_params['mod'] = src_dem
@@ -376,8 +350,7 @@ class DNRFetcher(Fetcher):
     """
     """
 
-    __doc__ = '''{}    
-    Fetches Module: <wadnr> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <wadnr> - {}'''.format(
         __doc__, fetches.wadnr.waDNR.__doc__
     )
     
@@ -412,8 +385,7 @@ class DAVFetcher_CoNED(Fetcher):
     since the CoNED doesn't assign one to their DEMs.
     """
 
-    __doc__ = '''{}    
-    Fetches Module: <CoNED> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <CoNED> - {}'''.format(
         __doc__, fetches.dav.CoNED.__doc__
     )
     
@@ -484,8 +456,7 @@ class DAVFetcher_SLR(Fetcher):
     mainly so we can pull and remove the flattened ring around the actual data.
     """
 
-    __doc__ = '''{}    
-    Fetches Module: <SLR> - {}'''.format(
+    __doc__ = '''{}Fetches Module: <SLR> - {}'''.format(
         __doc__, fetches.dav.SLR.__doc__
     )
 
@@ -561,8 +532,7 @@ class SWOTFetcher(Fetcher):
       
     """
 
-    __doc__ = '''{}    
-    Fetches Module: <swot> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <swot> - {}'''.format(
         __doc__, fetches.earthdata.SWOT.__doc__
     )
 
@@ -629,14 +599,13 @@ class IceSat2Fetcher(Fetcher):
     """
 
     from cudem.datalists.icesat2file import IceSat2_ATL03
-    
-    __doc__ = '''{}    
-    DLIM Module: <IceSat2File> - {}'''.format(
+    from cudem.fetches import osm
+            
+    __doc__ = '''{}\nDLIM Module: <IceSat2File> - {}'''.format(
         __doc__, IceSat2_ATL03.__doc__
     )
     
-    __doc__ = '''{}    
-    Fetches Module: <icesat2> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <icesat2> - {}'''.format(
         __doc__, fetches.earthdata.IceSat2.__doc__
     )
 
@@ -668,14 +637,23 @@ class IceSat2Fetcher(Fetcher):
         self.fetches_params['classify_water'] = self.classify_water
 
         if self.fetches_params['classify_buildings']:
-            self.fetches_params['classify_buildings'] \
-                = self.process_buildings(self.fetch_buildings(verbose=self.verbose), verbose=self.verbose)
+            this_bfp = bingbfp.bingBuildings(
+                region=self.region, verbose=self.verbose, cache_dir=self.cache_dir
+            )
+            bldg_mask = this_bfp(return_geom=True)
+            self.fetches_params['classify_buildings'] = bldg_mask
 
         if self.fetches_params['classify_water']:
-            self.fetches_params['classify_water'] = self.process_coastline(
-                self.fetch_coastline(chunks=False, verbose=self.verbose),
-                return_geom=True, verbose=self.verbose
+            this_osm = osm.osmCoastline(
+                region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir
             )
+            coast_mask = this_osm(return_geom=True)
+
+            this_osm_water = osm.osmCoastline(
+                region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir, q='water'
+            )
+            coast_mask.extend(this_osm_water(return_geom=True))
+            self.fetches_params['classify_water'] = coast_mask
 
         
     def yield_ds(self, result):
@@ -732,8 +710,7 @@ class GMRTFetcher(Fetcher):
     swath_only: only return MB swath data
     """
     
-    __doc__ = '''{}    
-    Fetches Module: <gmrt> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <gmrt> - {}'''.format(
         __doc__, fetches.gmrt.GMRT.__doc__
     )
 
@@ -797,8 +774,7 @@ class GEBCOFetcher(Fetcher):
     Note: Fetches entire zip file.
     """
     
-    __doc__ = '''{}    
-    Fetches Module: <gebco> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <gebco> - {}'''.format(
         __doc__, fetches.gebco.GEBCO.__doc__
     )
 
@@ -915,8 +891,7 @@ class CopernicusFetcher(Fetcher):
     """Gridded Copernicus sattelite data.
     """
     
-    __doc__ = '''{}    
-    Fetches Module: <copernicus> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <copernicus> - {}'''.format(
         __doc__, fetches.copernicus.CopernicusDEM.__doc__
     )
 
@@ -984,8 +959,7 @@ class MarGravFetcher(Fetcher):
     """Marine Gravity Bathymetry
     """
     
-    __doc__ = '''{}    
-    Fetches Module: <mar_grav> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <mar_grav> - {}'''.format(
         __doc__, fetches.margrav.MarGrav.__doc__
     )
 
@@ -1074,8 +1048,7 @@ class ChartsFetcher(Fetcher):
     Digital Soundings
     """
     
-    __doc__ = '''{}
-    Fetches Module: <charts> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <charts> - {}'''.format(
         __doc__, fetches.charts.Charts.__doc__
     )
 
@@ -1124,8 +1097,7 @@ class MBSFetcher(Fetcher):
     """NOAA Multibeam Fetcher
     """
 
-    __doc__ = '''{}
-    Fetches Module: <multibeam> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <multibeam> - {}'''.format(
         __doc__, fetches.multibeam.Multibeam.__doc__
     )
 
@@ -1158,8 +1130,7 @@ class HydroNOSFetcher(Fetcher):
     """NOAA HydroNOS Data Fetcher
     """
     
-    __doc__ = '''{}
-    Fetches Module: <hydronos> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <hydronos> - {}'''.format(
         __doc__, fetches.hydronos.HydroNOS.__doc__
     )
 
@@ -1223,8 +1194,9 @@ class CSBFetcher(Fetcher):
     """Crowd Sourced Bathymetry data fetcher
     """
     
-    __doc__ = '''{}
-    Fetches Module: <csb> - {}'''.format(__doc__, fetches.csb.CSB.__doc__)
+    __doc__ = '''{}\nFetches Module: <csb> - {}'''.format(
+        __doc__, fetches.csb.CSB.__doc__
+    )
 
                                         
     def __init__(self, **kwargs):
@@ -1240,8 +1212,7 @@ class R2RFetcher(Fetcher):
     """R2R Bathymetry data fetcher
     """
     
-    __doc__ = '''{}
-    Fetches Module: <r2r> - {}'''.format(__doc__, fetches.multibeam.R2R.__doc__)
+    __doc__ = '''{}\nFetches Module: <r2r> - {}'''.format(__doc__, fetches.multibeam.R2R.__doc__)
 
                                         
     def __init__(self, **kwargs):
@@ -1300,8 +1271,7 @@ class GEDTM30Fetcher(Fetcher):
     """GEDTM30 Data Fetcher
     """
     
-    __doc__ = '''{}
-    Fetches Module: <gedtm30> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <gedtm30> - {}'''.format(
         __doc__, fetches.gedtm30.GEDTM30.__doc__
     )
 
@@ -1332,8 +1302,7 @@ class HRDEMFetcher(Fetcher):
     """HRDEM Data Fetcher
     """
     
-    __doc__ = '''{}
-    Fetches Module: <hrdem> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <hrdem> - {}'''.format(
         __doc__, fetches.hrdem.HRDEM.__doc__
     )
 
@@ -1352,8 +1321,7 @@ class eHydroFetcher(Fetcher):
     """USACE eHydro soundings
     """
 
-    __doc__ = '''{}
-    Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.ehydro.eHydro.__doc__)
+    __doc__ = '''{}\nFetches Module: <ehydro> - {}'''.format(__doc__, fetches.ehydro.eHydro.__doc__)
 
                                         
     def __init__(self, want_contours=True, **kwargs):
@@ -1441,8 +1409,7 @@ class BlueTopoFetcher(Fetcher):
     unc_weights: use the uncertainty mask as weights
     """
 
-    __doc__ = '''{}
-    Fetches Module: <bluetopo> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <bluetopo> - {}'''.format(
         __doc__, fetches.bluetopo.BlueTopo.__doc__
     )
 
@@ -1487,8 +1454,7 @@ class NGSFetcher(Fetcher):
     """NGS Monument data
     """
 
-    __doc__ = '''{}
-    Fetches Module: <ngs> - {}'''.format(__doc__, fetches.ngs.NGS.__doc__)
+    __doc__ = '''{}\nFetches Module: <ngs> - {}'''.format(__doc__, fetches.ngs.NGS.__doc__)
 
     
     def __init__(self, datum = 'geoidHt', **kwargs):
@@ -1541,8 +1507,7 @@ class TidesFetcher(Fetcher):
     """NOS Tide Station data
     """
 
-    __doc__ = '''{}
-    Fetches Module: <tides> - {}'''.format(__doc__, fetches.tides.Tides.__doc__)
+    __doc__ = '''{}\nFetches Module: <tides> - {}'''.format(__doc__, fetches.tides.Tides.__doc__)
 
     
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', **kwargs):
@@ -1611,8 +1576,7 @@ class WaterServicesFetcher(Fetcher):
     72019 - Depth to water level, units below land surface
     """
 
-    __doc__ = '''{}
-    Fetches Module: <waterservices> - {}'''.format(
+    __doc__ = '''{}\nFetches Module: <waterservices> - {}'''.format(
         __doc__, fetches.waterservices.WaterServices.__doc__
     )
 
@@ -1671,8 +1635,7 @@ class VDatumFetcher(Fetcher):
     """VDatum transformation grids.
     """
 
-    __doc__ = '''{}
-    Fetches Module: <vdatum> - {}'''.format(__doc__, fetches.vdatum.VDATUM.__doc__)
+    __doc__ = '''{}\nFetches Module: <vdatum> - {}'''.format(__doc__, fetches.vdatum.VDATUM.__doc__)
 
     
     def __init__(self, **kwargs):

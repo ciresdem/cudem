@@ -46,6 +46,7 @@ from cudem import gdalfun
 from cudem.fetches import fetches
 from cudem.fetches import earthdata
 from cudem.fetches import osm
+from cudem.fetches import bingbfp
 from cudem.datalists.dlim import ElevationDataset
 
 class IceSat2_ATL24(ElevationDataset):
@@ -667,10 +668,11 @@ class IceSat2_ATL03(ElevationDataset):
         ## fetch and process buildings, if wanted
         if self.classify_buildings:
             if isinstance(self.classify_buildings, bool):
-                this_bing = self.process_buildings(
-                    self.fetch_buildings(verbose=self.verbose),
-                    verbose=self.verbose
+                this_bfp = bingbfp.bingBuildings(
+                    region=self.region, verbose=self.verbose, cache_dir=self.cache_dir
                 )
+                bldg_mask = this_bfp(return_geom=True)
+                this_bing = bldg_mask
                 
             elif isinstance(self.classify_buildings, list):
                 this_bing = self.classify_buildings
@@ -682,12 +684,15 @@ class IceSat2_ATL03(ElevationDataset):
         ## fetch and process watermask, if wanted
         if self.classify_water:
             if isinstance(self.classify_water, bool):
-                this_wm = self.process_coastline(
-                    self.fetch_coastline(chunks=False, verbose=self.verbose),
-                    return_geom=True,
-                    verbose=self.verbose
+                this_osm = osm.osmCoastline(
+                    region=self.region,
+                    chunks=True,
+                    verbose=self.verbose,
+                    attempts=5,
+                    cache_dir=self.cache_dir
                 )
-                
+                this_wm = this_osm(return_geom=True)
+                                
             elif isinstance(self.classify_water, list):
                 this_wm = self.classify_water
                 

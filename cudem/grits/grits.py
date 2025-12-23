@@ -513,7 +513,7 @@ Examples:
   % {cmd} input_dem.tif --uncertainty_mask input_dem_u.tif --max_z 0 -M outliers:percentile=65
 """.format(cmd=os.path.basename(sys.argv[0]),
            version=__version__,
-           d_formats=factory._cudem_module_short_desc(GritsFactory._modules))
+           d_formats=factory.get_module_short_desc(GritsFactory._modules))
         
 #if __name__ == '__main__':
 def grits_cli(argv = sys.argv):

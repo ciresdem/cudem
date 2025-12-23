@@ -628,5 +628,5 @@ class MUR_SST(EarthData):
     def __init__(self, **kwargs):
         super().__init__(short_name='MUR-JPL-L4-GLOB-v4.1', **kwargs)   
 
-
+        
 ### End

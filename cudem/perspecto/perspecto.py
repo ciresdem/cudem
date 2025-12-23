@@ -238,7 +238,7 @@ Options:
 Supported PERSPECTO modules (see perspecto --modules <module-name> for more info): 
   {d_formats}
 """.format(cmd=os.path.basename(sys.argv[0]),
-           d_formats=factory._cudem_module_short_desc(PerspectoFactory._modules))
+           d_formats=factory.get_module_short_desc(PerspectoFactory._modules))
         
 #if __name__ == '__main__':
 def perspecto_cli(argv = sys.argv):

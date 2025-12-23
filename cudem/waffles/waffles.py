@@ -57,52 +57,31 @@
 
 import sys
 import os
-import math
 import json
-import time
 import glob
 import traceback
 #from tqdm import tqdm
 #from tqdm import trange
 
 import numpy as np
-import h5py as h5
-import netCDF4 as nc
-import scipy
-from scipy import interpolate
-from scipy import spatial
-from scipy import ndimage
-import threading
 import multiprocessing as mp
-try:
-   import Queue as queue
-except: import queue as queue
 
 from osgeo import gdal
-from osgeo import ogr
-from osgeo import osr
 
-import cudem
+from cudem import __version__
 from cudem.datalists import dlim
-from cudem.datalists import xyzfile
 from cudem.datalists import gdalfile
 from cudem import pointz
 from cudem import regions
 from cudem import utils
-from cudem import xyzfun
 from cudem import gdalfun
-from cudem import vdatums
 from cudem import factory
-from cudem import fetches
 from cudem.grits import grits
-from cudem import srsfun
 
 ## Data cache directory, hold temp data, fetch data, etc here.
 waffles_cache = utils.cudem_cache()
 gc = utils.config_check()
 gdal.DontUseExceptions()
-ogr.DontUseExceptions()
-osr.DontUseExceptions()
 gdal.SetConfigOption(
     'CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null'
 )
@@ -355,10 +334,11 @@ class Waffle:
 
         self.data = dlim.init_data(
             self.data,
-            region=self.p_region,
+            src_region=self.p_region,
             src_srs=None,
             dst_srs=self.dst_srs,
-            xy_inc=(self.xinc, self.yinc),
+            x_inc=self.xinc,
+            y_inc=self.yinc,
             sample_alg=self.sample,
             want_weight=self.want_weight,
             want_uncertainty=self.want_uncertainty,
@@ -1197,10 +1177,10 @@ Modules (see waffles --modules <module-name> for more info):
   {modules}
 """.format(
     cmd=os.path.basename(sys.argv[0]),
-    dl_formats=factory._cudem_module_name_short_desc(dlim.DatasetFactory._modules),
-    modules=factory._cudem_module_short_desc(WaffleFactory._modules),
-    wf_version=cudem.__version__,
-    grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules)
+    dl_formats=factory.get_module_name_short_desc(dlim.DatasetFactory._modules),
+    modules=factory.get_module_short_desc(WaffleFactory._modules),
+    wf_version=__version__,
+    grits_modules=factory.get_module_short_desc(grits.GritsFactory._modules)
 )
 
 
@@ -1449,7 +1429,7 @@ def waffles_cli(argv = sys.argv):
             sys.stderr.write(waffles_cli_usage())
             sys.exit(0)
         elif arg == '--version' or arg == '-v':
-            sys.stdout.write('{}\n'.format(cudem.__version__))
+            sys.stdout.write('{}\n'.format(__version__))
             sys.exit(0)
         elif arg[0] == '-':
             sys.stderr.write(waffles_cli_usage())

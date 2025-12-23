@@ -70,17 +70,17 @@ class FABDEM(fetches.FetchModule):
         
     def run(self):
         """run the FABDEM fetches module"""
-        
         ## use the fabdem footprints vector to find the files to fetch
-        v_json = os.path.basename(self._fabdem_footprints_url)
-        try:
-            status = fetches.Fetch(
-                self._fabdem_footprints_url, verbose=self.verbose
-            ).fetch_file(v_json)
-            v_ds = ogr.Open(v_json)
-        except:
-            v_ds = None
-            status = -1
+        v_json = os.path.join(self._outdir, os.path.basename(self._fabdem_footprints_url))
+        #try:
+        status = fetches.Fetch(
+            self._fabdem_footprints_url, verbose=self.verbose
+        ).fetch_file(v_json)
+        v_ds = ogr.Open(v_json)
+        #except Exception as e:
+        #utils.echo_warning_msg(f'could not fetch fabdem footprints, {e}')
+        #v_ds = None
+        #status = -1
             
         if v_ds is not None:
             layer = v_ds.GetLayer()
@@ -194,7 +194,8 @@ class FABDEM_FRED(fetches.FetchModule):
             )
             try:
                 v_ds = ogr.Open(v_json)
-            except:
+            except Exception as e:
+                utils.echo_warning_msg(f'could not open fabdem footprints, {e}')
                 v_ds = None
                 status = -1
                 

@@ -110,7 +110,6 @@ import warnings
 # except: import queue as queue
         
 import numpy as np
-import pandas as pd
 # from scipy.spatial import ConvexHull
 # import lxml.etree
 
@@ -692,115 +691,168 @@ def h5_get_datasets_from_grp(grp, count = 0, out_keys = []):
     return(count, out_keys)
 
 
-## initialize a list of datasets into a dataset object
-def init_data(data_list,
-              region=None,
-              src_srs=None,
-              dst_srs=None,
-              src_geoid=None,
-              dst_geoid='g2018',
-              xy_inc=(None, None),
-              sample_alg='auto',
-              want_weight=False,
-              want_uncertainty=False,
-              want_verbose=True,
-              want_mask=False,
-              want_sm=False,
-              invert_region=False,
-              cache_dir=None,
-              dump_precision=4,
-              pnt_fltrs=None,
-              stack_fltrs=None,
-              stack_node=True,
-              stack_mode='mean',
-              upper_limit=None,
-              lower_limit=None,
-              mask=None):
+# ## initialize a list of datasets into a dataset object
+# def init_data_(data_list,
+#               region=None,
+#               src_srs=None,
+#               dst_srs=None,
+#               src_geoid=None,
+#               dst_geoid='g2018',
+#               xy_inc=(None, None),
+#               sample_alg='auto',
+#               want_weight=False,
+#               want_uncertainty=False,
+#               want_verbose=True,
+#               want_mask=False,
+#               want_sm=False,
+#               invert_region=False,
+#               cache_dir=None,
+#               dump_precision=4,
+#               pnt_fltrs=None,
+#               stack_fltrs=None,
+#               stack_node=True,
+#               stack_mode='mean',
+#               upper_limit=None,
+#               lower_limit=None,
+#               mask=None):
+#     """initialize a datalist object from a list of supported dataset entries"""
+
+#     from . import datalists
+#     from . import xyzfile
+    
+#     try:
+#         #utils.echo_msg(data_list)
+#         xdls = []
+#         for dl in data_list:
+#             #utils.echo_msg(dl)
+#             if dl is sys.stdin:
+#                 xdls.append(xyzfile.XYZFile(fn=dl, data_format=168))
+#             elif isinstance(dl, str):
+#                 xdls.append(
+#                     DatasetFactory(
+#                         mod=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+#                         data_format = None,
+#                         weight=None if not want_weight else 1,
+#                         uncertainty=None if not want_uncertainty else 0,
+#                         src_srs=src_srs,
+#                         dst_srs=dst_srs,
+#                         src_geoid=src_geoid,
+#                         dst_geoid=dst_geoid,
+#                         x_inc=xy_inc[0],
+#                         y_inc=xy_inc[1],
+#                         sample_alg=sample_alg,
+#                         parent=None,
+#                         src_region=region,
+#                         invert_region=invert_region,
+#                         cache_dir=cache_dir,
+#                         want_mask=want_mask,
+#                         want_sm=want_sm,
+#                         verbose=want_verbose,
+#                         dump_precision=dump_precision,
+#                         pnt_fltrs=pnt_fltrs,
+#                         stack_fltrs=stack_fltrs,
+#                         stack_node=stack_node,
+#                         stack_mode=stack_mode,
+#                         upper_limit=None,
+#                         lower_limit=None,
+#                         mask=mask
+#                     )._acquire_module()
+#                 )
+#             elif isinstance(dl, dict):
+
+#                 if dl['kwargs']['src_region'] is not None:
+#                     dl['kwargs']['src_region'] = regions.Region().from_list(
+#                         dl['kwargs']['src_region']
+#                 )
+#                 dl['kwargs']['xinc'] = xy_inc[0]
+#                 dl['kwargs']['yinc'] = xy_inc[1]
+#                 xdls.append(
+#                     DatasetFactory(
+#                         mod_name=dl['mod_name'], mod_args=dl['mod_args'], **dl['kwargs']
+#                     )._acquire_module()
+#                 )
+
+#         #utils.echo_msg(region)
+#         utils.echo_msg(xdls)
+#         if len(xdls) > 1:
+#             this_datalist = datalists.Scratch(
+#                 fn=xdls,
+#                 data_format=-3,
+#                 weight=None if not want_weight else 1,
+#                 uncertainty=None if not want_uncertainty else 0,
+#                 src_srs=src_srs,
+#                 dst_srs=dst_srs,
+#                 src_geoid=src_geoid,
+#                 dst_geoid=dst_geoid,
+#                 x_inc=xy_inc[0],
+#                 y_inc=xy_inc[1],
+#                 sample_alg=sample_alg,
+#                 parent=None,
+#                 src_region=region,
+#                 invert_region=invert_region,
+#                 cache_dir=cache_dir,
+#                 want_mask=want_mask,
+#                 want_sm=want_sm,
+#                 verbose=want_verbose,
+#                 dump_precision=dump_precision,
+#                 pnt_fltrs=pnt_fltrs,
+#                 stack_fltrs=stack_fltrs,
+#                 stack_node=stack_node,
+#                 stack_mode=stack_mode,
+#                 upper_limit=None,
+#                 lower_limit=None,
+#                 mask=mask
+#             )
+
+#         elif len(xdls) > 0:
+#             this_datalist = xdls[0]
+#         else:
+#             this_datalist = None
+
+#         return(this_datalist)
+    
+#     except Exception as e:
+#         #utils.echo_warning_msg('failed to parse datalist obs')
+#         utils.echo_error_msg(
+#             f'could not initialize data, {data_list}: {e}'
+#         )
+#         return(None)
+
+def init_data(data_list, **kwargs):
     """initialize a datalist object from a list of supported dataset entries"""
 
     from . import datalists
+    from . import xyzfile
     
     try:
-        #utils.echo_msg(data_list[0])
         xdls = []
-        for dl in data_list:
-            if isinstance(dl, str):
-                xdls.append(
-                    DatasetFactory(
-                        mod=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-                        data_format = None,
-                        weight=None if not want_weight else 1,
-                        uncertainty=None if not want_uncertainty else 0,
-                        src_srs=src_srs,
-                        dst_srs=dst_srs,
-                        src_geoid=src_geoid,
-                        dst_geoid=dst_geoid,
-                        x_inc=xy_inc[0],
-                        y_inc=xy_inc[1],
-                        sample_alg=sample_alg,
-                        parent=None,
-                        src_region=region,
-                        invert_region=invert_region,
-                        cache_dir=cache_dir,
-                        want_mask=want_mask,
-                        want_sm=want_sm,
-                        verbose=want_verbose,
-                        dump_precision=dump_precision,
-                        pnt_fltrs=pnt_fltrs,
-                        stack_fltrs=stack_fltrs,
-                        stack_node=stack_node,
-                        stack_mode=stack_mode,
-                        upper_limit=None,
-                        lower_limit=None,
-                        mask=mask
-                    )._acquire_module()
-                )
-            elif isinstance(dl, dict):
+        kwargs['weight'] = kwargs.get('want_weight')
+        kwargs['uncertainty'] = kwargs.get('want_uncertainty')
 
+        for dl in data_list:
+            if dl is sys.stdin:
+                xdls.append(xyzfile.XYZFile(fn=dl, data_format=168, **kwargs))
+
+            elif isinstance(dl, str):
+                kwargs['mod'] = " ".join(['-' if x == "" else x for x in dl.split(",")])
+                utils.echo_msg(kwargs)
+                xdls.append(DatasetFactory(**kwargs)._acquire_module())
+
+            elif isinstance(dl, dict):
                 if dl['kwargs']['src_region'] is not None:
                     dl['kwargs']['src_region'] = regions.Region().from_list(
                         dl['kwargs']['src_region']
                 )
-                dl['kwargs']['xinc'] = xy_inc[0]
-                dl['kwargs']['yinc'] = xy_inc[1]
+                #dl['kwargs']['xinc'] = xy_inc[0]
+                #dl['kwargs']['yinc'] = xy_inc[1]
                 xdls.append(
                     DatasetFactory(
                         mod_name=dl['mod_name'], mod_args=dl['mod_args'], **dl['kwargs']
                     )._acquire_module()
                 )
 
-        #utils.echo_msg(region)
-
         if len(xdls) > 1:
-            this_datalist = datalists.Scratch(
-                fn=xdls,
-                data_format=-3,
-                weight=None if not want_weight else 1,
-                uncertainty=None if not want_uncertainty else 0,
-                src_srs=src_srs,
-                dst_srs=dst_srs,
-                src_geoid=src_geoid,
-                dst_geoid=dst_geoid,
-                x_inc=xy_inc[0],
-                y_inc=xy_inc[1],
-                sample_alg=sample_alg,
-                parent=None,
-                src_region=region,
-                invert_region=invert_region,
-                cache_dir=cache_dir,
-                want_mask=want_mask,
-                want_sm=want_sm,
-                verbose=want_verbose,
-                dump_precision=dump_precision,
-                pnt_fltrs=pnt_fltrs,
-                stack_fltrs=stack_fltrs,
-                stack_node=stack_node,
-                stack_mode=stack_mode,
-                upper_limit=None,
-                lower_limit=None,
-                mask=mask
-            )
-
+            this_datalist = datalists.Scratch(fn=xdls, data_format=-3, **kwargs)
         elif len(xdls) > 0:
             this_datalist = xdls[0]
         else:
@@ -1191,7 +1243,11 @@ class ElevationDataset:
         #    or self.fn.startswith('/vsicurl/') \
         #    or self.fn.startswith('BAG'):
         #     check_path = False
-            
+
+        if self.fn is sys.stdin or self.fn == '-':
+            self.fn = sys.stdin
+            return(True)
+        
         #if check_path:
         if self.fn is not None:
             if not isinstance(self.fn, list) and \
@@ -1697,6 +1753,8 @@ class ElevationDataset:
         else:
             generate_inf = True        
 
+        if self.fn is sys.stdin:
+            generate_inf = False
         ## check hash from inf file vs generated hash,
         ## if hashes are different, then generate a new
         ## inf file...only do this if check_hash is set
@@ -2155,7 +2213,7 @@ class ElevationDataset:
         for this_entry in self.parse():
             for arrs, srcwin, gt in this_entry.array_yield:
                 ## update the mask
-                if np.all(arrs['count'] == 0):
+                if arrs['count'] is None or np.all(arrs['count'] == 0):
                     continue
 
                 if self.want_mask:
@@ -3047,6 +3105,9 @@ class ElevationDataset:
             ## gt is the geotransform of the incoming arrays
             ###################################################################
             for arrs, srcwin, gt in this_entry.array_yield:
+                if arrs['count'] is None or np.all(arrs['count'] == 0):
+                    continue
+
                 ## update the mask
                 mask_all_dset[srcwin[1]:srcwin[1]+srcwin[3],
                               srcwin[0]:srcwin[0]+srcwin[2]][arrs['count'] != 0] = 1
@@ -3733,29 +3794,21 @@ class ElevationDataset:
                     if not np.isnan(mask_infos['ndv']):
                         mask_data[mask_data==mask_infos['ndv']] = np.nan
                         
-                    out_mask = ((~np.isnan(mask_data)) & (z_mask))
-                    
+                    out_mask = ((~np.isnan(mask_data)) & (z_mask))                    
                     for arr in out_arrays.keys():
                         if out_arrays[arr] is not None:
                             if data_mask['invert']:
                                 if arr == 'count':
-                                    #out_arrays[arr][~np.isnan(mask_data)] = 0
                                     out_arrays[arr][~out_mask] = 0
                                 else:                            
-                                    #out_arrays[arr][~np.isnan(mask_data)] = np.nan
                                     out_arrays[arr][~out_mask] = np.nan
 
                             else:
                                 if arr == 'count':
-                                    #out_arrays[arr][np.isnan(mask_data)] = 0
                                     out_arrays[arr][out_mask] = 0
                                 else:
-                                    #out_arrays[arr][np.isnan(mask_data)] = np.nan
                                     out_arrays[arr][out_mask] = np.nan
 
-                    # mask_count += np.count_nonzero(~np.isnan(mask_data)) \
-                    #     if data_mask['invert'] \
-                    #        else np.count_nonzero(np.isnan(mask_data))
                     mask_count += np.count_nonzero(~out_mask) \
                         if data_mask['invert'] \
                            else np.count_nonzero(out_mask)
@@ -3795,10 +3848,9 @@ class ElevationDataset:
                     opts = self._init_mask(mask)
                     data_masks.append(opts)
 
-                # if self.verbose:
-                #     utils.echo_msg(
-                #         f'using mask dataset: {data_masks} to xyz'
-                #     )                    
+                utils.echo_debug_msg(
+                    f'using mask dataset: {data_masks} to xyz'
+                )                    
                 for this_xyz in this_entry.yield_xyz():
                     masked = False
                     for data_mask in data_masks:                
@@ -3851,8 +3903,6 @@ class ElevationDataset:
                             src_ds = ogr.Open(data_mask['data_mask'])
                             if src_ds is not None:
                                 layer = src_ds.GetLayer()
-                                #utils.echo_msg(len(layer))
-
                                 geomcol = gdalfun.ogr_union_geom(layer, verbose=False)
                                 if not geomcol.IsValid():
                                     geomcol = geomcol.Buffer(0)
@@ -3993,8 +4043,20 @@ class ElevationDataset:
             
     def stacks_yield_xyz(self, out_name=None, ndv=-9999, fmt='GTiff'):
         """yield the result of `_stacks` as an xyz object"""
+        
+        #stacked_fn = self._stacks(out_name=out_name, ndv=ndv)
+        from . import globato
+        
+        gbt = globato.GdalRasterStacker(
+            region=self.region,
+            x_inc=self.x_inc,
+            y_inc=self.y_inc,
+            dst_srs=self.dst_srs,
+            cache_dir=self.cache_dir
+        )
 
-        stacked_fn = self._stacks(out_name=out_name, ndv=ndv)
+        stacked_fn = gbt.process_stack(self.parse())
+
         #, fmt=fmt)#, mode=mode)
         sds = gdal.Open(stacked_fn)
         sds_gt = sds.GetGeoTransform()
@@ -4042,27 +4104,15 @@ class ElevationDataset:
         #stacked_fn = self._blocks(out_name=out_name)
         from . import globato
         
-        gbt = globato.globato(
-            region=self.region, x_inc=self.x_inc,
-            y_inc=self.y_inc, dst_srs=self.dst_srs,
+        gbt = globato.GlobatoStacker(
+            region=self.region,
+            x_inc=self.x_inc,
+            y_inc=self.y_inc,
+            dst_srs=self.dst_srs,
             cache_dir=self.cache_dir
         )
-        if os.path.exists(gbt.fn):
-            gbt.load()
-        else:
-            gbt.create()
 
-        for this_entry in self.parse():
-            #utils.echo_msg_bold(this_entry)
-            gbt.add_dataset_entry(this_entry)
-            gbt.block_entry(this_entry)
-            
-        gbt.finalize()
-           
-        gbt.close()
-        #stacked_fn = gbt(self.parse())
-        stacked_fn = gbt.fn
-        
+        stacked_fn = gbt.process_blocks(self.parse())        
         sds = h5.File(stacked_fn, 'r')
         sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
         sds_stack = sds['block']
@@ -4200,6 +4250,8 @@ class ElevationDataset:
         
         This may get very large, depending on the input data.
         """
+
+        import pandas as pd
         
         dataset = pd.DataFrame(
             {}, columns=['x', 'y', 'z', 'weight', 'uncertainty']
@@ -4503,180 +4555,7 @@ class ElevationDataset:
 
     ###########################################################################    
     ## Fetching
-    ## TODO: move these out of this class
-    ###########################################################################
-    def fetch_water_temp(self):
-        """fetch and return the average water temperature over the region"""
-        
-        if self.region is not None:
-            this_region = self.region.copy()
-        else:
-            this_region = regions.Region().from_list(self.infos.minmax)
-            
-        time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
-        time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
-        this_sst = fetches.earthdata.MUR_SST(
-            src_region=this_region,
-            verbose=self.verbose,
-            outdir=self.cache_dir,
-            time_start=time_start,
-            time_end=time_end
-        )
-        this_sst.run()
-        
-        # sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
-        # sst = round(np.nanmedian(sea_temp.values)-273,2)
-        
-        return(20)
-        # return(sst)
-
-        
-    def fetch_buildings(self, verbose=True):
-        """fetch building footprints from BING"""
-        
-        if self.region is not None:
-            this_region = self.region.copy()
-        else:
-            this_region = regions.Region().from_list(self.infos.minmax)
-
-        if this_region.valid_p():
-            if verbose:
-                utils.echo_msg(
-                    f'fetching buildings for region {this_region}'
-                )
-                
-            this_bldg = fetches.bingbfp.BingBFP(
-                src_region=this_region,
-                verbose=verbose,
-                outdir=self.cache_dir
-            )
-            this_bldg.run()
-            fr = fetches.fetches.fetch_results(this_bldg)
-            #, check_size=False)
-            fr.daemon=True
-            fr.start()
-            fr.join()
-            return(fr)
-        
-        return(None)
-
-    
-    def process_buildings(self, this_bing, verbose=True):
-        bldg_geoms = []
-        if this_bing is not None:
-            with utils.ccp(
-                    total=len(this_bing.results),
-                    desc='processing buildings',
-                    leave=verbose
-            ) as pbar:
-                for n, bing_result in enumerate(this_bing.results):
-                    if bing_result[-1] == 0:
-                        bing_gz = bing_result[1]
-                        try:
-                            bing_gj = utils.gunzip(bing_gz, self.cache_dir)
-                            os.rename(bing_gj, bing_gj + '.geojson')
-                            bing_gj = bing_gj + '.geojson'
-                            bldg_ds = ogr.Open(bing_gj, 0)
-                            bldg_layer = bldg_ds.GetLayer()
-                            bldg_geom = gdalfun.ogr_union_geom(
-                                bldg_layer, verbose=False
-                            )
-                            bldg_geoms.append(bldg_geom)
-                            bldg_ds = None
-                            utils.remove_glob(bing_gj)
-                        except Exception as e:
-                            utils.echo_error_msg(f'could not process bing bfp, {e}')
-
-                        utils.remove_glob(bing_gz)
-                        
-                    pbar.update()
-                    
-        return(bldg_geoms)
-
-    
-    def fetch_coastline(self, chunks=True, verbose=True):
-        if self.region is not None:
-            this_region = self.region.copy()
-        else:
-            this_region = regions.Region().from_list(self.infos.minmax)
-
-        #this_region.buffer(pct=5)
-        if this_region.valid_p():
-            if verbose:
-                utils.echo_msg(
-                    f'fetching coastline for region {this_region}'
-                )
-                
-            this_cst = fetches.osm.OpenStreetMap(
-                src_region=this_region,
-                verbose=verbose,
-                outdir=self.cache_dir,
-                q='coastline',
-                chunks=chunks,
-            )
-            this_cst.run()
-            fr = fetches.fetches.fetch_results(this_cst, check_size=False)
-            fr.daemon=True
-            fr.start()
-            fr.join()
-            return(fr)
-        
-        return(None)
-
-    
-    def process_coastline(
-            self, this_cst, return_geom=True, landmask_is_watermask=False,
-            line_buffer=0.0000001, include_landmask=False, verbose=True
-    ):
-        if self.region is not None:
-            this_region = self.region.copy()
-        else:
-            this_region = regions.Region().from_list(self.infos.minmax)
-            
-        cst_geoms = []
-        if this_cst is not None:
-            with utils.ccp(
-                    total=len(this_cst.results),
-                    desc='processing coastline',
-                    leave=verbose
-            ) as pbar:
-                for n, cst_result in enumerate(this_cst.results):
-                    if cst_result[-1] == 0:
-                        cst_osm = cst_result[1]
-                        out = fetches.osm.polygonize_osm_coastline(
-                            cst_osm,
-                            utils.make_temp_fn(
-                                f'{utils.fn_basename2(cst_osm)}_coast.gpkg',
-                                temp_dir=self.cache_dir
-                            ),
-                            region=this_region,
-                            include_landmask=include_landmask,
-                            landmask_is_watermask=landmask_is_watermask,
-                            line_buffer=line_buffer,
-                            verbose=verbose,
-                        )
-
-                        if out is not None:
-                            cst_ds = ogr.Open(out, 0)
-                            cst_layer = cst_ds.GetLayer()
-                            cst_geom = gdalfun.ogr_union_geom(
-                                cst_layer, verbose=verbose
-                            )
-                            cst_geoms.append(cst_geom)
-                            cst_ds = None
-                            utils.remove_glob(cst_osm)
-                            
-                    pbar.update()
-                        
-            if return_geom:
-                utils.remove_glob(f'{utils.fn_basename2(out)}.*')
-                        
-        if return_geom:            
-            return(cst_geoms)
-        else:
-            return(out)
-
-        
+    ###########################################################################        
     def fetch_data(self, fetches_module, check_size=True):
         this_fetches = fetches.FetchesFactory(
             mod=fetches_module,
@@ -5043,49 +4922,15 @@ class DatasetFactory(factory.CUDEMFactory):
         ## guess the format and finish there...
         ## the format number becomes the mod_name
         ## check for specified data format as well
-        # if os.path.exists(self.kwargs['fn']):
-        #     if 'data_format' not in self.kwargs.keys() or self.kwargs['data_format'] is None:
-        #         self.mod_name = self.guess_data_format(self.kwargs['fn'])
-        #         self.mod_args = {}
-        #         self.kwargs['data_format'] = self.mod_name
-        #     else:
-        #         opts = str(self.kwargs['data_format']).split(':')
-        #         if len(opts) > 1:
-        #             self.mod_name = int(opts[0])
-        #             self.mod_args = utils.args2dict(list(opts[1:]), {})
-        #         else:
-        #             self.mod_name = int(self.kwargs['data_format'])
-        #             self.mod_args = {}
-                    
-        #         self.kwargs['data_format'] = self.mod_name
-
-        #     # inherit metadata from parent if available
-        #     # something something!
-        #     if 'metadata' not in self.kwargs.keys():
-        #         self.kwargs['metadata'] = {}
-                
-        #     self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
-            
-        #     for key in self._metadata_keys:
-        #         if key not in self.kwargs['metadata'].keys():
-        #             self.kwargs['metadata'][key] = None
-                    
-        #     return(self.mod_name, self.mod_args)
-
         ## if fn is not a path, parse it as a datalist entry
 		## breaks on path with space, e.g. /meda/user/My\ Passport/etc
-        #this_entry = re.findall(r'[^"\s]\S*|".+?"', self.kwargs['fn'].rstrip())
-        #this_entry = shlex.split(shlex.quote(self.kwargs['fn'].rstrip()))#.replace("'", "\'")))
-        #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
-        #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
-        #utils.echo_msg(self.kwargs['fn'])
         this_entry = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
         
         if os.path.exists(self.kwargs['fn']):
-            if os.path.isfile(self.kwargs['fn']) or self.kwargs['fn'].split('.')[-1] in get_factory_exts():
+            if os.path.isfile(self.kwargs['fn']) \
+               or self.kwargs['fn'].split('.')[-1] in get_factory_exts():
                 this_entry = [self.kwargs['fn']]
 
-        #utils.echo_msg(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 \
                      else utils.str_or(x, replace_quote=False) if n < 2 \
@@ -5093,9 +4938,10 @@ class DatasetFactory(factory.CUDEMFactory):
                      else utils.float_or(x) if n < 4 \
                      else utils.str_or(x) \
                      for n, x in enumerate(this_entry)]
-            
-            #utils.echo_debug_msg(f'initial parsed entry: {entry}')
-            
+
+            #entry = [None if x == '-' else x for x in entry]
+            utils.echo_debug_msg(f'initial parsed entry: {entry}')
+
         except Exception as e:
             utils.echo_error_msg(
                 'could not parse entry {}, {}'.format(
@@ -5104,50 +4950,34 @@ class DatasetFactory(factory.CUDEMFactory):
             )
             return(self)
 
-        utils.echo_debug_msg(entry)
+        utils.echo_debug_msg(entry)        
         ## data format - entry[1]
         ## guess format based on fn if not specified otherwise
         ## parse the format for dataset specific opts.
         if len(entry) < 2:
-            if 'data_format' in self.kwargs.keys() \
-               and self.kwargs['data_format'] is not None:
-                entry.append(self.kwargs['data_format'])
+            if self.kwargs.get('data_format') is not None:
+                entry.append(self.kwargs.get('data_format'))
             else:
-                for key in self._modules.keys():
-                    if entry[0].startswith('http') \
-                       or entry[0].startswith('/vsicurl/'):
-                        see = 'https'
-                    else:
-                        se = entry[0].split('.')
-                        see = se[-1] \
-                            if len(se) > 1 \
-                               else entry[0].split(":")[0]
-
-                    if 'fmts' in self._modules[key].keys():
-                        if see in self._modules[key]['fmts']:
-                            entry.append(int(key))
-                            break
+                entry = self.guess_and_insert_fmt(entry)
 
             if len(entry) < 2:
                 utils.echo_error_msg(
                     'could not parse entry {}'.format(self.kwargs['fn'])
                 )
                 return(self)
-            
+
+        elif entry[1] is None or entry[1] == '-':
+            if self.kwargs.get('data_format') is not None:
+                entry[1] = self.kwargs['data_format']
+            else:
+                entry = self.guess_and_insert_fmt(entry)
+                        
         ## parse the entry format options
         opts = factory.fmod2dict(str(entry[1]), {})
         utils.echo_debug_msg(opts)
         if '_module' in opts.keys():# and len(opts.keys()) > 1:
-            entry[1] = int(opts['_module'])
+            entry[1] = utils.int_or((opts['_module']))
             self.mod_args = {i:opts[i] for i in opts if i!='_module'}
-
-        # opts = str(entry[1]).split(':')
-        # #utils.echo_msg(opts)
-        # if len(opts) > 1:
-        #     self.mod_args = utils.args2dict(list(opts[1:]), {})
-        #     entry[1] = int(opts[0])
-        # else:
-        #     self.mod_args = {}
 
         try:
             assert isinstance(utils.int_or(entry[1]), int)
@@ -5174,8 +5004,6 @@ class DatasetFactory(factory.CUDEMFactory):
         if self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
         else:
-            #utils.echo_msg(self.kwargs['parent'])
-            #utils.echo_msg(self.kwargs['parent'].fn)
             if self.mod_name >= -2 \
                and os.path.dirname(self.kwargs['parent'].fn) \
                != os.path.dirname(entry[0]) and \
@@ -5302,6 +5130,40 @@ class DatasetFactory(factory.CUDEMFactory):
             elif fn.split('.')[-1][:2] in self._modules[key]['fmts']:
                 return(key)
 
+
+    def guess_and_insert_fmt(self, entry):
+        if len(entry) >= 1:            
+            for key in self._modules.keys():
+                ## entry is stdin, set to 168 and break
+                if entry[0] is None or entry[0] == '-':
+                    if len(entry) > 1:
+                        entry[1] = 168
+                    else:
+                        entry.append(168)
+                        
+                    break
+                
+                if entry[0].startswith('http') \
+                   or entry[0].startswith('/vsicurl/'):
+                    see = 'https'
+                    
+                else:
+                    se = entry[0].split('.')
+                    see = se[-1] \
+                        if len(se) > 1 \
+                           else entry[0].split(":")[0]
+
+                if 'fmts' in self._modules[key].keys():
+                    if see in self._modules[key]['fmts']:
+                        if len(entry) > 1:
+                            entry[1] = int(key)
+                        else:
+                            entry.append(int(key))
+                            
+                        break
+
+        return(entry)
+
             
     def write_parameter_file(self, param_file: str):
         try:
@@ -5413,13 +5275,13 @@ Examples:
 """.format(
     cmd=os.path.basename(sys.argv[0]), 
     dl_version=__version__,
-    dl_formats=factory._cudem_module_name_short_desc(
+    dl_formats=factory.get_module_name_short_desc(
         DatasetFactory._modules
     ),
-    grits_modules=factory._cudem_module_short_desc(
+    grits_modules=factory.get_module_short_desc(
         grits.grits.GritsFactory._modules
     ),
-    point_filter_modules=factory._cudem_module_short_desc(
+    point_filter_modules=factory.get_module_short_desc(
         pointz.PointFilterFactory._modules
     )
 )
@@ -5589,9 +5451,9 @@ See `datalists_usage` for full cli options.
                 os.path.basename(sys.argv[0]), __version__)
                   )
             sys.exit(1)
-        elif arg[0] == '-':
-            print(datalists_usage())
-            sys.exit(0)
+        # elif arg[0] == '-':
+        #     print(datalists_usage())
+        #     sys.exit(0)
         else:
             dls.append(f'{arg}')#'"{}"'.format(arg)) # FIX THIS!!!
         
@@ -5635,6 +5497,10 @@ See `datalists_usage` for full cli options.
                 y_bv=(utils.str2inc(xy_inc[1])*extend)
             )
 
+
+        if len(dls) == 0:
+            dls = [sys.stdin]
+            
         if len(dls) == 0:
             sys.stderr.write(datalists_usage())
             utils.echo_error_msg('you must specify some type of data')
@@ -5642,10 +5508,11 @@ See `datalists_usage` for full cli options.
             ## intiialze the input data. Treat data from CLI as a datalist.
             this_datalist = init_data(
                 dls,
-                region=this_region,
+                src_region=this_region,
                 src_srs=src_srs,
                 dst_srs=dst_srs,
-                xy_inc=xy_inc,
+                x_inc=xy_inc[0],
+                y_inc=xy_inc[1],
                 sample_alg='auto',
                 want_weight=want_weights,
                 want_uncertainty=want_uncertainties,

@@ -31,6 +31,7 @@
 ### Code:
 
 import os
+import sys
 import numpy as np
 
 from cudem import utils
@@ -111,48 +112,54 @@ class XYZFile(ElevationDataset):
         self.field_formats = [float for x in [self.xpos, self.ypos,
                                               self.zpos, self.wpos,
                                               self.upos] if x is not None]
-        #if self.use_numpy:
-        try:
-            if self.delim is None:
-                self.guess_delim()
+        if self.fn is sys.stdin:
+            self.use_numpy = False
+            
+        if self.use_numpy:
+            try:
+                if self.delim is None:
+                    self.guess_delim()
 
-            skip_ = self.skip            
-            with open(self.fn, 'r') as src_data:
-                while True:
-                    points = np.loadtxt(
-                        src_data,
-                        delimiter=self.delim,
-                        comments='#',
-                        ndmin = 1,
-                        skiprows=skip_,
-                        usecols=[x for x in [self.xpos, self.ypos,
-                                             self.zpos, self.wpos,
-                                             self.upos] if x is not None],
-                        dtype={'names': self.field_names,
-                               'formats': self.field_formats},
-                        max_rows=self.iter_rows
-                    )
-                    skip_ = 0
+                skip_ = self.skip            
+                with open(self.fn, 'r') as src_data:
+                    while True:
+                        points = np.loadtxt(
+                            self.fn,
+                            delimiter=self.delim,
+                            comments='#',
+                            ndmin = 1,
+                            skiprows=skip_,
+                            usecols=[x for x in [self.xpos, self.ypos,
+                                                 self.zpos, self.wpos,
+                                                 self.upos] if x is not None],
+                            dtype={'names': self.field_names,
+                                   'formats': self.field_formats},
+                            max_rows=self.iter_rows
+                        )
+                        skip_ = 0
 
-                    if self.scoff:
-                        points['x'] = (points['x'] + self.x_offset) * self.x_scale
-                        points['y'] = (points['y'] + self.y_offset) * self.y_scale
-                        points['z'] *= self.z_scale
+                        if self.scoff:
+                            points['x'] = (points['x'] + self.x_offset) * self.x_scale
+                            points['y'] = (points['y'] + self.y_offset) * self.y_scale
+                            points['z'] *= self.z_scale
 
-                    if self.rem:
-                        points['x'] = np.fmod(points['x'] + 180, 360) - 180 
+                        if self.rem:
+                            points['x'] = np.fmod(points['x'] + 180, 360) - 180 
 
-                    points = points.view(np.recarray)                        
-                    yield(points)
-                    
-                    if self.iter_rows is None or len(points) < self.iter_rows:
-                        break
+                        points = points.view(np.recarray)                        
+                        yield(points)
 
-        ## old processing function used as a fallback for when numpy.loadtxt fails
-        except Exception as e:
-            utils.echo_warning_msg(
-                f'could not load xyz data from {self.fn}, {e}, falling back'
-            )
+                        if self.iter_rows is None or len(points) < self.iter_rows:
+                            break
+
+            ## old processing function used as a fallback for when numpy.loadtxt fails
+            except Exception as e:
+                utils.echo_warning_msg(
+                    f'could not load xyz data from {self.fn}, {e}, falling back'
+                )
+                self.use_numpy = False
+
+        if not self.use_numpy:
             if self.fn is not None:
                 if os.path.exists(str(self.fn)):
                     self.src_data = open(self.fn, "r")
@@ -255,7 +262,8 @@ class XYZFile(ElevationDataset):
             break
 
         try:
-            self.src_data.close()
+            if self.src_data is not sys.stdin:
+                self.src_data.close()
         except:
             pass
 

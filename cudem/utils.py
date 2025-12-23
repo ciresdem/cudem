@@ -887,7 +887,7 @@ def unzip(zip_file, outdir='./', overwrite=False, verbose=True):
         return(zip_files)
     
     except Exception as e:
-        echo_error_msg(e)
+        echo_error_msg(f'could not unzip {zip_file}, {e}')
         
         return(None)
 

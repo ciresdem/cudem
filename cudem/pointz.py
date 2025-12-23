@@ -738,7 +738,6 @@ class PointPixels():
 
         weight = utils.float_or(weight, 1)
         uncertainty = utils.float_or(weight, 0)
-            
         #######################################################################
         ## convert the points to pixels based on the geotransform
         ## and calculate the local srcwin of the points
@@ -787,147 +786,152 @@ class PointPixels():
         pixel_w[np.isnan(pixel_w)] = 1
         pixel_u[np.isnan(pixel_u)] = 0
 
-        #######################################################################
-        ## set the srcwin of the incoming points
-        #######################################################################
-        this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
-                       int(max(pixel_x) - min(pixel_x))+1,
-                       int(max(pixel_y) - min(pixel_y))+1)
-        count += len(pixel_x)
+        this_count = len(pixel_x)
 
-        #######################################################################
-        ## adjust the pixels to the srcwin and stack together
-        #######################################################################
-        pixel_x = pixel_x - this_srcwin[0]
-        pixel_y = pixel_y - this_srcwin[1]
-        pixel_xy = np.vstack((pixel_y, pixel_x)).T
-
-        #utils.echo_msg_bold(pixel_x.shape)
-        #out_arrays['pixel_x'] = pixel_x
-        #out_arrays['pixel_y'] = pixel_y
-
-        #######################################################################
-        ## find the non-unique x/y points and mean/min/max
-        ## their z values together while calculating the std
-        ## for uncertainty
-        #######################################################################
-        unq, unq_idx, unq_inv, unq_cnt = np.unique(
-            pixel_xy, axis=0, return_inverse=True,
-            return_index=True, return_counts=True
-        )
-        cnt_msk = unq_cnt > 1
-        cnt_idx, = np.nonzero(cnt_msk)
-        idx_msk = np.in1d(unq_inv, cnt_idx)
-        idx_idx, = np.nonzero(idx_msk)
-        srt_idx = np.argsort(unq_inv[idx_msk])
-        dup_idx = np.split(
-            idx_idx[srt_idx],
-            np.cumsum(unq_cnt[cnt_msk])[:-1]
-        )
-
-        #######################################################################
-        ## set the output arrays; set to the target grid
-        ## arrays will hold weighted-sums
-        #######################################################################
-        if mode == 'sums':
-            ww = pixel_w[unq_idx] * weight
-            zz = pixel_z[unq_idx] * ww 
-            uu = pixel_u[unq_idx]
-            xx = points_x[unq_idx] * ww
-            yy = points_y[unq_idx] * ww
+        if this_count == 0:
+            return out_arrays, None, None
         else:
-            zz = pixel_z[unq_idx]
-            ww = pixel_w[unq_idx]
-            uu = pixel_u[unq_idx]
-            xx = points_x[unq_idx]
-            yy = points_y[unq_idx]
-            #u = np.zeros(zz.shape)
+            count += this_count
+            #######################################################################
+            ## set the srcwin of the incoming points
+            #######################################################################
+            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
+                           int(max(pixel_x) - min(pixel_x))+1,
+                           int(max(pixel_y) - min(pixel_y))+1)
 
-        px = pixel_x[unq_idx]
-        py = pixel_y[unq_idx]
-            
-        #######################################################################
-        ## min/max/sum the duplicates (values in the same cell)
-        ## min and max get the count reset to 1, the count is accumulated
-        ## in mean, mixed
-        #######################################################################
-        if np.any([len(dup) for dup in dup_idx]):
-            if mode == 'min':
-                dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
-                dup_stds = np.zeros(dup_stack.shape)
-                dup_stack_x = [np.min(pixel_x[dup]) for dup in dup_idx]
-                dup_stack_y = [np.min(pixel_y[dup]) for dup in dup_idx]
-                dup_counts = [1 for dup in dup_idx]
-            elif mode == 'max':
-                dup_stack = [np.max(pixel_z[dup]) for dup in dup_idx]
-                dup_stds = np.zeros(dup_stack.shape)
-                dup_stack_x = [np.max(pixel_x[dup]) for dup in dup_idx]
-                dup_stack_y = [np.max(pixel_y[dup]) for dup in dup_idx]
-                dup_counts = [1 for dup in dup_idx]
-            elif mode == 'mean':
-                dup_stack = [np.mean(pixel_z[dup]) for dup in dup_idx]
-                dup_stack_x = [np.mean(points_x[dup]) for dup in dup_idx]
-                dup_stack_y = [np.mean(points_y[dup]) for dup in dup_idx]
-                dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
-            elif mode == 'sums':
-                dup_stack = [np.sum((pixel_z[dup] * (pixel_w[dup] * weight))) \
-                             for dup in dup_idx]
-                dup_stack_x = [np.sum((points_x[dup] * (pixel_w[dup] * weight))) \
-                               for dup in dup_idx]
-                dup_stack_y = [np.sum((points_y[dup] * (pixel_w[dup] * weight))) \
-                               for dup in dup_idx]
-                dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
-                dup_w = [np.sum((pixel_w[dup] * weight)) for dup in dup_idx]
-                ww[cnt_msk] = dup_w
-                
-            zz[cnt_msk] = dup_stack
-            yy[cnt_msk] = dup_stack_y
-            xx[cnt_msk] = dup_stack_x
-            uu[cnt_msk] = np.sqrt(
-                np.power(uu[cnt_msk], 2) + np.power(dup_stds, 2)
+            #######################################################################
+            ## adjust the pixels to the srcwin and stack together
+            #######################################################################
+            pixel_x = pixel_x - this_srcwin[0]
+            pixel_y = pixel_y - this_srcwin[1]
+            pixel_xy = np.vstack((pixel_y, pixel_x)).T
+
+            #utils.echo_msg_bold(pixel_x.shape)
+            #out_arrays['pixel_x'] = pixel_x
+            #out_arrays['pixel_y'] = pixel_y
+
+            #######################################################################
+            ## find the non-unique x/y points and mean/min/max
+            ## their z values together while calculating the std
+            ## for uncertainty
+            #######################################################################
+            unq, unq_idx, unq_inv, unq_cnt = np.unique(
+                pixel_xy, axis=0, return_inverse=True,
+                return_index=True, return_counts=True
             )
-                
-        ## make the output arrays to yield
-        out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_x[unq[:,0], unq[:,1]] = xx
-        out_x[out_x == 0] = np.nan
-        out_arrays['x'] = out_x
+            cnt_msk = unq_cnt > 1
+            cnt_idx, = np.nonzero(cnt_msk)
+            idx_msk = np.in1d(unq_inv, cnt_idx)
+            idx_idx, = np.nonzero(idx_msk)
+            srt_idx = np.argsort(unq_inv[idx_msk])
+            dup_idx = np.split(
+                idx_idx[srt_idx],
+                np.cumsum(unq_cnt[cnt_msk])[:-1]
+            )
 
-        out_y = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_y[unq[:,0], unq[:,1]] = yy
-        out_y[out_y == 0] = np.nan
-        out_arrays['y'] = out_y
+            #######################################################################
+            ## set the output arrays; set to the target grid
+            ## arrays will hold weighted-sums
+            #######################################################################
+            if mode == 'sums':
+                ww = pixel_w[unq_idx] * weight
+                zz = pixel_z[unq_idx] * ww 
+                uu = pixel_u[unq_idx]
+                xx = points_x[unq_idx] * ww
+                yy = points_y[unq_idx] * ww
+            else:
+                zz = pixel_z[unq_idx]
+                ww = pixel_w[unq_idx]
+                uu = pixel_u[unq_idx]
+                xx = points_x[unq_idx]
+                yy = points_y[unq_idx]
+                #u = np.zeros(zz.shape)
 
-        out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_z[unq[:,0], unq[:,1]] = zz
-        out_z[out_z == 0] = np.nan
-        out_arrays['z'] = out_z
+            px = pixel_x[unq_idx]
+            py = pixel_y[unq_idx]
 
-        out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
+            #######################################################################
+            ## min/max/sum the duplicates (values in the same cell)
+            ## min and max get the count reset to 1, the count is accumulated
+            ## in mean, mixed
+            #######################################################################
+            if np.any([len(dup) for dup in dup_idx]):
+                if mode == 'min':
+                    dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
+                    dup_stds = np.zeros(dup_stack.shape)
+                    dup_stack_x = [np.min(pixel_x[dup]) for dup in dup_idx]
+                    dup_stack_y = [np.min(pixel_y[dup]) for dup in dup_idx]
+                    dup_counts = [1 for dup in dup_idx]
+                elif mode == 'max':
+                    dup_stack = [np.max(pixel_z[dup]) for dup in dup_idx]
+                    dup_stds = np.zeros(dup_stack.shape)
+                    dup_stack_x = [np.max(pixel_x[dup]) for dup in dup_idx]
+                    dup_stack_y = [np.max(pixel_y[dup]) for dup in dup_idx]
+                    dup_counts = [1 for dup in dup_idx]
+                elif mode == 'mean':
+                    dup_stack = [np.mean(pixel_z[dup]) for dup in dup_idx]
+                    dup_stack_x = [np.mean(points_x[dup]) for dup in dup_idx]
+                    dup_stack_y = [np.mean(points_y[dup]) for dup in dup_idx]
+                    dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
+                elif mode == 'sums':
+                    dup_stack = [np.sum((pixel_z[dup] * (pixel_w[dup] * weight))) \
+                                 for dup in dup_idx]
+                    dup_stack_x = [np.sum((points_x[dup] * (pixel_w[dup] * weight))) \
+                                   for dup in dup_idx]
+                    dup_stack_y = [np.sum((points_y[dup] * (pixel_w[dup] * weight))) \
+                                   for dup in dup_idx]
+                    dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
+                    dup_w = [np.sum((pixel_w[dup] * weight)) for dup in dup_idx]
+                    ww[cnt_msk] = dup_w
 
-        out_arrays['pixel_x'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_arrays['pixel_x'][unq[:,0], unq[:,1]] = px
-        
-        out_arrays['pixel_y'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-        out_arrays['pixel_y'][unq[:,0], unq[:,1]] = py
-        
-        if mode == 'sums':
-            out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
-            out_arrays['weight'][unq[:,0], unq[:,1]] = ww #* weight)
+                zz[cnt_msk] = dup_stack
+                yy[cnt_msk] = dup_stack_y
+                xx[cnt_msk] = dup_stack_x
+                uu[cnt_msk] = np.sqrt(
+                    np.power(uu[cnt_msk], 2) + np.power(dup_stds, 2)
+                )
 
-        else:
-            out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
-            out_arrays['weight'][:] = weight if weight is not None else 1
-            out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
-            #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
+            ## make the output arrays to yield
+            out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_x[unq[:,0], unq[:,1]] = xx
+            out_x[out_x == 0] = np.nan
+            out_arrays['x'] = out_x
 
-        out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
-        #out_arrays['uncertainty'][:] = self.uncertainty if self.uncertainty is not None else 0
-        out_arrays['uncertainty'][unq[:,0], unq[:,1]] \
-            = np.sqrt(uu**2 + (uncertainty if uncertainty is not None else 0)**2)                
+            out_y = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_y[unq[:,0], unq[:,1]] = yy
+            out_y[out_y == 0] = np.nan
+            out_arrays['y'] = out_y
 
-        return(out_arrays, this_srcwin, self.dst_gt)
+            out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_z[unq[:,0], unq[:,1]] = zz
+            out_z[out_z == 0] = np.nan
+            out_arrays['z'] = out_z
+
+            out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
+
+            out_arrays['pixel_x'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_arrays['pixel_x'][unq[:,0], unq[:,1]] = px
+
+            out_arrays['pixel_y'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_arrays['pixel_y'][unq[:,0], unq[:,1]] = py
+
+            if mode == 'sums':
+                out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
+                out_arrays['weight'][unq[:,0], unq[:,1]] = ww #* weight)
+
+            else:
+                out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
+                out_arrays['weight'][:] = weight if weight is not None else 1
+                out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
+                #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
+
+            out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+            #out_arrays['uncertainty'][:] = self.uncertainty if self.uncertainty is not None else 0
+            out_arrays['uncertainty'][unq[:,0], unq[:,1]] \
+                = np.sqrt(uu**2 + (uncertainty if uncertainty is not None else 0)**2)                
+
+            return(out_arrays, this_srcwin, self.dst_gt)
 
 
 ### End

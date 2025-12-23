@@ -1319,7 +1319,7 @@ Supported FETCHES modules (see fetches --modules <module-name> for more info):
   {f_formats}
 """.format(cmd=os.path.basename(sys.argv[0]), 
            version=__version__,
-           f_formats=utils._cudem_module_short_desc(FetchesFactory._modules))
+           f_formats=utils.get_module_short_desc(FetchesFactory._modules))
 
 def fetches_cli(argv = sys.argv):
     """run fetches from command-line
