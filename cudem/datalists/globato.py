@@ -24,7 +24,25 @@
 ###############################################################################
 ### Commentary:
 ##
-## GLOBATO BLOCKS
+## Both GlobatoStacker and GdalRasterStacker are designed to solve the same geospatial problem: "Waffle Stacking."
+## They take a stream of small, overlapping, or disjointed spatial data chunks (often called "waffles")
+## and stitch them together into a single, seamless, mathematically consistent grid. They don't just paste images together;
+## they perform mathematical operations (weighted averaging, uncertainty propagation, or logic-based supersedure) to handle
+## areas where data overlaps.
+##
+## Both classes implement the same mathematical "modes" to determine how overlapping pixels are combined:
+##
+## Mean: A standard weighted average.$$Z_{final} = \frac{\sum (Z_i \times W_i)}{\sum W_i}
+##     $Uncertainty is propagated using standard error of the weighted mean.
+##
+## Min/Max: The output cell takes the absolute minimum or maximum value encountered among all overlapping inputs.
+##
+## Supercede: A "Winner Takes All" approach based on weight. If a new data point has a higher weight than what is
+##  currently in the cell, it completely overwrites the existing data. If it has lower weight, it is ignored.
+##
+## Mixed: A complex hybrid designed for bathymetry/elevation data:
+##        Data is stratified by Weight Thresholds. High-quality data (High Weight) completely overwrites
+##        Low-quality data. Data within the same quality tier is averaged together.
 ##
 ### Examples:
 ##
@@ -47,6 +65,27 @@ from cudem import factory
 ## globato stacker to h5
 ###############################################################################
 class GlobatoStacker:
+    """The GlobatoStacker creates a hierarchical scientific data container. 
+    It is best used when you need to store not just the final result, but also the intermediate sums, 
+    distinct masks for every source dataset, and potentially the raw source data itself within a single file structure.
+    
+    Structure: Instead of flat raster bands, it creates HDF5 Groups:
+    
+    /stack: Holds the final processed arrays (Z, Weight, Uncertainty).
+    /sums: Holds the raw running totals used during calculation.
+    /mask: Contains a separate binary mask for each input dataset encountered, preserving the exact footprint of every source.
+    /datasets: Can optionally store the actual data from the inputs.
+    
+    Workflow:
+    
+    Initializes an empty HDF5 file with the target geometry.
+    As data arrives, it updates the specific chunk in the /sums and /mask groups.
+    Because HDF5 supports chunked storage, it efficiently updates only the necessary parts of the file without 
+    loading the whole grid into RAM.
+
+    Finalization: It reads the /sums, divides by the accumulated weights, and writes the results to /stack.
+    """
+    
     def __init__(self, region, x_inc, y_inc, stack_mode='mean', stack_mode_args=None, 
                  dst_srs=None, cache_dir='.', verbose=False):
         """
@@ -631,6 +670,27 @@ class GlobatoStacker:
 ###############################################################################
 
 class GdalRasterStacker:
+    """The GdalRasterStacker creates standard geospatial rasters compatible with GIS software (like QGIS, ArcGIS, or GDAL command-line tools). 
+    It is best used for generating final product deliverables.
+
+    Structure: It creates a multi-band raster file where each band represents a specific metric:
+
+    Band 1: Z (Elevation/Value)
+    Band 2: Count (Number of overlapping points)
+    Band 3: Weights
+    Band 4: Uncertainty, etc.
+
+    Masking: Unlike the HDF5 version which keeps masks internal, this class generates a separate sidecar file 
+    (e.g., output_msk.tif) if want_mask=True. This keeps the main data file clean and standard.
+
+    Workflow:
+
+    Initializes a GeoTIFF on disk using Create().
+    Uses ReadAsArray and WriteArray to process small windows of the file on disk.
+
+    Optimization: It relies on GDAL's virtual memory and caching mechanisms to handle large files.
+    """
+    
     def __init__(self, region, x_inc, y_inc, stack_mode='mean', stack_mode_args=None, 
                  dst_srs=None, cache_dir='.', want_mask=False, want_sm=False, verbose=False):
         """
