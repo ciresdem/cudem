@@ -1,0 +1,1136 @@
+### globato.py 
+##
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+##
+## globato.py is part of CUDEM
+##
+## Permission is hereby granted, free of charge, to any person obtaining a copy 
+## of this software and associated documentation files (the "Software"), to deal 
+## in the Software without restriction, including without limitation the rights 
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
+## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
+##
+###############################################################################
+### Commentary:
+##
+## GLOBATO BLOCKS
+##
+### Examples:
+##
+### TODO:
+## add temporal
+##
+### Code:
+###############################################################################
+
+import os, sys
+import h5py as h5
+import numpy as np
+from osgeo import gdal, osr
+from cudem import utils
+from cudem import srsfun
+from cudem import gdalfun
+from cudem import factory
+
+###############################################################################
+## globato stacker to h5
+###############################################################################
+class GlobatoStacker:
+    def __init__(self, region, x_inc, y_inc, stack_mode='mean', stack_mode_args=None, 
+                 dst_srs=None, cache_dir='.', verbose=False):
+        """
+        Initialize the GlobatoStacker.
+
+        Parameters:
+        -----------
+        region : object
+            Object containing region extent and geo_transform methods.
+        x_inc : float
+            X increment/resolution.
+        y_inc : float
+            Y increment/resolution.
+        stack_mode : str
+            The stacking mode ('mean', 'min', 'max', 'mixed', 'supercede').
+        stack_mode_args : dict
+            Arguments for the specific stack mode.
+        dst_srs : str, optional
+            Destination Spatial Reference System.
+        cache_dir : str
+            Directory for caching/output.
+        verbose : bool
+            Enable verbose logging.
+        """
+        self.region = region
+        self.x_inc = x_inc
+        self.y_inc = y_inc
+        self.stack_mode_name = stack_mode
+        self.stack_mode_args = stack_mode_args if stack_mode_args else {}
+        self.dst_srs = dst_srs
+        self.cache_dir = cache_dir
+        self.verbose = verbose
+
+    def _load_globato(self, fn):
+        """Internal method to load an existing globato file."""
+        stack_ds = h5.File(fn, 'a', rdcc_nbytes=(1024**2)*12000)
+        if 'short_name' in stack_ds.attrs.keys():                
+            if stack_ds.attrs['short_name'] != 'globato':
+                utils.echo_warning_msg(f'{fn} is not a globato file')
+                return None
+        else:
+            return None
+        return stack_ds
+
+    def _create_globato(self, out_file):
+        """Internal method to create a new globato file structure."""
+        if not os.path.exists(os.path.dirname(out_file)):
+            os.makedirs(os.path.dirname(out_file))
+        
+        xcount, ycount, dst_gt = self.region.geo_transform(
+            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        )
+        
+        if xcount <= 0 or ycount <= 0:
+            utils.echo_error_msg(
+                (f'could not create grid of {xcount}x{ycount} '
+                 f'cells with {self.x_inc}/{self.y_inc} increments on '
+                 f'region: {self.region}')
+            )
+            sys.exit(-1)
+
+        if self.verbose:
+            utils.echo_msg(
+                (f'stacking using {self.stack_mode_name} '
+                 f'with {self.stack_mode_args} '
+                 f'to {out_file}')
+            )
+
+        lon_start = dst_gt[0] + (dst_gt[1] / 2)
+        lat_start = dst_gt[3] + (dst_gt[5] / 2)
+        lon_end = dst_gt[0] + (dst_gt[1] * xcount)
+        lat_end = dst_gt[3] + (dst_gt[5] * ycount)
+        lon_inc = dst_gt[1]
+        lat_inc = dst_gt[5]
+        
+        stack_ds = h5.File(out_file, 'w', rdcc_nbytes=(1024**2)*12000)
+        stack_ds.attrs['short_name'] = 'globato'
+
+        # CRS
+        crs_dset = stack_ds.create_dataset('crs', dtype=h5.string_dtype())
+        crs_dset.attrs['GeoTransform'] = ' '.join([str(x) for x in dst_gt])
+        if self.dst_srs is not None:
+            crs_dset.attrs['crs_wkt'] = srsfun.osr_wkt(self.dst_srs)
+
+        # Latitude
+        lat_array = np.arange(lat_start, lat_end, lat_inc)
+        lat_dset = stack_ds.create_dataset('lat', data=lat_array)
+        lat_dset.make_scale('latitude')
+        lat_dset.attrs["long_name"] = "latitude"
+        lat_dset.attrs["units"] = "degrees_north"
+        lat_dset.attrs["standard_name"] = "latitude"
+        lat_dset.attrs["actual_range"] = [lat_end, lat_start]
+
+        # Longitude
+        lon_array = np.arange(lon_start, lon_end, lon_inc)
+        lon_dset = stack_ds.create_dataset('lon', data=lon_array)
+        lon_dset.make_scale('longitude')
+        lon_dset.attrs["long_name"] = "longitude"
+        lon_dset.attrs["units"] = "degrees_east" 
+        lon_dset.attrs["standard_name"]= "longitude"
+        lon_dset.attrs["actual_range"] = [lon_start, lon_end]
+
+        # Stack Group
+        stack_grp = stack_ds.create_group('stack')
+        stacked_keys = ['z', 'count', 'weights', 'uncertainty', 'src_uncertainty', 'x', 'y']
+
+        for key in stacked_keys:
+            stack_dset = stack_grp.create_dataset(
+                key, data=np.full((ycount, xcount), np.nan),
+                compression='lzf', maxshape=(ycount, xcount),
+                chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
+                dtype=np.float32
+            )
+            stack_dset.dims[0].attach_scale(lat_dset)
+            stack_dset.dims[1].attach_scale(lon_dset)
+            stack_dset.attrs['grid_mapping'] = "crs"
+
+        # Sums Group
+        sums_grp = stack_ds.create_group('sums')
+        for key in stacked_keys:
+            sums_dset = sums_grp.create_dataset(
+                key, data=np.full((ycount, xcount), np.nan),
+                compression='lzf', maxshape=(ycount, xcount),
+                chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
+                dtype=np.float32
+            )
+            sums_dset.dims[0].attach_scale(lat_dset)
+            sums_dset.dims[1].attach_scale(lon_dset)
+            sums_dset.attrs['grid_mapping'] = "crs"            
+
+        # Mask Group
+        mask_grp = stack_ds.create_group('mask')
+
+        mask_coast_dset = mask_grp.create_dataset(
+            'coast_mask', data=np.zeros((ycount,xcount)),
+            compression='lzf', maxshape=(ycount, xcount),
+            chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*(min(100, ycount)),
+            dtype=np.uint8
+        )
+        mask_coast_dset.dims[0].attach_scale(lat_dset)
+        mask_coast_dset.dims[1].attach_scale(lon_dset)
+        mask_coast_dset.attrs['grid_mapping'] = "crs"
+
+        mask_all_dset = mask_grp.create_dataset(
+            'full_dataset_mask', data=np.zeros((ycount,xcount)),
+            compression='lzf', maxshape=(ycount, xcount),
+            chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*(min(100, ycount)),
+            dtype=np.uint8
+        )
+        mask_all_dset.dims[0].attach_scale(lat_dset)
+        mask_all_dset.dims[1].attach_scale(lon_dset)
+        mask_all_dset.attrs['grid_mapping'] = "crs"
+
+        # Datasets Group
+        stack_ds.create_group('datasets')                 
+        
+        return stack_ds
+
+    def _average(self, weight_above, stacked_data, arrs):
+        """Average of incoming data with existing data above weight_threshold."""
+        stacked_data['count'][weight_above] += arrs['count'][weight_above]
+        stacked_data['z'][weight_above] += arrs['z'][weight_above]
+        stacked_data['x'][weight_above] += arrs['x'][weight_above]
+        stacked_data['y'][weight_above] += arrs['y'][weight_above]
+        
+        stacked_data['src_uncertainty'][weight_above] = np.sqrt(
+            np.power(stacked_data['src_uncertainty'][weight_above], 2) + 
+            np.power(arrs['uncertainty'][weight_above], 2)
+        )
+        
+        stacked_data['weights'][weight_above] += arrs['weight'][weight_above]
+        
+        # Accumulate variance * weight
+        term = ((arrs['z'][weight_above] / arrs['weight'][weight_above]) / arrs['count'][weight_above]) - \
+               ((stacked_data['z'][weight_above] / stacked_data['weights'][weight_above]) / stacked_data['count'][weight_above])
+               
+        stacked_data['uncertainty'][weight_above] += arrs['weight'][weight_above] * np.power(term, 2)
+
+        return stacked_data
+
+    def _supercede(self, weight_above_sup, stacked_data, arrs, sup=True):
+        """Supercede logic for mixed/supercede modes."""
+        stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
+        stacked_data['z'][weight_above_sup] = arrs['z'][weight_above_sup]
+        stacked_data['x'][weight_above_sup] = arrs['x'][weight_above_sup]
+        stacked_data['y'][weight_above_sup] = arrs['y'][weight_above_sup]
+        stacked_data['src_uncertainty'][weight_above_sup] = arrs['uncertainty'][weight_above_sup]
+        stacked_data['weights'][weight_above_sup] = arrs['weight'][weight_above_sup]
+        stacked_data['uncertainty'][weight_above_sup] = np.array(stacked_data['src_uncertainty'][weight_above_sup])
+        return stacked_data
+
+    def process_blocks(self, data_generator, out_name=None, ndv=-9999):
+        """
+        Block and mask incoming arrays together.
+        
+        Parameters:
+        -----------
+        data_generator : iterator
+            An iterator that yields 'entry' objects. Each entry must have:
+            - entry.metadata['name'] (str)
+            - entry.weight (float or None)
+            - entry.uncertainty (float or None)
+            - entry.array_yield (iterator yielding (arrs, srcwin, gt))
+        out_name : str, optional
+            The output stacked raster basename.
+        ndv : float
+            The desired no data value.
+        
+        Returns:
+        --------
+        str
+            Path to the generated .csg hdf5 file.
+        """
+        
+        utils.set_cache(self.cache_dir)
+        mode = self.stack_mode_name
+        
+        mask_level = utils.int_or(self.stack_mode_args.get('mask_level'), 0)
+        
+        # Initialize output filename
+        if out_name is None:
+            out_name = os.path.join(self.cache_dir, '{}'.format(
+                utils.append_fn('globato_blocks', self.region, self.x_inc)
+            ))
+            
+        out_file = '{}.h5'.format(out_name)
+        
+        if os.path.exists(out_file):
+            stack_ds = self._load_globato(out_file)
+            if stack_ds is None:
+                utils.remove_glob('{}.*'.format(out_file))
+                stack_ds = self._create_globato(out_file)
+        else:
+            stack_ds = self._create_globato(out_file)        
+
+        # Access Datasets
+        crs_dset = stack_ds['crs']
+        dst_gt = crs_dset.attrs['GeoTransform']
+        lat_dset = stack_ds['lat']
+        lon_dset = stack_ds['lon']
+                
+        stack_grp = stack_ds['stack']
+        sums_grp = stack_ds['sums']
+        mask_grp = stack_ds['mask']
+        datasets_grp = stack_ds['datasets']
+
+        utils.echo_msg(mask_grp.keys())
+        utils.echo_msg(datasets_grp.keys())
+        mask_all_dset = mask_grp['full_dataset_mask']
+        
+        # Load Data into Memory
+        stacked_data = {}
+        for key in stack_grp.keys():
+            stacked_data[key] = stack_grp[key][...,]
+
+        sums_data = {}
+        for key in sums_grp.keys():
+            sums_data[key] = sums_grp[key][...,]
+
+        datasets_data = {k: None for k in ['z', 'count', 'weight', 'uncertainty', 'x', 'y']}
+
+        ycount, xcount = stack_grp['z'].shape
+            
+        # Parse each entry and process it
+        for this_entry in data_generator:
+            
+            # --- MASK SETUP ---
+            entry_name = this_entry.metadata['name']
+            if mask_level > 0:
+                parts = entry_name.split('/')
+                if mask_level > len(parts):
+                    effective_level = len(parts) - 2
+                else:
+                    effective_level = mask_level
+                entry_name = '/'.join(parts[:-effective_level])
+
+            if entry_name not in mask_grp.keys():
+                mask_dset = mask_grp.create_dataset(
+                    entry_name, data=np.zeros((ycount,xcount)),
+                    compression='lzf', maxshape=(ycount, xcount),
+                    chunks=(1, xcount), rdcc_nbytes=1024*xcount,
+                    dtype=np.uint8
+                )
+                mask_dset.dims[0].attach_scale(lat_dset)
+                mask_dset.dims[1].attach_scale(lon_dset)
+                mask_dset.attrs['grid_mapping'] = "crs"
+            else:
+                mask_dset = mask_grp[entry_name]
+
+            # Set metadata attributes on mask
+            for k in this_entry.metadata.keys():
+                if k not in mask_dset.attrs.keys() or mask_dset.attrs[k] == 'null':
+                    try:
+                        mask_dset.attrs[k] = str(this_entry.metadata[k])
+                    except:
+                        utils.echo_warning_msg(k)
+                        utils.echo_warning_msg(this_entry.metadata[k])
+                        mask_dset.attrs[k] = 'null'
+                else:
+                    mask_dset.attrs[k] = 'null'
+
+            mask_dset.attrs['weight'] = (this_entry.weight if this_entry.weight is not None else 1)
+            mask_dset.attrs['uncertainty'] = (this_entry.uncertainty if this_entry.uncertainty is not None else 0)
+
+            if entry_name not in datasets_grp.keys():
+                datasets_dset_grp = datasets_grp.create_group(entry_name)
+                for key in datasets_data.keys():
+                    ds_dset = datasets_dset_grp.create_dataset(
+                        key, data=np.full((ycount, xcount), np.nan),
+                        compression='lzf', maxshape=(ycount, xcount),
+                        chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
+                        dtype=np.float32
+                    )
+                    ds_dset.dims[0].attach_scale(lat_dset)
+                    ds_dset.dims[1].attach_scale(lon_dset)
+                    ds_dset.attrs['grid_mapping'] = "crs"            
+            else:
+                pass # datasets_dset_grp = datasets_grp[entry_name]
+                
+            # --- PROCESS ARRAYS ---
+            for arrs, srcwin, gt in this_entry.array_yield:
+                if arrs['count'] is None or np.all(arrs['count'] == 0):
+                    continue
+
+                # Update masks
+                y_slice = slice(srcwin[1], srcwin[1]+srcwin[3])
+                x_slice = slice(srcwin[0], srcwin[0]+srcwin[2])
+                
+                mask_all_dset[y_slice, x_slice][arrs['count'] != 0] = 1
+                if mask_dset is not None:
+                    mask_dset[y_slice, x_slice][arrs['count'] != 0] = 1
+
+                # Read saved accumulated rasters
+                for key in sums_grp.keys():
+                    sums_data[key] = sums_grp[key][y_slice, x_slice]
+                    if mode not in ['min', 'max']:
+                        sums_data[key][np.isnan(sums_data[key])] = 0
+                    if key == 'count':
+                        sums_data[key][np.isnan(sums_data[key])] = 0
+                    
+                # Sanitize incoming arrays
+                arrs['count'][np.isnan(arrs['count'])] = 0
+                arrs['weight'][np.isnan(arrs['z'])] = 0
+                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                
+                if mode not in ['min', 'max']:
+                    arrs['x'][np.isnan(arrs['x'])] = 0
+                    arrs['y'][np.isnan(arrs['y'])] = 0
+                    arrs['z'][np.isnan(arrs['z'])] = 0
+                    for arr_key in arrs:
+                        if arrs[arr_key] is not None:
+                            arrs[arr_key][np.isnan(arrs[arr_key])] = 0
+
+                # Accumulate count
+                if mode != 'mixed' and mode != 'supercede':
+                    sums_data['count'] += arrs['count']
+                    
+                tmp_arrs_weight = arrs['weight'] / arrs['count']
+                tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
+                
+                # --- SUPERCEDE MODE ---
+                if mode == 'supercede':
+                    tmp_stacked_weight = sums_data['weights'] / sums_data['count']
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
+
+                    sums_data['count'][sup_mask] = arrs['count'][sup_mask]
+                    sums_data['z'][sup_mask] = arrs['z'][sup_mask]
+                    sums_data['weights'][sup_mask] = arrs['weight'][sup_mask]
+                    sums_data['x'][sup_mask] = arrs['x'][sup_mask]
+                    sums_data['y'][sup_mask] = arrs['y'][sup_mask]
+                    sums_data['src_uncertainty'][sup_mask] = arrs['uncertainty'][sup_mask]
+                    sums_data['uncertainty'][sup_mask] = np.array(sums_data['src_uncertainty'])[sup_mask]
+                    
+                    # Clean up superseded masks in the file
+                    k_list = []
+                    mask_grp.visit(lambda x: k_list.append(x) if not isinstance(mask_grp[x], h5.Group) else None)
+
+                    for key in k_list:
+                        if entry_name in key: continue
+
+                        key_dset_arr = mask_grp[key][y_slice, x_slice]
+                        # weight_above_sup logic inferred from original context; using non-nan as baseline
+                        weight_above_sup = ~np.isnan(key_dset_arr) 
+
+                        key_dset_mask = key_dset_arr[weight_above_sup] == 1
+                        if np.any(key_dset_mask):
+                            key_dset_arr[key_dset_mask] = 0
+                            mask_grp[key][y_slice, x_slice] = key_dset_arr
+                                
+                # --- MIN/MAX MODE ---
+                elif mode == 'min' or mode == 'max':
+                    mask = np.isnan(sums_data['z'])
+                    for k_map in ['x', 'y', 'src_uncertainty', 'uncertainty', 'weights', 'z']:
+                        sums_data[k_map][mask] = arrs['z' if k_map == 'z' else k_map][mask]
+
+                    if mode == 'min':
+                        mask = arrs['z'] <= sums_data['z']
+                    else:
+                        mask = arrs['z'] >= sums_data['z']
+                        
+                    sums_data['x'][mask] = arrs['x'][mask]
+                    sums_data['y'][mask] = arrs['y'][mask]
+                    sums_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
+                    sums_data['weights'][mask] += arrs['weight'][mask]
+                    sums_data['weights'][mask][sums_data['weights'][mask] == 0] = np.nan
+                    
+                    term = (arrs['z'][mask] - (sums_data['z'][mask] / sums_data['weights'][mask]))
+                    sums_data['uncertainty'][mask] += arrs['weight'][mask] * np.power(term, 2)
+                    sums_data['z'][mask] = arrs['z'][mask]
+                
+                # --- MEAN MODE ---
+                elif mode == 'mean':
+                    sums_data['z'] += arrs['z']
+                    sums_data['x'] += arrs['x']
+                    sums_data['y'] += arrs['y']
+                    sums_data['src_uncertainty'] = np.sqrt(
+                        np.power(sums_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2)
+                    )
+                    sums_data['weights'] += arrs['weight']
+                    sums_data['weights'][sums_data['weights'] == 0] = np.nan
+                    
+                    term = (arrs['z'] - (sums_data['z'] / sums_data['weights']))
+                    sums_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
+
+                # --- MIXED MODE ---
+                elif mode == 'mixed':
+                    wt_str = self.stack_mode_args.get('weight_threshold', '1')
+                    wts = [utils.float_or(x) for x in str(wt_str).split('/')]
+                    wts.sort()
+                    wt_pairs = utils.range_pairs(wts)
+                    wt_pairs.reverse()
+                    
+                    tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    
+                    # Collect keys for mask cleaning
+                    k_list = []
+                    mask_grp.visit(lambda x: k_list.append(x) if not isinstance(mask_grp[x], h5.Group) else None)
+
+                    # 1. ABOVE THRESHOLD
+                    weight_above_sup = (tmp_arrs_weight >= max(wts)) & (tmp_stacked_weight < max(wts))
+                    
+                    # Adjust mask for supercede
+                    for key in k_list:
+                        if entry_name in key: continue
+                        key_dset_arr = mask_grp[key][y_slice, x_slice]
+                        # simplified mask check
+                        wa_sup_local = weight_above_sup if weight_above_sup is not None else ~np.isnan(key_dset_arr)
+                        key_dset_mask = key_dset_arr[wa_sup_local] == 1
+                        if np.any(key_dset_mask):
+                            key_dset_arr[key_dset_mask] = 0
+                            mask_grp[key][y_slice, x_slice] = key_dset_arr
+
+                    sums_data = self._supercede(weight_above_sup, sums_data, arrs)
+
+                    # Recalculate weights
+                    tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    
+                    weight_above = (tmp_arrs_weight >= max(wts)) & \
+                                   (tmp_arrs_weight >= tmp_stacked_weight) & \
+                                   (~weight_above_sup)
+
+                    # Adjust mask for average
+                    for key in k_list:
+                        if entry_name in key: continue
+                        key_dset_arr = mask_grp[key][y_slice, x_slice]
+                        wa_local = weight_above if weight_above is not None else ~np.isnan(key_dset_arr)
+                        key_dset_mask = key_dset_arr[wa_local] == 1
+                        if np.any(key_dset_mask):
+                            key_dset_arr[key_dset_mask] = 0
+                            mask_grp[key][y_slice, x_slice] = key_dset_arr
+                    
+                    sums_data = self._average(weight_above, sums_data, arrs)
+
+                    # 2. BETWEEN THRESHOLDS
+                    for wt_pair in wt_pairs:
+                        tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        arrs_mask_sup = (tmp_arrs_weight >= min(wt_pair)) & (tmp_arrs_weight < max(wt_pair))
+                        tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
+                        weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
+
+                        # Adjust mask
+                        for key in k_list:
+                            if entry_name in key: continue
+                            key_dset_arr = mask_grp[key][y_slice, x_slice]
+                            wb_sup_local = weight_between_sup if weight_between_sup is not None else ~np.isnan(key_dset_arr)
+                            key_dset_mask = key_dset_arr[wb_sup_local] == 1
+                            if np.any(key_dset_mask):
+                                key_dset_arr[key_dset_mask] = 0
+                                mask_grp[key][y_slice, x_slice] = key_dset_arr
+                        
+                        sums_data = self._supercede(weight_between_sup, sums_data, arrs)
+
+                        tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        arrs_weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
+                                              (tmp_arrs_weight < max(wt_pair)) & \
+                                              (tmp_arrs_weight >= tmp_stacked_weight)
+                        
+                        weight_between = (arrs_weight_between) & (~weight_between_sup)
+
+                        # Adjust mask
+                        for key in k_list:
+                            if entry_name in key: continue
+                            key_dset_arr = mask_grp[key][y_slice, x_slice]
+                            wb_local = weight_between if weight_between is not None else ~np.isnan(key_dset_arr)
+                            key_dset_mask = key_dset_arr[wb_local] == 1
+                            if np.any(key_dset_mask):
+                                key_dset_arr[key_dset_mask] = 0
+                                mask_grp[key][y_slice, x_slice] = key_dset_arr
+                        
+                        sums_data = self._average(weight_between, sums_data, arrs)
+
+                    # 3. BELOW THRESHOLD
+                    tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
+
+                    # Adjust mask
+                    for key in k_list:
+                        if entry_name in key: continue
+                        key_dset_arr = mask_grp[key][y_slice, x_slice]
+                        wb_local = weight_below if weight_below is not None else ~np.isnan(key_dset_arr)
+                        key_dset_mask = key_dset_arr[wb_local] == 1
+                        if np.any(key_dset_mask):
+                            key_dset_arr[key_dset_mask] = 0
+                            mask_grp[key][y_slice, x_slice] = key_dset_arr
+
+                    sums_data = self._average(weight_below, sums_data, arrs)
+
+                # Write out results to accumulated rasters
+                sums_data['count'][sums_data['count'] == 0] = np.nan
+                for key in sums_grp.keys():
+                    sums_data[key][np.isnan(sums_data['count'])] = np.nan
+                    sums_grp[key][y_slice, x_slice] = sums_data[key]
+
+        # --- FINALIZE ---
+        if self.verbose:
+            utils.echo_msg('finalizing stacked raster bands...')
+
+        for key in mask_grp.keys():
+            key_dset = mask_grp[key]
+            if np.all(key_dset == 0):
+                del key_dset
+
+        for key in sums_grp.keys():
+            sums_data[key] = sums_grp[key][...]
+                
+        for key in stack_grp.keys():
+            stacked_data[key] = stack_grp[key][...]
+
+        stacked_data['count'] = sums_data['count'].copy()
+        stacked_data['weights'] = sums_data['weights'] / sums_data['count']
+
+        stacked_data['x'] = (sums_data['x'] / stacked_data['weights']) / sums_data['count']
+        stacked_data['y'] = (sums_data['y'] / stacked_data['weights']) / sums_data['count']
+        stacked_data['z'] = (sums_data['z'] / stacked_data['weights']) / sums_data['count']
+
+        # Calculate standard error
+        term = (sums_data['uncertainty'] / sums_data['weights']) / sums_data['count']
+        stacked_data['uncertainty'] = np.sqrt(
+            np.power(sums_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
+        )
+            
+        # Write final rasters
+        for key in stack_grp.keys():
+            stack_grp[key][:] = stacked_data[key]
+
+        for key in sums_grp.keys():
+            sums_grp[key][:] = sums_data[key]
+
+        stack_ds.close()                        
+        return out_file
+
+###############################################################################
+## globato stacker to gdal multiband tif
+###############################################################################
+
+class GdalRasterStacker:
+    def __init__(self, region, x_inc, y_inc, stack_mode='mean', stack_mode_args=None, 
+                 dst_srs=None, cache_dir='.', want_mask=False, want_sm=False, verbose=False):
+        """
+        Initialize the GdalRasterStacker.
+
+        Parameters:
+        -----------
+        region : object
+            Object containing region extent and geo_transform methods.
+        x_inc, y_inc : float
+            Grid resolution increments.
+        stack_mode : str
+            Stacking mode: 'mean', 'min', 'max', 'mixed', 'supercede'.
+        stack_mode_args : dict
+            Arguments for the specific stack mode.
+        dst_srs : str, optional
+            Destination Spatial Reference System (WKT or EPSG).
+        cache_dir : str
+            Directory for caching/output.
+        want_mask : bool
+            If True, generate a binary source mask.
+        want_sm : bool
+            If True, generate spatial metadata (footprints).
+        verbose : bool
+            Enable verbose logging.
+        """
+        self.region = region
+        self.x_inc = x_inc
+        self.y_inc = y_inc
+        self.stack_mode_name = stack_mode
+        self.stack_mode_args = stack_mode_args if stack_mode_args else {}
+        self.dst_srs = dst_srs
+        self.cache_dir = cache_dir
+        self.want_mask = want_mask
+        self.want_sm = want_sm
+        self.verbose = verbose
+
+    def _add_mask_band(self, m_ds, this_entry, mask_level=0):
+        """Internal: Adds or retrieves a mask band for the specific data entry."""
+        m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
+        entry_name = this_entry.metadata['name']
+        
+        if mask_level > 0:
+            if mask_level > len(entry_name.split('/')):
+                mask_level = len(entry_name.split('/')) - 2
+            entry_name = '/'.join(entry_name.split('/')[:-mask_level])
+        elif mask_level < 0:
+            entry_name = '/'.join(entry_name.split('/')[:2])
+
+        if entry_name not in m_bands.keys():
+            m_ds.AddBand()
+            m_band = m_ds.GetRasterBand(m_ds.RasterCount)
+            m_band.SetNoDataValue(0)
+            m_band.SetDescription(entry_name)
+        else:
+            m_band = m_ds.GetRasterBand(m_bands[entry_name])
+
+        band_md = m_band.GetMetadata()
+        for k in this_entry.metadata.keys():
+            if k not in band_md.keys() or band_md[k] is None:
+                band_md[k] = this_entry.metadata[k]
+
+        band_md['weight'] = str(this_entry.weight if this_entry.weight is not None else 1)
+        band_md['uncertainty'] = str(this_entry.uncertainty if this_entry.uncertainty is not None else 0)
+
+        try:
+            m_band.SetMetadata(band_md)
+        except Exception as e:
+            # Fallback: clean None types
+            try:
+                for key in list(band_md.keys()):
+                    if band_md[key] is None:
+                        del band_md[key]
+                m_band.SetMetadata(band_md)
+            except Exception as e2:
+                utils.echo_error_msg(f'could not set band metadata: {band_md}; {e2}')
+
+        m_band.FlushCache()
+        return m_band
+
+    def _reset_mask_bands(self, m_ds, srcwin, except_band_name=None, mask=None):
+        """Internal: Resets mask bands to accommodate superceding data."""
+        for b in range(1, m_ds.RasterCount+1):
+            this_band = m_ds.GetRasterBand(b)
+            this_band_name = this_band.GetDescription()
+            
+            if this_band_name != except_band_name:
+                this_band_array = this_band.ReadAsArray(
+                    srcwin[0], srcwin[1], srcwin[2], srcwin[3]
+                )
+                if mask is None:
+                    mask = ~np.isnan(this_band_array)
+
+                masked = this_band_array[(mask)] == 1
+                if np.any(masked):
+                    this_band_array[(mask) & (masked)] = 0                        
+                    this_band.WriteArray(
+                        this_band_array, srcwin[0], srcwin[1]
+                    )
+                    m_ds.FlushCache()
+
+    def _average(self, weight_above, stacked_data, arrs):
+        """Internal: Accumulate weighted averages."""
+        stacked_data['count'][weight_above] += arrs['count'][weight_above]
+        
+        stacked_data['z'][weight_above] += arrs['z'][weight_above]
+        stacked_data['x'][weight_above] += arrs['x'][weight_above]
+        stacked_data['y'][weight_above] += arrs['y'][weight_above]
+        
+        stacked_data['src_uncertainty'][weight_above] = np.sqrt(
+            np.power(stacked_data['src_uncertainty'][weight_above], 2) + 
+            np.power(arrs['uncertainty'][weight_above], 2)
+        )
+        
+        stacked_data['weights'][weight_above] += arrs['weight'][weight_above]
+        
+        # Variance * weight
+        term = ((arrs['z'][weight_above] / arrs['weight'][weight_above]) / arrs['count'][weight_above]) - \
+               ((stacked_data['z'][weight_above] / stacked_data['weights'][weight_above]) / stacked_data['count'][weight_above])
+               
+        stacked_data['uncertainty'][weight_above] += arrs['weight'][weight_above] * np.power(term, 2)
+
+        return stacked_data
+
+    def _supercede(self, weight_above_sup, stacked_data, arrs):
+        """Internal: Apply supercede logic."""
+        stacked_data['count'][weight_above_sup] = arrs['count'][weight_above_sup]
+        stacked_data['z'][weight_above_sup] = arrs['z'][weight_above_sup]
+        stacked_data['x'][weight_above_sup] = arrs['x'][weight_above_sup]
+        stacked_data['y'][weight_above_sup] = arrs['y'][weight_above_sup]
+        stacked_data['src_uncertainty'][weight_above_sup] = arrs['uncertainty'][weight_above_sup]
+        stacked_data['weights'][weight_above_sup] = arrs['weight'][weight_above_sup]
+        stacked_data['uncertainty'][weight_above_sup] = np.array(stacked_data['src_uncertainty'][weight_above_sup])
+        return stacked_data
+
+    def process_stack(self, data_generator, out_name=None, ndv=-9999, fmt='GTiff'):
+        """
+        Stack and mask incoming arrays together using GDAL.
+
+        Parameters:
+        -----------
+        data_generator : iterator
+            Iterator that yields 'entry' objects (must have `array_yield` and `metadata`).
+        out_name : str, optional
+            Output basename.
+        ndv : float
+            No Data Value.
+        fmt : str
+            GDAL format (e.g., 'GTiff').
+
+        Returns:
+        --------
+        str : The output filename.
+        """
+        utils.set_cache(self.cache_dir)
+        mode = self.stack_mode_name
+        mask_level = utils.int_or(self.stack_mode_args.get('mask_level'), 0)
+        
+        # --- Output Filename Setup ---
+        if out_name is None:
+            tmp_fn = utils.append_fn('dlim_stacks', self.region, self.x_inc)
+            out_name = os.path.join(self.cache_dir, f'{tmp_fn}')
+
+        xcount, ycount, dst_gt = self.region.geo_transform(
+            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        )
+        if xcount <= 0 or ycount <= 0:
+            utils.echo_error_msg(f'Invalid grid dimensions: {xcount}x{ycount}')
+            sys.exit(-1)
+
+        # --- GDAL Output Initialization ---
+        out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        driver = gdal.GetDriverByName(fmt)
+        
+        if os.path.exists(out_file):
+            driver.Delete(out_file)
+            utils.remove_glob('{}*'.format(out_file))
+
+        if not os.path.exists(os.path.dirname(out_file)):
+            os.makedirs(os.path.dirname(out_file))
+                
+        gdt = gdal.GDT_Float32
+        stack_opts = ['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
+        if fmt == 'GTiff':
+            stack_opts.append('BIGTIFF=YES')
+        elif fmt == 'MEM':
+            stack_opts = []
+        
+        dst_ds = driver.Create(out_file, xcount, ycount, 7, gdt, options=stack_opts)
+        if dst_ds is None:
+            utils.echo_error_msg(f'Failed to create stack grid {out_file}')
+            sys.exit(-1)
+
+        dst_ds.SetGeoTransform(dst_gt)
+        if self.dst_srs is not None:
+            dst_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+        stack_keys = ['z', 'count', 'weights', 'uncertainty', 'src_uncertainty', 'x', 'y']
+        stacked_data = {x: None for x in stack_keys}            
+        stacked_bands = {x: dst_ds.GetRasterBand(i+1) for i, x in enumerate(stack_keys)}
+        
+        for key in stack_keys:
+            stacked_bands[key].SetNoDataValue(np.nan)
+            stacked_bands[key].SetDescription(key)
+
+        # --- Mask Grid Initialization ---
+        m_ds = None
+        mask_fn = None
+        if self.want_mask:
+            mask_ext = gdalfun.gdal_fext(fmt)
+            mask_fn = f'{out_name}_msk.{mask_ext}'
+            if os.path.exists(mask_fn):
+                driver.Delete(mask_fn)
+            
+            # Create mask in MEM first
+            mem_driver = gdal.GetDriverByName('MEM')
+            m_ds = mem_driver.Create('', xcount, ycount, 1, gdal.GDT_Byte)
+            m_ds.SetDescription(f'{out_name}_msk')
+            m_ds.SetGeoTransform(dst_gt)
+            if self.dst_srs is not None:
+                m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+            m_band_all = m_ds.GetRasterBand(1)
+            m_band_all.SetNoDataValue(0)
+            m_band_all.SetDescription('Full Data Mask')
+
+        if self.verbose:
+            utils.echo_msg(f'stacking using {mode} to {out_file}')
+
+        # =====================================================================
+        # PROCESS ENTRY DATA (Waffles)
+        # =====================================================================
+        for this_entry in data_generator:
+            for arrs, srcwin, gt in this_entry.array_yield:
+                if arrs['count'] is None or np.all(arrs['count'] == 0):
+                    continue
+
+                # --- Handle Masking ---
+                m_band = None
+                m_array = None
+                m_all_array = None
+
+                if self.want_mask:
+                    m_all_array = m_band_all.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    m_band = self._add_mask_band(m_ds, this_entry, mask_level=mask_level)
+                    if m_band is not None:
+                        m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+
+                # --- Read Accumulators ---
+                for key in stack_keys:
+                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    if mode not in ['min', 'max']:
+                        stacked_data[key][np.isnan(stacked_data[key])] = 0
+                    if key == 'count':
+                        stacked_data[key][np.isnan(stacked_data[key])] = 0
+
+                # --- Sanitize Inputs ---
+                arrs['count'][np.isnan(arrs['count'])] = 0
+                arrs['weight'][np.isnan(arrs['z'])] = 0
+                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                
+                if mode not in ['min', 'max']:
+                    for k in ['x', 'y', 'z']:
+                        arrs[k][np.isnan(arrs[k])] = 0
+
+                if mode not in ['mixed', 'supercede']:
+                    stacked_data['count'] += arrs['count']
+
+                tmp_arrs_weight = arrs['weight'] / arrs['count']
+                tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
+
+                # =============================================================
+                # STACKING LOGIC
+                # =============================================================
+                if mode == 'supercede':
+                    tmp_stacked_weight = stacked_data['weights'].copy()
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
+
+                    if self.want_mask:
+                        self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=sup_mask)
+                        valid_mask = (sup_mask) & (arrs['count'] != 0)
+                        m_array[valid_mask] = 1
+                        m_all_array[valid_mask] = 1
+
+                    for key in ['count', 'z', 'x', 'y']:
+                        stacked_data[key][sup_mask] = arrs[key][sup_mask]
+                    stacked_data['weights'][sup_mask] = tmp_arrs_weight[sup_mask]
+                    stacked_data['src_uncertainty'][sup_mask] = arrs['uncertainty'][sup_mask]
+                    stacked_data['uncertainty'][sup_mask] = np.array(stacked_data['src_uncertainty'][sup_mask])
+
+                elif mode == 'mixed':
+                    # Weight thresholds setup
+                    wt_str = self.stack_mode_args.get('weight_threshold', '1')
+                    wts = sorted([utils.float_or(x) for x in str(wt_str).split('/')])
+                    wt_pairs = utils.range_pairs(wts)[::-1] # Reverse
+
+                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                    # 1. ABOVE THRESHOLD
+                    weight_above_sup = (tmp_arrs_weight >= max(wts)) & (tmp_stacked_weight < max(wts))
+                    
+                    if self.want_mask:
+                        self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_above_sup)
+                        valid_mask = (weight_above_sup) & (arrs['count'] != 0)
+                        m_array[valid_mask] = 1
+                        m_all_array[valid_mask] = 1
+
+                    stacked_data = self._supercede(weight_above_sup, stacked_data, arrs)
+                    
+                    # Refresh weights
+                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    
+                    weight_above = (tmp_arrs_weight >= max(wts)) & \
+                                   (tmp_arrs_weight >= tmp_stacked_weight) & \
+                                   (~weight_above_sup)
+
+                    if self.want_mask:
+                        valid_mask = (weight_above) & (arrs['count'] != 0)
+                        m_array[valid_mask] = 1
+                        m_all_array[valid_mask] = 1
+                    
+                    stacked_data = self._average(weight_above, stacked_data, arrs)
+
+                    # 2. BETWEEN THRESHOLDS
+                    for wt_pair in wt_pairs:
+                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        arrs_mask_sup = (tmp_arrs_weight >= min(wt_pair)) & (tmp_arrs_weight < max(wt_pair))
+                        tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
+                        weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
+
+                        if self.want_mask:
+                             self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_between_sup)
+                             valid_mask = (weight_between_sup) & (arrs['count'] != 0)
+                             m_array[valid_mask] = 1
+                             m_all_array[valid_mask] = 1
+                        
+                        stacked_data = self._supercede(weight_between_sup, stacked_data, arrs)
+
+                        # Refresh weights
+                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
+                                         (tmp_arrs_weight < max(wt_pair)) & \
+                                         (tmp_arrs_weight >= tmp_stacked_weight) & \
+                                         (~weight_between_sup)
+                        
+                        if self.want_mask:
+                            valid_mask = (weight_between) & (arrs['count'] != 0)
+                            m_array[valid_mask] = 1
+                            m_all_array[valid_mask] = 1
+                        
+                        stacked_data = self._average(weight_between, stacked_data, arrs)
+
+                    # 3. BELOW THRESHOLD
+                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                    weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
+
+                    if self.want_mask:
+                        valid_mask = (weight_below) & (arrs['count'] != 0)
+                        m_array[valid_mask] = 1
+                        m_all_array[valid_mask] = 1
+                    
+                    stacked_data = self._average(weight_below, stacked_data, arrs)
+
+                elif mode == 'min' or mode == 'max':
+                    if self.want_mask:
+                        m_array[arrs['count'] != 0] = 1
+                        m_all_array[arrs['count'] != 0] = 1
+
+                    mask = np.isnan(stacked_data['z'])
+                    # Initialize empty cells
+                    for k in ['x', 'y', 'z', 'weights']:
+                        stacked_data[k][mask] = arrs[k if k != 'weights' else 'weight'][mask]
+                    stacked_data['src_uncertainty'][mask] = arrs['uncertainty'][mask]
+                    stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
+
+                    if mode == 'min':
+                        mask = arrs['z'] <= stacked_data['z']
+                    else:
+                        mask = arrs['z'] >= stacked_data['z']
+
+                    stacked_data['x'][mask] = arrs['x'][mask]
+                    stacked_data['y'][mask] = arrs['y'][mask]
+                    stacked_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
+                    stacked_data['weights'][mask] += arrs['weight'][mask]
+                    stacked_data['weights'][mask][stacked_data['weights'][mask] == 0] = np.nan
+                    
+                    term = (arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask]))
+                    stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power(term, 2)
+                    stacked_data['z'][mask] = arrs['z'][mask]
+
+                elif mode == 'mean':
+                    if self.want_mask:
+                        m_array[arrs['count'] != 0] = 1
+                        m_all_array[arrs['count'] != 0] = 1
+
+                    stacked_data['z'] += arrs['z']
+                    stacked_data['x'] += arrs['x']
+                    stacked_data['y'] += arrs['y']
+                    stacked_data['src_uncertainty'] = np.sqrt(
+                        np.power(stacked_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2)
+                    )
+                    stacked_data['weights'] += arrs['weight']
+                    stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    
+                    # Weighted Variance
+                    term = ((arrs['z'] / arrs['weight'] / arrs['count']) - 
+                            (stacked_data['z'] / stacked_data['weights'] / stacked_data['count']))
+                    stacked_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
+
+                # --- Write Block Back to Disk ---
+                if self.want_mask:
+                    m_band.WriteArray(m_array, srcwin[0], srcwin[1])
+                    m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
+                    m_ds.FlushCache()
+                
+                stacked_data['count'][stacked_data['count'] == 0] = np.nan
+                for key in stack_keys:
+                    stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
+                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
+
+        # =====================================================================
+        # FINALIZE
+        # =====================================================================
+        if self.verbose:
+            utils.echo_msg('finalizing stacked raster bands...')
+
+        # Write Mask to Disk
+        if self.want_mask:
+            msk_opts = ['COMPRESS=LZW']
+            if fmt == 'GTiff': msk_opts.append('BIGTIFF=YES')
+            
+            # Using CreateCopy to write the MEM dataset to disk
+            gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts)
+            m_ds = None 
+
+        # Finalize Weighted Sums (Scanline Processing)
+        srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+        for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+            for key in stack_keys:
+                stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                stacked_data[key][stacked_data[key] == ndv] = np.nan
+
+            stacked_data['weights'][stacked_data['weights'] == 0] = 1
+            stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+
+            # Finalize averages
+            for k in ['x', 'y', 'z']:
+                stacked_data[k] = (stacked_data[k] / stacked_data['weights']) / stacked_data['count']
+
+            # Finalize uncertainty (Standard Error)
+            term = (stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count']
+            stacked_data['uncertainty'] = np.sqrt(
+                np.power(stacked_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
+            )
+
+            for key in stack_keys:
+                stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+
+        # Set NoData
+        for key in stack_keys:
+            stacked_bands[key].SetNoDataValue(ndv)
+
+        # Cleanup
+        dst_ds = None
+        
+        # Spatial Metadata (Footprints)
+        if self.want_mask and self.want_sm:
+            # Assuming polygonize_mask_multibands exists in your scope/imports
+            pass 
+            
+        if self.want_mask:
+            # Re-apply removed data based on NDV in final stack to clean the mask
+            out_ds = gdal.Open(out_file)
+            out_arr_band = out_ds.GetRasterBand(1)
+            msk_ds = gdal.Open(mask_fn, 1)
+            
+            for y in range(0, out_ds.RasterYSize):
+                out_line = out_arr_band.ReadAsArray(0, y, out_ds.RasterXSize, 1)
+                is_ndv = out_line == ndv
+                
+                for b in range(1, msk_ds.RasterCount + 1):
+                    msk_band = msk_ds.GetRasterBand(b)
+                    msk_line = msk_band.ReadAsArray(0, y, out_ds.RasterXSize, 1)
+                    msk_line[is_ndv] = 0
+                    msk_band.WriteArray(msk_line, 0, y)
+            
+            out_ds = msk_ds = None
+
+        if self.verbose:
+            utils.echo_msg(f'generated stack: {os.path.basename(out_file)}')
+
+        return out_file
+
+### End
