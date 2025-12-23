@@ -43,7 +43,7 @@
 ## Process all input data through cudem.dlim first, minimally, using
 ## cudem.dlim.init_data(list-of-data).
 ##
-## Data will be processed through cudem.dlim._stacks prior to any interpolation.
+## Data will be processed through cudem.dlim.stacks prior to any interpolation.
 ## This will produce a weighted-mean (or weight-superceded)
 ## grid of the data to use for interpolation. See cudem.dlim for more information.
 ##
@@ -663,10 +663,10 @@ class Waffle:
                             verbose=self.verbose
                     ).initialize().valid_p():
                         utils.echo_warning_msg('existing stack file {self.stack_fn) is invalid, re-generating')
-                        self.stack = self.data._stacks(out_name=stack_bn)
+                        self.stack = self.data.stacks(out_name=stack_bn)
                         #, mode=self.stack_mode)#supercede=self.supercede)
                 else:
-                    self.stack = self.data._stacks(out_name=stack_bn)
+                    self.stack = self.data.stacks(out_name=stack_bn)
                     #, mode=self.stack_mode)#supercede=self.supercede)
                     
                 self.stack_ds = gdalfile.GDALFile(

@@ -1,3 +1,4 @@
+```mermaid
 flowchart TD
     subgraph Initialization
     A[Start: process_stack] --> B[Initialize Output GDAL File<br/>7 Bands: Z, Count, W, Unc, etc.]
@@ -45,3 +46,4 @@ flowchart TD
     X --> Y[Write Final Values<br/>Apply Final NoData]
     Y --> Z[Clean up Masks]
     end
+```	

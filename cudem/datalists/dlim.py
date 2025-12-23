@@ -4040,6 +4040,21 @@ class ElevationDataset:
                 f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
             )    
 
+    def stacks(self, out_name=None):
+        from . import globato
+        
+        gbt = globato.GdalRasterStacker(
+            region=self.region,
+            x_inc=self.x_inc,
+            y_inc=self.y_inc,
+            dst_srs=self.dst_srs,
+            cache_dir=self.cache_dir
+        )
+
+        stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
+
+        return stacked_fn
+
             
     def stacks_yield_xyz(self, out_name=None, ndv=-9999, fmt='GTiff'):
         """yield the result of `_stacks` as an xyz object"""
