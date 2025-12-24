@@ -35,9 +35,10 @@ from cudem import gdalfun
 from cudem import utils
 from cudem import htdpfun
 from cudem import fetches
+from cudem import __version__ as __cudem__version__
 
 _vdatums_cache = utils.cudem_cache()
-_version = '0.2.5'
+__version__ = '0.2.5'
 
 ## ==============================================
 ## Vertical Datum References
@@ -591,7 +592,8 @@ class Vdatum:
 ## ==============================================
 def vdatums_cli():
     parser = argparse.ArgumentParser(
-        description=f'vdatums ({_version}): transform a grid between vertical datums'
+        description=f'CUDEM ({__cudem__version__}) vdatums ({__version__}): transform a grid between vertical datums',
+        epilog="CUDEM home page: <http://cudem.colorado.edu>"
     )
     
     parser.add_argument('input_grid', help='The input raster to transform')
@@ -602,8 +604,8 @@ def vdatums_cli():
     parser.add_argument('-k', '--keep-cache', action='store_true', help='Keep the cache data intact after run')
     parser.add_argument('-l', '--list-epsg', action='store_true', help='List the supported EPSG codes and their names')
     parser.add_argument('-q', '--quiet', action='store_true', help='Lower verbosity')
-    parser.add_argument('-wm', help='Warp memory for gdalwarp')
-    parser.add_argument('--version', action='version', version=f'%(prog)s {_version}')
+    parser.add_argument('-w', '--warp-mem', help='Warp memory for gdalwarp')
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     
     args = parser.parse_args()
 
@@ -621,7 +623,7 @@ def vdatums_cli():
     ## Set up cache directory
     cache_dir = args.cache_dir
     if not cache_dir:
-        cache_dir = os.path.join(os.path.expanduser('~'), '.cudem_cache')
+        cache_dir = os.path.join(os.path.expanduser('~'), 'cudem_cache')
 
     src_grid = args.input_grid
     if not os.path.exists(src_grid):
