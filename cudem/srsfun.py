@@ -38,7 +38,7 @@ from osgeo import osr, ogr
 
 from cudem import utils, vdatums, regions 
 
-# Initialize configuration and GDAL settings
+## Initialize configuration and GDAL settings
 gc = utils.config_check()
 ogr.DontUseExceptions()
 osr.DontUseExceptions()
@@ -58,10 +58,11 @@ def split_srs(srs: str, as_epsg: bool = False) -> Tuple[Optional[Union[str, int]
     Returns:
         tuple: (horz_srs, vert_srs) as WKT or EPSG.
     """
+    
     if srs is None:
         return None, None
 
-    # Strip geoid definition if present
+    ## Strip geoid definition if present
     if '+geoid' in srs:
         srs = '+'.join([x for x in srs.split('+') if 'geoid' not in x])
 
@@ -77,7 +78,7 @@ def split_srs(srs: str, as_epsg: bool = False) -> Tuple[Optional[Union[str, int]
             vert_wkt = vert_srs_obj.ExportToWkt()
         srs = esri_split[0]
 
-    # Process standard SRS
+    ## Process standard SRS
     src_srs = osr.SpatialReference()
     if src_srs.SetFromUserInput(srs) != 0:
         return None, None
@@ -112,6 +113,7 @@ def split_srs(srs: str, as_epsg: bool = False) -> Tuple[Optional[Union[str, int]
 
 def combine_epsgs(src_horz: str, src_vert: str, name: str = 'Combined') -> Optional[str]:
     """Combine src_horz and src_vert into a CompoundCS WKT."""
+    
     if src_horz is None or src_vert is None:
         return None
 
@@ -131,11 +133,13 @@ def combine_epsgs(src_horz: str, src_vert: str, name: str = 'Combined') -> Optio
 
 def wkt2geom(wkt: str) -> ogr.Geometry:
     """Transform a WKT string to an OGR geometry."""
+    
     return ogr.CreateGeometryFromWkt(wkt)
 
 
 def osr_srs(src_srs: str) -> Optional[osr.SpatialReference]:
     """Create an osr.SpatialReference from a string."""
+    
     try:
         srs = osr.SpatialReference()
         if srs.SetFromUserInput(src_srs) == 0:
@@ -147,6 +151,7 @@ def osr_srs(src_srs: str) -> Optional[osr.SpatialReference]:
 
 def osr_wkt(src_srs: str, esri: bool = False) -> Optional[str]:
     """Convert a src_srs to WKT string."""
+    
     try:
         sr = osr.SpatialReference()
         if sr.SetFromUserInput(src_srs) != 0:
@@ -165,6 +170,7 @@ def osr_prj_file(dst_fn: str, src_srs: str) -> int:
     Returns:
         0 on success, -1 on failure.
     """
+    
     wkt = osr_wkt(src_srs, esri=True)
     if not wkt:
         return -1
@@ -180,6 +186,7 @@ def osr_prj_file(dst_fn: str, src_srs: str) -> int:
 
 def srs_get_cstype(in_srs: str) -> str:
     """Determine if SRS is Geographic or Projected."""
+    
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(in_srs)
     
@@ -194,13 +201,14 @@ def epsg_from_input(in_srs: str) -> Tuple[Optional[str], Optional[str]]:
     Returns:
         list: [horz_code, vert_code]
     """
+    
     src_vert = None
     
-    # Clean Geoid
+    ## Clean Geoid
     if '+geoid' in in_srs:
         in_srs = '+'.join([x for x in in_srs.split('+') if 'geoid' not in x])
 
-    # Handle ESRI
+    ## Handle ESRI
     if in_srs.startswith('ESRI'):
         esri_split = in_srs.split('+')
         if len(esri_split) > 1:
@@ -214,7 +222,7 @@ def epsg_from_input(in_srs: str) -> Tuple[Optional[str], Optional[str]]:
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(in_srs)
 
-    # Horizontal
+    ## Horizontal
     cstype = 'GEOGCS' if src_srs.IsGeographic() else 'PROJCS'
     src_srs.AutoIdentifyEPSG()
     
@@ -228,7 +236,7 @@ def epsg_from_input(in_srs: str) -> Tuple[Optional[str], Optional[str]]:
     else:
         src_horz = f'{an}:{ac}'
 
-    # Vertical
+    ## Vertical
     if src_srs.IsVertical() == 1 and src_vert is None:
         csvtype = 'VERT_CS'
         src_vert = src_srs.GetAuthorityCode(csvtype)
@@ -238,6 +246,7 @@ def epsg_from_input(in_srs: str) -> Tuple[Optional[str], Optional[str]]:
 
 def osr_parse_srs(src_srs: osr.SpatialReference, return_vertcs: bool = True) -> Optional[str]:
     """Parse an OSR SRS object and return a proj/auth string."""
+    
     if src_srs is None:
         return None
 
@@ -268,6 +277,7 @@ def osr_parse_srs(src_srs: osr.SpatialReference, return_vertcs: bool = True) -> 
 
 def parse_srs(src_srs: str = None, dst_srs: str = None) -> Dict[str, Any]:
     """Parse source and destination SRS to determine transform requirements."""
+    
     transform = {}
     
     if src_srs is None or dst_srs is None:
@@ -280,19 +290,19 @@ def parse_srs(src_srs: str = None, dst_srs: str = None) -> Dict[str, Any]:
     out_vertical_epsg = None
     in_vertical_epsg_esri = None
 
-    # Parse Source Geoid
+    ## Parse Source Geoid
     tmp_src_srs = src_srs.split('+geoid:')
     src_srs = tmp_src_srs[0]
     if len(tmp_src_srs) > 1:
         src_geoid = tmp_src_srs[1]
 
-    # Parse Destination Geoid
+    ## Parse Destination Geoid
     tmp_dst_srs = dst_srs.split('+geoid:')
     dst_srs = tmp_dst_srs[0]
     if len(tmp_dst_srs) > 1:
         dst_geoid = tmp_dst_srs[1]
 
-    # Check for ESRI prefix
+    ## Check for ESRI prefix
     is_esri = False
     if 'ESRI' in src_srs.upper():
         is_esri = True
@@ -301,7 +311,7 @@ def parse_srs(src_srs: str = None, dst_srs: str = None) -> Dict[str, Any]:
         if len(srs_split) > 1:
             in_vertical_epsg_esri = srs_split[1]
 
-    # Check for Tidal frames
+    ## Check for Tidal frames
     last_param = src_srs.split('+')[-1]
     last_int = utils.int_or(last_param)
     if last_int in vdatums._tidal_frames.keys():
@@ -309,7 +319,7 @@ def parse_srs(src_srs: str = None, dst_srs: str = None) -> Dict[str, Any]:
         tidal_epsg = vdatums._tidal_frames[last_int]['epsg']
         src_srs = f'{base_srs}+{tidal_epsg}'
 
-    # Create PyProj CRS objects
+    ## Create PyProj CRS objects
     try:
         in_crs = pyproj.CRS.from_user_input(src_srs)
         out_crs = pyproj.CRS.from_user_input(dst_srs)
@@ -317,7 +327,7 @@ def parse_srs(src_srs: str = None, dst_srs: str = None) -> Dict[str, Any]:
         utils.echo_error_msg(f"Error parsing CRS: {e}")
         return transform
 
-    # Handle Input CRS Component Splitting
+    ## Handle Input CRS Component Splitting
     if in_crs.is_compound:
         in_horizontal_crs = in_crs.sub_crs_list[0]
         in_vertical_crs = in_crs.sub_crs_list[1]
@@ -327,7 +337,7 @@ def parse_srs(src_srs: str = None, dst_srs: str = None) -> Dict[str, Any]:
         in_vertical_crs = None
         want_vertical = False
 
-    # Handle Output CRS Component Splitting
+    ## Handle Output CRS Component Splitting
     if out_crs.is_compound:
         out_horizontal_crs = out_crs.sub_crs_list[0]
         out_vertical_crs = out_crs.sub_crs_list[1]
@@ -338,18 +348,18 @@ def parse_srs(src_srs: str = None, dst_srs: str = None) -> Dict[str, Any]:
         want_vertical = False
         out_vertical_epsg = None
 
-    # Override with ESRI vertical if present
+    ## Override with ESRI vertical if present
     if is_esri and in_vertical_epsg_esri is not None:
         in_vertical_epsg = in_vertical_epsg_esri
         if out_vertical_epsg is not None:
             want_vertical = True
 
-    # Disable vertical transform if EPSGs match and no custom source geoid is set
+    ## Disable vertical transform if EPSGs match and no custom source geoid is set
     if want_vertical:
         if (in_vertical_epsg == out_vertical_epsg) and src_geoid is None:
             want_vertical = False
 
-    # Populate transform dictionary
+    ## Populate transform dictionary
     transform.update({
         'src_horz_crs': in_horizontal_crs,
         'dst_horz_crs': out_horizontal_crs,
@@ -369,7 +379,7 @@ def set_vertical_transform(transform: Dict[str, Any], region=None, infos=None,
                            cache_dir: str = './', verbose: bool = True) -> Dict[str, Any]:
     """Generate the vertical transformation grid and pipeline."""
     
-    # Determine region for transformation
+    ## Determine region for transformation
     if region is None and infos is not None:
         vd_region = regions.Region().from_list(infos.minmax)
         vd_region.src_srs = transform['src_horz_crs'].to_proj4()
@@ -389,27 +399,27 @@ def set_vertical_transform(transform: Dict[str, Any], region=None, infos=None,
         utils.echo_warning_msg('Failed to generate transformation: Invalid region')
         return transform
 
-    # Define transformation grid filename
+    ## Define transformation grid filename
     trans_fn = os.path.join(
         cache_dir, 
         f"_vdatum_trans_{transform['src_vert_epsg']}_{transform['dst_vert_epsg']}_{vd_region.format('fn')}.tif"
     )
     transform['trans_fn'] = trans_fn
 
-    # Generate grid if it doesn't exist
+    ## Generate grid if it doesn't exist
     if not os.path.exists(trans_fn):
         with utils.ccp(
             desc=f"Generating v-grid {os.path.basename(trans_fn)}",
             leave=verbose,
             disable=not verbose
         ) as _:
-            # Initial grid resolution (3 arc-seconds)
+            ## Initial grid resolution (3 arc-seconds)
             vd_x_inc = vd_y_inc = utils.str2inc('3s')
             xcount, ycount, _ = vd_region.geo_transform(
                 x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
             )
 
-            # Ensure grid isn't too small (at least 10x10)
+            ## Ensure grid isn't too small (at least 10x10)
             while xcount <= 10 or ycount <= 10:
                 vd_x_inc /= 2
                 vd_y_inc /= 2
@@ -434,7 +444,7 @@ def set_vertical_transform(transform: Dict[str, Any], region=None, infos=None,
                 utils.echo_error_msg(f"VerticalTransform Run failed: {e}")
                 return transform
 
-    # Setup PyProj pipelines
+    ## Setup PyProj pipelines
     if transform['trans_fn'] is not None and os.path.exists(transform['trans_fn']):
         transform['pipeline'] = (
             f"+proj=pipeline +step {transform['src_horz_crs'].to_proj4()} +inv "
@@ -460,17 +470,17 @@ def set_transform(src_srs: str = None, dst_srs: str = None,
     
     transform = parse_srs(src_srs=src_srs, dst_srs=dst_srs)
     
-    # Ensure CRSs are valid
+    ## Ensure CRSs are valid
     if transform.get('src_horz_crs') is None or transform.get('dst_horz_crs') is None:
         return transform
 
-    # 1. Horizontal Pipeline
+    ## Horizontal Pipeline
     transform['horz_pipeline'] = (
         f"+proj=pipeline +step {transform['src_horz_crs'].to_proj4()} +inv "
         f"+step {transform['dst_horz_crs'].to_proj4()}"
     )
 
-    # 2. Determine Transformation Region
+    ## Determine Transformation Region
     if region is not None:
         transform['trans_region'] = region.copy()
         transform['trans_region'].src_srs = transform['dst_horz_crs'].to_proj4()
@@ -482,13 +492,13 @@ def set_transform(src_srs: str = None, dst_srs: str = None,
     else:
         transform['trans_region'] = None
 
-    # 3. Vertical Transformation
+    ## Vertical Transformation
     if transform['want_vertical']:
         transform = set_vertical_transform(transform, region=region, infos=infos, cache_dir=cache_dir)
     else:
         transform['pipeline'] = transform['horz_pipeline']
 
-    # 4. Create Main Transformer
+    ## Create Main Transformer
     try:
         transform['transformer'] = pyproj.Transformer.from_crs(
             transform['src_horz_crs'], 
@@ -502,8 +512,7 @@ def set_transform(src_srs: str = None, dst_srs: str = None,
         )
         return transform
 
-    # 5. Define Data Region (Final bounds check logic)
-    # Note: Corrected logic to remove 'self.region' assumption
+    ## Define Data Region (Final bounds check logic)
     if region is not None and region.valid_p():
         base_region = transform['trans_region'].copy() if transform['trans_region'] else region.copy()
         
