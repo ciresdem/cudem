@@ -1194,7 +1194,14 @@ class ElevationDataset:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
-                    self.set_transform()
+                    srsfun.set_transform(
+                        src_srs=self.src_srs,
+                        dst_srs=self.dst_srs,
+                        region=self.region,
+                        infos=self.infos,
+                        cache_dir=self.cache_dir
+                    )
+                    #self.set_transform()
                 except Exception as e:
                     utils.echo_error_msg(
                         f'could not set transformation on {self.fn}, {e}'

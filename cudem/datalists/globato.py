@@ -81,6 +81,7 @@ class GlobatoStack:
         
     def __enter__(self):
         self.open()
+        
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -89,6 +90,7 @@ class GlobatoStack:
     def open(self):
         if not os.path.exists(self.filepath):
             raise FileNotFoundError(f"{self.filepath} does not exist.")
+        
         self._f = h5py.File(self.filepath, 'r')
 
     def close(self):
@@ -244,6 +246,7 @@ class GlobatoStacker:
                 return None
         else:
             return None
+        
         return stack_ds
 
     def _create_globato(self, out_file):
