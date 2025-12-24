@@ -29,7 +29,6 @@ import re
 import json
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-# Try to import cudem.utils, provide dummy if strictly necessary (though this assumes the env is set)
 try:
     from cudem import utils
 except ImportError:
@@ -38,6 +37,7 @@ except ImportError:
 
 def _parse_value_string(val_str: str) -> Any:
     """Helper to parse string values into Python types (bool, None, list)."""
+    
     val_lower = val_str.lower()
     if val_lower == 'false':
         return False
@@ -57,6 +57,7 @@ def parse_fmod(fmod: str) -> Tuple[Dict[str, Any], str, Dict[str, Any]]:
     Returns:
         Tuple containing (all_options, module_name, module_arguments)
     """
+    
     opts = fmod2dict(fmod)
     mod = opts.get('_module')
     mod_args = {k: v for k, v in opts.items() if k != '_module'}
@@ -73,14 +74,15 @@ def fmod2dict(fmod: str, dict_args: Optional[Dict[str, Any]] = None) -> Dict[str
     Returns:
       dict: A dictionary of the key/values.
     """
+    
     if dict_args is None:
         dict_args = {}
 
-    # Split by colon, ignoring colons inside quotes
+    ## Split by colon, ignoring colons inside quotes
     args_list = re.split(r':(?=(?:[^"]*"[^"]*")*[^"]*$)', fmod)
     
     for arg in args_list:
-        # Split by equals, ignoring equals inside quotes
+        ## Split by equals, ignoring equals inside quotes
         p_arg = re.split(r'=(?=(?:[^"]*"[^"]*")*[^"]*$)', arg)
         
         if len(p_arg) == 1:
@@ -90,7 +92,7 @@ def fmod2dict(fmod: str, dict_args: Optional[Dict[str, Any]] = None) -> Dict[str
             key = p_arg[0]
             val_str = p_arg[1]
             
-            # If there are multiple '=' parts, rejoin the rest
+            ## If there are multiple '=' parts, rejoin the rest
             if len(p_arg) > 2:
                 dict_args[key] = '='.join(p_arg[1:])
             else:
@@ -108,6 +110,7 @@ def dict2fmod(in_dict: Dict[str, Any]) -> str:
     Returns:
       str: A string representation of in_dict suitable for a factory CLI.
     """
+    
     out_args = []
     keys = list(in_dict.keys())
     
@@ -132,6 +135,7 @@ def args2dict(args: List[str], dict_args: Optional[Dict[str, Any]] = None) -> Di
     Returns:
       dict: A dictionary of the key/values.
     """
+    
     if dict_args is None:
         dict_args = {}
 
@@ -157,6 +161,7 @@ def dict2args(in_dict: Dict[str, Any]) -> str:
     Returns:
       str: A string representation.
     """
+    
     out_args = []
     for key, val in in_dict.items():
         out_args.append(f'{key}="{val}"')
@@ -165,6 +170,7 @@ def dict2args(in_dict: Dict[str, Any]) -> str:
 
 def _set_params(mc: Any, mod: Any = None, mod_name: str = None, mod_args: Optional[Dict] = None) -> None:
     """Set module parameters into mc module class."""
+    
     if not hasattr(mc, 'params'):
         mc.params = {}
     
@@ -182,6 +188,7 @@ def _set_params(mc: Any, mod: Any = None, mod_name: str = None, mod_args: Option
 
 def _set_mod_params(mc: Any, mf: Any = None, mod: Any = None, mod_name: str = None) -> None:
     """Set specific module parameters based on factory lookup."""
+    
     if mod is not None:
         mc.params['mod'] = mod
         
@@ -206,8 +213,9 @@ def _factory_module_check(mf: Any, mc: Any) -> Optional[str]:
     Returns:
       str: Module key if found, else None.
     """
+    
     for k in mf._modules.keys():
-        # Check if the module class matches the factory definition
+        ## Check if the module class matches the factory definition
         try:
             if isinstance(mf._modules[k]['call'](), type(mc)):
                 return k
@@ -219,7 +227,6 @@ def _factory_module_check(mf: Any, mc: Any) -> Optional[str]:
 ###############################################################################
 # Module Description Helpers
 ###############################################################################
-
 def get_module_short_desc(m: Dict) -> str:
     return ', '.join([f'{key}' for key in m])
 
@@ -266,7 +273,7 @@ def echo_modules(module_dict: Dict, key: Any, md: bool = False) -> None:
         if key in module_dict:
             selected_mod = {key: module_dict[key]}
         else:
-            # Search by 'name' attribute
+            ## Search by 'name' attribute
             for mk in module_dict:
                 if key == module_dict[mk].get('name'):
                     selected_mod = {mk: module_dict[mk]}
@@ -295,19 +302,22 @@ class CUDEMModule:
         self.modules = modules if modules is not None else {}
         self.kwargs = kwargs
         
-        # Set kwargs as attributes
+        ## Set kwargs as attributes
         for kpam, kval in kwargs.items():
             setattr(self, kpam, kval)
 
         self.run()
 
+        
     def initialize(self):
         pass
-            
+
+    
     def __call__(self):
         print(self.__dict__)
         self.run()
 
+        
     def run(self):
         raise NotImplementedError(
             f'The module {self.params.get("mod")} could not be parsed by the sub factory, '
@@ -334,7 +344,7 @@ class CUDEMFactory:
         }
     }
     
-    # Class-level default modules
+    ## Class-level default modules
     _modules = {
         '_factory': {
             'name': 'factory',
@@ -359,12 +369,13 @@ class CUDEMFactory:
           mod_args: Dictionary of module arguments
           kwargs: Additional arguments
         """
+        
         self.mod = mod
         self.mod_name = mod_name
         self.mod_args = mod_args if mod_args is not None else {}
         self.kwargs = kwargs
         
-        # IMPORTANT: Create an instance copy of _modules so we don't modify the class variable
+        ## IMPORTANT: Create an instance copy of _modules so we don't modify the class variable
         self._modules = self._modules.copy()
 
         if self.mod is not None:
@@ -372,18 +383,22 @@ class CUDEMFactory:
 
         self.add_module(self._factory_module)
 
+        
     def __str__(self):
         return f'<{self.__dict__}>'
+
     
     def __repr__(self):
         return f'<{self.__dict__}>'
 
+    
     def _parse_mod(self, mod: str):
         """Parse the module string.
 
         Returns:
           (module-name, module-arguments)
         """
+        
         opts = fmod2dict(mod, {})
         if '_module' not in opts:
             utils.echo_error_msg(f'Could not parse module string: {opts}')
@@ -399,8 +414,10 @@ class CUDEMFactory:
             
         return self.mod_name, self.mod_args
 
+    
     def add_module(self, type_def: Dict = None):
         """Add a module to the factory `_modules` dict."""
+        
         if type_def is None:
             return
         
@@ -418,14 +435,14 @@ class CUDEMFactory:
                 if isinstance(value, dict):
                     yield from _get_all_keys(value)
         
-        # Add factory params to kwargs
+        ## Add factory params to kwargs
         self.kwargs['params'] = self.__dict__
         
-        # Merge mod_args into kwargs, prioritizing mod_args
+        ## Merge mod_args into kwargs, prioritizing mod_args
         keys_to_remove = []
         for k in self.kwargs:
             if k in self.mod_args:
-                # self.kwargs takes precedence or is overwritten here based on original logic
+                ## self.kwargs takes precedence or is overwritten here
                 self.kwargs[k] = self.mod_args[k]
                 keys_to_remove.append(k)
         
@@ -433,14 +450,14 @@ class CUDEMFactory:
             del self.mod_args[k]
                 
         if self.mod_name is not None and self.mod_name in self._modules:
-            # Instantiate the module class
+            ## Instantiate the module class
             module_class = self._modules[self.mod_name]['call']
             
-            # Call the module
-            # We assume the module class accepts **kwargs for arguments
+            ## Call the module
+            ## The module class should accept **mod_args and **kwargs for arguments
             instance = module_class(**self.mod_args, **self.kwargs)
 
-            # Validation check (warn if arguments were unused)
+            ## Validation check (warn if arguments were unused)
             instance_keys = list(_get_all_keys(instance.__dict__))
             for mod_arg in self.mod_args:
                 if mod_arg not in instance_keys:
@@ -449,9 +466,11 @@ class CUDEMFactory:
             return instance
         else:
             return None
+
         
     def load_parameter_dict(self, param_dict: Dict):
         """Load a module parameter dictionary."""
+        
         valid_data = False
 
         for ky, val in param_dict.items():
@@ -465,13 +484,15 @@ class CUDEMFactory:
             
         return self
 
+    
     def write_parameter_file(self, param_file: str):
         """Write a module parameter file to disk."""
+        
         try:
             with open(param_file, 'w') as outfile:
                 params = self.__dict__.copy()
                 
-                # Convert paths to absolute paths
+                ## Convert paths to absolute paths
                 if 'mod_args' in params:
                     for key in params['mod_args']:
                         val = params['mod_args'][key]
@@ -491,8 +512,10 @@ class CUDEMFactory:
                 f'CUDEMFactory: Unable to write new parameter file to {param_file}. Error: {e}'
             )
 
+        
     def open_parameter_file(self, param_file: str):
         """Open and read a saved parameter file."""
+        
         valid_data = False
         try:
             with open(param_file, 'r') as infile:
