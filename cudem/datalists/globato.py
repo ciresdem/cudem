@@ -78,45 +78,52 @@ class GlobatoStack:
     def __init__(self, filepath):
         self.filepath = filepath
         self._f = None
+
         
     def __enter__(self):
         self.open()
-        
         return self
 
+    
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+        
     def open(self):
         if not os.path.exists(self.filepath):
             raise FileNotFoundError(f"{self.filepath} does not exist.")
-        
         self._f = h5py.File(self.filepath, 'r')
 
+        
     def close(self):
         if self._f:
             self._f.close()
             self._f = None
 
+            
     @property
     def is_open(self):
         return self._f is not None
 
+    
     def _check_open(self):
         if not self.is_open:
             raise IOError("File is not open. Use 'with GlobatoStack(...) as ...' or call .open()")
 
-    # --- Coordinates ---
+        
+    ## --- Coordinates ---
     @property
     def lat(self):
         self._check_open()
         return self._f['lat'][:]
 
+    
     @property
     def lon(self):
         self._check_open()
         return self._f['lon'][:]
 
+    
     @property
     def crs_wkt(self):
         self._check_open()
@@ -124,6 +131,7 @@ class GlobatoStack:
             return self._f['crs'].attrs['crs_wkt']
         return None
 
+    
     @property
     def geotransform(self):
         self._check_open()
@@ -131,7 +139,8 @@ class GlobatoStack:
             return [float(x) for x in self._f['crs'].attrs['GeoTransform'].split()]
         return None
 
-    # --- Data Access ---
+    
+    ## --- Data Access ---
     @property
     def stack(self):
         """Access the final processed stack datasets (z, weights, uncertainty, etc)."""
@@ -139,6 +148,7 @@ class GlobatoStack:
         self._check_open()
         return self._f['stack']
 
+    
     @property
     def sums(self):
         """Access the raw accumulation sums."""
@@ -146,6 +156,7 @@ class GlobatoStack:
         self._check_open()
         return self._f['sums']
 
+    
     @property
     def masks(self):
         """Access the individual source masks."""
@@ -153,6 +164,7 @@ class GlobatoStack:
         self._check_open()
         return self._f['mask']
 
+    
     def get_mask_names(self):
         """Return a list of all source mask names stored in the file."""
         
@@ -164,6 +176,7 @@ class GlobatoStack:
                 names.append(key)
         return names
 
+    
     def get_data(self, variable='z', group='stack'):
         """
         Quick accessor for data arrays.
@@ -176,6 +189,7 @@ class GlobatoStack:
         self._check_open()
         return self._f[group][variable][:]
 
+    
     def __repr__(self):
         status = "Open" if self.is_open else "Closed"
         return f"<GlobatoStack '{os.path.basename(self.filepath)}' [{status}]>"
@@ -227,6 +241,7 @@ class GlobatoStacker:
         verbose : bool
             Enable verbose logging.
         """
+        
         self.region = region
         self.x_inc = x_inc
         self.y_inc = y_inc
@@ -236,6 +251,7 @@ class GlobatoStacker:
         self.cache_dir = cache_dir
         self.verbose = verbose
 
+        
     def _load_globato(self, fn):
         """Internal method to load an existing globato file."""
         
@@ -249,6 +265,7 @@ class GlobatoStacker:
         
         return stack_ds
 
+    
     def _create_globato(self, out_file):
         """Internal method to create a new globato file structure."""
         
@@ -284,13 +301,13 @@ class GlobatoStacker:
         stack_ds = h5.File(out_file, 'w', rdcc_nbytes=(1024**2)*12000)
         stack_ds.attrs['short_name'] = 'globato'
 
-        # CRS
+        ## CRS
         crs_dset = stack_ds.create_dataset('crs', dtype=h5.string_dtype())
         crs_dset.attrs['GeoTransform'] = ' '.join([str(x) for x in dst_gt])
         if self.dst_srs is not None:
             crs_dset.attrs['crs_wkt'] = srsfun.osr_wkt(self.dst_srs)
 
-        # Latitude
+        ## Latitude
         lat_array = np.arange(lat_start, lat_end, lat_inc)
         lat_dset = stack_ds.create_dataset('lat', data=lat_array)
         lat_dset.make_scale('latitude')
@@ -299,7 +316,7 @@ class GlobatoStacker:
         lat_dset.attrs["standard_name"] = "latitude"
         lat_dset.attrs["actual_range"] = [lat_end, lat_start]
 
-        # Longitude
+        ## Longitude
         lon_array = np.arange(lon_start, lon_end, lon_inc)
         lon_dset = stack_ds.create_dataset('lon', data=lon_array)
         lon_dset.make_scale('longitude')
@@ -308,7 +325,7 @@ class GlobatoStacker:
         lon_dset.attrs["standard_name"]= "longitude"
         lon_dset.attrs["actual_range"] = [lon_start, lon_end]
 
-        # Stack Group
+        ## Stack Group
         stack_grp = stack_ds.create_group('stack')
         stacked_keys = ['z', 'count', 'weights', 'uncertainty', 'src_uncertainty', 'x', 'y']
 
@@ -323,7 +340,7 @@ class GlobatoStacker:
             stack_dset.dims[1].attach_scale(lon_dset)
             stack_dset.attrs['grid_mapping'] = "crs"
 
-        # Sums Group
+        ## Sums Group
         sums_grp = stack_ds.create_group('sums')
         for key in stacked_keys:
             sums_dset = sums_grp.create_dataset(
@@ -336,7 +353,7 @@ class GlobatoStacker:
             sums_dset.dims[1].attach_scale(lon_dset)
             sums_dset.attrs['grid_mapping'] = "crs"            
 
-        # Mask Group
+        ## Mask Group
         mask_grp = stack_ds.create_group('mask')
 
         mask_coast_dset = mask_grp.create_dataset(
@@ -359,11 +376,11 @@ class GlobatoStacker:
         mask_all_dset.dims[1].attach_scale(lon_dset)
         mask_all_dset.attrs['grid_mapping'] = "crs"
 
-        # Datasets Group
-        stack_ds.create_group('datasets')                 
-        
+        ## Datasets Group
+        stack_ds.create_group('datasets')
         return stack_ds
 
+    
     def _average(self, weight_above, stacked_data, arrs):
         """Average of incoming data with existing data above weight_threshold."""
         
@@ -379,14 +396,14 @@ class GlobatoStacker:
         
         stacked_data['weights'][weight_above] += arrs['weight'][weight_above]
         
-        # Accumulate variance * weight
+        ## Accumulate variance * weight
         term = ((arrs['z'][weight_above] / arrs['weight'][weight_above]) / arrs['count'][weight_above]) - \
                ((stacked_data['z'][weight_above] / stacked_data['weights'][weight_above]) / stacked_data['count'][weight_above])
                
         stacked_data['uncertainty'][weight_above] += arrs['weight'][weight_above] * np.power(term, 2)
-
         return stacked_data
 
+    
     def _supercede(self, weight_above_sup, stacked_data, arrs, sup=True):
         """Supercede logic for mixed/supercede modes."""
         
@@ -399,6 +416,7 @@ class GlobatoStacker:
         stacked_data['uncertainty'][weight_above_sup] = np.array(stacked_data['src_uncertainty'][weight_above_sup])
         return stacked_data
 
+    
     def process_blocks(self, data_generator, out_name=None, ndv=-9999):
         """
         Block and mask incoming arrays together.
@@ -427,7 +445,7 @@ class GlobatoStacker:
         
         mask_level = utils.int_or(self.stack_mode_args.get('mask_level'), 0)
         
-        # Initialize output filename
+        ## Initialize output filename
         if out_name is None:
             out_name = os.path.join(self.cache_dir, '{}'.format(
                 utils.append_fn('globato_blocks', self.region, self.x_inc)
@@ -443,7 +461,7 @@ class GlobatoStacker:
         else:
             stack_ds = self._create_globato(out_file)        
 
-        # Access Datasets
+        ## Access Datasets
         crs_dset = stack_ds['crs']
         dst_gt = crs_dset.attrs['GeoTransform']
         lat_dset = stack_ds['lat']
@@ -458,7 +476,7 @@ class GlobatoStacker:
         utils.echo_msg(datasets_grp.keys())
         mask_all_dset = mask_grp['full_dataset_mask']
         
-        # Load Data into Memory
+        ## Load Data into Memory
         stacked_data = {}
         for key in stack_grp.keys():
             stacked_data[key] = stack_grp[key][...,]
@@ -471,10 +489,10 @@ class GlobatoStacker:
 
         ycount, xcount = stack_grp['z'].shape
             
-        # Parse each entry and process it
+        ## Parse each entry and process it
         for this_entry in data_generator:
             
-            # --- MASK SETUP ---
+            ## --- MASK SETUP ---
             entry_name = this_entry.metadata['name']
             if mask_level > 0:
                 parts = entry_name.split('/')
@@ -497,7 +515,7 @@ class GlobatoStacker:
             else:
                 mask_dset = mask_grp[entry_name]
 
-            # Set metadata attributes on mask
+            ## Set metadata attributes on mask
             for k in this_entry.metadata.keys():
                 if k not in mask_dset.attrs.keys() or mask_dset.attrs[k] == 'null':
                     try:
@@ -527,12 +545,12 @@ class GlobatoStacker:
             else:
                 pass # datasets_dset_grp = datasets_grp[entry_name]
                 
-            # --- PROCESS ARRAYS ---
+            ## --- PROCESS ARRAYS ---
             for arrs, srcwin, gt in this_entry.array_yield:
                 if arrs['count'] is None or np.all(arrs['count'] == 0):
                     continue
 
-                # Update masks
+                ## Update masks
                 y_slice = slice(srcwin[1], srcwin[1]+srcwin[3])
                 x_slice = slice(srcwin[0], srcwin[0]+srcwin[2])
                 
@@ -540,7 +558,7 @@ class GlobatoStacker:
                 if mask_dset is not None:
                     mask_dset[y_slice, x_slice][arrs['count'] != 0] = 1
 
-                # Read saved accumulated rasters
+                ## Read saved accumulated rasters
                 for key in sums_grp.keys():
                     sums_data[key] = sums_grp[key][y_slice, x_slice]
                     if mode not in ['min', 'max']:
@@ -548,7 +566,7 @@ class GlobatoStacker:
                     if key == 'count':
                         sums_data[key][np.isnan(sums_data[key])] = 0
                     
-                # Sanitize incoming arrays
+                ## Sanitize incoming arrays
                 arrs['count'][np.isnan(arrs['count'])] = 0
                 arrs['weight'][np.isnan(arrs['z'])] = 0
                 arrs['uncertainty'][np.isnan(arrs['z'])] = 0
@@ -561,14 +579,14 @@ class GlobatoStacker:
                         if arrs[arr_key] is not None:
                             arrs[arr_key][np.isnan(arrs[arr_key])] = 0
 
-                # Accumulate count
+                ## Accumulate count
                 if mode != 'mixed' and mode != 'supercede':
                     sums_data['count'] += arrs['count']
                     
                 tmp_arrs_weight = arrs['weight'] / arrs['count']
                 tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
                 
-                # --- SUPERCEDE MODE ---
+                ## --- SUPERCEDE MODE ---
                 if mode == 'supercede':
                     tmp_stacked_weight = sums_data['weights'] / sums_data['count']
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
@@ -582,7 +600,7 @@ class GlobatoStacker:
                     sums_data['src_uncertainty'][sup_mask] = arrs['uncertainty'][sup_mask]
                     sums_data['uncertainty'][sup_mask] = np.array(sums_data['src_uncertainty'])[sup_mask]
                     
-                    # Clean up superseded masks in the file
+                    ## Clean up superseded masks in the file
                     k_list = []
                     mask_grp.visit(lambda x: k_list.append(x) if not isinstance(mask_grp[x], h5.Group) else None)
 
@@ -590,7 +608,6 @@ class GlobatoStacker:
                         if entry_name in key: continue
 
                         key_dset_arr = mask_grp[key][y_slice, x_slice]
-                        # weight_above_sup logic inferred from original context; using non-nan as baseline
                         weight_above_sup = ~np.isnan(key_dset_arr) 
 
                         key_dset_mask = key_dset_arr[weight_above_sup] == 1
@@ -598,7 +615,7 @@ class GlobatoStacker:
                             key_dset_arr[key_dset_mask] = 0
                             mask_grp[key][y_slice, x_slice] = key_dset_arr
                                 
-                # --- MIN/MAX MODE ---
+                ## --- MIN/MAX MODE ---
                 elif mode == 'min' or mode == 'max':
                     mask = np.isnan(sums_data['z'])
                     for k_map in ['x', 'y', 'src_uncertainty', 'uncertainty', 'weights', 'z']:
@@ -619,7 +636,7 @@ class GlobatoStacker:
                     sums_data['uncertainty'][mask] += arrs['weight'][mask] * np.power(term, 2)
                     sums_data['z'][mask] = arrs['z'][mask]
                 
-                # --- MEAN MODE ---
+                ## --- MEAN MODE ---
                 elif mode == 'mean':
                     sums_data['z'] += arrs['z']
                     sums_data['x'] += arrs['x']
@@ -633,7 +650,7 @@ class GlobatoStacker:
                     term = (arrs['z'] - (sums_data['z'] / sums_data['weights']))
                     sums_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
 
-                # --- MIXED MODE ---
+                ## --- MIXED MODE ---
                 elif mode == 'mixed':
                     wt_str = self.stack_mode_args.get('weight_threshold', '1')
                     wts = [utils.float_or(x) for x in str(wt_str).split('/')]
@@ -644,14 +661,14 @@ class GlobatoStacker:
                     tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     
-                    # Collect keys for mask cleaning
+                    ## Collect keys for mask cleaning
                     k_list = []
                     mask_grp.visit(lambda x: k_list.append(x) if not isinstance(mask_grp[x], h5.Group) else None)
 
-                    # 1. ABOVE THRESHOLD
+                    ## ABOVE THRESHOLD
                     weight_above_sup = (tmp_arrs_weight >= max(wts)) & (tmp_stacked_weight < max(wts))
                     
-                    # Adjust mask for supercede
+                    ## Adjust mask for supercede
                     for key in k_list:
                         if entry_name in key: continue
                         key_dset_arr = mask_grp[key][y_slice, x_slice]
@@ -664,7 +681,7 @@ class GlobatoStacker:
 
                     sums_data = self._supercede(weight_above_sup, sums_data, arrs)
 
-                    # Recalculate weights
+                    ## Recalculate weights
                     tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     
@@ -672,7 +689,7 @@ class GlobatoStacker:
                                    (tmp_arrs_weight >= tmp_stacked_weight) & \
                                    (~weight_above_sup)
 
-                    # Adjust mask for average
+                    ## Adjust mask for average
                     for key in k_list:
                         if entry_name in key: continue
                         key_dset_arr = mask_grp[key][y_slice, x_slice]
@@ -684,7 +701,7 @@ class GlobatoStacker:
                     
                     sums_data = self._average(weight_above, sums_data, arrs)
 
-                    # 2. BETWEEN THRESHOLDS
+                    ## BETWEEN THRESHOLDS
                     for wt_pair in wt_pairs:
                         tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
@@ -693,7 +710,7 @@ class GlobatoStacker:
                         tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
                         weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
 
-                        # Adjust mask
+                        ## Adjust mask
                         for key in k_list:
                             if entry_name in key: continue
                             key_dset_arr = mask_grp[key][y_slice, x_slice]
@@ -714,7 +731,7 @@ class GlobatoStacker:
                         
                         weight_between = (arrs_weight_between) & (~weight_between_sup)
 
-                        # Adjust mask
+                        ## Adjust mask
                         for key in k_list:
                             if entry_name in key: continue
                             key_dset_arr = mask_grp[key][y_slice, x_slice]
@@ -726,12 +743,12 @@ class GlobatoStacker:
                         
                         sums_data = self._average(weight_between, sums_data, arrs)
 
-                    # 3. BELOW THRESHOLD
+                    ## BELOW THRESHOLD
                     tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
 
-                    # Adjust mask
+                    ## Adjust mask
                     for key in k_list:
                         if entry_name in key: continue
                         key_dset_arr = mask_grp[key][y_slice, x_slice]
@@ -743,13 +760,13 @@ class GlobatoStacker:
 
                     sums_data = self._average(weight_below, sums_data, arrs)
 
-                # Write out results to accumulated rasters
+                ## Write out results to accumulated rasters
                 sums_data['count'][sums_data['count'] == 0] = np.nan
                 for key in sums_grp.keys():
                     sums_data[key][np.isnan(sums_data['count'])] = np.nan
                     sums_grp[key][y_slice, x_slice] = sums_data[key]
 
-        # --- FINALIZE ---
+        ## --- FINALIZE ---
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
 
@@ -771,7 +788,7 @@ class GlobatoStacker:
         stacked_data['y'] = (sums_data['y'] / stacked_data['weights']) / sums_data['count']
         stacked_data['z'] = (sums_data['z'] / stacked_data['weights']) / sums_data['count']
 
-        # Calculate standard error
+        ## Calculate standard error
         term = (sums_data['uncertainty'] / sums_data['weights']) / sums_data['count']
         stacked_data['uncertainty'] = np.sqrt(
             np.power(sums_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
@@ -787,6 +804,7 @@ class GlobatoStacker:
         stack_ds.close()                        
         return out_file
 
+    
 ###############################################################################
 ## GDAL Multi-Band tif stack
 ###############################################################################
@@ -801,7 +819,7 @@ class GdalStack:
             mask = gs.get_mask_array()
     """
     
-    # Mapping defined in GdalRasterStacker
+    ## Mapping defined in GdalRasterStacker
     BAND_MAP = {
         'z': 1,
         'count': 2,
@@ -817,17 +835,20 @@ class GdalStack:
         self._ds = None
         self._mask_ds = None
         
-        # Check for sidecar mask file (e.g., output_msk.tif)
+        ## Check for sidecar mask file (e.g., output_msk.tif)
         base, ext = os.path.splitext(filepath)
         self.mask_filepath = f"{base}_msk{ext}"
 
+        
     def __enter__(self):
         self.open()
         return self
 
+    
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
+        
     def open(self):
         if not os.path.exists(self.filepath):
             raise FileNotFoundError(f"{self.filepath} does not exist.")
@@ -836,35 +857,41 @@ class GdalStack:
         if os.path.exists(self.mask_filepath):
             self._mask_ds = gdal.Open(self.mask_filepath, gdal.GA_ReadOnly)
 
+            
     def close(self):
         self._ds = None
         self._mask_ds = None
 
+        
     @property
     def is_open(self):
         return self._ds is not None
 
+    
     def _check_open(self):
         if not self.is_open:
             raise IOError("Dataset is not open.")
 
-    # --- Metadata ---
+    ## --- Metadata ---
     @property
     def geotransform(self):
         self._check_open()
         return self._ds.GetGeoTransform()
 
+    
     @property
     def projection(self):
         self._check_open()
         return self._ds.GetProjection()
 
+    
     @property
     def shape(self):
         self._check_open()
         return (self._ds.RasterYSize, self._ds.RasterXSize)
 
-    # --- Data Access via Properties ---
+    
+    ## --- Data Access via Properties ---
     def _get_band_array(self, name):
         self._check_open()
         idx = self.BAND_MAP.get(name)
@@ -872,45 +899,55 @@ class GdalStack:
             raise ValueError(f"Unknown band name: {name}")
         band = self._ds.GetRasterBand(idx)
         arr = band.ReadAsArray()
-        # Clean nodata
+        ## Clean nodata
         ndv = band.GetNoDataValue()
         if ndv is not None:
             arr[arr == ndv] = float('nan')
         return arr
 
+    
     @property
     def z(self): return self._get_band_array('z')
+
     
     @property
     def count(self): return self._get_band_array('count')
+
     
     @property
     def weights(self): return self._get_band_array('weights')
+
     
     @property
     def uncertainty(self): return self._get_band_array('uncertainty')
 
+    
     @property
     def src_uncertainty(self): return self._get_band_array('src_uncertainty')
 
-    # --- Mask Access ---
+    
+    ## --- Mask Access ---
     @property
     def has_mask(self):
         return self._mask_ds is not None
 
+    
     def get_mask_array(self, band_index=1):
         """
         Get the binary mask. 
         Band 1 is usually the 'Full Data Mask'.
         Subsequent bands (if any) correspond to specific inputs.
         """
+        
         self._check_open()
         if not self.has_mask:
             return None
         return self._mask_ds.GetRasterBand(band_index).ReadAsArray()
 
+    
     def get_mask_names(self):
         """Returns descriptions of bands in the sidecar mask file."""
+        
         self._check_open()
         if not self.has_mask:
             return []
@@ -920,6 +957,7 @@ class GdalStack:
             names.append(desc if desc else f"Band_{i}")
         return names
 
+    
     def __repr__(self):
         status = "Open" if self.is_open else "Closed"
         mask_status = "Found" if os.path.exists(self.mask_filepath) else "Missing"
@@ -974,6 +1012,7 @@ class GdalRasterStacker:
         verbose : bool
             Enable verbose logging.
         """
+        
         self.region = region
         self.x_inc = x_inc
         self.y_inc = y_inc
@@ -985,6 +1024,7 @@ class GdalRasterStacker:
         self.want_sm = want_sm
         self.verbose = verbose
 
+        
     def _add_mask_band(self, m_ds, this_entry, mask_level=0):
         """Internal: Adds or retrieves a mask band for the specific data entry."""
         
@@ -1017,7 +1057,7 @@ class GdalRasterStacker:
         try:
             m_band.SetMetadata(band_md)
         except Exception as e:
-            # Fallback: clean None types
+            ## Fallback: clean None types
             try:
                 for key in list(band_md.keys()):
                     if band_md[key] is None:
@@ -1029,8 +1069,10 @@ class GdalRasterStacker:
         m_band.FlushCache()
         return m_band
 
+    
     def _reset_mask_bands(self, m_ds, srcwin, except_band_name=None, mask=None):
         """Internal: Resets mask bands to accommodate superceding data."""
+        
         for b in range(1, m_ds.RasterCount+1):
             this_band = m_ds.GetRasterBand(b)
             this_band_name = this_band.GetDescription()
@@ -1050,6 +1092,7 @@ class GdalRasterStacker:
                     )
                     m_ds.FlushCache()
 
+                    
     def _average(self, weight_above, stacked_data, arrs):
         """Internal: Accumulate weighted averages."""
         
@@ -1066,7 +1109,7 @@ class GdalRasterStacker:
         
         stacked_data['weights'][weight_above] += arrs['weight'][weight_above]
         
-        # Variance * weight
+        ## Variance * weight
         term = ((arrs['z'][weight_above] / arrs['weight'][weight_above]) / arrs['count'][weight_above]) - \
                ((stacked_data['z'][weight_above] / stacked_data['weights'][weight_above]) / stacked_data['count'][weight_above])
                
@@ -1074,6 +1117,7 @@ class GdalRasterStacker:
 
         return stacked_data
 
+    
     def _supercede(self, weight_above_sup, stacked_data, arrs):
         """Internal: Apply supercede logic."""
         
@@ -1086,6 +1130,7 @@ class GdalRasterStacker:
         stacked_data['uncertainty'][weight_above_sup] = np.array(stacked_data['src_uncertainty'][weight_above_sup])
         return stacked_data
 
+    
     def process_stack(self, data_generator, out_name=None, ndv=-9999, fmt='GTiff'):
         """
         Stack and mask incoming arrays together using GDAL.
@@ -1110,7 +1155,7 @@ class GdalRasterStacker:
         mode = self.stack_mode_name
         mask_level = utils.int_or(self.stack_mode_args.get('mask_level'), 0)
         
-        # --- Output Filename Setup ---
+        ## --- Output Filename Setup ---
         if out_name is None:
             tmp_fn = utils.append_fn('dlim_stacks', self.region, self.x_inc)
             out_name = os.path.join(self.cache_dir, f'{tmp_fn}')
@@ -1122,7 +1167,7 @@ class GdalRasterStacker:
             utils.echo_error_msg(f'Invalid grid dimensions: {xcount}x{ycount}')
             sys.exit(-1)
 
-        # --- GDAL Output Initialization ---
+        ## --- GDAL Output Initialization ---
         out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         driver = gdal.GetDriverByName(fmt)
         
@@ -1157,7 +1202,7 @@ class GdalRasterStacker:
             stacked_bands[key].SetNoDataValue(np.nan)
             stacked_bands[key].SetDescription(key)
 
-        # --- Mask Grid Initialization ---
+        ## --- Mask Grid Initialization ---
         m_ds = None
         mask_fn = None
         if self.want_mask:
@@ -1166,7 +1211,7 @@ class GdalRasterStacker:
             if os.path.exists(mask_fn):
                 driver.Delete(mask_fn)
             
-            # Create mask in MEM first
+            ## Create mask in MEM first
             mem_driver = gdal.GetDriverByName('MEM')
             m_ds = mem_driver.Create('', xcount, ycount, 1, gdal.GDT_Byte)
             m_ds.SetDescription(f'{out_name}_msk')
@@ -1181,15 +1226,15 @@ class GdalRasterStacker:
         if self.verbose:
             utils.echo_msg(f'stacking using {mode} to {out_file}')
 
-        # =====================================================================
-        # PROCESS ENTRY DATA (Waffles)
-        # =====================================================================
+        ## =====================================================================
+        ## PROCESS ENTRY DATA
+        ## =====================================================================
         for this_entry in data_generator:
             for arrs, srcwin, gt in this_entry.array_yield:
                 if arrs['count'] is None or np.all(arrs['count'] == 0):
                     continue
 
-                # --- Handle Masking ---
+                ## --- Handle Masking ---
                 m_band = None
                 m_array = None
                 m_all_array = None
@@ -1200,7 +1245,7 @@ class GdalRasterStacker:
                     if m_band is not None:
                         m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
 
-                # --- Read Accumulators ---
+                ## --- Read Accumulators ---
                 for key in stack_keys:
                     stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     if mode not in ['min', 'max']:
@@ -1208,7 +1253,7 @@ class GdalRasterStacker:
                     if key == 'count':
                         stacked_data[key][np.isnan(stacked_data[key])] = 0
 
-                # --- Sanitize Inputs ---
+                ## --- Sanitize Inputs ---
                 arrs['count'][np.isnan(arrs['count'])] = 0
                 arrs['weight'][np.isnan(arrs['z'])] = 0
                 arrs['uncertainty'][np.isnan(arrs['z'])] = 0
@@ -1223,9 +1268,9 @@ class GdalRasterStacker:
                 tmp_arrs_weight = arrs['weight'] / arrs['count']
                 tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
 
-                # =============================================================
-                # STACKING LOGIC
-                # =============================================================
+                ## =============================================================
+                ## STACKING
+                ## =============================================================
                 if mode == 'supercede':
                     tmp_stacked_weight = stacked_data['weights'].copy()
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
@@ -1252,7 +1297,7 @@ class GdalRasterStacker:
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
-                    # 1. ABOVE THRESHOLD
+                    ## ABOVE THRESHOLD
                     weight_above_sup = (tmp_arrs_weight >= max(wts)) & (tmp_stacked_weight < max(wts))
                     
                     if self.want_mask:
@@ -1278,7 +1323,7 @@ class GdalRasterStacker:
                     
                     stacked_data = self._average(weight_above, stacked_data, arrs)
 
-                    # 2. BETWEEN THRESHOLDS
+                    ## BETWEEN THRESHOLDS
                     for wt_pair in wt_pairs:
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
@@ -1295,7 +1340,7 @@ class GdalRasterStacker:
                         
                         stacked_data = self._supercede(weight_between_sup, stacked_data, arrs)
 
-                        # Refresh weights
+                        ## Refresh weights
                         tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
@@ -1311,7 +1356,7 @@ class GdalRasterStacker:
                         
                         stacked_data = self._average(weight_between, stacked_data, arrs)
 
-                    # 3. BELOW THRESHOLD
+                    ## BELOW THRESHOLD
                     tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
                     tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
                     weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
@@ -1329,7 +1374,7 @@ class GdalRasterStacker:
                         m_all_array[arrs['count'] != 0] = 1
 
                     mask = np.isnan(stacked_data['z'])
-                    # Initialize empty cells
+                    ## Initialize empty cells
                     for k in ['x', 'y', 'z', 'weights']:
                         stacked_data[k][mask] = arrs[k if k != 'weights' else 'weight'][mask]
                     stacked_data['src_uncertainty'][mask] = arrs['uncertainty'][mask]
@@ -1369,7 +1414,7 @@ class GdalRasterStacker:
                             (stacked_data['z'] / stacked_data['weights'] / stacked_data['count']))
                     stacked_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
 
-                # --- Write Block Back to Disk ---
+                ## --- Write Block Back to Disk ---
                 if self.want_mask:
                     m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                     m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
@@ -1380,22 +1425,22 @@ class GdalRasterStacker:
                     stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
                     stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
 
-        # =====================================================================
-        # FINALIZE
-        # =====================================================================
+        ## =====================================================================
+        ## FINALIZE
+        ## =====================================================================
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
 
-        # Write Mask to Disk
+        ## Write Mask to Disk
         if self.want_mask:
             msk_opts = ['COMPRESS=LZW']
             if fmt == 'GTiff': msk_opts.append('BIGTIFF=YES')
             
-            # Using CreateCopy to write the MEM dataset to disk
+            ## Using CreateCopy to write the MEM dataset to disk
             gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts)
             m_ds = None 
 
-        # Finalize Weighted Sums (Scanline Processing)
+        ## Finalize Weighted Sums (Scanline Processing)
         srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             for key in stack_keys:
@@ -1405,11 +1450,11 @@ class GdalRasterStacker:
             stacked_data['weights'][stacked_data['weights'] == 0] = 1
             stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
 
-            # Finalize averages
+            ## Finalize averages
             for k in ['x', 'y', 'z']:
                 stacked_data[k] = (stacked_data[k] / stacked_data['weights']) / stacked_data['count']
 
-            # Finalize uncertainty (Standard Error)
+            ## Finalize uncertainty (Standard Error)
             term = (stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count']
             stacked_data['uncertainty'] = np.sqrt(
                 np.power(stacked_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
@@ -1419,20 +1464,19 @@ class GdalRasterStacker:
                 stacked_data[key][np.isnan(stacked_data[key])] = ndv
                 stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
 
-        # Set NoData
+        ## Set NoData
         for key in stack_keys:
             stacked_bands[key].SetNoDataValue(ndv)
 
-        # Cleanup
+        ## Cleanup
         dst_ds = None
         
-        # Spatial Metadata (Footprints)
+        ## Spatial Metadata (Footprints)
         if self.want_mask and self.want_sm:
-            # Assuming polygonize_mask_multibands exists in your scope/imports
             pass 
             
         if self.want_mask:
-            # Re-apply removed data based on NDV in final stack to clean the mask
+            ## Re-apply removed data based on NDV in final stack to clean the mask
             out_ds = gdal.Open(out_file)
             out_arr_band = out_ds.GetRasterBand(1)
             msk_ds = gdal.Open(mask_fn, 1)

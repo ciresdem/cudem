@@ -118,8 +118,7 @@ _geoids = {
 }
 
 def get_vdatum_by_name(datum_name):
-    """Return the vertical datum EPSG based on the vertical datum name.
-    """
+    """Return the vertical datum EPSG based on the vertical datum name."""
     
     if datum_name is None:
         return None
@@ -134,7 +133,7 @@ def get_vdatum_by_name(datum_name):
     else:
         return int(datum_name)
 
-    # Check HTDP
+    ## Check HTDP
     if datum_int not in _htdp_reference_frames:
         for t in _htdp_reference_frames:
             if datum_name.lower() in _htdp_reference_frames[t]['name'].lower():
@@ -142,7 +141,7 @@ def get_vdatum_by_name(datum_name):
     else:
         return int(datum_name)
 
-    # Check CDN
+    ## Check CDN
     if datum_int not in _cdn_reference_frames:
         for t in _cdn_reference_frames:
             if datum_name.lower() in _cdn_reference_frames[t]['name'].lower():
@@ -156,8 +155,7 @@ def get_vdatum_by_name(datum_name):
 ## Vertical Transformation Grid Class
 ## ==============================================
 class VerticalTransform:
-    """Generate a vertical transformation grid based on input/output vertical EPSG.
-    """
+    """Generate a vertical transformation grid based on input/output vertical EPSG."""
     
     def __init__(self, mode, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
                  geoid_in=None, geoid_out='g2018', node='pixel', verbose=True,
@@ -178,10 +176,10 @@ class VerticalTransform:
         self.node = node
         self.mode = mode
         self.wm = wm
+
         
     def _frames(self, epsg_in, epsg_out):
-        """Determine the input/output vertical datum frame.
-        """
+        """Determine the input/output vertical datum frame."""
         
         ref_in = None
         ref_out = None
@@ -202,19 +200,19 @@ class VerticalTransform:
 
         return ref_in, ref_out
 
+    
     def _tidal_transform(self, vdatum_tidal_in, vdatum_tidal_out):
-        """Generate tidal transformation grid using NOAA VDatum.
-        """
+        """Generate tidal transformation grid using NOAA VDatum."""
 
         from cudem.waffles.waffles import WaffleFactory
         
-        # Fetch the input tidal datum from VDatum
+        ## Fetch the input tidal datum from VDatum
         v_in = fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
         v_in._outdir = self.cache_dir
         v_in.run()
 
         if vdatum_tidal_out is not None:
-            # Fetch the output tidal datum from VDatum if necessary
+            ## Fetch the output tidal datum from VDatum if necessary
             v_out = fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
             v_out._outdir = self.cache_dir
             v_out.run()
@@ -280,14 +278,14 @@ class VerticalTransform:
             else:
                 return _trans_in_array - _trans_out_array, get_vdatum_by_name(vdatum_tidal_out)
 
+            
     def _cdn_transform(self, epsg=None, name=None, geoid='g2018', invert=False):
-        """Create a CDN transformation grid (Proj).
-        """
+        """Create a CDN transformation grid (Proj)."""
         
         epsg = 5703 if (epsg == 6360 or epsg == 8228) else epsg
         geoid = 'g2018' if geoid is None else geoid
         
-        # Fetch the CDN transformation grids
+        ## Fetch the CDN transformation grids
         if epsg is not None:
             cdn_results = fetches.vdatum.search_proj_cdn(
                 self.src_region, epsg=epsg, cache_dir=self.cache_dir, verbose=self.verbose
@@ -297,7 +295,7 @@ class VerticalTransform:
                 self.src_region, cache_dir=self.cache_dir, verbose=self.verbose
             )
 
-        # Filter by geoid name
+        ## Filter by geoid name
         if len(cdn_results) > 0:
             for _result in cdn_results:
                 if geoid in _result['name']:
@@ -343,9 +341,9 @@ class VerticalTransform:
         utils.echo_error_msg(f'failed to locate transformation for {epsg}')
         return np.zeros((self.ycount, self.xcount)), epsg
 
+    
     def _htdp_transform(self, epsg_in, epsg_out):
-        """Create an HTDP transformation grid.
-        """
+        """Create an HTDP transformation grid."""
         
         if utils.config_check()['HTDP'] is None:
             utils.echo_error_msg('you must have HTDP installed to perform HTDP vertical transformations')            
@@ -369,9 +367,9 @@ class VerticalTransform:
         utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
         return out_grid, epsg_out
 
+    
     def _vertical_transform(self, epsg_in, epsg_out):
-        """Perform the combined vertical transformation.
-        """
+        """Perform the combined vertical transformation."""
         
         trans_array = np.zeros((self.ycount, self.xcount))
         unc_array = np.zeros((self.ycount, self.xcount))
@@ -441,6 +439,7 @@ class VerticalTransform:
             trans_array = trans_array + tmp_trans + tmp_trans_geoid
             
         return trans_array, unc_array
+
     
     def run(self, outfile=None):
         if outfile is None:
@@ -476,6 +475,7 @@ class VerticalTransform:
         else:
             return trans_array, unc_array, trans_infos
 
+        
 ## ==============================================
 ## NOAA's VDATUM Wrapper
 ## ==============================================
@@ -499,14 +499,15 @@ class Vdatum:
         self.epoch = None
         self.vdatum_set_horz()
 
+        
     def vdatum_set_horz(self):
         if 'ITRF' in self.overt:
             self.ohorz = self.overt
             self.epoch = '1997.0:1997.0'
-        
+
+            
     def vdatum_locate_jar(self):
-        """Find the VDatum executable on the local system.
-        """
+        """Find the VDatum executable on the local system."""
         
         results = []
         for root, dirs, files in os.walk('/'):
@@ -519,9 +520,9 @@ class Vdatum:
             self.jar = results[0]
             return results
 
+        
     def vdatum_get_version(self):
-        """Run vdatum and attempt to get its version.
-        """
+        """Run vdatum and attempt to get its version."""
         
         if self.jar is None:
             self.vdatum_locate_jar()
@@ -532,9 +533,9 @@ class Vdatum:
                     return i.strip().split('v')[-1]
         return None
 
+    
     def vdatum_xyz(self, xyz):
-        """Run vdatum on an xyz list [x, y, z].
-        """
+        """Run vdatum on an xyz list [x, y, z]."""
         
         if self.jar is None:
             self.vdatum_locate_jar()
@@ -559,19 +560,19 @@ class Vdatum:
         else: 
             return xyz
 
+        
     def vdatum_clean_result(self):
-        """Clean the vdatum 'result' folder.
-        """
+        """Clean the vdatum 'result' folder."""
         
         utils.remove_glob(f'{self.result_dir}/*')
         try:
             os.removedirs(self.result_dir)
         except OSError: 
             pass
-    
+
+        
     def run_vdatum(self, src_fn):
-        """Run vdatum on src_fn which is an XYZ file.
-        """
+        """Run vdatum on src_fn which is an XYZ file."""
         
         if self.jar is None:
             self.vdatum_locate_jar()
@@ -584,6 +585,7 @@ class Vdatum:
         else: 
             return [], -1
 
+        
 ## ==============================================
 ## Command-line Interface (CLI)
 ## ==============================================
@@ -616,7 +618,7 @@ def vdatums_cli():
         _print_epsg('Tidal EPSG', _tidal_frames)
         sys.exit(0)
 
-    # Set up cache directory
+    ## Set up cache directory
     cache_dir = args.cache_dir
     if not cache_dir:
         cache_dir = os.path.join(os.path.expanduser('~'), '.cudem_cache')
@@ -626,7 +628,7 @@ def vdatums_cli():
         utils.echo_error_msg(f'Error: {src_grid} is not a valid file')
         sys.exit(1)
 
-    # Set default output grid name if not provided
+    ## Set default output grid name if not provided
     if not args.output_grid:
         base, ext = os.path.splitext(src_grid)
         v_out_str = str(args.vdatum_out).replace('(', '_').replace(')', '_')
@@ -634,7 +636,7 @@ def vdatums_cli():
     else:
         dst_grid = args.output_grid
 
-    # Process grid
+    ## Process grid
     src_infos = gdalfun.gdal_infos(src_grid)
     src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
     src_horz, _ = gdalfun.split_srs(gdalfun.gdal_get_srs(src_grid))
@@ -683,10 +685,9 @@ def vdatums_cli():
             f'--co TILED=YES --co PREDICTOR=3 --overwrite'
         )
         
-        # Use utils.run_cmd if possible, else os.system for gdal_calc scripts
-        os.system(gdc_cmd)
+        utils.run_cmd(gdc_cmd, verbose=not args.quiet)
 
-        # Set Metadata
+        ## Set Metadata
         out_horz_srs = osr.SpatialReference()
         out_horz_srs.SetFromUserInput(src_horz)
         out_vert_srs = osr.SpatialReference()
@@ -703,7 +704,6 @@ def vdatums_cli():
         )
 
     if not args.keep_cache:
-        # Assuming utils has a clean up mechanism or manual removal if strictly required
         pass
 
 if __name__ == '__main__':
