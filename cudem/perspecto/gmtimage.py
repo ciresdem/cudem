@@ -19,31 +19,51 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Base class for PyGMT-based image generation.
 ##
 ### Code:
 
-from cudem.perspecto import perspecto
 from cudem import utils
-import pygmt
+from cudem.perspecto import perspecto
+
+try:
+    import pygmt
+    HAS_PYGMT = True
+except ImportError:
+    HAS_PYGMT = False
+
 
 class GMTImage(perspecto.Perspecto):
-    """Use GMTImage with pygmt"""
+    """
+    Base class for generating images using PyGMT.
+    Ensures input is in NetCDF format and loads the grid.
+    """
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(want_gdal_cpt=False, **kwargs)
 
+        if not HAS_PYGMT:
+            utils.echo_error_msg("PyGMT is not installed.")
+            return
+
+        self.src_dem_netcdf = None
+        # Ensure input is NetCDF for GMT
         if self.dem_infos['fmt'] != 'NetCDF':
-            utils.run_cmd(
-                'gmt grdconvert {} {}.nc'.format(
-                    self.src_dem, utils.fn_basename2(self.src_dem)
-                )
-            )
-            self.src_dem = '{}.nc'.format(utils.fn_basename2(self.src_dem))
+            basename = utils.fn_basename2(self.src_dem)
+            nc_filename = f"{basename}.nc"
+            
+            utils.run_cmd(f'gmt grdconvert {self.src_dem} {nc_filename}')
+            self.src_dem_netcdf = nc_filename
         
-        self.grid = pygmt.load_dataarray(self.src_dem)
-        self.makecpt(self.cpt, output=None)
+        # Load the grid data
+        if self.src_dem_netcdf is not None:
+            self.grid = pygmt.load_dataarray(self.src_dem_netcdf)
+        
+            # Initialize CPT
+            self.makecpt(cmap=self.cpt, output=None)
+        else:
+            return
 
 ### End

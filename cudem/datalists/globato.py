@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ## Both GlobatoStacker and GdalRasterStacker are designed to solve the same geospatial problem: "Waffle Stacking."
@@ -44,13 +43,7 @@
 ##        Data is stratified by Weight Thresholds. High-quality data (High Weight) completely overwrites
 ##        Low-quality data. Data within the same quality tier is averaged together.
 ##
-### Examples:
-##
-### TODO:
-## add temporal
-##
 ### Code:
-###############################################################################
 
 import os, sys
 import h5py as h5

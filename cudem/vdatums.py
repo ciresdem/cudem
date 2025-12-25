@@ -19,8 +19,6 @@
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
-### Commentary:
-##
 ### Code:
 
 import os
@@ -40,9 +38,9 @@ from cudem import __version__ as __cudem__version__
 _vdatums_cache = utils.cudem_cache()
 __version__ = '0.2.5'
 
-## ==============================================
+###############################################################################
 ## Vertical Datum References
-## ==============================================
+###############################################################################
 _tidal_frames = {
     1089: {'name': 'mllw', 'description': 'Mean Lower Low Water', 'uncertainty': 0, 'epsg': 5866},
     5866: {'name': 'mllw', 'description': 'Mean Lower Low Water', 'uncertainty': 0, 'epsg': 5866},
@@ -152,9 +150,9 @@ def get_vdatum_by_name(datum_name):
 
     return None
 
-## ==============================================
+###############################################################################
 ## Vertical Transformation Grid Class
-## ==============================================
+###############################################################################
 class VerticalTransform:
     """Generate a vertical transformation grid based on input/output vertical EPSG."""
     
@@ -477,9 +475,9 @@ class VerticalTransform:
             return trans_array, unc_array, trans_infos
 
         
-## ==============================================
+###############################################################################
 ## NOAA's VDATUM Wrapper
-## ==============================================
+###############################################################################
 class Vdatum:
     def __init__(self, jar=None, ivert='navd88:m:height', overt='mhw:m:height',
                  ihorz='NAD83_2011', ohorz='NAD83_2011', region='4', fmt='txt',
@@ -587,9 +585,9 @@ class Vdatum:
             return [], -1
 
         
-## ==============================================
+###############################################################################
 ## Command-line Interface (CLI)
-## ==============================================
+###############################################################################
 def vdatums_cli():
     parser = argparse.ArgumentParser(
         description=f'CUDEM ({__cudem__version__}) vdatums ({__version__}): transform a grid between vertical datums',

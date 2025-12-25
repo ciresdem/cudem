@@ -21,8 +21,8 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
+##
 ## General utility functions and classes used in other modules...
 ## includes, generic gdal functions, fetching classes, progress indicators,
 ## system command interfaces, etc...
@@ -53,14 +53,11 @@ from typing import List, Dict, Optional, Tuple, Any, Union, Generator
 
 import numpy as np
 
-
-USE_TQDM = False
-if USE_TQDM:
-    try:
-        from tqdm import tqdm
-        USE_TQDM = True
-    except ImportError:
-        USE_TQDM = False
+try:
+    from tqdm import tqdm
+    USE_TQDM = True
+except ImportError:
+    USE_TQDM = False
 
 ###############################################################################
 ## General Utility Functions
@@ -347,6 +344,8 @@ def dict_path2abspath(d=None, except_keys=None):
 
 
 def int_or(val, or_val=None):
+    """Return val if val is an integer, else return or_val"""
+    
     try:
         return int(float_or(val))
     except:
@@ -354,6 +353,8 @@ def int_or(val, or_val=None):
 
     
 def float_or(val, or_val=None):
+    """Return val if val is a float, else return or_val"""
+    
     try:
         return float(val)
     except:
@@ -361,6 +362,8 @@ def float_or(val, or_val=None):
 
     
 def str_or(instr, or_val=None, replace_quote=True):
+    """Return val if val is a string, else return or_val"""
+    
     if instr is None:
         return or_val
     try:
@@ -402,7 +405,10 @@ def convert_size(size_bytes):
 
 
 def euc_dst(pnt0, pnt1):
-    """Euclidean distance in meters (approx)."""
+    """Euclidean distance in meters (approx).
+
+    Points are geographic and result is in meters.
+    """
     
     rad_m = 637100
     distance = math.sqrt(sum([(a - b) ** 2 for a, b in zip(pnt0, pnt1)]))
@@ -410,7 +416,10 @@ def euc_dst(pnt0, pnt1):
 
 
 def hav_dst(pnt0, pnt1):
-    """Haversine distance in meters."""
+    """Haversine distance in meters.
+
+    Points are geographic and result is in meters.
+    """
     
     x0, y0 = float(pnt0[0]), float(pnt0[1])
     x1, y1 = float(pnt1[0]), float(pnt1[1])
@@ -423,12 +432,16 @@ def hav_dst(pnt0, pnt1):
 
 
 def wgs_inc2meter(src_inc):
+    """Return a wgs increment as meters"""
+    
     gds_equator = 111321.543
     degree_to_radian = lambda d: math.pi * (d / 180)
     return math.cos(degree_to_radian(src_inc)) * (gds_equator * src_inc)
 
 
 def lll(src_lat):
+    """Return the lon/lat length in meters"""
+    
     gds_equator = 111321.543
     gds_pi = 3.14159265358979323846
     degree_to_radian = lambda d: gds_pi * (d / 180)
@@ -438,6 +451,8 @@ def lll(src_lat):
 
 
 def touch(fname, times=None):
+    """touch a file to make sure it exists"""
+    
     with open(fname, 'a'):
         os.utime(fname, times)
     return fname
@@ -530,6 +545,20 @@ def _geo2pixel(geo_x, geo_y, geo_transform, node='grid'):
     return int(pixel_x), int(pixel_y)
 
 
+def __geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
+    """Convert a geographic x,y value to a pixel location of geoTransform
+
+    Note: use _geo2pixel instead
+    """
+    
+    import affine
+    forward_transform = affine.Affine.from_gdal(*geo_transform)
+    reverse_transform = ~forward_transform
+    pixel_x, pixel_y = reverse_transform * (geo_x, geo_y)
+    pixel_x, pixel_y = int(pixel_x+0.5), int(pixel_y+0.5)    
+    return pixel_x, pixel_y
+
+
 def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel',
                x_precision=None, y_precision=None):
     """Convert a pixel location to geographic coordinates."""
@@ -539,8 +568,7 @@ def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel',
     y_precision = int_or(y_precision)
     
     gx = round(geo_x, x_precision) if x_precision is not None else geo_x
-    gy = round(geo_y, y_precision) if y_precision is not None else geo_y
-    
+    gy = round(geo_y, y_precision) if y_precision is not None else geo_y    
     return gx, gy
 
 
@@ -551,7 +579,6 @@ def _apply_gt(in_x, in_y, geo_transform, node='pixel'):
     
     out_x = geo_transform[0] + (in_x + offset) * geo_transform[1] + (in_y + offset) * geo_transform[2]
     out_y = geo_transform[3] + (in_x + offset) * geo_transform[4] + (in_y + offset) * geo_transform[5]
-
     return out_x, out_y
 
 
@@ -602,6 +629,8 @@ def zip_list(zip_file):
 
     
 def unzip(zip_file, outdir='./', overwrite=False, verbose=True):
+    """Unzip (extract) `zip_file`"""
+    
     try:
         with zipfile.ZipFile(zip_file) as zip_ref:
             zip_files = zip_ref.namelist()
@@ -624,6 +653,8 @@ def unzip(zip_file, outdir='./', overwrite=False, verbose=True):
 
     
 def gunzip(gz_file, outdir='./'):
+    """Gunzip (extract) `gz_file`"""
+    
     if os.path.exists(gz_file):
         guz_file = os.path.join(outdir, os.path.basename(fn_basename2(gz_file)))
         with gzip.open(gz_file, 'rb') as in_gz, open(guz_file, 'wb') as f:
@@ -674,6 +705,8 @@ def gdb_unzip(src_zip, outdir='./', verbose=True):
 
 
 def p_unzip(src_file, exts=None, outdir='./', verbose=True):
+    """Unzip/gunzip src_file based on `exts`"""
+    
     if exts is None: exts = []
     src_procs = []
     
@@ -721,6 +754,8 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
 
 
 def p_f_unzip(src_file, fns=None, outdir='./', tmp_fn=False, verbose=True):
+    """Unzip/gunzip src_file based on `fn`"""
+    
     if fns is None: fns = []
     src_procs = []
     ext_lower = src_file.split('.')[-1].lower()
@@ -763,6 +798,8 @@ def p_f_unzip(src_file, fns=None, outdir='./', tmp_fn=False, verbose=True):
 ## srcwin functions
 ###############################################################################
 def fix_srcwin(srcwin, xcount, ycount):
+    """geo_transform is considered in grid-node to properly capture the region"""
+    
     out_srcwin = list(srcwin)
     if srcwin[0] + srcwin[2] > xcount:
         out_srcwin[2] = xcount - srcwin[0]
@@ -776,7 +813,9 @@ def chunk_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
 
 
 def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin',
-                 start_at_edge=True, verbose=True):
+                 end_msg='chunked srcwin', start_at_edge=True, verbose=True):
+    """yield source windows in n_chunks at step"""
+    
     if step is None:
         step = n_chunk
 
@@ -817,6 +856,8 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin',
 
             
 def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
+    """Buffer the srcwin by `buff_size`"""
+    
     if n_size is None:
         n_size = srcwin
 
@@ -959,6 +1000,8 @@ def yield_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
 
         
 def cmd_check(cmd_str, cmd_vers_str):
+    """check system for availability of 'cmd_str'"""
+    
     if cmd_exists(cmd_str): 
         cmd_vers, status = run_cmd(f'{cmd_vers_str}')
         return cmd_vers.rstrip()
@@ -1047,8 +1090,7 @@ def _terminal_width():
 
 
 def get_terminal_size_stderr(fallback=(80, 24)):
-    """Unlike shutil.get_terminal_size, which looks at stdout, this looks at stderr.
-    """
+    """Unlike shutil.get_terminal_size, which looks at stdout, this looks at stderr."""
         
     try:
         size = os.get_terminal_size(sys.__stderr__.fileno())
@@ -1084,6 +1126,12 @@ def _init_msg(msg, prefix_len, buff_len=6):
 
 
 def echo_msg2(msg, prefix='cudem', level='info', nl='\n', bold=False, use_tqdm=False, dst_port=sys.stderr):
+    """echo `msg` to stderr using `prefix`
+    
+    >> echo_msg2('message', 'test')
+    test: message
+    """
+        
     if level.lower() in MSG_LEVELS and MSG_LEVELS[level.lower()] >= MSG_LEVEL:
         lvl_color = {
             'warning': '\033[33m\033[1mWARNING\033[m',
@@ -1151,7 +1199,7 @@ def echo_modules(module_dict, key):
 ###############################################################################
 ## Progress indicator...
 ###############################################################################
-class CudemCommonProgress():
+class CudemCommonProgress:
     """Cudem Common Progress
 
     Minimal progress indication to use with CLI.
@@ -1416,7 +1464,7 @@ if USE_TQDM:
             kwargs['file'] = DST_PORT
             super().__init__(**kwargs)
 else:
-    class ccp(SimpleProgress):
+    class ccp(CudemCommonProgress):
         pass
 
     

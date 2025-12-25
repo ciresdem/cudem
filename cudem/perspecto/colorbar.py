@@ -2,6 +2,8 @@
 ##
 ## Copyright (c) 2023 - 2025 Regents of the University of Colorado
 ##
+## colorbar.py is part of CUDEM
+##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
 ## in the Software without restriction, including without limitation the rights 
@@ -19,42 +21,59 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Generate a standalone colorbar image using PyGMT.
 ##
 ### Code:
 
-from cudem.perspecto import gmtimage
 from cudem import utils
-import pygmt
+from cudem.perspecto import perspecto
 
-class colorbar(gmtimage.GMTImage):
-    """Generate a colorbar
+try:
+    import pygmt
+    HAS_PYGMT = True
+except ImportError:
+    HAS_PYGMT = False
 
-    uses pyGMT
 
-< colorbar:colorbar_text='Elevation':widt=10:height=2 >
+class Colorbar(perspecto.Perspecto):
+    """
+    Generate a standalone colorbar image using PyGMT.
+    
+    Configuration Example:
+    < colorbar:colorbar_text='Elevation':width=10:height=2 >
     """
     
-    def __init__(self, colorbar_text='Elevation', width=10,
-                 height=2, **kwargs):
-        super().__init__(**kwargs)
-        self.colorbar_text=colorbar_text
+    def __init__(self, colorbar_text='Elevation', width=10, height=2, **kwargs):
+        # Initialize parent with 'colorbar' module name
+        super().__init__(mod='colorbar', want_gdal_cpt=False, **kwargs)
+        self.colorbar_text = colorbar_text
         self.width = utils.int_or(width)
         self.height = utils.int_or(height)
 
         
     def run(self):
-        fig = pygmt.Figure()
-        fig.colorbar(
-            region=[0,10,0,3],
-            projection="X10c/3c",
-            position='jTC+w{}c/{}c+h'.format(self.width, self.height),
-            frame=['x+l{}'.format(self.colorbar_text), 'y+1m']
-        )
-        fig.savefig('{}_cbar.png'.format(utils.fn_basename2(self.src_dem)))
-        return('{}_cbar.png'.format(utils.fn_basename2(self.src_dem)))
+        if not HAS_PYGMT:
+            utils.echo_error_msg("PyGMT is not installed, cannot generate colorbar.")
+            return None
 
+        basename = utils.fn_basename2(self.src_dem)
+        outfile = f'{basename}_cbar.png'
+
+        fig = pygmt.Figure()
+        
+        # Draw the colorbar
+        # Position: Top Center (jTC), width/height specified in cm (+w), horizontal (+h)
+        fig.colorbar(
+            cmap=self.cpt,  # Ensure CPT is passed from parent/init
+            region=[0, 10, 0, 3],
+            projection="X10c/3c",
+            position=f'jTC+w{self.width}c/{self.height}c+h',
+            frame=[f'x+l{self.colorbar_text}', 'y+1m']
+        )
+        
+        fig.savefig(outfile)
+        return outfile
 
 ### END

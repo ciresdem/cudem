@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary
 ##
 ## wrapper and functions for using the htdp program
@@ -61,7 +60,7 @@
 ## 16...ITRF93                      23...ITRF2014 or IGS14/IGb14
 ## 17...ITRF94 (=ITRF96=ITRF97)
 ##
-###############################################################################
+### Code:
 
 import os
 import sys

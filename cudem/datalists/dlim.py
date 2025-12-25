@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ## A datalist is similar to an MBSystem datalist; it is a space-delineated file
@@ -84,11 +83,6 @@
 ## my_processed_datalist.archive_xyz() # archive the data to the region/increments
 ## my_mask = my_processed_datalist._mask() # mask the data to the region/increments
 ##
-### TODO:
-## mask to stacks for supercede
-## fetch results class
-## temp files
-##
 ### Code:
 
 import os
@@ -98,7 +92,6 @@ import copy
 import json
 import glob
 import math
-#from tqdm import tqdm
 import traceback
 import warnings
 
@@ -116,7 +109,6 @@ import numpy as np
 import pyproj
 from osgeo import gdal
 from osgeo import ogr
-#from osgeo import osr
 import h5py as h5
 import netCDF4 as nc
 
@@ -3884,5 +3876,5 @@ See `datalists_usage` for full cli options.
                     except Exception as e:
                       utils.echo_error_msg(e)
                       print(traceback.format_exc())
-                
-### End
+
+### End                      

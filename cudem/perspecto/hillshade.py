@@ -1,6 +1,8 @@
-### hillshade.py 
+### hillshade.py
 ##
 ## Copyright (c) 2023 - 2025 Regents of the University of Colorado
+##
+## hillshade.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -19,48 +21,50 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Generate Hillshades from a DEM using GDAL and Numpy blending.
 ##
 ### Code:
 
 import os
-
+import numpy as np
 from osgeo import gdal
 from osgeo_utils import gdal_calc
 
-from cudem.perspecto import perspecto
 from cudem import utils
 from cudem import gdalfun
-import numpy as np
+from cudem.perspecto import perspecto
 
 try:
     import pygmt
-    has_pygmt = True
-except ImportError as e:
-    has_pygmt = False
-    
+    HAS_PYGMT = True
+except ImportError:
+    HAS_PYGMT = False
+
 
 class Hillshade(perspecto.Perspecto):
-    """Generate a Hillshade Image
-
-    https://en.wikipedia.org/wiki/Blend_modes#Overlay
-
-< hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
     """
+    Generate a Hillshade Image using GDAL and Numpy blending.
     
+    Supports various blending modes:
+    https://en.wikipedia.org/wiki/Blend_modes#Overlay
+    
+    Configuration Example:
+    < hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
+    """
+
     def __init__(
-            self,
-            vertical_exaggeration=1,
-            projection=4326,
-            azimuth=315,
-            altitude=45,
-            modulate=125,
-            alpha=False,
-            mode='multiply',
-            gamma=.5,
-            **kwargs,
+        self,
+        vertical_exaggeration=1,
+        projection=4326,
+        azimuth=315,
+        altitude=45,
+        modulate=125,
+        alpha=False,
+        mode='multiply',
+        gamma=0.5,
+        **kwargs,
     ):
         super().__init__(mod='hillshade', **kwargs)
         self.vertical_exaggeration = vertical_exaggeration
@@ -75,125 +79,148 @@ class Hillshade(perspecto.Perspecto):
 
         
     def _modulate(self, gdal_fn):
+        """Adjusts brightness/saturation using ImageMagick (External utility)."""
+        
         utils.run_cmd(
-            'mogrify -modulate {} -depth 8 {}'.format(
-                self.modulate, gdal_fn
-            ),
+            f'mogrify -modulate {self.modulate} -depth 8 {gdal_fn}',
             verbose=False
         )
 
         
-    def gamma_correction_calc(self, hs_fn=None, gamma=.5,
-                              outfile='gdaldem_gamma.tif'):
+    def gamma_correction_calc(self, hs_fn=None, outfile='gdaldem_gamma.tif'):
+        """Apply gamma correction using gdal_calc (External utility)."""
+        
         gdal_calc.Calc(
             "uint8(((A / 255.)**(1/0.5)) * 255)",
             A=hs_fn,
             outfile=outfile,
             quiet=True
         )
-        return(outfile)
+        return outfile
 
     
     def gamma_correction(self, arr):
-        if self.gamma is not None:
-            gc_arr = (((arr/255.)**(1/self.gamma)) * 255.).astype(np.uint8)
-            return(gc_arr)
-        else:
-            return(arr)
-
+        """Apply gamma correction to a numpy array."""
         
-    def blend(self, hs_file, rgb_file, mode='multiply', gamma=None,
-              outfile='gdaldem_multiply.tif'):
-        modes = ['multiply', 'screen', 'overlay', 'hard_light', 'soft_light']
-        if mode not in modes:
+        if self.gamma is not None:
+            return (((arr / 255.)**(1 / self.gamma)) * 255.).astype(np.uint8)
+        return arr
+
+    
+    def blend(self, hs_file, rgb_file, mode='multiply', gamma=None, outfile='gdaldem_multiply.tif'):
+        """Blend a Hillshade (hs_file) and Color Relief (rgb_file) using the specified mode."""
+        
+        valid_modes = ['multiply', 'screen', 'overlay', 'hard_light', 'soft_light']
+        if mode not in valid_modes:
             mode = 'multiply'
-            
+
         with gdalfun.gdal_datasource(rgb_file, update=True) as rgb_ds:
             with gdalfun.gdal_datasource(hs_file) as cr_ds:
                 ds_config = gdalfun.gdal_infos(cr_ds)
-                n_chunk = int(ds_config['nx'] * .1)
+                n_chunk = int(ds_config['nx'] * 0.1)
+                
+                # Iterate over the image in chunks to manage memory
                 for srcwin in utils.yield_srcwin(
-                        (ds_config['ny'], ds_config['nx']), n_chunk=n_chunk,
-                        msg='Blending rgb and hillshade using {}'.format(mode),
-                        end_msg='Generated color hillshade',
-                        verbose=self.verbose
+                    (ds_config['ny'], ds_config['nx']), 
+                    n_chunk=n_chunk,
+                    msg=f'Blending rgb and hillshade using {mode}',
+                    end_msg='Generated color hillshade',
+                    verbose=self.verbose
                 ):
                     cr_band = cr_ds.GetRasterBand(1)
                     cr_arr = cr_band.ReadAsArray(*srcwin)
                     cr_arr = self.gamma_correction(cr_arr)
-                    for band_no in [1,2,3]:
+                    
+                    # Normalize hillshade for calculations
+                    cr_norm = cr_arr / 255.0
+
+                    for band_no in [1, 2, 3]:
                         band = rgb_ds.GetRasterBand(band_no)
                         band_arr = band.ReadAsArray(*srcwin)
-                        if mode == 'multiply':
-                            band_arr = (((cr_arr/255.) * (band_arr/255.)) * 255.).astype(np.uint8)
-                        elif mode == 'screen':
-                            band_arr = ((1 - ((1 - cr_arr/255.) * (1 - (band_arr/255.)))) * 255.).astype(np.uint8)
-                        elif mode == 'overlay':
-                            out_arr = np.copy(band_arr)
-                            out_arr[cr_arr<128] = (2 * (cr_arr[cr_arr<128]/255.) * (band_arr[cr_arr<128]/255.) *
-                                                   255.).astype(np.uint8)
-                            out_arr[cr_arr>=128] = ((1 - (2 * (1 - (cr_arr[cr_arr>=128]/255.)) *
-                                                          (1 - (band_arr[cr_arr>=128]/255.))))
-                                                    * 255.).astype(np.uint8)
-                            band_arr[:] = out_arr
-                        elif mode == 'hard_light':
-                            out_arr = np.copy(band_arr)
-                            out_arr[band_arr<128] = (2 * (cr_arr[band_arr<128]/255.) * (band_arr[band_arr<128]/255.)
-                                                     * 255.).astype(np.uint8)
-                            out_arr[band_arr>=128] = ((1 - (2 * (1 - (cr_arr[band_arr>=128]/255.)) *
-                                                            (1 - (band_arr[band_arr>=128]/255.))))
-                                                      * 255.).astype(np.uint8)
-                            band_arr[:] = out_arr
-                        elif mode == 'soft_light':
-                            out_arr = np.copy(band_arr)
-                            out_arr[band_arr<128] = (((2 * (cr_arr[band_arr<128]/255.) * (band_arr[band_arr<128]/255.)) +
-                                                      (((cr_arr[band_arr<128]/255.)**2) *
-                                                       (1 - (2 * band_arr[band_arr<128]/255.))))
-                                                     * 255.).astype(np.uint8)
-                            out_arr[band_arr>=128] = (((2 * (cr_arr[band_arr>=128]/255.) * (1 - band_arr[band_arr>=128]/255.)) +
-                                                       (np.sqrt(cr_arr[band_arr>=128]/255.) *
-                                                        ((2 * (band_arr[band_arr>=128]/255.)) - 1)))
-                                                      * 255.).astype(np.uint8)
-                            band_arr[:] = out_arr
-                            
-                        band.WriteArray(band_arr, srcwin[0], srcwin[1])
+                        band_norm = band_arr / 255.0
                         
+                        out_arr = np.copy(band_arr)
+
+                        if mode == 'multiply':
+                            out_arr = (cr_norm * band_norm * 255.).astype(np.uint8)
+
+                        elif mode == 'screen':
+                            out_arr = ((1 - ((1 - cr_norm) * (1 - band_norm))) * 255.).astype(np.uint8)
+
+                        elif mode == 'overlay':
+                            # Contrast mode: Multiplies or Screens based on bottom layer
+                            mask_low = cr_arr < 128
+                            mask_high = cr_arr >= 128
+                            
+                            out_arr[mask_low] = (2 * cr_norm[mask_low] * band_norm[mask_low] * 255.).astype(np.uint8)
+                            out_arr[mask_high] = ((1 - (2 * (1 - cr_norm[mask_high]) * (1 - band_norm[mask_high]))) * 255.).astype(np.uint8)
+
+                        elif mode == 'hard_light':
+                            # Like Overlay, but based on top layer
+                            mask_low = band_arr < 128
+                            mask_high = band_arr >= 128
+                            
+                            out_arr[mask_low] = (2 * cr_norm[mask_low] * band_norm[mask_low] * 255.).astype(np.uint8)
+                            out_arr[mask_high] = ((1 - (2 * (1 - cr_norm[mask_high]) * (1 - band_norm[mask_high]))) * 255.).astype(np.uint8)
+
+                        elif mode == 'soft_light':
+                            mask_low = band_arr < 128
+                            mask_high = band_arr >= 128
+                            
+                            # Soft light formula for darker pixels
+                            term1_low = 2 * cr_norm[mask_low] * band_norm[mask_low]
+                            term2_low = (cr_norm[mask_low]**2) * (1 - 2 * band_norm[mask_low])
+                            out_arr[mask_low] = ((term1_low + term2_low) * 255.).astype(np.uint8)
+                            
+                            # Soft light formula for lighter pixels
+                            term1_high = 2 * cr_norm[mask_high] * (1 - band_norm[mask_high])
+                            term2_high = np.sqrt(cr_norm[mask_high]) * (2 * band_norm[mask_high] - 1)
+                            out_arr[mask_high] = ((term1_high + term2_high) * 255.).astype(np.uint8)
+
+                        band.WriteArray(out_arr, srcwin[0], srcwin[1])
+
         os.rename(rgb_file, outfile)
-        return(outfile)
+        return outfile
 
     
     def gmt_figure(self, colorbar_text='Elevation'):
-        fig = pygmt.Figure()
-        # fig.basemap(
-        #     region=self.dem_region.format('str'),
-        #     frame=[f'a', '+t{self.outfile}'],
-        # )
+        """Generate a figure using PyGMT (if available)."""
         
+        if not HAS_PYGMT:
+            utils.echo_msg("PyGMT is not installed.")
+            return
+
+        fig = pygmt.Figure()
         fig.grdimage(
-            frame=[f'af', '+t{self.outfile}'],
+            frame=[f'af', f'+t{self.outfile}'],
             grid=self.outfile,
             cmap=False,
         )
+        fig.colorbar(frame=[f'x+l{colorbar_text}', 'y+1m'])
+        fig.savefig(f'{utils.fn_basename2(self.src_dem)}_gmt.png')
 
-        #if self.want_colorbar:
-        #fig.colorbar(frame=['a{}'.format(self.interval), 'x+lElevation', 'y+1m'])
-        fig.colorbar(frame=['x+l{}'.format(colorbar_text), 'y+1m'])
-
-        fig.savefig('{}_gmt.png'.format(utils.fn_basename2(self.src_dem)))
-            
         
     def run(self):
-        #self.init_cpt(want_gdal=True)
         hs_fn = utils.make_temp_fn('gdaldem_hs.tif', self.outdir)
         gdal.DEMProcessing(
-            hs_fn, self.src_dem, 'hillshade', computeEdges=True, scale=111120,
-            azimuth=self.azimuth, altitude=self.altitude, zFactor=self.vertical_exaggeration
+            hs_fn, 
+            self.src_dem, 
+            'hillshade', 
+            computeEdges=True, 
+            scale=111120,
+            azimuth=self.azimuth, 
+            altitude=self.altitude, 
+            zFactor=self.vertical_exaggeration
         )
 
         cr_fn = utils.make_temp_fn('gdaldem_cr.tif', self.outdir)
         gdal.DEMProcessing(
-            cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt,
-            computeEdges=True, addAlpha=self.alpha
+            cr_fn, 
+            self.src_dem, 
+            'color-relief', 
+            colorFilename=self.cpt,
+            computeEdges=True, 
+            addAlpha=self.alpha
         )
 
         cr_hs_fn = utils.make_temp_fn('gdaldem_cr_hs.tif', self.outdir)
@@ -201,27 +228,26 @@ class Hillshade(perspecto.Perspecto):
 
         utils.remove_glob(hs_fn, cr_fn)
         os.rename(cr_hs_fn, self.outfile)
-        #self._modulate(self.outfile)
+        
+        # self._modulate(self.outfile) # Optional ImageMagick post-processing
+        # self.gmt_figure()            # Optional GMT figure generation
+        
+        return self.outfile
 
-        #self.gmt_figure()
-        return(self.outfile)
 
-    
 class Hillshade_cmd(perspecto.Perspecto):
-    """Generate a Hillshade Image
-
-    uses gdal/ImageMagick
-
-< hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
     """
-    
+    Generate a Hillshade Image using command-line tools.
+    Requires GDAL and ImageMagick installed in the system path.
+    """
+
     def __init__(
-            self,
-            vertical_exaggeration=1,
-            projection=None,
-            azimuth=315,
-            altitude=45,
-            **kwargs,
+        self,
+        vertical_exaggeration=1,
+        projection=None,
+        azimuth=315,
+        altitude=45,
+        **kwargs,
     ):
         super().__init__(**kwargs)
         self.vertical_exaggeration = vertical_exaggeration
@@ -229,19 +255,26 @@ class Hillshade_cmd(perspecto.Perspecto):
         self.azimuth = azimuth
         self.altitude = altitude
         self.cpt_no_slash()
+
         
     def run(self):
+        basename = utils.fn_basename2(self.src_dem)
+        
+        # 1. Generate Hillshade
         utils.run_cmd(
-            'gdaldem hillshade -compute_edges -s 111120 -z {} -az {} -alt {} {} hillshade.tif'.format(
-                self.vertical_exaggeration, self.azimuth, self.altitude, self.src_dem
-            ), verbose=self.verbose
-        )
-        # Generate the color-releif
-        utils.run_cmd(
-            'gdaldem color-relief {} {} colors.tif'.format(self.src_dem, self.cpt),
+            f'gdaldem hillshade -compute_edges -s 111120 '
+            f'-z {self.vertical_exaggeration} -az {self.azimuth} -alt {self.altitude} '
+            f'{self.src_dem} hillshade.tif',
             verbose=self.verbose
         )
-        # Composite the hillshade and the color-releif
+
+        # 2. Generate Color Relief
+        utils.run_cmd(
+            f'gdaldem color-relief {self.src_dem} {self.cpt} colors.tif',
+            verbose=self.verbose
+        )
+
+        # 3. Composite (ImageMagick)
         utils.run_cmd(
             'composite -compose multiply -depth 8 colors.tif hillshade.tif output.tif',
             verbose=self.verbose
@@ -250,47 +283,31 @@ class Hillshade_cmd(perspecto.Perspecto):
             'mogrify -modulate 115 -depth 8 output.tif',
             verbose=self.verbose
         )
-        # Generate the combined georeferenced tif
+
+        # 4. Restore Georeferencing
+        # Create a TFW file from source
         utils.run_cmd(
-            'gdal_translate -co "TFW=YES" {} temp.tif'.format(self.src_dem),
+            f'gdal_translate -co "TFW=YES" {self.src_dem} temp.tif',
             verbose=self.verbose
         )
         utils.run_cmd('mv temp.tfw output.tfw')
+        
+        # Translate back to GeoTiff
+        srs_cmd = f'-a_srs epsg:{self.projection}' if self.projection else ''
         utils.run_cmd(
-            'gdal_translate {} output.tif temp2.tif'.format(
-                '-a_srs epsg:{}'.format(self.projection) if self.projection is not None else ''
-            )
+            f'gdal_translate {srs_cmd} output.tif temp2.tif'
         )
-        # Cleanup
+
+        # 5. Cleanup
         utils.remove_glob(
             'output.tif*', 'temp.tif*', 'hillshade.tif*', 'colors.tif*', 'output.tfw*'
         )
-        #subtract 2 cells from rows and columns 
-        #gdal_translate -srcwin 1 1 $(gdal_rowcol.py $ingrd t) temp2.tif $outgrd
-        utils.run_cmd(
-            'gdal_translate temp2.tif {}_hs.tif'.format(utils.fn_basename2(self.src_dem))
-        )
+        
+        # Final move
+        final_output = f'{basename}_hs.tif'
+        utils.run_cmd(f'gdal_translate temp2.tif {final_output}')
         utils.remove_glob('temp2.tif')
 
-        return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
-
-    
-class HillShade_test(perspecto.Perspecto):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        
-    def hillshade(self, array, azimuth, angle_altitude):
-        azimuth = 360.0 - azimuth 
-    
-        x, y = np.gradient(array)
-        slope = np.pi/2. - np.arctan(np.sqrt(x*x + y*y))
-        aspect = np.arctan2(-x, y)
-        azm_rad = azimuth*np.pi/180. #azimuth in radians
-        alt_rad = angle_altitude*np.pi/180. #altitude in radians        
-        shaded = np.sin(alt_rad) * np.sin(slope) + np.cos(alt_rad)*np.cos(slope)*np.cos((azm_rad - np.pi/2.) - aspect)
-        
-        return(255*(shaded + 1)/2)
-
+        return final_output
 
 ### End

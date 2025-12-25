@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## cptcity.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ##
@@ -52,7 +51,6 @@ class CPTCity(fetches.FetchModule):
         """Run the cpt-city fetches module"""
         
         cpt_xml = fetches.iso_xml(self.cpt_pkg_url + "package.xml")
-        print(cpt_xml)
         cpt_url_bn = cpt_xml.xml_doc.find('cpt').text
         cpt_zip = requests.get(self.cpt_pkg_url + cpt_url_bn)
         zip_ref = zipfile.ZipFile(BytesIO(cpt_zip.content))

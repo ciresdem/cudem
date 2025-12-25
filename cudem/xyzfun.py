@@ -21,7 +21,7 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
+### Code:
 
 import sys
 import json
@@ -496,7 +496,7 @@ def xyz2wkt(xyz: List[float]) -> str:
     return f'POINT ({xyz[0]} {xyz[1]})'
 
 
-def xyz_in_region_p(xyz: List[float], region: Union[List[float], str]) -> bool:
+def xyz_is_in_region(xyz: List[float], region: Union[List[float], str]) -> bool:
     """Check if XYZ point is inside the given region."""
     
     if isinstance(region, list) and len(region) == 4:
@@ -517,6 +517,7 @@ def xyz_in_region_p(xyz: List[float], region: Union[List[float], str]) -> bool:
             
     return False
 
+xyz_in_region_p = xyz_is_in_region
 
 def xyz_inf(src_xyz):
     """Generate metadata/info for an XYZ source.

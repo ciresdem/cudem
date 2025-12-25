@@ -21,11 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
-### Commentary:
-##
-## Functions, etc. for common pyproj/osr usage.
-##
 ### Code:
 
 import os
@@ -43,11 +38,9 @@ gc = utils.config_check()
 ogr.DontUseExceptions()
 osr.DontUseExceptions()
 
-
 ###############################################################################
 ## OSR/WKT/proj
 ###############################################################################
-
 def split_srs(srs: str, as_epsg: bool = False) -> Tuple[Optional[Union[str, int]], Optional[Union[str, int]]]:
     """Split an SRS into horizontal and vertical elements.
 

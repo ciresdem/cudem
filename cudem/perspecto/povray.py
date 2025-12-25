@@ -2,6 +2,8 @@
 ##
 ## Copyright (c) 2023 - 2025 Regents of the University of Colorado
 ##
+## povray.py is part of CUDEM
+## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
 ## in the Software without restriction, including without limitation the rights 
@@ -19,32 +21,42 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Helper class for POV-Ray rendering.
 ##
 ### Code:
 
-from cudem.perspecto import perspecto
+import os
 from cudem import utils
+from . import perspecto
 
-class POVRay(perspecto.Perspecto):
+class PovRay(perspecto.Perspecto):
+    """Helper class for generating POV-Ray scenes from DEMs."""
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.cpt_no_slash()
         
-        self.rgb_image = '{}_rgb.png'.format(utils.fn_basename2(self.src_dem))
-        self.dem_image = '{}_16bit.png'.format(utils.fn_basename2(self.src_dem))
+        basename = utils.fn_basename2(self.src_dem)
+        self.rgb_image = f'{basename}_rgb.png'
+        self.dem_image = f'{basename}_16bit.png'
+        self.output_pov = f'{basename}.pov'
 
-        #if not os.path.exists(self.rgb_image) or not os.path.exists(self.dem_image):
+        # Generate intermediate PNGs if they don't exist
+        # (Uncomment the check if you want to skip regeneration)
+        # if not os.path.exists(self.rgb_image) or not os.path.exists(self.dem_image):
         self.export_as_png()            
-        self.output_pov = '{}.pov'.format(utils.fn_basename2(self.src_dem))
 
         
     def run_povray(self, src_pov_template, pov_width=800, pov_height=800):
-        utils.run_cmd(
-            'povray {} +W{} +H{} -D'.format(src_pov_template, pov_width, pov_height),
-            verbose=True
-        )
+        """Executes POV-Ray to render the scene."""
+        
+        if not os.path.exists(src_pov_template):
+            utils.echo_error_msg(f"POV-Ray template not found: {src_pov_template}")
+            return
+
+        cmd = f'povray {src_pov_template} +W{pov_width} +H{pov_height} -D'
+        utils.run_cmd(cmd, verbose=True)
 
 ### End

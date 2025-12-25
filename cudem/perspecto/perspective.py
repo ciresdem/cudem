@@ -2,6 +2,8 @@
 ##
 ## Copyright (c) 2023 - 2025 Regents of the University of Colorado
 ##
+## perspective.py is part of CUDEM
+##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
 ## in the Software without restriction, including without limitation the rights 
@@ -19,32 +21,33 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Generate a 3D perspective scene using POV-Ray.
 ##
 ### Code:
 
-from cudem.perspecto import perspecto
-from cudem.perspecto import povray
 from cudem import utils
+from cudem.perspecto import povray
 
-class perspective(povray.POVRay):
-    """Generate a perspective image
 
-< perspective:cam_azimuth=-130:cam_elevation=30:cam_distance=265:cam_view_angle=40:light_elevation=20:light_distance=10000:vertical_exaggeration=2 >
+class Perspective(povray.PovRay):
+    """Generate a perspective image using POV-Ray.
+
+    Configuration Example:
+    < perspective:cam_azimuth=-130:cam_elevation=30:cam_distance=265:cam_view_angle=40:light_elevation=20:light_distance=10000:vertical_exaggeration=2 >
     """
     
     def __init__(
-            self,
-            cam_azimuth=-130,
-            cam_elevation=30,
-            cam_distance=265,
-            cam_view_angle=40,
-            light_elevation=20,
-            light_distance=10000,
-            vertical_exaggeration=2,
-            **kwargs
+        self,
+        cam_azimuth=-130,
+        cam_elevation=30,
+        cam_distance=265,
+        cam_view_angle=40,
+        light_elevation=20,
+        light_distance=10000,
+        vertical_exaggeration=2,
+        **kwargs
     ):
         super().__init__(**kwargs)
         self.cam_azimuth = cam_azimuth
@@ -54,25 +57,41 @@ class perspective(povray.POVRay):
         self.light_elevation = light_elevation
         self.light_distance = light_distance
         self.vertical_exaggeration = vertical_exaggeration
-        self.dem_lll = perspecto.lll(self.dem_region.ymin)
-        self.output_pov = '{}_perspective.pov'.format(
-            utils.fn_basename2(self.src_dem)
-        )
         
-        self.template = """
+        ## Calculate degrees length at the minimum latitude
+        self.dem_lll = utils.lll(self.dem_region.ymin)
+        
+        basename = utils.fn_basename2(self.src_dem)
+        self.output_pov = f'{basename}_perspective.pov'
+        self.output_png = f'{basename}_perspective.png'
+        
+        ## Extract variables for cleaner f-string usage
+        nx = self.dem_infos['nx']
+        ny = self.dem_infos['ny']
+        ymax = self.dem_region.ymax
+        ymin = self.dem_region.ymin
+        zmax = self.dem_infos['zr'][1]
+        zmin = self.dem_infos['zr'][0]
+        deg_lat_len = self.dem_lll[0]
+        deg_lon_len = self.dem_lll[1]
+
+        ## POV-Ray Template
+        ## Note: Double braces {{ }} are used for POV-Ray syntax. 
+        ## Single braces { } are used for Python f-string variables.
+        self.template = f"""
 // DEM
 
 global_settings {{ assumed_gamma 1 }}
-#include \"colors.inc\" 
+#include "colors.inc" 
 
 //
 // Custom parameters start here
 //
-#declare rgb_image = \"rgb.png\"
-#declare dem_image = \"dem_16bit.png\"
+#declare rgb_image = "{self.rgb_image}"
+#declare dem_image = "{self.dem_image}"
 
-#declare xdim = {xdim};  //number of pixels in X-direction
-#declare ydim = {ydim};  //number of pixels in y-direction
+#declare xdim = {nx};  //number of pixels in X-direction
+#declare ydim = {ny};  //number of pixels in y-direction
 #declare max_y = {ymax}; //maximum latitude extent
 #declare min_y = {ymin}; //minimum latitude extent
 #declare min_z = {zmin}; //minimum elevation
@@ -83,17 +102,17 @@ global_settings {{ assumed_gamma 1 }}
 #declare deg_lon_len = {deg_lon_len}; //length of a degree of longitude in meters
 
 // Position of camera             
-#declare cam_azimuth = {cam_azimuth};
-#declare cam_elevation = {cam_elevation};
-#declare cam_distance = {cam_distance}; 
-#declare cam_view_angle = {cam_view_angle};
+#declare cam_azimuth = {self.cam_azimuth};
+#declare cam_elevation = {self.cam_elevation};
+#declare cam_distance = {self.cam_distance}; 
+#declare cam_view_angle = {self.cam_view_angle};
                      
-// Position of the \"sun\"  
+// Position of the "sun"  
 #declare light_azimuth = cam_azimuth+90;
-#declare light_elevation = {light_elevation};
-#declare light_distance = {light_distance};             
+#declare light_elevation = {self.light_elevation};
+#declare light_distance = {self.light_distance};             
 
-#declare vertical_exaggeration = {vertical_exaggeration};
+#declare vertical_exaggeration = {self.vertical_exaggeration};
 //
 // Custom parameters end here
 //
@@ -112,7 +131,7 @@ global_settings {{ assumed_gamma 1 }}
 texture {{
   pigment{{
     image_map {{ 
-      png "{rgb_image}" map_type 0 once interpolate 2
+      png "{self.rgb_image}" map_type 0 once interpolate 2
     }} 
   }} 
   finish {{ ambient 0.4 diffuse 0.8 }}
@@ -120,12 +139,12 @@ texture {{
 }}
                   
 height_field {{ // Unsigned 16-bit PNG DEM
-   png "{dem_image}"
+   png "{self.dem_image}"
    smooth
    clipped_by {{box {{ <0, 0, 0>, <0.999, 1, 0.999> }} }}
    texture {{ Texture0 }}
    translate <-0.5, 0, -0.5>
-   scale <100*lon_scale*{xdim}/{ydim},
+   scale <100*lon_scale*{nx}/{ny},
           vertical_exaggeration*z_scale,  //Vertical exaggeration
           100>
 }} 
@@ -138,32 +157,23 @@ camera {{
                                     
 light_source {{ <light_x, light_y, light_z> color White shadowless parallel }}
         
-background {{ White }}""".format(
-    rgb_image=self.rgb_image,
-    dem_image=self.dem_image,
-    xdim=self.dem_infos['nx'],
-    ydim=self.dem_infos['ny'],
-    ymax = self.dem_region.ymax,
-    ymin = self.dem_region.ymin,
-    zmax = self.dem_infos['zr'][1],
-    zmin = self.dem_infos['zr'][0],
-    deg_lat_len = self.dem_lll[0],
-    deg_lon_len = self.dem_lll[1],
-    cam_azimuth = self.cam_azimuth,
-    cam_elevation = self.cam_elevation,
-    cam_distance = self.cam_distance,
-    cam_view_angle = self.cam_view_angle,
-    light_elevation = self.light_elevation,
-    light_distance = self.light_distance,
-    vertical_exaggeration = self.vertical_exaggeration,
-)
+background {{ White }}"""
 
     def run(self):
-        with open(self.output_pov, 'w') as pov_temp:
-            pov_temp.write(self.template)
+        """Write the POV file and execute POV-Ray."""
         
-        self.run_povray(
-            self.output_pov, self.dem_infos['nx'], self.dem_infos['ny']
-        )
+        try:
+            with open(self.output_pov, 'w') as pov_temp:
+                pov_temp.write(self.template)
+            
+            self.run_povray(
+                self.output_pov, 
+                pov_width=self.dem_infos['nx'], 
+                pov_height=self.dem_infos['ny']
+            )
+        except OSError as e:
+            utils.echo_error_msg(f"Failed to run POV-Ray: {e}")
+
+        return self.output_png
 
 ### End

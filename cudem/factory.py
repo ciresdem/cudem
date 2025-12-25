@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ## Module factory...
@@ -284,7 +283,14 @@ def _factory_module_check(mf: Any, mc: Any) -> Optional[str]:
 
 
 ###############################################################################
-# Module Description Helpers
+##
+## Module Description Helpers
+##
+## modules are a dictionary with the module name
+## as the key and at least a 'class' key which
+## points to the class/function to call for the module
+## uses <class>.__doc__ as description
+##
 ###############################################################################
 def get_module_short_desc(m: Dict) -> str:
     return ', '.join([f'{key}' for key in m])
@@ -365,7 +371,7 @@ def echo_modules(module_dict: Dict, key: Any, md: bool = False) -> None:
             )
 
     sys.stderr.flush()
-
+    return 0
 
 class CUDEMModule:
     """CUDEM factory module.
@@ -614,6 +620,3 @@ class CUDEMFactory:
 
 if __name__ == '__main__':
     f = CUDEMFactory()
-
-
-### End

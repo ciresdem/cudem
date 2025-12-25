@@ -21,7 +21,7 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
+### Code:
 
 import os
 import sys
@@ -2189,6 +2189,5 @@ def sample_warp(
     else:
         dst_ds = None
         return dst_dem, 0
-
 
 ### End

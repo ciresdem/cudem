@@ -21,12 +21,7 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
-### Commentary:
-##
-## Regions are bounding boxes made up of corner coordinates
-##
-### Code:
+###  Code:
 
 import os
 import sys
@@ -925,9 +920,9 @@ def quarter_tile_from_coordinates(x=None, y=None):
     return None
 
 
-## ==============================================
+###############################################################################
 ## Command-line Interface (CLI)
-## ==============================================
+###############################################################################
 def regions_cli():
     """Run regions from command-line using argparse."""
     
@@ -1057,6 +1052,3 @@ def regions_cli():
 
 if __name__ == '__main__':
     regions_cli()
-
-    
-### End

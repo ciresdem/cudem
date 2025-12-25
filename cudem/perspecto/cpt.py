@@ -1,6 +1,8 @@
-### cpt.py 
+### cpt.py
 ##
 ## Copyright (c) 2023 - 2025 Regents of the University of Colorado
+##
+## cpt.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -19,69 +21,101 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
-## Generate iMAGEs from a DEm
-##
-## uses:
-##   povray
-##   gdal
-##   ImageMagick
-##   GMT
+## CPT (Color Palette Table) generation and processing tools.
 ##
 ### Code:
 
-from cudem import utils
-from cudem import fetches
+import os
+import colorsys
 import numpy as np
-import pygmt
+from osgeo import gdal
 
-## CPT          
-def scale_el__(value, gmin, gmax, tr):
+try:
+    import pygmt
+except ImportError:
+    pygmt = None
+
+from cudem import utils
+from cudem.fetches import fetches
+
+## CPT Colors dictionary
+CPT_COLORS = {
+    'black': [0, 0, 0],
+    'white': [255, 255, 255],
+}
+
+
+def scale_el_simple(value, gmin, gmax, tr):
+    """Simple scaling of elevation based on predefined ranges."""
+    
     if value > 0 and gmax > 0:
-        return((gmax * tr) / 8000)
+        return (gmax * tr) / 8000
     elif value < 0 and gmin < 0:
-        return((gmin * tr) / -11000)
+        return (gmin * tr) / -11000
     elif value == 0:
-        return(0)
+        return 0
     else:
         print(value)
-        return(None)
+        return None
 
     
-def scale_el_(value, gmin, gmax, tr, trs):
+def scale_el_relative(value, gmin, gmax, tr, trs):
+    """Linearly scales 'tr' from the range [min(trs), max(trs)] to [gmin, gmax].
+    Lowest input -> gmin
+    Highest input -> gmax
+    """
+    
+    input_min = min(trs)
+    input_max = max(trs)
+    
+    input_range = input_max - input_min
+    output_range = gmax - gmin
+    
+    # Avoid division by zero if the input array has no variation
+    if input_range == 0:
+        return gmin
+
+    # Calculate the position of 'tr' in the input range (0.0 to 1.0)
+    percentage = (tr - input_min) / input_range
+    
+    # Map that percentage to the output range
+    return gmin + (percentage * output_range)
+
+    
+def scale_el_relative2(value, gmin, gmax, tr, trs):
+    """Scaling relative to the max/min of the input ranges (trs)."""
+
+    utils.echo_msg(value)
+    utils.echo_msg(gmin)
+    utils.echo_msg(gmax)
+    utils.echo_msg(tr)
+    utils.echo_msg(trs)
     if value > 0 and gmax > 0:
-        return((gmax * tr) / max(trs))
+        return (gmax * tr) / max(trs)
     elif value < 0 and gmin < 0:
         if min(trs) == 0:
-            return(gmin * tr)
+            return gmin * tr
         else:
-            return((gmin * tr) / min(trs))
+            return (gmin * tr) / min(trs)
     elif value == 0:
-        return(0)
+        return gmin
     else:
-        return(None)
+        return None
 
+
+def scale_el_linear(value, gmin, gmax, tr, trs):
+    """Linear scaling calculation."""
     
-def scale_el(value, gmin, gmax, tr, trs):
     p = (tr - min(trs)) / (max(trs) - min(trs))
-    v = (1-p) * (gmin - gmax) + gmax
-    #v = p * (gmax - gmin) + gmin
+    v = (1 - p) * (gmin - gmax) + gmax
+    return v
+
+
+def generate_etopo_cpt(gmin, gmax, output_file='tmp.cpt'):
+    """Generates a CPT based on ETOPO1 color steps scaled to gmin/gmax."""
     
-    # if value < 0:
-    #     p = (tr - min(trs)) / (max(trs) - min(trs))
-    #     v = (1-p) * (gmin - 0) + 0
-    # elif value > 0:
-    #     p = (tr - min(trs)) / (max(trs) - min(trs))
-    #     v = (1-p) * (0 - gmax) + gmax
-    # elif value == 0:
-    #     v = 0
-
-    return(v)
-
-
-def generate_etopo_cpt(gmin, gmax):
     trs = [
         -11000, -10500, -10000, -9500, -9000, -8500,
         -8000, -7500, -7000, -6500, -6000, -5500,
@@ -101,7 +135,7 @@ def generate_etopo_cpt(gmin, gmax):
         96.13731797, 240.3432949, 480.6865898, 721.0298848, 961.3731797,
         1201.716475, 1442.05977, 1682.403064, 1922.746359, 2163.089654,
         2403.432949, 2643.776244, 2884.119539, 3124.462834, 3364.806129,
-        3605.149424,  3845.492719
+        3605.149424, 3845.492719
     ]
 
     colors = (
@@ -116,158 +150,194 @@ def generate_etopo_cpt(gmin, gmax):
         [204,204,204], [229,229,229], [138,227,255], [51,102,0]
     )
 
-    with open('tmp.cpt', 'w') as cpt:
-        for i,j in enumerate(elevs):
-            if j != None and i + 1 != len(elevs):
-                elev = scale_el_(j, gmin, gmax, trs[i], trs)
-                elev1 = scale_el_(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
-                if elev is not None and elev1 is not None:
+    with open(output_file, 'w') as cpt:
+        for i, j in enumerate(elevs):
+            if j is not None and i + 1 < len(elevs):
+                elev_curr = scale_el_relative(j, gmin, gmax, trs[i], trs)
+                elev_next = scale_el_relative(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                
+                if elev_curr is not None and elev_next is not None:
+                    c1 = colors[i]
                     cpt.write(
-                        '{} {} {} {} {} {} {} {}\n'.format(
-                            elev, colors[i][0], colors[i][1], colors[i][2],
-                            elev1, colors[i][0], colors[i][1], colors[i][2]
-                        )
+                        f'{elev_curr} {c1[0]} {c1[1]} {c1[2]} '
+                        f'{elev_next} {c1[0]} {c1[1]} {c1[2]}\n'
                     )
-    return('tmp.cpt')
+    return output_file
 
 
-cpt_colors = {
-    'black': [0, 0, 0],
-    'white': [255, 255, 255],
-}
+def make_cpt(cmap='etopo1', color_model='r', min_z=None, max_z=None, output=None):
+    """Wrapper around pygmt.makecpt."""
+    
+    if pygmt is None:
+        utils.echo_error_msg("PyGMT is not installed.")
+        return None
 
-
-def makecpt(cmap='etopo1', color_model='r', min_z = None, max_z = None, output=None):
     pygmt.makecpt(
         cmap=cmap,
         color_model=color_model,
         output=output,
         series=[min_z, max_z, 50],
         no_bg=True,
-        #continuous=True,
-        #truncate=[min_z, max_z],
     )
-    
-    return(output)
+    return output
 
-def process_cpt(cpt, gmin, gmax, gdal=False, split_cpt=None):
+
+def process_cpt(cpt_file, gmin, gmax, gdal=False, split_cpt=None):
+    """Parses an existing CPT and rescales it to gmin/gmax."""
+    
     trs = []
     colors = []
-    with open(cpt, 'r') as cpt:
-        for l in cpt:
-            ll = l.split()
-            if len(ll) == 0:
+
+    with open(cpt_file, 'r') as f:
+        for line in f:
+            parts = line.split()
+            if not parts:
                 continue
             
-            if utils.float_or(ll[0]) is not None:
-                trs.append(float(ll[0]))
+            # Check if first part is a number (elevation)
+            if utils.float_or(parts[0]) is not None:
+                trs.append(float(parts[0]))
 
-                if utils.int_or(ll[1]) is not None:
-                    colors.append(
-                        [int(float(ll[1])),
-                         int(float(ll[2])),
-                         int(float(ll[3]))]
-                    )
-                elif ll[1] in cpt_colors.keys():
-                    colors.append(cpt_colors[ll[1]])
-                elif len(ll[1].split('/')) > 1:
-                    colors.append(
-                        [int(float(x)) for x in ll[1].split('/')]
-                    )
+                # Parse color
+                if utils.int_or(parts[1]) is not None:
+                    # R G B format
+                    colors.append([
+                        int(float(parts[1])),
+                        int(float(parts[2])),
+                        int(float(parts[3]))
+                    ])
+                elif parts[1] in CPT_COLORS:
+                    # Named color
+                    colors.append(CPT_COLORS[parts[1]])
+                elif '/' in parts[1]:
+                    # Slash delimited
+                    colors.append([int(float(x)) for x in parts[1].split('/')])
 
+    # Determine elevation steps
     if split_cpt is not None:
         _trs = np.array(trs)
-        len_b = len(_trs[_trs<split_cpt])
-        len_t = len(_trs[_trs>split_cpt])
+        len_b = len(_trs[_trs < split_cpt])
+        len_t = len(_trs[_trs > split_cpt])
         
         elevs_b = np.linspace(gmin, split_cpt, len_b)
+        # Skip first element of top to avoid duplicate/overlap if necessary
         elevs_t = np.linspace(split_cpt, gmax, len_t)[1:]
-        elevs = np.concatenate((elevs_b,elevs_t))
+        elevs = np.concatenate((elevs_b, elevs_t))
     else:
         elevs = np.linspace(gmin, gmax, len(trs))
 
-    with open('tmp.cpt', 'w') as cpt:
+    output_fn = 'tmp.cpt'
+    with open(output_fn, 'w') as f_out:
         for i, j in enumerate(elevs):
-            if j != None and i + 1 != len(elevs):
+            if j is not None and i + 1 < len(elevs):
+                # Choose scaling method based on range crossing zero
                 if gmin < 0 and gmax > 0:
-                    elev = scale_el_(j, gmin, gmax, trs[i], trs)
-                    elev1 = scale_el_(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                    #utils.echo_msg(f'elevs: {j} -> {elevs[i + 1]}')
+                    elev_curr = scale_el_relative(j, gmin, gmax, trs[i], trs)
+                    elev_next = scale_el_relative(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                    #utils.echo_msg(f'mapped: {elev_curr} -> {elev_next}')
                 else:
-                    elev = scale_el(j, gmin, gmax, trs[i], trs)
-                    elev1 = scale_el(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                    elev_curr = scale_el_linear(j, gmin, gmax, trs[i], trs)
+                    elev_next = scale_el_linear(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
                     
-                if elev is not None and elev1 is not None:
+                if elev_curr is not None and elev_next is not None:
+                    c = colors[i]
                     if not gdal:
-                        cpt.write(
-                            '{} {} {} {} {} {} {} {}\n'.format(
-                                elev, colors[i][0], colors[i][1], colors[i][2],
-                                elev1, colors[i][0], colors[i][1], colors[i][2]
-                            )
+                        f_out.write(
+                            f'{elev_curr} {c[0]} {c[1]} {c[2]} '
+                            f'{elev_next} {c[0]} {c[1]} {c[2]}\n'
                         )
                     else:
-                        cpt.write(
-                            '{} {} {} {} 255\n'.format(
-                                elev, colors[i][0], colors[i][1], colors[i][2]
-                            )
-                        )
+                        # GDAL format typically requires index or specific structuring
+                        f_out.write(f'{elev_curr} {c[0]} {c[1]} {c[2]} 255\n')
+        
         if gdal:
-            cpt.write('nv 0 0 0 0\n')
-    return('tmp.cpt')
+            f_out.write('nv 0 0 0 0\n')
+
+    return output_fn
 
 
 def fetch_cpt_city(q='grass/haxby', cache_dir='./'):
+    """Fetches a CPT file from the cpt-city archive."""
+    
     utils.echo_msg(f'checking for `{q}` at cpt-city')
-    this_fetches = fetches.fetches_factory.FetchesFactory(
+    
+    this_fetches = fetches.FetchesFactory(
         mod='cpt_city', verbose=True, outdir=cache_dir, q=q
     )._acquire_module()
-    this_fetches.run()
-    utils.echo_msg(
-        'found {} results for `{}` at cpt-city, using first entry `{}`'.format(
-            len(this_fetches.results), q, this_fetches.results[0]['url']
-        )
-    )
-    fetches.fetches.Fetch(
-        this_fetches.results[0]['url']
-    ).fetch_file(
-        this_fetches.results[0]['dst_fn']
-    )
     
-    return(this_fetches.results[0]['dst_fn'])
+    this_fetches.run()
+    
+    if not this_fetches.results:
+        utils.echo_error_msg(f"No results found for {q}")
+        return None
 
-def get_correctMap(path, luminosity, contrast):
-        ds = gdal.Open(image_path)
-        #To normalize
-        band1 = ds.GetRasterBand(1)
-        #Get the max value
-        maxValue = int(2**16 -1)
-        if band1.DataType == gdal.GDT_UInt16:
-            maxValue = int(2**16 -1)
-        elif band1.DataType == gdal.GDT_Byte:
-            maxValue = int(2**8 -1)
-        else:
-            LOGGER.info(
-                (f'band type {band1.DataType} not handled: '
-                'use default size of value (16 bits)')
-            )
+    result = this_fetches.results[0]
+    utils.echo_msg(
+        f"found {len(this_fetches.results)} results for `{q}` at cpt-city, "
+        f"using first entry `{result['url']}`"
+    )
 
-        band1 = ds.ReadAsArray(0,0,ds.RasterXSize,ds.RasterYSize)[0]
-        band2 = ds.ReadAsArray(0,0,ds.RasterXSize,ds.RasterYSize)[1]
-        band3 = ds.ReadAsArray(0,0,ds.RasterXSize,ds.RasterYSize)[2] 
+    result['dst_fn'] = os.path.join(this_fetches._outdir, result['dst_fn'])
+    fetches.Fetch(result['url']).fetch_file(result['dst_fn'])
+    
+    return result['dst_fn']
 
-        for x in range(0,ds.RasterXSize):
-                for y in range(0,ds.RasterXSize):
 
-                    r = float(band1[x,y]) / maxValue
-                    g = float(band2[x,y]) / maxValue
-                    b = float(band3[x,y]) / maxValue
+def get_correct_map(path, luminosity, contrast):
+    """Adjusts the luminosity and contrast of a GDAL raster.
 
-                    #Convert to HLS them apply luminosity and contrast
-                    (h,l,s) = colorsys.rgb_to_hls(r, g, b)
+    Note: This iterates pixel-by-pixel and is slow for large images.
+    """
+    
+    if not os.path.exists(path):
+        utils.echo_error_msg(f"File not found: {path}")
+        return
 
-                    l = min(max(0, l + (l - 0.5)*(luminosity - 0.5)) , 1)
-                    s = min(max(0, s + (s - 0.5)*(contrast - 0.5)) , 1)
+    ds = gdal.Open(path)
+    if ds is None:
+        utils.echo_error_msg(f"Could not open {path}")
+        return
 
-                    (r,g,b) = colorsys.hls_to_rgb(h, l, s)
+    band1_obj = ds.GetRasterBand(1)
+    
+    # Determine Max Value based on DataType
+    if band1_obj.DataType == gdal.GDT_UInt16:
+        max_value = int(2**16 - 1)
+    elif band1_obj.DataType == gdal.GDT_Byte:
+        max_value = int(2**8 - 1)
+    else:
+        utils.echo_msg(
+            f'band type {band1_obj.DataType} not handled: using default 16-bit'
+        )
+        max_value = int(2**16 - 1)
 
-                    
+    # Read bands (Assuming RGB)
+    # ReadAsArray returns [bands, y, x]
+    data_array = ds.ReadAsArray(0, 0, ds.RasterXSize, ds.RasterYSize)
+    if len(data_array) < 3:
+        utils.echo_error_msg("Image requires at least 3 bands (RGB).")
+        return
+
+    band1 = data_array[0]
+    band2 = data_array[1]
+    band3 = data_array[2]
+
+    # Process pixel by pixel (Slow)
+    # TODO: Vectorize this loop using numpy for performance
+    for x in range(ds.RasterXSize):
+        for y in range(ds.RasterYSize): # Should check if dims match array shape (usually y,x)
+
+            r = float(band1[y, x]) / max_value
+            g = float(band2[y, x]) / max_value
+            b = float(band3[y, x]) / max_value
+
+            # Convert to HLS then apply luminosity and contrast
+            h, l, s = colorsys.rgb_to_hls(r, g, b)
+
+            l = min(max(0, l + (l - 0.5) * (luminosity - 0.5)), 1)
+            s = min(max(0, s + (s - 0.5) * (contrast - 0.5)), 1)
+
+            r_out, g_out, b_out = colorsys.hls_to_rgb(h, l, s)
+            
 ### End

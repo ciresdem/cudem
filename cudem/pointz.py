@@ -21,17 +21,9 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
-### Commentary:
-##
-### Examples:
-##
-### TODO:
-##
 ### Code:
 
 import os
-#from tqdm import tqdm
 import numpy as np
 from osgeo import ogr
 from osgeo import gdal
@@ -41,12 +33,10 @@ from cudem import regions
 from cudem import fetches
 from cudem import factory
 
+__version__ = '0.0.2'
 
-###############################################################################
 ## PointZ filters
-##
 ## filter points and return the result
-###############################################################################
 class PointZ:
     """Point Data.
 
@@ -88,10 +78,9 @@ class PointZ:
             return(self.points)
 
         outliers = self.run()
-        # if self.verbose:
-        #     utils.echo_msg(f'filtered {len(outliers)} records')
-            
-        return(self.points)
+        if self.verbose:
+            utils.echo_msg(f'filtered {len(outliers)} records')            
+        return self.points
 
 
     def run(self):
@@ -99,21 +88,18 @@ class PointZ:
 
     
     def init_region(self, region):
-        """Initialize the data-region AOI
-        """
+        """Initialize the data-region AOI"""
         
         if region is None:
             region = regions.Region().from_list(
                 [np.min(self.points['x']), np.max(self.points['x']),
                  np.min(self.points['y']), np.max(self.points['y'])]
-            )
-            
-        return(region)
+            )            
+        return region
 
     
     def fetch_data(self, fetches_module, check_size=True):
-        """Fetch data from a fetches module for the data-region
-        """
+        """Fetch data from a fetches module for the data-region"""
         
         this_fetches = fetches.fetches.FetchesFactory(
             mod=fetches_module,
@@ -126,8 +112,7 @@ class PointZ:
         fr = fetches.fetches.fetch_results(this_fetches, check_size=check_size)
         fr.daemon = True
         fr.start()
-        fr.join()
-        
+        fr.join()        
         return(fr)
 
     
@@ -139,14 +124,12 @@ class PointZ:
         pa = PointPixels(x_size=x_size, y_size=y_size, ppm=True)
         point_arrays, _, _ = pa(points, mode='mean')
         point_pixels = point_arrays['z'][point_arrays['pixel_y'],
-                                         point_arrays['pixel_x']]
-        
-        return(point_pixels)
+                                         point_arrays['pixel_x']]        
+        return point_pixels
 
     
     def vectorize_points(self):
-        """Make a point vector OGR DataSet Object from points
-        """
+        """Make a point vector OGR DataSet Object from points"""
 
         dst_ogr = 'points_dataset'
         ogr_ds = gdal.GetDriverByName('Memory').Create(
@@ -160,18 +143,18 @@ class PointZ:
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
         with utils.ccp(
                 total=len(self.points),
-                desc='vectorizing points dataset', leave=False
+                desc='vectorizing points dataset',
+                leave=False
         ) as pbar:
             for index, this_row in enumerate(self.points):
-                pbar.update()
                 f.SetField(0, index)
                 g = ogr.CreateGeometryFromWkt(
                     f'POINT ({this_row["x"]} {this_row["y"]})'
                 )
                 f.SetGeometryDirectly(g)
                 layer.CreateFeature(f)
-            
-        return(ogr_ds)
+                pbar.update()            
+        return ogr_ds
 
 
     def mask_to_raster(self):
@@ -184,9 +167,8 @@ class PointZ:
             #invert=True,
             verbose=self.verbose,
             temp_dir=self.cache_dir
-        )
-        
-        return(data_mask)
+        )        
+        return data_mask
 
     
 ## check if regions overlap before vectorizing points
@@ -230,9 +212,9 @@ class PointZVectorMask(PointZ):
         outliers = smoothed_depth == 0
 
         if invert:
-            return(points[outliers], outliers)
+            return points[outliers], outliers
         else:
-            return(points[~outliers], outliers)
+            return points[~outliers], outliers
 
         
     def filter_mask(self, points, invert = False):
@@ -295,9 +277,9 @@ class PointZVectorMask(PointZ):
             )
             
         if invert:
-            return(points[outliers], outliers)
+            return points[outliers], outliers
         else:
-            return(points[~outliers], outliers)
+            return points[~outliers], outliers
 
         
     def run(self):
@@ -312,7 +294,7 @@ class PointZVectorMask(PointZ):
         #    )
 
         #return(self.points)
-        return(outliers)
+        return outliers
 
     
 class PointZOutlier(PointZ):
@@ -350,7 +332,7 @@ class PointZOutlier(PointZ):
         else:
             residuals = np.abs(points['z'] - point_pixels)
 
-        return(residuals)
+        return residuals
 
     
     def find_outliers(
@@ -367,7 +349,7 @@ class PointZOutlier(PointZ):
                 f'found {np.count_nonzero(outliers)} outliers @ {percentile}'
             )
         
-        return(outliers)
+        return outliers
 
     
     def filter_points(
@@ -383,11 +365,11 @@ class PointZOutlier(PointZ):
             )
 
             if invert:
-                return(points[outliers], outliers)
+                return points[outliers], outliers
             else:
-                return(points[~outliers], outliers)
+                return points[~outliers], outliers
         else:
-            return(points, None)
+            return points, None
         
         
     def run(self):
@@ -404,8 +386,8 @@ class PointZOutlier(PointZ):
             # if np.count_nonzero(outliers) == 0:
             #     break
             
-        #return(self.points)
-        return(outliers)
+        #return self.points
+        return outliers
 
     
 ## todo: remove the gmrt or other fetched rasters after processing...
@@ -440,13 +422,13 @@ class RQOutlierZ(PointZOutlier):
 
         
     def __str__(self):
-        return(f'< rq >: {self.raster}')
+        return f'< rq >: {self.raster}'
 
     
     def mask_gmrt(self, raster):
         #this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
         if os.path.exists(f'{raster}_swath.tif'):
-            return(f'{raster}_swath.tif')
+            return f'{raster}_swath.tif'
 
         this_fetch = fetches.fetches.FetchesFactory(
             mod='gmrt',
@@ -485,9 +467,9 @@ class RQOutlierZ(PointZOutlier):
                     verbose=True, cache_dir=this_fetch._outdir
                 )
 
-            return(f'{raster}_swath.tif')
+            return f'{raster}_swath.tif'
 
-        return(None)
+        return None
 
     
     def set_raster_fn(self, raster):
@@ -502,13 +484,12 @@ class RQOutlierZ(PointZOutlier):
                 os.makedirs(os.path.dirname(_raster))
             
             if os.path.exists(_raster) and os.path.isfile(_raster):
-                return([_raster])
+                return [_raster]
 
-        return(raster)                
+        return raster
 
         
     def init_raster(self, raster):
-
         if raster is not None and isinstance(raster, str):
             if os.path.exists(raster) and os.path.isfile(raster):
                 return([raster])
@@ -527,7 +508,7 @@ class RQOutlierZ(PointZOutlier):
                     return([_raster])
                 
             raster = []
-            # try gmrt all
+            ## Try gmrt all
             this_fetch = self.fetch_data(
                 'gmrt', self.region.copy().buffer(pct=1)
             )
@@ -535,7 +516,7 @@ class RQOutlierZ(PointZOutlier):
             raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) \
                            if x.split('.')[-1] == 'grd' else x for x in raster_])
             
-            # try etopo
+            ## Try etopo
             this_fetch = self.fetch_data(
                 'etopo:datatype=surface', self.region.copy().buffer(pct=1)
             )
@@ -543,7 +524,7 @@ class RQOutlierZ(PointZOutlier):
             # raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) \
             #                if x.split('.')[-1] == 'grd' else x for x in raster_])
 
-            # try gmrt swath
+            ## Try gmrt swath
             this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
             raster_ = [x[1] for x in this_fetch.results]
             raster_ = [gdalfun.gmt_grd2gdal(x, verbose=False) \
@@ -552,7 +533,7 @@ class RQOutlierZ(PointZOutlier):
             if gmrt_swath is not None:
                 raster.extend([gmrt_swath])
 
-            # try cudem 1/3
+            ## Try cudem 1/3
             this_fetch = self.fetch_data(
                 'CUDEM:datatype=13:keep_footprints=True', self.region.copy().buffer(pct=1)
             )
@@ -562,9 +543,8 @@ class RQOutlierZ(PointZOutlier):
             this_fetch = self.fetch_data(
                 'CUDEM:datatype=19:keep_footprints=True', self.region.copy().buffer(pct=1)
             )
-            raster.extend([x[1] for x in this_fetch.results])        
+            raster.extend([x[1] for x in this_fetch.results])
             
-            #utils.echo_msg_bold(raster)
             if (self.region is not None or self.xyinc is not None) and self.resample_raster:
                 # vrt_options = gdal.BuildVRTOptions(resampleAlg='cubic') # Example option
                 # vrt_ds = gdal.BuildVRT('tmp.vrt', raster, options=vrt_options)
@@ -611,15 +591,13 @@ class RQOutlierZ(PointZOutlier):
 
         else:
             utils.echo_warning_msg(f'could not parse rq raster {raster}')
-
-        #utils.echo_msg_bold(raster)
-        return(raster)
+        return raster
 
 
     ## todo: allow for multiple rasters
     def point_residuals(self, points, percentage=True, res=50):
         if len(self.raster) == 0:
-            return(None)
+            return None
 
         #smoothed_depth = []
         #utils.echo_msg(self.raster)
@@ -634,7 +612,7 @@ class RQOutlierZ(PointZOutlier):
             x = None
             
         if len(smoothed_depth) == 0:
-            return(None)
+            return None
         
         if percentage:
             if self.scaled_percentile:
@@ -647,22 +625,14 @@ class RQOutlierZ(PointZOutlier):
                 ) * 100
         else:
             residuals = np.abs(points['z'] - smoothed_depth)
-
-        #utils.echo_msg(residuals)
-        return(residuals)
+        return residuals
 
     
 class PointFilterFactory(factory.CUDEMFactory):
     _modules = {
-        'outlierz': {
-            'name': 'outlierz', 'call': PointZOutlier
-        },
-        'rq': {
-            'name': 'rq', 'call': RQOutlierZ
-        },
-        'vector_mask': {
-            'name': 'vector_mask', 'call': PointZVectorMask
-        },
+        'outlierz': {'name': 'outlierz', 'call': PointZOutlier},
+        'rq': {'name': 'rq', 'call': RQOutlierZ},
+        'vector_mask': {'name': 'vector_mask', 'call': PointZVectorMask},
     }
 
     
@@ -670,7 +640,7 @@ class PointFilterFactory(factory.CUDEMFactory):
         super().__init__(**kwargs)
 
         
-class PointPixels():
+class PointPixels_:
     """Return the point cloud data as an array which coincides with the 
     desired region, x_size and y_size
 
@@ -729,7 +699,7 @@ class PointPixels():
         }
         count = 0
         if len(points) == 0:
-            return(out_arrays, None, None)
+            return out_arrays, None, None
         
         if self.src_region is None:
             self.init_region_from_points(points)
@@ -737,12 +707,11 @@ class PointPixels():
             self.init_gt()
 
         weight = utils.float_or(weight, 1)
-        uncertainty = utils.float_or(weight, 0)
-        #######################################################################
+        uncertainty = utils.float_or(uncertainty, 0)
+
         ## convert the points to pixels based on the geotransform
         ## and calculate the local srcwin of the points
         ## pixel_x and pixel_y are the location of the points_* of the srcwin
-        #######################################################################            
         pixel_x = np.floor(
             (points['x'] - self.dst_gt[0]) / self.dst_gt[1]
         ).astype(int)
@@ -762,9 +731,7 @@ class PointPixels():
         except:
             pixel_u = np.zeros(pixel_z.shape)
 
-        #######################################################################
         ## remove pixels that will break the srcwin
-        #######################################################################
         out_idx = np.nonzero((pixel_x >= self.x_size) \
                              | (pixel_x < 0) \
                              | (pixel_y >= self.y_size) \
@@ -792,16 +759,13 @@ class PointPixels():
             return out_arrays, None, None
         else:
             count += this_count
-            #######################################################################
+            
             ## set the srcwin of the incoming points
-            #######################################################################
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
                            int(max(pixel_x) - min(pixel_x))+1,
                            int(max(pixel_y) - min(pixel_y))+1)
 
-            #######################################################################
             ## adjust the pixels to the srcwin and stack together
-            #######################################################################
             pixel_x = pixel_x - this_srcwin[0]
             pixel_y = pixel_y - this_srcwin[1]
             pixel_xy = np.vstack((pixel_y, pixel_x)).T
@@ -810,11 +774,9 @@ class PointPixels():
             #out_arrays['pixel_x'] = pixel_x
             #out_arrays['pixel_y'] = pixel_y
 
-            #######################################################################
             ## find the non-unique x/y points and mean/min/max
             ## their z values together while calculating the std
             ## for uncertainty
-            #######################################################################
             unq, unq_idx, unq_inv, unq_cnt = np.unique(
                 pixel_xy, axis=0, return_inverse=True,
                 return_index=True, return_counts=True
@@ -829,10 +791,8 @@ class PointPixels():
                 np.cumsum(unq_cnt[cnt_msk])[:-1]
             )
 
-            #######################################################################
             ## set the output arrays; set to the target grid
             ## arrays will hold weighted-sums
-            #######################################################################
             if mode == 'sums':
                 ww = pixel_w[unq_idx] * weight
                 zz = pixel_z[unq_idx] * ww 
@@ -850,11 +810,9 @@ class PointPixels():
             px = pixel_x[unq_idx]
             py = pixel_y[unq_idx]
 
-            #######################################################################
             ## min/max/sum the duplicates (values in the same cell)
             ## min and max get the count reset to 1, the count is accumulated
             ## in mean, mixed
-            #######################################################################
             if np.any([len(dup) for dup in dup_idx]):
                 if mode == 'min':
                     dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
@@ -931,7 +889,236 @@ class PointPixels():
             out_arrays['uncertainty'][unq[:,0], unq[:,1]] \
                 = np.sqrt(uu**2 + (uncertainty if uncertainty is not None else 0)**2)                
 
-            return(out_arrays, this_srcwin, self.dst_gt)
+            return out_arrays, this_srcwin, self.dst_gt
 
 
+class PointPixels:
+    """
+    Return the point cloud data as an array which coincides with the 
+    desired region, x_size, and y_size.
+
+    Incoming data are numpy structured arrays (rec-arrays) of x, y, z, <w, u> points.
+    """
+
+    def __init__(self, src_region=None, x_size=None, y_size=None, 
+                 verbose=True, ppm=False, **kwargs):
+        self.src_region = src_region
+        self.x_size = utils.int_or(x_size, 10)
+        self.y_size = utils.int_or(y_size, 10)
+        self.verbose = verbose
+        self.ppm = ppm
+        self.dst_gt = None
+
+        
+    def init_region_from_points(self, points):
+        """Initialize the source region based on point extents."""
+        
+        if self.src_region is None:
+            self.src_region = regions.Region().from_list([
+                np.min(points['x']), np.max(points['x']),
+                np.min(points['y']), np.max(points['y'])
+            ])
+        self.init_gt()
+
+        
+    def init_gt(self):
+        """Initialize the GeoTransform based on region and size."""
+        
+        if self.src_region is not None:
+            self.dst_gt = self.src_region.geo_transform_from_count(
+                x_count=self.x_size, y_count=self.y_size
+            )
+
+            
+    def __call__(self, points, weight=1, uncertainty=0, mode='mean'):
+        """
+        Process points into a gridded array.
+        
+        Args:
+            points (dict or np.recarray): Input data containing 'x', 'y', 'z'.
+            weight (float): Global weight multiplier.
+            uncertainty (float): Global uncertainty value.
+            mode (str): Aggregation mode ('mean', 'min', 'max', 'sums').
+        """
+        
+        ## Initialize output structure
+        out_arrays = {
+            'z': None, 'count': None, 'weight': None, 'uncertainty': None,
+            'mask': None, 'x': None, 'y': None, 
+            'pixel_x': None, 'pixel_y': None
+        }
+
+        if len(points) == 0:
+            return out_arrays, None, None
+
+        ## Ensure region and geotransform are set
+        if self.src_region is None:
+            self.init_region_from_points(points)
+        elif self.dst_gt is None:
+            self.init_gt()
+
+        ## Sanitize inputs
+        weight = utils.float_or(weight, 1)
+        uncertainty = utils.float_or(uncertainty, 0)
+
+        ## Extract data columns safely
+        points_x = np.array(points['x'])
+        points_y = np.array(points['y'])
+        pixel_z = np.array(points['z'])
+
+        ## Handle optional fields (w=weight, u=uncertainty)
+        pixel_w = np.array(points['w']) if 'w' in points.dtype.names else np.ones_like(pixel_z)
+        pixel_u = np.array(points['u']) if 'u' in points.dtype.names else np.zeros_like(pixel_z)
+
+        ## Handle NaNs in optional fields
+        pixel_w[np.isnan(pixel_w)] = 1
+        pixel_u[np.isnan(pixel_u)] = 0
+
+        ## Convert points to pixel coordinates
+        ## dst_gt structure: [origin_x, pixel_width, 0, origin_y, 0, pixel_height]
+        pixel_x = np.floor((points_x - self.dst_gt[0]) / self.dst_gt[1]).astype(int)
+        pixel_y = np.floor((points_y - self.dst_gt[3]) / self.dst_gt[5]).astype(int)
+
+        ## Filter pixels outside the target window
+        if not self.ppm:
+            valid_mask = (
+                (pixel_x >= 0) & (pixel_x < self.x_size) &
+                (pixel_y >= 0) & (pixel_y < self.y_size)
+            )
+            
+            if not np.any(valid_mask):
+                return out_arrays, None, None
+
+            # Apply mask
+            pixel_x = pixel_x[valid_mask]
+            pixel_y = pixel_y[valid_mask]
+            pixel_z = pixel_z[valid_mask]
+            pixel_w = pixel_w[valid_mask]
+            pixel_u = pixel_u[valid_mask]
+            points_x = points_x[valid_mask]
+            points_y = points_y[valid_mask]
+
+        if len(pixel_x) == 0:
+            return out_arrays, None, None
+
+        ## Calculate local source window
+        min_px, max_px = int(np.min(pixel_x)), int(np.max(pixel_x))
+        min_py, max_py = int(np.min(pixel_y)), int(np.max(pixel_y))
+        
+        this_srcwin = (min_px, min_py, max_px - min_px + 1, max_py - min_py + 1)
+
+        ## Shift pixels to local window coordinates
+        local_px = pixel_x - min_px
+        local_py = pixel_y - min_py
+        
+        ## Combine X and Y for unique identification
+        ## (Using row-major order: y, x)
+        pixel_xy = np.vstack((local_py, local_px)).T
+
+        ## Find unique pixels and indices
+        ## unq: unique (y, x) pairs
+        ## unq_idx: indices of the first occurrence of unique values
+        ## unq_inv: indices to reconstruct the original array from unique values
+        ## unq_cnt: count of each unique value
+        unq, unq_idx, unq_inv, unq_cnt = np.unique(
+            pixel_xy, axis=0, return_inverse=True,
+            return_index=True, return_counts=True
+        )
+
+        ## Prepare data containers for unique pixels
+        ## Pre-fill with the values found at the first occurrence (unq_idx)
+        if mode == 'sums':
+            ww = pixel_w[unq_idx] * weight
+            zz = pixel_z[unq_idx] * ww
+            xx = points_x[unq_idx] * ww
+            yy = points_y[unq_idx] * ww
+        else:
+            zz = pixel_z[unq_idx]
+            ww = pixel_w[unq_idx]
+            xx = points_x[unq_idx]
+            yy = points_y[unq_idx]
+            
+        uu = pixel_u[unq_idx]
+        px = local_px[unq_idx]
+        py = local_py[unq_idx]
+
+        ## --- Handle Duplicates (Aggregation) ---
+        ## Identify pixels that contain multiple points
+        cnt_msk = unq_cnt > 1
+        if np.any(cnt_msk):
+            ## Get indices of duplicates in the original arrays
+            ## Group indices by unique pixel ID
+            ## argsort ensures we group indices belonging to the same pixel together
+            srt_idx = np.argsort(unq_inv)
+            
+            ## Split the sorted indices based on counts
+            split_indices = np.cumsum(unq_cnt)[:-1]
+            grouped_indices = np.split(srt_idx, split_indices)
+            
+            ## Extract only the groups that have duplicates for processing
+            dup_indices = [grouped_indices[i] for i in np.flatnonzero(cnt_msk)]
+
+            dup_stds = []
+            
+            ## Perform Aggregation based on Mode
+            if mode == 'min':
+                zz[cnt_msk] = [np.min(pixel_z[idx]) for idx in dup_indices]
+                xx[cnt_msk] = [np.min(pixel_x[idx]) for idx in dup_indices]
+                yy[cnt_msk] = [np.min(pixel_y[idx]) for idx in dup_indices] 
+                dup_stds = np.zeros(len(dup_indices))
+
+            elif mode == 'max':
+                zz[cnt_msk] = [np.max(pixel_z[idx]) for idx in dup_indices]
+                xx[cnt_msk] = [np.max(pixel_x[idx]) for idx in dup_indices]
+                yy[cnt_msk] = [np.max(pixel_y[idx]) for idx in dup_indices]
+                dup_stds = np.zeros(len(dup_indices))
+
+            elif mode == 'mean':
+                zz[cnt_msk] = [np.mean(pixel_z[idx]) for idx in dup_indices]
+                xx[cnt_msk] = [np.mean(points_x[idx]) for idx in dup_indices]
+                yy[cnt_msk] = [np.mean(points_y[idx]) for idx in dup_indices]
+                dup_stds = [np.std(pixel_z[idx]) for idx in dup_indices]
+
+            elif mode == 'sums':
+                # Weighted Sums
+                zz[cnt_msk] = [np.sum(pixel_z[idx] * pixel_w[idx] * weight) for idx in dup_indices]
+                xx[cnt_msk] = [np.sum(points_x[idx] * pixel_w[idx] * weight) for idx in dup_indices]
+                yy[cnt_msk] = [np.sum(points_y[idx] * pixel_w[idx] * weight) for idx in dup_indices]
+                ww[cnt_msk] = [np.sum(pixel_w[idx] * weight) for idx in dup_indices]
+                dup_stds = [np.std(pixel_z[idx]) for idx in dup_indices]
+
+            ## Calculate Uncertainty (Root Sum Square of existing U + Standard Deviation)
+            uu[cnt_msk] = np.sqrt(
+                np.power(uu[cnt_msk], 2) + np.power(dup_stds, 2)
+            )
+
+        ## --- Construct Output Grid Arrays ---
+        grid_shape = (this_srcwin[3], this_srcwin[2]) # (rows, cols)
+
+        def fill_grid(values, fill_val=np.nan):
+            grid = np.full(grid_shape, fill_val)
+            grid[unq[:, 0], unq[:, 1]] = values
+            return grid
+
+        out_arrays['z'] = fill_grid(zz)
+        out_arrays['x'] = fill_grid(xx)
+        out_arrays['y'] = fill_grid(yy)
+        out_arrays['count'] = fill_grid(unq_cnt, fill_val=0)
+        out_arrays['pixel_x'] = fill_grid(px, fill_val=0)
+        out_arrays['pixel_y'] = fill_grid(py, fill_val=0)
+        out_arrays['uncertainty'] = fill_grid(
+            np.sqrt(uu**2 + (uncertainty)**2), fill_val=0
+        )
+
+        ## Handle Weights
+        out_arrays['weight'] = np.ones(grid_shape)
+        if mode == 'sums':
+            out_arrays['weight'][unq[:, 0], unq[:, 1]] = ww
+        else:
+            ## Default weight multiplied by count/weight influence
+            out_arrays['weight'][:] = weight
+            out_arrays['weight'][unq[:, 0], unq[:, 1]] *= (ww * unq_cnt)
+
+        return out_arrays, this_srcwin, self.dst_gt
+        
 ### End
