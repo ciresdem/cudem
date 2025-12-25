@@ -150,7 +150,6 @@ class Region:
 
     ## Alias for backward compatibility
     valid_p = is_valid
-
     
     def copy(self):
         """Return a deep copy of the region."""

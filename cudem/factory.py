@@ -22,6 +22,65 @@
 ## SOFTWARE.
 ##
 ###############################################################################
+### Commentary:
+##
+## Module factory...
+##
+## Use factory.CUDEMFactory as a superclass for a specific module factory, and
+## define a _modules dict that has the module name as keys and their values are
+## a dict with atleast
+## a 'call' key which points to a module sub-class
+##
+## class PerspectoFactory(factory.CUDEMFactory):
+##     if has_pygmt:
+##         _modules = {
+##             'hillshade': {'call': Hillshade},
+##             'perspective': {'call': perspective},
+##             'sphere': {'call': sphere},
+##             'figure1': {'call': figure1},        
+##         }
+##     else:
+##         _modules = {
+##             'hillshade': {'call': Hillshade},
+##             'perspective': {'call': perspective},
+##             'sphere': {'call': sphere},
+##         }    
+##     def __init__(self, **kwargs):
+##         super().__init__(**kwargs)
+##
+##
+## In the superclass we need at least a 'params' parameter, this dict holds
+## the factory parameters, including
+## 'mod', 'mod_args', 'kwargs'
+##
+## class MySuperClass:
+##     def __init__(self, params={}):
+##         self.params = params
+##
+## To add module paramers when module is run outside of the factory (only if
+## params dict is wanted, though it could be easier to just use the factory
+## that's the case):
+## make sure all super and sub classes __init__ functions only define parameters.
+## Make use of a self.initialize() function or something if needed, where you first
+## set the 'mod_args' parameters before defining anything futher...
+##
+## from cudem import factory
+##
+## # in __init__ of the superclass do:
+## def __init__(self, p = None, params = {}, **kwargs):
+##     self.p = p
+##     self.params = params
+##     factory._set_params(self, 'mod', 'mod_name', {})
+##     self.initialize()
+##
+## # then, after a module has been loaded:
+## def initialize(self):
+##     factory._set_mod_args(self)
+##     if not self.params['mod_args']:
+##         for k in self.__dict__:
+##             if k not in self.params['kwargs'].keys():
+##                 self.params['mod_args'][k] = self.__dict__[k]
+### Code:
 
 import os
 import sys
@@ -250,6 +309,16 @@ def get_module_long_desc(m: Dict) -> str:
     return header + '\n  '.join(rows) + '\n'
 
 
+def get_module_md(m: Dict) -> str:
+    header = "| **Name** | **Module-Key** | **Description** |\n|---|---|---|\n"
+    rows = []
+    for key in m:
+        name = m[key].get('name', key)
+        desc = m[key].get('description', 'No description')
+        rows.append(f"| {name} | {key} | {desc} |")
+    return header + '\n'.join(rows)
+
+
 def get_module_md_table(m: Dict) -> str:
     header = "| **Name** | **Module-Key** | **Description** |\n|---|---|---|\n"
     rows = []
@@ -258,6 +327,14 @@ def get_module_md_table(m: Dict) -> str:
         desc = m[key].get('description', 'No description')
         rows.append(f"| {name} | {key} | {desc} |")
     return header + '\n'.join(rows)
+
+
+## Aliases
+_cudem_module_short_desc = get_module_short_desc
+_cudem_module_name_short_desc = get_module_name_short_desc
+_cudem_module_long_desc = get_module_long_desc
+_cudem_module_md = get_module_md_table
+_cudem_module_md_table = get_module_md_table
 
 
 def echo_modules(module_dict: Dict, key: Any, md: bool = False) -> None:
