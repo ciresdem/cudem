@@ -1,6 +1,6 @@
-### htdp.py
+### htdp.py - CUDEM wrapper for NGS HTDP
 ##
-## Copyright (c) 2022 - 2025  Regents of the University of Colorado
+## Copyright (c) 2022 - 2025 Regents of the University of Colorado
 ##
 ## htdp.py is part of CUDEM
 ##
@@ -22,7 +22,7 @@
 ## SOFTWARE.
 ##
 ###############################################################################
-### Commentary:
+### Commentary
 ##
 ## wrapper and functions for using the htdp program
 ## https://geodesy.noaa.gov/TOOLS/Htdp/Htdp.shtml
@@ -45,8 +45,7 @@
 ## version 3.4.0
 ##  1...NAD_83(2011/CORS96/2007)  North America plate fixed     
 ##  2...NAD_83(PA11/PACP00)       Pacific plate fixed           
-##  3...NAD_83(MA11/MARP00)       Mariana plate fixed           
-                                                             
+##  3...NAD_83(MA11/MARP00)       Mariana plate fixed                                                             
 ##  4...WGS84 original (Transit)                                
 ##  5...WGS84(G730)   ITRF91 used                               
 ##  6...WGS84(G873)   ITRF94=ITRF96=ITRF97 used                 
@@ -60,168 +59,212 @@
 ## 14...ITRF91 (or SIO/MIT_92)      21...ITRF2005 or IGS05      
 ## 15...ITRF92                      22...ITRF2008 or IGS08/IGb08
 ## 16...ITRF93                      23...ITRF2014 or IGS14/IGb14
-## 17...ITRF94 (=ITRF96=ITRF97) 
-### Code:
+## 17...ITRF94 (=ITRF96=ITRF97)
+##
+###############################################################################
 
 import os
 import sys
+import subprocess
+from typing import Optional, Tuple, List, Union
 import numpy as np
 from cudem import utils
 
+__version__ = '0.2.0'
 
-###############################################################################
-## HTDP
-###############################################################################
 class HTDP:
-    def __init__(self, htdp_bin='htdp', verbose=True):
-        self.htdp_bin = htdp_bin
-        self.verbose=verbose
+    """Wrapper for the NGS HTDP (Horizontal Time-Dependent Positioning) software."""
 
-        if utils.config_check()['HTDP'] is None:
+    def __init__(self, htdp_bin: str = 'htdp', verbose: bool = True):
+        self.htdp_bin = htdp_bin
+        self.verbose = verbose
+
+        ## Check if HTDP is configured/installed
+        if utils.config_check().get('HTDP') is None:
             utils.echo_error_msg(
-                'you must have HTDP installed to perform vertical transformations'
+                'You must have HTDP installed to perform vertical transformations.'
             )
 
             
-    def _next_point(self, fd):
-        line = fd.readline().strip()
-        while line != '' and line.find('PNT_') == -1:
-            line = fd.readline()
-
-        if line == '':
-            return None
-
-        line = line.strip()
-        name_tokens = line.split('_')
-        tokens = line.split()
-        lat_dst = float(tokens[0])
-        lon_dst = float(tokens[1])
-        eht_dst = float(tokens[2])
-        return((int(name_tokens[1].strip('"')),
-                int(name_tokens[2].strip('"')),
-                lat_dst, lon_dst, eht_dst))
-
-    
-    def _read_grid(self, filename, shape):
-        """read grid created by `_create_grid`"""
+    def _next_point(self, fd) -> Optional[Tuple[int, int, float, float, float]]:
+        """Parse the next point from the HTDP output file object."""
         
-        fd = open(filename)
+        while True:
+            line = fd.readline()
+            if not line:
+                return None
+            
+            line = line.strip()
+            ## Look for lines containing the point ID tag "PNT_"
+            if 'PNT_' in line:
+                try:
+                    ## Line format example: 
+                    ## 40.00000000 -105.00000000 123.456 "PNT_0_0"
+                    parts = line.split()
+                    coords = parts[:3]
+                    name_tag = parts[3].strip('"')
+                    
+                    lat_dst = float(coords[0])
+                    lon_dst = float(coords[1])
+                    eht_dst = float(coords[2])
+                    
+                    ## Parse indices from name "PNT_X_Y"
+                    name_tokens = name_tag.split('_')
+                    x_idx = int(name_tokens[1])
+                    y_idx = int(name_tokens[2])
+
+                    return x_idx, y_idx, lat_dst, lon_dst, eht_dst
+                except (ValueError, IndexError):
+                    continue
+
+    def _read_grid(self, filename: str, shape: Tuple[int, int]) -> np.ndarray:
+        """Read the output grid created by HTDP.
+        
+        Args:
+            filename: Path to the HTDP output file.
+            shape: Tuple of (rows, cols) representing grid dimensions.
+        """
+        
         grid = np.zeros(shape)
-
-        if self.verbose:
-            for i in range(5):
-                utils.echo_msg(fd.readline().rstrip())
-
+        expected_points = shape[0] * shape[1]
         points_found = 0
-        ptuple = self._next_point(fd)
-        while ptuple != None:
-            grid[ptuple[1],ptuple[0]] = ptuple[4]
-            points_found += 1
-            ptuple = self._next_point(fd)
 
-        if points_found < shape[0] * shape[1]:
-            print('points found:   ', points_found)
-            print('points expected:', shape[0] * shape[1])
+        with open(filename, 'r') as fd:
+            if self.verbose:
+                ## Echo header info (approx first 5 lines)
+                for _ in range(5):
+                    header_line = fd.readline().strip()
+                    if header_line:
+                        utils.echo_msg(header_line)
+
+            ptuple = self._next_point(fd)
+            while ptuple is not None:
+                ## ptuple: (x_idx, y_idx, lat, lon, height)
+                ## grid indices: [row/y, col/x]
+                try:
+                    grid[ptuple[1], ptuple[0]] = ptuple[4]
+                    points_found += 1
+                except IndexError:
+                    utils.echo_error_msg(f"Grid index out of bounds: {ptuple}")
+                
+                ptuple = self._next_point(fd)
+
+        if points_found < expected_points:
+            utils.echo_error_msg(
+                f'Points found: {points_found}, Points expected: {expected_points}'
+            )
             sys.exit(1)
 
-        return(grid)
+        return grid
 
     
-    def _new_create_grid(self, griddef):
-        """This function creates a regular grid of lat/long values 
-        with one "band" for latitude, and one for longitude.
+    def _new_create_grid(self, griddef: List[float]) -> np.ndarray:
+        """Create a regular meshgrid of lat/long values.
+        
+        Args:
+            griddef: [lon_min, lat_min, lon_max, lat_max, lon_steps, lat_steps]
+                     Note: logic assumes longitude needs sign inversion based on original code.
         """
-
+        
         lon_start = -1 * griddef[0]
         lon_end = -1 * griddef[2]
-
-        #lon_start = griddef[0]
-        #lon_end = griddef[2]
-
+        
         lat_start = griddef[1]
         lat_end = griddef[3]
 
         lon_steps = int(griddef[4])
         lat_steps = int(griddef[5])
 
-        lon_axis = np.linspace(lon_start,lon_end,lon_steps)
-        lat_axis = np.linspace(lat_start,lat_end,lat_steps)
+        lon_axis = np.linspace(lon_start, lon_end, lon_steps)
+        lat_axis = np.linspace(lat_start, lat_end, lat_steps)
 
-        lon_list = []
-        for i in range(lat_steps):
-            lon_list.append(lon_axis)
+        ## indexing='xy' ensures:
+        ## xv (lon) has shape (lat_steps, lon_steps)
+        ## yv (lat) has shape (lat_steps, lon_steps)
+        xv, yv = np.meshgrid(lon_axis, lat_axis, indexing='xy')
 
-        lon_band = np.vstack(lon_list)
-        
-        lat_list = []
-        for i in range(lon_steps):
-            lat_list.append(lat_axis)
-
-        lat_band = np.column_stack(lat_list)
-
-        t = np.array([lon_band, lat_band])
-        return(t)
+        ## Return stacked array: [lon_grid, lat_grid]
+        return np.array([xv, yv])
 
     
-    def _write_grid(self, grid, out_filename):
-        """This function writes a grid out in form suitable to use 
-        as input to the htdp program.
+    def _write_grid(self, grid: np.ndarray, out_filename: str):
+        """Write a grid to a file suitable for HTDP input.
+        
+        Args:
+            grid: Numpy array of shape (2, rows, cols) where grid[0] is lon, grid[1] is lat.
+            out_filename: Output file path.
         """
         
-        fd_out = open(out_filename, 'w')
+        ## grid shape: (2, rows, cols)
+        rows = grid.shape[1]
+        cols = grid.shape[2]
 
-        for i in range(grid.shape[2]):
-            for j in range(grid.shape[1]):
-                fd_out.write(
-                    '{} {} 0 "PNT_{}_{}"\n'.format(
-                        grid[1,j,i], grid[0,j,i], i, j
+        with open(out_filename, 'w') as fd_out:
+            for i in range(cols):
+                for j in range(rows):
+                    ## Format: Lat Lon Height "Label"
+                    ## grid[1] is lat, grid[0] is lon
+                    fd_out.write(
+                        f'{grid[1, j, i]} {grid[0, j, i]} 0 "PNT_{i}_{j}"\n'
                     )
-                )
+
+                    
+    def _write_control(self, control_fn: str, out_grid_fn: str,
+                       in_grid_fn: str, src_crs_id: int, src_crs_date: str,
+                       dst_crs_id: int, dst_crs_date: str):
+        """Write the HTDP control file."""
+        
+        ## 4 = Mode: Transform positions
+        ## 2 = Date format: decimal years
+        ## 2 = Date format: decimal years
+        ## 3 = Height code: Ellipsoidal
+        ## 0 = Velocity output: No
+        ## 0 = Output format: Standard        
+        control_content = (
+            f"4\n"
+            f"{out_grid_fn}\n"
+            f"{src_crs_id}\n"
+            f"{dst_crs_id}\n"
+            f"2\n"
+            f"{src_crs_date}\n"
+            f"2\n"
+            f"{dst_crs_date}\n"
+            f"3\n"
+            f"{in_grid_fn}\n"
+            f"0\n"
+            f"0\n"
+        )
+        
+        with open(control_fn, 'w') as f:
+            f.write(control_content)
+
+            
+    def run(self, htdp_control: str):
+        """Execute HTDP using the generated control file."""
+        
+        if utils.config_check().get('HTDP') is None:
+            return
+
+        ## Use subprocess to securely pipe the control file content to HTDP stdin
+        try:
+            with open(htdp_control, 'r') as stdin_f:
+                if self.verbose:
+                    utils.echo_msg(f"Running HTDP with control file: {htdp_control}")
                 
-        fd_out.close()
-
-        
-    def _write_control(self, control_fn, out_grid_fn,
-                      in_grid_fn, src_crs_id, src_crs_date,
-                      dst_crs_id, dst_crs_date):
-        
-        # start_date, end_date should be something like "2011.0"
-        control_template = """
-4
-{out_grid}
-{src_id}
-{dst_id}
-2
-{src_date}
-2
-{dst_date}
-3
-{in_grid}
-0
-0
-""".format(out_grid=out_grid_fn, src_id=src_crs_id,
-           dst_id=dst_crs_id, src_date=src_crs_date,
-           dst_date=dst_crs_date, in_grid=in_grid_fn)
-        
-        open(control_fn,'w').write(control_template)
-
-        
-    def run(self, htdp_control):
-
-        if utils.config_check()['HTDP'] is not None:
-            if utils.config_check()['platform'] == 'win32':
-                os.system(
-                    'cat {} | {}'.format(
-                        htdp_control, self.htdp_bin
-                    )
+                subprocess.run(
+                    [self.htdp_bin],
+                    stdin=stdin_f,
+                    check=True,
+                    stdout=None if self.verbose else subprocess.DEVNULL,
+                    stderr=subprocess.PIPE
                 )
-            else:
-                utils.run_cmd(
-                    '{} < {}'.format(
-                        self.htdp_bin, htdp_control
-                    ),
-                    verbose=self.verbose
-                )
+        except subprocess.CalledProcessError as e:
+            utils.echo_error_msg(f"HTDP execution failed: {e}")
+            if e.stderr:
+                utils.echo_error_msg(e.stderr.decode())
+        except FileNotFoundError:
+            utils.echo_error_msg(f"Control file not found: {htdp_control}")
+        except Exception as e:
+            utils.echo_error_msg(f"An unexpected error occurred running HTDP: {e}")
 
-                
 ### End
