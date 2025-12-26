@@ -42,6 +42,7 @@ from cudem import utils
 from cudem import gdalfun
 from cudem import regions
 from cudem import factory
+from cudem import __version__ as __cudem_version__
 from . import cpt
 from . import __version__
 
@@ -182,7 +183,7 @@ class Perspecto:
                 verbose=True
             )
             utils.remove_glob('_rgb_temp*')
-
+            r
             
     def run(self):
         raise NotImplementedError("Perspecto is an abstract base class; run() must be implemented by subclasses.")
@@ -235,12 +236,12 @@ CUDEM home page: <http://cudem.colorado.edu>
     
     parser.add_argument(
         'dem', 
-        nargs='?', 
         help="Input DEM file or Waffles config JSON"
     )
     
     parser.add_argument(
         '-M', '--module',
+        default='hillshade',
         help="Desired perspecto MODULE and options.\n"
              "Format: module[:opt=val[:opt=val...]]"
     )
@@ -278,9 +279,9 @@ CUDEM home page: <http://cudem.colorado.edu>
     )
     
     parser.add_argument(
-        '-v', '--version',
+        '--version',
         action='version',
-        version=f'{__version__}'
+        version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
 
     args = parser.parse_args()

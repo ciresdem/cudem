@@ -33,7 +33,7 @@ from cudem import gdalfun
 from cudem import utils
 from cudem import htdpfun
 from cudem import fetches
-from cudem import __version__ as __cudem__version__
+from cudem import __version__ as __cudem_version__
 
 _vdatums_cache = utils.cudem_cache()
 __version__ = '0.2.5'
@@ -590,7 +590,7 @@ class Vdatum:
 ###############################################################################
 def vdatums_cli():
     parser = argparse.ArgumentParser(
-        description=f'CUDEM ({__cudem__version__}) vdatums ({__version__}): transform a grid between vertical datums',
+        description=f'Transform a grid between vertical datums',
         epilog="CUDEM home page: <http://cudem.colorado.edu>"
     )
     
@@ -603,7 +603,7 @@ def vdatums_cli():
     parser.add_argument('-l', '--list-epsg', action='store_true', help='List the supported EPSG codes and their names')
     parser.add_argument('-q', '--quiet', action='store_true', help='Lower verbosity')
     parser.add_argument('-w', '--warp-mem', help='Warp memory for gdalwarp')
-    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
+    parser.add_argument('--version', action='version', version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}')
     
     args = parser.parse_args()
 

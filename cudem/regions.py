@@ -36,7 +36,7 @@ from osgeo import ogr
 from cudem import utils
 from cudem import factory
 from cudem import srsfun
-from cudem import __version__ as __cudem__version__
+from cudem import __version__ as __cudem_version__
 
 ## Suppress OGR exceptions to maintain legacy behavior
 ogr.DontUseExceptions()
@@ -927,7 +927,7 @@ def regions_cli():
     """Run regions from command-line using argparse."""
     
     parser = argparse.ArgumentParser(
-        description=f"CUDEM ({__cudem__version__}) Regions ({__version__}): Process and generate regions.",
+        description=f"Process and generate regions.",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="CUDEM home page: <http://cudem.colorado.edu>"
     )
@@ -1000,7 +1000,7 @@ def regions_cli():
     parser.add_argument(
         '--version',
         action='version',
-        version=f'%(prog)s {__version__}'
+        version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
 
     args = parser.parse_args()
