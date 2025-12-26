@@ -73,25 +73,16 @@ def scale_el_relative(value, gmin, gmax, tr, trs):
     input_range = input_max - input_min
     output_range = gmax - gmin
     
-    # Avoid division by zero if the input array has no variation
     if input_range == 0:
         return gmin
 
-    # Calculate the position of 'tr' in the input range (0.0 to 1.0)
-    percentage = (tr - input_min) / input_range
-    
-    # Map that percentage to the output range
+    percentage = (tr - input_min) / input_range    
     return gmin + (percentage * output_range)
 
     
-def scale_el_relative2(value, gmin, gmax, tr, trs):
+def scale_el_relative_etopo(value, gmin, gmax, tr, trs):
     """Scaling relative to the max/min of the input ranges (trs)."""
 
-    utils.echo_msg(value)
-    utils.echo_msg(gmin)
-    utils.echo_msg(gmax)
-    utils.echo_msg(tr)
-    utils.echo_msg(trs)
     if value > 0 and gmax > 0:
         return (gmax * tr) / max(trs)
     elif value < 0 and gmin < 0:
@@ -153,8 +144,8 @@ def generate_etopo_cpt(gmin, gmax, output_file='tmp.cpt'):
     with open(output_file, 'w') as cpt:
         for i, j in enumerate(elevs):
             if j is not None and i + 1 < len(elevs):
-                elev_curr = scale_el_relative(j, gmin, gmax, trs[i], trs)
-                elev_next = scale_el_relative(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                elev_curr = scale_el_relative_etopo(j, gmin, gmax, trs[i], trs)
+                elev_next = scale_el_relative_etopo(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
                 
                 if elev_curr is not None and elev_next is not None:
                     c1 = colors[i]
@@ -188,6 +179,9 @@ def process_cpt(cpt_file, gmin, gmax, gdal=False, split_cpt=None):
     trs = []
     colors = []
 
+    if cpt_file is None:
+        return None
+    
     with open(cpt_file, 'r') as f:
         for line in f:
             parts = line.split()
@@ -232,10 +226,8 @@ def process_cpt(cpt_file, gmin, gmax, gdal=False, split_cpt=None):
             if j is not None and i + 1 < len(elevs):
                 # Choose scaling method based on range crossing zero
                 if gmin < 0 and gmax > 0:
-                    #utils.echo_msg(f'elevs: {j} -> {elevs[i + 1]}')
                     elev_curr = scale_el_relative(j, gmin, gmax, trs[i], trs)
                     elev_next = scale_el_relative(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
-                    #utils.echo_msg(f'mapped: {elev_curr} -> {elev_next}')
                 else:
                     elev_curr = scale_el_linear(j, gmin, gmax, trs[i], trs)
                     elev_next = scale_el_linear(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
