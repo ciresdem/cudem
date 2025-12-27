@@ -1,8 +1,8 @@
-### chs.py
+### gba.py
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## gba.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,95 +21,63 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch Global Building Atlas (GBA) data via WFS.
 ##
 ### Code:
 
-import lxml.etree
-from cudem import regions
+from urllib.parse import urlencode
 from cudem.fetches import fetches
 
-## CHS - Canada Hydro
-class GBA(fetches.FetchModule):
-    
-    def __init__(self,  **kwargs):
-        super().__init__(name='gba', **kwargs)
+## ==============================================
+## Constants
+## ==============================================
+GBA_WFS_URL = 'https://tubvsig-so2sat-vm1.srv.mwn.de/geoserver/ows?'
 
-        ## The various CHS URLs
-        self._gba_url = 'https://tubvsig-so2sat-vm1.srv.mwn.de/geoserver/ows?'
+## ==============================================
+## GBA Module
+## ==============================================
+class GBA(fetches.FetchModule):
+    """Global Building Atlas (GBA) fetch module.
+    
+    Fetches Level of Detail 1 (LOD1) building data via WFS.
+
+    Configuration Example:
+    < gba >
+    """
+    
+    def __init__(self, **kwargs):
+        super().__init__(name='gba', **kwargs)
 
         
     def run(self):
-        """Run the CHS fetching module"""
+        """Run the GBA fetching module."""
 
-        if self.region is None: return([])
-        # _data = {
-        #     'request': 'DescribeCoverage',
-        #     'version': '2.0.1',
-        #     'CoverageID': 'nonna__NONNA {} Coverage'.format(self.datatype),
-        #     'service': 'WCS'
-        # }
-        # _req = fetches.Fetch(self._chs_url).fetch_req(params=_data)
-        # _results = lxml.etree.fromstring(_req.text.encode('utf-8'))        
-        # g_env = _results.findall(
-        #     './/{http://www.opengis.net/gml/3.2}GridEnvelope',
-        #     namespaces=fetches.namespaces
-        # )[0]
-        # hl = [float(x) for x in g_env.find(
-        #     '{http://www.opengis.net/gml/3.2}high'
-        # ).text.split()]
-        # g_bbox = _results.findall(
-        #     './/{http://www.opengis.net/gml/3.2}Envelope'
-        # )[0]
-        # lc = [float(x) for x in g_bbox.find(
-        #     '{http://www.opengis.net/gml/3.2}lowerCorner'
-        # ).text.split()]
-        # uc = [float(x) for x in g_bbox.find(
-        #     '{http://www.opengis.net/gml/3.2}upperCorner'
-        # ).text.split()]
-        # ds_region = regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]])
-        # resx = (uc[1] - lc[1]) / hl[0]
-        # resy = (uc[0] - lc[0]) / hl[1]
-        # if regions.regions_intersect_ogr_p(self.region, ds_region):
-        # _gba_data = {
-        #     'request': 'GetCoverage',
-        #     'version': '2.0.1',
-        #     #'CoverageID': 'global3D__bf_120m',
-        #     #'CoverageID': 'global3D__global_volume_distribution',
-        #     'CoverageID': 'global3D__volume_preview',
-        #     'service': 'WCS',
-        #     'subset': ['Long({},{})'.format(self.region.xmin, self.region.xmax),
-        #                'Lat({},{})'.format(self.region.ymin, self.region.ymax)],
-        #     'subsettingcrs': 'http://www.opengis.net/def/crs/EPSG/0/4326',
-        #     'outputcrs': 'http://www.opengis.net/def/crs/EPSG/0/4326'
-        # }
-        # _gba_req = fetches.Fetch(self._gba_url).fetch_req(params=_gba_data)
-        # outf = 'gba_{}.tif'.format(self.region.format('fn'))
-        # self.add_entry_to_results(_gba_req.url, outf, 'gba')
+        if self.region is None:
+            return []
 
-        _gba_data = {
+        ## WFS GetFeature Parameters
+        wfs_params = {
             'request': 'GetFeature',
             'version': '2.0.0',
-            #'CoverageID': 'global3D__bf_120m',
-            #'CoverageID': 'global3D__global_volume_distribution',
             'typenames': 'lod1_global',
             'service': 'WFS',
-            'bbox': '{},http://www.opengis.net/def/crs/EPSG/0/4326'.format(self.region.format('osm_bbox')),
+            'bbox': f"{self.region.format('osm_bbox')},http://www.opengis.net/def/crs/EPSG/0/4326",
             'outputformat': 'json',
-            #'subset': ['Long({},{})'.format(self.region.xmin, self.region.xmax),
-            #           'Lat({},{})'.format(self.region.ymin, self.region.ymax)],
-            #'subsettingcrs': 'http://www.opengis.net/def/crs/EPSG/0/4326',
             'targetcrs': 'http://www.opengis.net/def/crs/EPSG/0/4326'
         }
-        _gba_req = fetches.Fetch(self._gba_url).fetch_req(params=_gba_data)
-        #print(_gba_req.url)
-        #print(_gba_req.text)
-        outf = 'gba_{}.geojson'.format(self.region.format('fn'))
-        self.add_entry_to_results(_gba_req.url, outf, 'gba')
 
+        ## Construct URL
+        query_string = urlencode(wfs_params)
+        full_url = f"{GBA_WFS_URL}{query_string}"
         
-        return(self)
+        ## Define Output Filename
+        out_fn = f"gba_{self.region.format('fn')}.geojson"
+        
+        # Add to results
+        self.add_entry_to_results(full_url, out_fn, 'gba')
+
+        return self
 
 ### End

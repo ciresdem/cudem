@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## buoys.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,104 +21,104 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch NOAA Buoy Data.
 ##
 ### Code:
 
 import lxml.html as lh
+from typing import List, Optional
 from cudem.fetches import fetches
 
-## buoys 
+## ==============================================
+## Constants
+## ==============================================
+NDBC_URL = 'https://www.ndbc.noaa.gov'
+BUOY_RADIAL_SEARCH_URL = 'https://www.ndbc.noaa.gov/radial_search.php?'
+BUOY_REALTIME_URL = 'https://www.ndbc.noaa.gov/data/realtime2/'
+
+## ==============================================
+## Buoys Module
+## ==============================================
 class BUOYS(fetches.FetchModule):
     """NOAA BUOY data (beta)
 
-    Fetch NOS Buoy Stations
+    Fetch NOS Buoy Stations data.
 
     A sustainable and resilient marine observation and monitoring 
     infrastructure which enhances healthy ecosystems, communities, 
-    and economies in the face of change and To provide quality observations in 
-    the marine environment in a safe and sustainable manner to support 
-    the understanding of and predictions  to changes in weather, climate, 
-    oceans and coast. 
+    and economies.
 
     https://www.ndbc.noaa.gov
 
+    Configuration Example:
     < buoys:buoy_id=None >
     """
     
-    def __init__(self, buoy_id = None, **kwargs):
+    def __init__(self, buoy_id: Optional[str] = None, **kwargs):
         super().__init__(name='buoys', **kwargs)
         self.buoy_id = buoy_id
-        
-        ## various buoy URLs
-        self._ndbc_url = 'https://www.ndbc.noaa.gov'
-        self._buoy_box_search_url = 'https://www.ndbc.noaa.gov/box_search.php?'
-        self._buoy_radial_search_url = 'https://www.ndbc.noaa.gov/radial_search.php?'
-        self._buoy_station_url = 'https://www.ndbc.noaa.gov/station_page.php?'
-        self._buoy_stations_url = 'https://www.ndbc.noaa.gov/to_station.shtml'
-        self._buoy_station_kml = 'https://www.ndbc.noaa.gov/kml/marineobs_by_owner.kml'
-        self._buoy_station_realtime = 'https://www.ndbc.noaa.gov/data/realtime2/'
 
         
     def run(self):
-        '''Run the BOUYS fetching module'''
+        """Run the BUOYS fetching module.
+        
+        Performs a radial search around the center of the provided region
+        to find relevant buoy stations.
+        """
         
         if self.region is None:
-            return([])
+            return []
 
-        _data_box = {
-            'lat1': self.region.ymin,
-            'lat2': self.region.ymax,
-            'lon1': self.region.xmin,
-            'lon2': self.region.xmax,
-            'uom': 'M',
-            'ot': 'A',
-            'time': 0,
-        }
+        ## Calculate center of the region for radial search
         rc = self.region.center()
-        #print(rc)
-        _data = {
-            'lon1': rc[0],
+        
+        ## Search parameters for NDBC radial_search.php
+        ## dist is search radius in nm (nautical miles)
+        ## API defaults usually imply close proximity. 
+        search_params = {
             'lat1': rc[1],
-            #'lat1': self.region.ymin,
-            #'lat2': self.region.ymax,
-            'lon1': self.region.xmin,
-            #'lon2': self.region.xmax,
-            'uom': 'M',
-            'ot': 'A',
-            'dist': 100,
+            'lon1': rc[0],
+            'uom': 'M',    # Units: Metric
+            'ot': 'A',     # Observation Time (A=All)
+            'dist': 100,   # Distance
             'time': 0,
         }
 
-        ## Fetch buoy ids from box search
-        _req = fetches.Fetch(
-            self._buoy_radial_search_url, verbose=self.verbose
-        ).fetch_req(params=_data)
-        if _req is not None:
-            #print(_req.content)
-            #print(_req.url)
-            doc = lh.document_fromstring(_req.text)
-            sp = doc.xpath('//span')
-            current_stations = []
-            
-            for s in sp:
-                #print(s.text_content())
-                if len(s.xpath('a')) > 0:
-                    station_url = s.xpath('a')[0].get('href')
-                    if 'station=' in station_url:
-                        station_id = station_url.split('=')[-1]
-                        if station_id not in current_stations:
-                            current_stations.append(station_id)
-                            
-            for station_id in current_stations:
-                self.add_entry_to_results(
-                    self._buoy_station_realtime + station_id + '.txt',
-                    'buoy_results_{}.txt'.format(station_id),
-                    'buoys'
-                )
+        ## Fetch the HTML search results
+        req = fetches.Fetch(
+            BUOY_RADIAL_SEARCH_URL, 
+            verbose=self.verbose
+        ).fetch_req(params=search_params)
+        
+        if req is not None:
+            try:
+                doc = lh.document_fromstring(req.text)
+                spans = doc.xpath('//span')
+                current_stations = set()
+                
+                ## Parse HTML for station links
+                for span in spans:
+                    links = span.xpath('a')
+                    if links:
+                        href = links[0].get('href')
+                        if href and 'station=' in href:
+                            station_id = href.split('=')[-1]
+                            current_stations.add(station_id)
+                                
+                ## Add Realtime Data Links for found stations
+                for station_id in current_stations:
+                    self.add_entry_to_results(
+                        f"{BUOY_REALTIME_URL}{station_id}.txt",
+                        f"buoy_results_{station_id}.txt",
+                        'buoys'
+                    )
+            except Exception as e:
+                ## Fallback or error logging
+                if self.verbose:
+                    utils.echo_error_msg(f"couln't parse Buoy results: {e}")
 
-        return(self)
+        return self
 
 ### End

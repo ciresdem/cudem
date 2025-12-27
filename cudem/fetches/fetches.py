@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ## Fetch elevation and related data from a variety of sources.
@@ -29,368 +28,284 @@
 ## Use CLI command 'fetches'
 ## or use FetchesFactory() to acquire and use a fetch module in python.
 ##
-### TODO:
-##
 ### Code:
 
-import os, sys
+import os
+import sys
 import time
+import base64
+import threading
+import queue
+import netrc
+import argparse
+import urllib.request
+import urllib.parse
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, build_opener, HTTPCookieProcessor
+from typing import List, Dict, Optional, Union, Any, Tuple
+
 import requests
-import urllib
 import lxml.etree
 import lxml.html as lh
-#from utils.ccp import utils.ccp
-import threading
-try:
-    import Queue as queue
-except: import queue as queue
 
 from cudem import utils
 from cudem import regions
 from cudem import gdalfun
 from cudem import factory
-from cudem.fetches import __version__
+from cudem.fetches import __version__ as __cudem_version__
+from . import __version__
 
-# for get_credentials
-import base64
-import netrc
-from getpass import getpass
-try:
-    from urllib.parse import urlparse
-    from urllib.request import urlopen, Request, build_opener, HTTPCookieProcessor
-    from urllib.error import HTTPError, URLError
-except ImportError:
-    from urlparse import urlparse
-    from urllib2 import urlopen, Request, HTTPError, URLError, build_opener, HTTPCookieProcessor
+## ==============================================
+## Constants & Configuration
+## ==============================================
+DEFAULT_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0'
+R_HEADERS = {'User-Agent': DEFAULT_USER_AGENT}
 
-## Some servers don't like custom user agents...
-#r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
-r_headers = {
-    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0'
-}
-
-## Namespaces for vaious XML files
-namespaces = {
+NAMESPACES = {
     'gmd': 'http://www.isotc211.org/2005/gmd', 
     'gmi': 'http://www.isotc211.org/2005/gmi', 
     'gco': 'http://www.isotc211.org/2005/gco',
     'gml': 'http://www.isotc211.org/2005/gml',
-    }
-thredds_namespaces = {
     'th': 'http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0',
+    'wms': 'http://www.opengis.net/wms',
 }
 
-# http = urllib3.PoolManager(
-#     cert_reqs="CERT_REQUIRED",
-#     ca_certs=certifi.where()
-# )
-
-## callback for use in fetches. currently, only the coastline and hydrolakes modules use
-## fetches processes...Change this function to better handle failed fetches. `r` is the
-## fetches results as a list: [url, local-fn, data-type, fetch-status-or-error-code]
-## this code is run in fetches.fetch_results() after a successful or failed download.
-def fetches_callback(r):
+## ==============================================
+## Helper Functions
+## ==============================================
+def fetches_callback(r: List[Any]):
+    """Default callback for fetches processes.
+    r: [url, local-fn, data-type, fetch-status-or-error-code]
+    """
+    
     pass
 
 
-def urlencode(opts):
-    """encode `opts` for use in a URL"""
+def urlencode(opts: Dict) -> str:
+    """Encode `opts` for use in a URL."""
     
-    try:
-        url_enc = urllib.urlencode(opts)
-    except:
-        url_enc = urllib.parse.urlencode(opts)
-        
-    return(url_enc)
+    return urllib.parse.urlencode(opts)
 
 
-def xml2py(node):
-    """parse an xml file into a python dictionary"""
+def xml2py(node) -> Optional[Dict]:
+    """Parse an xml file into a python dictionary."""
     
     texts = {}
     if node is None:
-        return(None)
+        return None
 
     for child in list(node):
         child_key = lxml.etree.QName(child).localname
-        if 'name' in child.attrib.keys():
+        if 'name' in child.attrib:
             child_key = child.attrib['name']
         
-        if '{http://www.w3.org/1999/xlink}href' in child.attrib.keys():
-            href = child.attrib['{http://www.w3.org/1999/xlink}href']
-        else: href = None
+        href = child.attrib.get('{http://www.w3.org/1999/xlink}href')
         
         if child.text is None or child.text.strip() == '':
             if href is not None:
-                if child_key in texts.keys():
+                if child_key in texts:
                     texts[child_key].append(href)
                 else:
                     texts[child_key] = [href]
-                    
             else:
-                if child_key in texts.keys():
+                if child_key in texts:
                     ck = xml2py(child)
-                    texts[child_key][list(ck.keys())[0]].update(ck[list(ck.keys())[0]])
+                    if ck:
+                        first_key = list(ck.keys())[0]
+                        texts[child_key][first_key].update(ck[first_key])
                 else:
                     texts[child_key] = xml2py(child)
-                    
         else:
-            if child_key in texts.keys():
+            if child_key in texts:
                 texts[child_key].append(child.text)
             else:
                 texts[child_key] = [child.text]
                 
-    return(texts)
+    return texts
 
 
-def get_userpass(authenticator_url):
+def get_userpass(authenticator_url: str) -> Tuple[Optional[str], Optional[str]]:
+    """Retrieve username and password from netrc for a given URL."""
+    
     try:
         info = netrc.netrc()
-        username, account, password \
-            = info.authenticators(urlparse(authenticator_url).hostname)
-        errprefix = 'netrc error: '
+        username, _, password = info.authenticators(urllib.parse.urlparse(authenticator_url).hostname)
     except Exception as e:
-        if (not ('No such file' in str(e))):
-            print('netrc error: {0}'.format(str(e)))
+        if 'No such file' not in str(e):
+            utils.echo_error_msg(f'failed to parse netrc: {e}')
         username = None
         password = None
 
-    return(username, password)
+    return username, password
 
 
-def get_credentials(url, authenticator_url='https://urs.earthdata.nasa.gov'):
+def get_credentials(url: str, authenticator_url: str = 'https://urs.earthdata.nasa.gov') -> Optional[str]:
     """Get user credentials from .netrc or prompt for input. 
     Used for EarthData.
     """
     
     credentials = None
     errprefix = ''
-    try:
-        info = netrc.netrc()
-        username, account, password \
-            = info.authenticators(urlparse(authenticator_url).hostname)
-        errprefix = 'netrc error: '
-    except Exception as e:
-        if (not ('No such file' in str(e))):
-            print('netrc error: {0}'.format(str(e)))
-        username = None
-        password = None
+    
+    username, password = get_userpass(authenticator_url)
 
     while not credentials:
         if not username:
             username = utils.get_username()
             password = utils.get_password()
             
-        credentials = '{0}:{1}'.format(username, password)
-        credentials = base64.b64encode(credentials.encode('ascii')).decode('ascii')
+        cred_str = f'{username}:{password}'
+        credentials = base64.b64encode(cred_str.encode('ascii')).decode('ascii')
 
         if url:
             try:
                 req = Request(url)
-                req.add_header(
-                    'Authorization', 'Basic {0}'.format(
-                        credentials
-                    )
-                )
+                req.add_header('Authorization', f'Basic {credentials}')
                 opener = build_opener(HTTPCookieProcessor())
                 opener.open(req)
             except HTTPError:
-                print(errprefix + 'Incorrect username or password')
+                print(f'{errprefix}Incorrect username or password')
                 errprefix = ''
                 credentials = None
                 username = None
                 password = None
 
-    return(credentials)
+    return credentials
 
 
-## a few convenience functions to parse common iso xml files
+## ==============================================
+## ISO XML Parser
+## ==============================================
 class iso_xml:
-    def __init__(self, xml_url, timeout=2, read_timeout=10):
+    def __init__(self, xml_url: str, timeout: int = 2, read_timeout: int = 10):
         self.url = xml_url
-        self.xml_doc = self._fetch(timeout=timeout, read_timeout=read_timeout)
-        self.namespaces = {
-            'gmd': 'http://www.isotc211.org/2005/gmd', 
-            'gmi': 'http://www.isotc211.org/2005/gmi', 
-            'gco': 'http://www.isotc211.org/2005/gco',
-            'gml': 'http://www.isotc211.org/2005/gml',
-            'th': 'http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0',
-            'wms': 'http://www.opengis.net/wms',
-        }
-        
-    def _fetch(self, timeout = 2, read_timeout = 10):
-        return(Fetch(self.url).fetch_xml(timeout=timeout, read_timeout=read_timeout))
+        self.timeout = timeout
+        self.read_timeout = read_timeout
+        self.namespaces = NAMESPACES
+        self.xml_doc = self._fetch()
 
-    def title(self):
+        
+    def _fetch(self):
+        return Fetch(self.url).fetch_xml(timeout=self.timeout, read_timeout=self.read_timeout)
+
+    
+    def title(self) -> str:
         t = self.xml_doc.find(
-            ('.//gmd:MD_DataIdentification/gmd:citation/'
-             'gmd:CI_Citation/gmd:title/gco:CharacterString'),
+            './/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:title/gco:CharacterString',
             namespaces=self.namespaces
         )
-        return(t.text if t is not None else 'Unknown')
-        
-    def bounds(self, geom = True):
-        wl = self.xml_doc.find(
-            './/gmd:westBoundLongitude/gco:Decimal',
-            namespaces=self.namespaces
-        )
-        el = self.xml_doc.find(
-            './/gmd:eastBoundLongitude/gco:Decimal',
-            namespaces=self.namespaces
-        )
-        sl = self.xml_doc.find(
-            './/gmd:southBoundLatitude/gco:Decimal',
-            namespaces=self.namespaces
-        )
-        nl = self.xml_doc.find(
-            './/gmd:northBoundLatitude/gco:Decimal',
-            namespaces=self.namespaces
-        )
-        if wl is not None \
-           and el is not None \
-           and sl is not None \
-           and nl is not None:
-            region = [float(wl.text), float(el.text),
-                      float(sl.text), float(nl.text)]
-            if geom:
-                return(
-                    regions.Region().from_list(
-                        [float(wl.text), float(el.text),
-                         float(sl.text), float(nl.text)]
-                    ).export_as_geom()
-                )
-            else:
-                return(region)            
-        else:
-            return(None)
+        return t.text if t is not None else 'Unknown'
 
+    
+    def bounds(self, geom: bool = True):
+        wl = self.xml_doc.find('.//gmd:westBoundLongitude/gco:Decimal', namespaces=self.namespaces)
+        el = self.xml_doc.find('.//gmd:eastBoundLongitude/gco:Decimal', namespaces=self.namespaces)
+        sl = self.xml_doc.find('.//gmd:southBoundLatitude/gco:Decimal', namespaces=self.namespaces)
+        nl = self.xml_doc.find('.//gmd:northBoundLatitude/gco:Decimal', namespaces=self.namespaces)
         
-    def polygon(self, geom=True):
+        if all(x is not None for x in [wl, el, sl, nl]):
+            coords = [float(wl.text), float(el.text), float(sl.text), float(nl.text)]
+            if geom:
+                return regions.Region().from_list(coords).export_as_geom()
+            else:
+                return coords          
+        return None
+
+    
+    def polygon(self, geom: bool = True):
         opoly = []
-        polygon = self.xml_doc.find(
-            './/{*}Polygon', namespaces=self.namespaces
-        )
+        polygon = self.xml_doc.find('.//{*}Polygon', namespaces=self.namespaces)
         if polygon is not None:
             nodes = polygon.findall('.//{*}pos', namespaces=self.namespaces)
-            [opoly.append([float(x) for x in node.text.split()]) for node in nodes]
-            if opoly[0][0] != opoly[-1][0] or opoly[0][1] != opoly[-1][1]:
+            for node in nodes:
+                opoly.append([float(x) for x in node.text.split()])
+                
+            ## Close polygon if open
+            if opoly and (opoly[0][0] != opoly[-1][0] or opoly[0][1] != opoly[-1][1]):
                 opoly.append(opoly[0])
+            
             if geom:
-                return(gdalfun.wkt2geom(regions.create_wkt_polygon(opoly)))
-            else:
-                return(opoly)
-        else:
-            return(None)
+                return gdalfun.wkt2geom(regions.create_wkt_polygon(opoly))
+            return opoly
+        return None
 
-        
-    def date(self):
-        dt = self.xml_doc.find(
-            './/gmd:date/gco:Date', namespaces=self.namespaces
-        )
+    
+    def date(self) -> str:
+        dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces=self.namespaces)
         if dt is None:
             dt = self.xml_doc.find(
-                ('.//gmd:MD_DataIdentification/gmd:citation/'
-                 'gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date'),
+                './/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date',
                 namespaces=self.namespaces
             )
-            
-        return(dt.text[:4] if dt is not None else '0000')
+        return dt.text[:4] if dt is not None else '0000'
 
     
-    def xml_date(self):
-        mddate = self.xml_doc.find(
-            './/gmd:dateStamp/gco:DateTime',
-            namespaces=self.namespaces
-        )
-        
-        return(utils.this_date() if mddate is None else mddate.text)
+    def xml_date(self) -> str:
+        mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces=self.namespaces)
+        return utils.this_date() if mddate is None else mddate.text
 
     
-    def reference_system(self):
-        ref_s = self.xml_doc.findall(
-            './/gmd:MD_ReferenceSystem',
-            namespaces=self.namespaces
-        )
-        if ref_s is None or len(ref_s) == 0:
-            return(None, None)
+    def reference_system(self) -> Tuple[Optional[str], Optional[str]]:
+        ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces=self.namespaces)
+        if not ref_s:
+            return None, None
         
-        h_epsg = ref_s[0].find(
-            './/gmd:code/gco:CharacterString',
-            namespaces=self.namespaces
-        )
-        if h_epsg is not None:
-            h_epsg = h_epsg.text.split(':')[-1]
+        h_epsg = ref_s[0].find('.//gmd:code/gco:CharacterString', namespaces=self.namespaces)
+        h_epsg = h_epsg.text.split(':')[-1] if h_epsg is not None else None
         
+        v_epsg = None
         if len(ref_s) > 1:
-            v_epsg = ref_s[1].find(
-                './/gmd:code/gco:CharacterString',
-                namespaces=self.namespaces
-            )
-            if v_epsg is not None:
-                v_epsg = v_epsg.text.split(':')[-1]
+            v_val = ref_s[1].find('.//gmd:code/gco:CharacterString', namespaces=self.namespaces)
+            if v_val is not None:
+                v_epsg = v_val.text.split(':')[-1]
                 
-        else:
-            v_epsg = None
-            
-        return(h_epsg, v_epsg)
+        return h_epsg, v_epsg
 
     
-    def abstract(self):
+    def abstract(self) -> str:
         try:
-            abstract = self.xml_doc.find(
-                './/gmd:abstract/gco:CharacterString',
-                namespaces=self.namespaces
-            )
-            abstract = '' if abstract is None else abstract.text
+            abstract = self.xml_doc.find('.//gmd:abstract/gco:CharacterString', namespaces=self.namespaces)
+            return '' if abstract is None else abstract.text
         except:
-            abstract = ''
-            
-        return(abstract)
+            return ''
 
-    
-    def linkages(self):
-        linkage = self.xml_doc.find(
-            './/{*}linkage/{*}URL',
-            namespaces=self.namespaces
-        )
-        if linkage is not None:
-            linkage = linkage.text
         
-        return(linkage)
+    def linkages(self) -> Optional[str]:
+        linkage = self.xml_doc.find('.//{*}linkage/{*}URL', namespaces=self.namespaces)
+        return linkage.text if linkage is not None else None
 
     
-    def data_links(self):
+    def data_links(self) -> Dict[str, List[str]]:
         dd = {}        
-        dfs = self.xml_doc.findall(
-            './/gmd:MD_Format/gmd:name/gco:CharacterString',
-            namespaces=self.namespaces
-        )
-        dus = self.xml_doc.findall(
-            './/gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL',
-            namespaces=self.namespaces
-        )
+        dfs = self.xml_doc.findall('.//gmd:MD_Format/gmd:name/gco:CharacterString', namespaces=self.namespaces)
+        dus = self.xml_doc.findall('.//gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL', namespaces=self.namespaces)
 
-        if dfs is not None:
-            for i,j in enumerate(dfs):
-                if j.text in dd.keys():
-                    dd[j.text].append(dus[i].text)
-                else:
-                    dd[j.text] = [dus[i].text]
-                    
-        return(dd)
+        if dfs:
+            for i, j in enumerate(dfs):
+                if i < len(dus):
+                    key = j.text
+                    val = dus[i].text
+                    if key in dd:
+                        dd[key].append(val)
+                    else:
+                        dd[key] = [val]
+        return dd
 
     
+## ==============================================
+## Fetch 
+## ==============================================
 class Fetch:
     """Fetch class to fetch ftp/http data files"""
     
     def __init__(
             self,
-            url=None,
-            callback=fetches_callback,
-            verbose=None,
-            headers=r_headers,
-            verify=True,
-            allow_redirects=True
+            url: str = None,
+            callback = fetches_callback,
+            verbose: bool = None,
+            headers: Dict = R_HEADERS,
+            verify: bool = True,
+            allow_redirects: bool = True
     ):
         self.url = url
         self.callback = callback
@@ -400,118 +315,90 @@ class Fetch:
         self.allow_redirects = allow_redirects
 
         
-    def fetch_req(
-            self,
-            params=None,
-            json=None,
-            tries=5,
-            timeout=None,
-            read_timeout=None
-    ):
-        """fetch src_url and return the requests object"""
+    def fetch_req(self, params=None, json=None, tries=5, timeout=None, read_timeout=None) -> Optional[requests.Response]:
+        """Fetch src_url and return the requests object (iterative retry)."""
         
-        if tries <= 0:
-            utils.echo_error_msg(
-                f'max-tries exhausted {self.url}'
-            )
-            raise ConnectionError(
-                'Maximum attempts at connecting have failed.'
-            )
-        
-        try:
-            req = requests.get(
-                self.url,
-                stream=True,
-                params=params,
-                json=json,
-                timeout=(timeout,read_timeout),
-                #headers=self.headers,
-                verify=self.verify,
-                allow_redirects=self.allow_redirects
-            )
-        except Exception as e:
-            ## there was an exception and we'll try again until tries is less than 1
-            utils.echo_warning_msg(e)
-            req = self.fetch_req(
-                params=params,
-                json=json,
-                tries=tries - 1,
-                #headers=self.headers,
-                timeout=timeout * 2 if timeout is not None else None,
-                read_timeout=read_timeout * 2 if read_timeout is not None else None
-            )
+        req = None
+        current_timeout = timeout
+        current_read_timeout = read_timeout
 
-        if req is not None:
-            if req.status_code == 504:
-                time.sleep(2)
-                req = self.fetch_req(
-                    params=params,
-                    json=json,
-                    tries=tries - 1,
-                    #headers=self.headers,
-                    timeout=timeout + 1 if timeout is not None else None,
-                    read_timeout=read_timeout + 10 if read_timeout is not None else None
+        for attempt in range(tries):
+            try:
+                ## Calculate timeouts for this attempt
+                to_tuple = (
+                    current_timeout if current_timeout else None,
+                    current_read_timeout if current_read_timeout else None
                 )
 
-            ## server says we have a band Range in the header, so we will
-            ## remove the Range from the header and just try again.
-            elif req.status_code == 416:
-                if 'Range' in self.headers.keys():
-                    del self.headers['Range']                    
-                    req = self.fetch_req(
-                        params=params,
-                        json=json,
-                        tries=tries - 1,
-                        #headers=self.headers,
-                        timeout=timeout + 1 if timeout is not None else None,
-                        read_timeout=read_timeout + 10 if read_timeout is not None else None
-                    )
+                req = requests.get(
+                    self.url,
+                    stream=True,
+                    params=params,
+                    json=json,
+                    timeout=to_tuple,
+                    verify=self.verify,
+                    allow_redirects=self.allow_redirects
+                )
+                
+                ## Check status codes
+                if req.status_code == 504: # Gateway Timeout
+                    time.sleep(2)
+                    ## Increase timeouts next loop
+                    if current_timeout: current_timeout += 1
+                    if current_read_timeout: current_read_timeout += 10
+                    continue
 
-            ## some unaccounted for return status code, report and exit.
-            #req.status_code != 200 and req.status_code != 201:
-            elif req.status_code < 200 or req.status_code > 299: 
-                if self.verbose:
-                    utils.echo_error_msg(
-                        'request from {} returned {}'.format(
-                            req.url, req.status_code
-                        )
-                    )
-                #req = None
-            
-            return(req)
+                elif req.status_code == 416: # Range Not Satisfiable
+                    if 'Range' in self.headers:
+                        del self.headers['Range']
+                        ## Retrying without range header
+                        continue
+                
+                elif 200 <= req.status_code <= 299:
+                    return req
+                
+                else:
+                    if self.verbose:
+                        utils.echo_error_msg(f'request from {req.url} returned {req.status_code}')
+                    ## Return it anyway to let caller handle it, or continue? 
+                    return req
 
-        
-    def fetch_html(self, timeout=2):
-        """fetch src_url and return it as an HTML object"""
+            except Exception as e:
+                utils.echo_warning_msg(f"Attempt {attempt + 1}/{tries} failed: {e}")
+                if current_timeout: current_timeout *= 2
+                if current_read_timeout: current_read_timeout *= 2
+                time.sleep(1)
+
+        utils.echo_error_msg(f'max-tries exhausted {self.url}')
+        raise ConnectionError('Maximum attempts at connecting have failed.')
+
     
+    def fetch_html(self, timeout=2):
+        """Fetch src_url and return it as an HTML object."""
+        
         req = self.fetch_req(timeout=timeout)
         if req:
-            return(lh.document_fromstring(req.text))
-        else:
-            return(None)
+            return lh.document_fromstring(req.text)
+        return None
 
-        
-    def fetch_xml(self, timeout = 2, read_timeout = 10):
-        """fetch src_url and return it as an XML object"""
     
-        results = lxml.etree.fromstring(
-            '<?xml version="1.0"?><!DOCTYPE _[<!ELEMENT _ EMPTY>]><_/>'.encode('utf-8')
-        )
-        #try:
-        req = self.fetch_req(
-            timeout=timeout, read_timeout=read_timeout#, headers=self.headers
-        )
-        results = lxml.etree.fromstring(req.text.encode('utf-8'))
-        #except:
-        #    utils.echo_error_msg(
-        #        f'could not access {self.url}'
-        #    )
-        return(results)
+    def fetch_xml(self, timeout=2, read_timeout=10):
+        """Fetch src_url and return it as an XML object."""
+        
+        try:
+            req = self.fetch_req(timeout=timeout, read_timeout=read_timeout)
+            results = lxml.etree.fromstring(req.text.encode('utf-8'))
+        except Exception as e:
+            ## Fallback empty XML
+            results = lxml.etree.fromstring(
+                '<?xml version="1.0"?><!DOCTYPE _[<!ELEMENT _ EMPTY>]><_/>'.encode('utf-8')
+            )
+        return results
 
     
     def fetch_file(
             self,
-            dst_fn,
+            dst_fn: str,
             params=None,
             datatype=None,
             overwrite=False,
@@ -519,286 +406,133 @@ class Fetch:
             read_timeout=None,
             tries=5,
             check_size=True
-    ):
-        """fetch src_url and save to dst_fn"""
-
-        def retry(resume = False):
-            if 'Range' in self.headers:
-                del self.headers['Range']
-
-            status = self.fetch_file(
-                dst_fn,
-                params=params,
-                datatype=datatype,
-                overwrite=overwrite,
-                timeout=timeout+5 if timeout is not None else None,
-                read_timeout=read_timeout+50 if read_timeout is not None else None,
-                tries=tries-1
-            )
-            
+    ) -> int:
+        """Fetch src_url and save to dst_fn."""
+        
         status = 0
-        dst_fn_size = 0
-        if 'Range' in self.headers:
-            del self.headers['Range']
-
-        req = None
-        if not os.path.exists(os.path.dirname(dst_fn)):
+        
+        ## Ensure directory exists
+        dst_dir = os.path.abspath(os.path.dirname(dst_fn))
+        if not os.path.exists(dst_dir):
             try:
-                os.makedirs(os.path.dirname(dst_fn))
+                os.makedirs(dst_dir)
             except Exception as e:
                 utils.echo_error_msg(e)
-                pass
+
+        ## Handle Ranges for resuming
+        if 'Range' in self.headers:
+            del self.headers['Range']
+        
+        if not overwrite and os.path.exists(dst_fn):
+            if not check_size:
+                ## File exists and we don't care about size -> Success
+                return 0
+            else:
+                dst_fn_size = os.stat(dst_fn).st_size
+                self.headers['Range'] = f'bytes={dst_fn_size}-'
 
         try:
-            ## Set the Range header to the size of the existing file,
-            ## unless check_size is False or overwrite is True.
-            ## Otherwise, exit, FileExistsError will set status to 0,
-            ## as if it completed a fetch.
-            if not overwrite and os.path.exists(dst_fn):
-                if not check_size:
-                    raise FileExistsError(
-                        f'{dst_fn} exists, '
-                    )
-                else:
-                    dst_fn_size = os.stat(dst_fn).st_size
-                    resume_byte_pos = dst_fn_size
-                    #utils.echo_msg_bold('{} {}'.format(dst_fn_size, resume_byte_pos))
-                    self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
+            for attempt in range(tries):
+                try:
+                    with requests.get(
+                            self.url, stream=True, params=params, headers=self.headers,
+                            timeout=(timeout, read_timeout), verify=self.verify
+                    ) as req:
 
-            with requests.get(
-                    self.url, stream=True, params=params, headers=self.headers,
-                    timeout=(timeout,read_timeout), verify=self.verify
-            ) as req:
+                        ## Determine content length
+                        req_h = req.headers
+                        content_length = 0
+                        if 'Content-Range' in req_h:
+                            content_length = int(req_h['Content-Range'].split('/')[-1])
+                        elif 'Content-Length' in req_h:
+                            content_length = int(req_h['Content-Length'])
+                        else:
+                            content_length = int(req_h.get('content-length', 0))
 
-                ## requested range is not satisfiable, most likely the
-                ## requestedrange is the complete size of the file,
-                ## we'll skip here and assume that is the case.
-                ## Set overwrite to True to overwrite instead
-                req_h = req.headers
-                if 'Content-Range' in req_h:
-                    # this is wrong/hack
-                    content_length = int(req_h['Content-Range'].split('/')[-1]) 
-                    content_range = int(req_h['Content-Range'].split('/')[-1])
-                    
-                elif 'Content-Length' in req_h:
-                    content_length = int(req_h['Content-Length'])                    
-                else:
-                    content_length = int(req_h.get('content-length', 0))
+                        ## Check if file is already complete
+                        if not overwrite and check_size and os.path.exists(dst_fn):
+                            if content_length == os.path.getsize(dst_fn) or content_length == 0:
+                                return 0 # Success, already done
 
-                req_s = content_length
-                # if req_s != 0:
-                #     utils.echo_msg(req_h)
-                ## raise FileExistsError here if the file exists and the
-                ## header Range value is the same as the requested
-                ## content-length, unless overwrite is True or
-                ## check_size is False.
-                if not overwrite and check_size:
-                    if os.path.exists(dst_fn):
-                        if req_s == os.path.getsize(dst_fn) or req_s == 0:
-                            raise FileExistsError(
-                                f'{dst_fn} exists, '
-                            )
-
-                ## server returned bad content-length
-                elif req_s == -1 or req_s == 0 or req_s == 49:
-                    req_s = 0
-                    
-                if req.status_code == 416:
-                    overwrite = True
-                    raise FileExistsError(
-                        '{} exists, and requested Range is invalid, {}'.format(
-                            dst_fn, self.headers['Range']
-                        )
-                    )
-                    
-                ## redirect response. pass
-                if req.status_code == 300:
-                    pass
-
-                ## hack for earthdata credential redirect...
-                ## recursion here may never end with incorrect user/pass
-                if req.status_code == 401:
-                    ## we're hoping for a redirect url here.
-                    if self.url == req.url:
-                        raise UnboundLocalError('Incorrect Authentication')
-
-                    ## re-run the Fetch with the new URL
-                    status = Fetch(
-                        url=req.url, headers=self.headers, verbose=self.verbose
-                    ).fetch_file(
-                        dst_fn,
-                        params=params,
-                        datatype=datatype,
-                        overwrite=overwrite,
-                        timeout=timeout,
-                        read_timeout=read_timeout
-                    )
-
-                ## got a good response, so we'll attempt to fetch the file now.
-                # or (req.status_code :
-                elif (req.status_code == 200) or (req.status_code == 206):
-                    curr_chunk = 0
-                    total_size = int(req.headers.get('content-length', 0))                    
-                    with open(
-                            dst_fn, 'ab' if req.status_code == 206 else 'wb'
-                    ) as local_file:
-                        #prefix = f'{utils.get_calling_module_name()}:'
-                        #url_msg = f'{utils._init_msg(self.url, len(prefix), 40)}'
-                        with utils.ccp(
-                                desc=self.url,
-                                # desc='fetching: {}'.format(
-                                #     utils._init_msg(
-                                #         self.url, len('fetching: '), 40
-                                #     )
-                                # ),
-                                total=req_s,
-                                #unit='iB',
-                                #unit_scale=True,
-                                leave=self.verbose
-                        ) as pbar:
-                            try:
-                                for chunk in req.iter_content(chunk_size = 8196):
-                                    pbar.update(len(chunk))
-                                    if not chunk:
-                                        break
-
-                                    local_file.write(chunk)
-                                    local_file.flush()
-                                    
-                            except Exception as e:
-                                ## reset the Fetch here if there was an exception
-                                ## in fetching.
-                                ## We'll attempt this `tries` times.
-                                if tries != 0:
-                                    if self.verbose:
-                                        utils.echo_warning_msg(
-                                            (f'server returned: {req.status_code}, '
-                                             f'and an exception occured: {e}, '
-                                             f'(attempts left: {tries})...')
-                                        )
-                                        
-                                    time.sleep(2)
-                                    status = Fetch(
-                                        url=self.url,
-                                        headers=self.headers,
-                                        verbose=self.verbose
-                                    ).fetch_file(
-                                        dst_fn,
-                                        params=params,
-                                        datatype=datatype,
-                                        overwrite=overwrite,
-                                        timeout=timeout+5 \
-                                        if timeout is not None \
-                                        else None,
-                                        read_timeout=read_timeout+50 \
-                                        if read_timeout is not None \
-                                        else None,
-                                        tries=tries-1
-                                    )
-                                    self.verbose = False
-                                else:
-                                    raise e
-
-                    ## something went wrong here and the size of the
-                    ## fetched file does not match the requested
-                    ## content-length
-                    if check_size \
-                       and (total_size != 0) \
-                       and (total_size != os.stat(dst_fn).st_size):
-                        raise UnboundLocalError(f'sizes do not match! {total_size} {os.stat(dst_fn).st_size}')
-
-                ## 429: "Too Many Requests!"
-                ## 416: "Bad header Range!"
-                ## 504: "Gateway Timeout!"
-                ## lets try again if we haven't already, these might resolve.
-                elif (req.status_code == 429) \
-                     or (req.status_code == 416) \
-                     or (req.status_code == 504):
-                    if tries != 0:
-                        if self.verbose:
-                            utils.echo_warning_msg(
-                                'server returned: {}, (attempts left: {})...'.format(
-                                    req.status_code, tries
-                                )
-                            )
-                            
-                        time.sleep(10)
-                        status = Fetch(
-                            url=self.url,
-                            headers=self.headers,
-                            verbose=self.verbose
-                        ).fetch_file(
-                            dst_fn,
-                            params=params,
-                            datatype=datatype,
-                            overwrite=overwrite,
-                            timeout=timeout+5 \
-                            if timeout is not None \
-                            else None,
-                            read_timeout=read_timeout+50 \
-                            if read_timeout is not None \
-                            else None,
-                            tries=tries-1
-                        )
-                else:
-                    ## server returned some non-accounted-for status,
-                    ## report and exit...
-                    if self.verbose:
-                        utils.echo_error_msg(
-                            'server returned: {} ({})'.format(
-                                req.status_code, req.url
-                            )
-                        )
+                        # Handle Status Codes
+                        if req.status_code == 416: # Range error
+                            overwrite = True # Force overwrite next try
+                            raise FileExistsError(f'{dst_fn} exists, invalid Range requested.')
                         
-                    status = -1
-                    raise ConnectionError(f'{req.url}: {req.status_code}')
+                        elif req.status_code == 401: # Auth error
+                            ## Earthdata hack: they redirect 401s sometimes
+                            if self.url == req.url:
+                                raise UnboundLocalError('Incorrect Authentication')
+                            ## Recursion for redirect url
+                            return Fetch(
+                                url=req.url, headers=self.headers, verbose=self.verbose
+                            ).fetch_file(dst_fn, params, datatype, overwrite, timeout, read_timeout)
 
-        ## file exists, so we return status of 0,
-        ## as if we were successful!
-        except FileExistsError as e:
-            status = 0
+                        elif req.status_code in [429, 504]: # Rate limit / Gateway
+                            if attempt < tries - 1:
+                                time.sleep(10)
+                                continue
+                            else:
+                                raise ConnectionError(f'{req.url}: {req.status_code}')
 
-        ## other exceptions will return a status of -1,
-        ## failure.
-        except ConnectionError as e:
-            status = -1
-            raise e
-        
-        except requests.exceptions.ConnectionError as e:
-            status = -1
-            raise e#ConnectionError('Connection Aborted!')
-        
-        except UnboundLocalError as e:
-            status = -1
-            #utils.echo_msg(e)
-            raise e#UnboundLocalError(e)
-        
+                        elif req.status_code in [200, 206]: # OK or Partial Content
+                            mode = 'ab' if req.status_code == 206 else 'wb'
+                            with open(dst_fn, mode) as local_file:
+                                with utils.ccp(
+                                        desc=self.url,
+                                        total=content_length,
+                                        leave=self.verbose,
+                                        #unit='iB',
+                                        #unit_scale=True,
+                                ) as pbar:
+                                    for chunk in req.iter_content(chunk_size=8196):
+                                        if chunk:
+                                            pbar.update(len(chunk))
+                                            local_file.write(chunk)
+                                            local_file.flush()
+                            
+                            ## Verify Size
+                            if check_size and (content_length != 0):
+                                if content_length != os.stat(dst_fn).st_size:
+                                    raise UnboundLocalError(f'Size mismatch! Expected {content_length}, got {os.stat(dst_fn).st_size}')
+                            
+                            return 0 # Success
+
+                        else:
+                            ## Unknown error code
+                            if self.verbose:
+                                utils.echo_error_msg(f'Server returned: {req.status_code} ({req.url})')
+                            return -1
+
+                except (requests.exceptions.RequestException, UnboundLocalError) as e:
+                    if attempt < tries - 1:
+                        if self.verbose:
+                            utils.echo_warning_msg(f'Exception: {e}. Retrying ({tries - attempt - 1} left)...')
+                        time.sleep(2)
+                        continue
+                    else:
+                        raise e
+
+        except FileExistsError:
+            return 0
         except Exception as e:
+            if self.verbose:
+                utils.echo_error_msg(str(e))
             status = -1
-            raise e#Exception(e)
 
-        ## if the file exists now after all the above, make sure
-        ## the size of that file is not zero, if `check_size`
-        ## is True.
-        if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
-            if check_size:
-                status = -1
-                raise UnboundLocalError('data not fetched')
+        ## Final check
+        if check_size and (not os.path.exists(dst_fn) or os.stat(dst_fn).st_size == 0):
+            status = -1
+            
+        return status
 
-        return(status)
-
-    
     def fetch_ftp_file(self, dst_fn, params=None, datatype=None, overwrite=False):
-        """fetch an ftp file via urllib"""
-
+        """Fetch an ftp file via urllib."""
+        
         status = 0
-        f = None
+        
         if self.verbose:
-            utils.echo_msg(
-                'fetching remote ftp file: {}...'.format(
-                    self.url[:20]
-                )
-            )
+            utils.echo_msg(f'fetching remote ftp file: {self.url[:20]}...')
             
         if not os.path.exists(os.path.dirname(dst_fn)):
             try:
@@ -807,128 +541,91 @@ class Fetch:
                 pass
             
         try:
-            f = urllib.request.urlopen(self.url)
+            with urllib.request.urlopen(self.url) as f:
+                with open(dst_fn, 'wb') as local_file:
+                     local_file.write(f.read())
+            
+            if self.verbose:
+                utils.echo_msg(f'fetched remote ftp file: {os.path.basename(self.url)}.')
         except Exception as e:
             utils.echo_error_msg(e)
-            f = None
-            status - 1
+            status = -1
 
-        if f is not None:
-            with open(dst_fn, 'wb') as local_file:
-                 local_file.write(f.read())
-                 
-            if self.verbose:
-                utils.echo_msg(
-                    'fetched remote ftp file: {}.'.format(
-                        os.path.basename(self.url)
-                    )
-                )
-                
-        return(status)
+        return status
 
-    
-## fetch queue for threads
-def fetch_queue(q, c = True):
-    """fetch queue `q` of fetch results
 
-    each fetch queue `q` should be a list of the following:
-    [remote_data_url, local_data_path, data-type, fetches-module, 
-    number-of-attempts, results-list]    
-
-    set c to False to skip size-checking
+## ==============================================
+## Threading & Queues
+## ==============================================
+def fetch_queue(q: queue.Queue, c: bool = True):
+    """Worker for the fetch queue.
+    q items: [remote_data_url, local_data_path, data-type, fetches-module, attempts, results-list]    
     """
-
-    ## temporary bypass of ssl for certain modules...
-    #no_verify = ['tnm', 'mar_grav', 'srtm_plus']
+    
+    ## Modules that bypass SSL verification
     no_verify = ['mar_grav', 'srtm_plus']
+
     while True:
         fetch_args = q.get()
-        if not os.path.exists(os.path.dirname(fetch_args[1])):
+        url = fetch_args[0]
+        local_path = fetch_args[1]
+        data_type = fetch_args[2]
+        module = fetch_args[3]
+        retries = fetch_args[4]
+        results_list = fetch_args[5]
+
+        ## Ensure dir exists
+        if not os.path.exists(os.path.dirname(local_path)):
             try:
-                os.makedirs(os.path.dirname(fetch_args[1]))
+                os.makedirs(os.path.dirname(local_path))
             except: pass
 
-        ## fetch either FTP or HTTP
-        if fetch_args[0].split(':')[0] == 'ftp':
-            Fetch(
-                url=fetch_args[0],
-                callback=fetch_args[3].callback,
-                verbose=fetch_args[3].verbose,
-                headers=fetch_args[3].headers
-            ).fetch_ftp_file(fetch_args[1])
-            #fetch_args[5].append([fetch_args[0], fetch_args[1], fetch_args[2]])
-            fetch_results_ = [fetch_args[0], fetch_args[1], fetch_args[2], 0]
-            fetch_args[5].append(fetch_results_)
-            
-            ## call the fetches callback function, does nothing
-            ## unless reset by user, must be defined with a single
-            ## argument, which is the fetch_results just populated
-            if callable(fetch_args[3].callback):
-                fetch_args[3].callback(fetch_results_)
-        else:
-            try:
+        parsed_url = urllib.parse.urlparse(url)
+        
+        try:
+            if parsed_url.scheme == 'ftp':
                 status = Fetch(
-                    url=fetch_args[0],
-                    callback=fetch_args[3].callback,
-                    verbose=fetch_args[3].verbose,
-                    headers=fetch_args[3].headers,
-                    verify=False if fetch_args[3].name in no_verify else True
-                ).fetch_file(fetch_args[1], check_size=c)
-                fetch_results_ = [fetch_args[0], fetch_args[1], fetch_args[2], status]
-                fetch_args[5].append(fetch_results_)
+                    url=url,
+                    callback=module.callback,
+                    verbose=module.verbose,
+                    headers=module.headers
+                ).fetch_ftp_file(local_path)
+            else:
+                verify_ssl = False if module.name in no_verify else True
+                status = Fetch(
+                    url=url,
+                    callback=module.callback,
+                    verbose=module.verbose,
+                    headers=module.headers,
+                    verify=verify_ssl
+                ).fetch_file(local_path, check_size=c)
 
-                ## call the fetches callback function, does nothing
-                ## unless reset by user, must be defined with a single
-                ## argument, which is the fetch_results just populated
-                if callable(fetch_args[3].callback):
-                    fetch_args[3].callback(fetch_results_)
-                    
-            except Exception as e:
-                ## There was an exception in fetch_file, we'll put the request back into
-                ## the queue to attempt to try again, fetch_args[4] is the number of times
-                ## we will try to do this, once exhausted, we will give up.
-                # and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
-                if fetch_args[4] > 0:
-                    # utils.echo_warning_msg(
-                    #     'fetch of {} failed...putting back in the queue: {}'.format(
-                    #         fetch_args[0], e
-                    #     )
-                    # )
-                    fetch_args[4] -= 1
-                    utils.remove_glob(fetch_args[1])
-                    q.put(fetch_args)
-                else:
-                    utils.echo_error_msg(
-                        'fetch of {} failed...'.format(fetch_args[0])
-                    )
-                    fetch_args[3].status = -1
-                    fetch_results_ = [fetch_args[0], fetch_args[1], fetch_args[2], e]
-                    fetch_args[5].append(fetch_results_)
+            ## Record result
+            fetch_results_entry = [url, local_path, data_type, status]
+            results_list.append(fetch_results_entry)
 
-                    ## call the fetches callback function, does nothing
-                    ## unless reset by user, must be defined with a single
-                    ## argument, which is the fetch_results just populated
-                    if callable(fetch_args[3].callback):
-                        fetch_args[3].callback(fetch_results_)
+            if callable(module.callback):
+                module.callback(fetch_results_entry)
+        
+        except Exception as e:
+            if retries > 0:
+                fetch_args[4] -= 1
+                utils.remove_glob(local_path)
+                q.put(fetch_args) # Put back in queue
+            else:
+                utils.echo_error_msg(f'fetch of {url} failed...')
+                module.status = -1
+                fetch_results_entry = [url, local_path, data_type, str(e)]
+                results_list.append(fetch_results_entry)
+                
+                if callable(module.callback):
+                    module.callback(fetch_results_entry)
 
         q.task_done()
 
         
 class fetch_results(threading.Thread):
-    """fetch results gathered from a fetch module.
-
-    results is a list of URLs with data type
-
-    when a fetch module is run with {module}.run() it will 
-    fill {module}.results with a list of urls, e.g.
-    {module}.results = [[http://data/url.xyz.gz, /home/user/data/url.xyz.gz, data-type], ...]
-    where each result in is [data_url, data_fn, data_type]
-
-    run this on an initialized fetches module:
-    >>> fetch_result(fetches_module, n_threads=3).run()
-    and this will fill a queue for data fetching, using 
-    'n_threads' threads.
-    """
+    """Threaded fetch runner."""
     
     def __init__(self, mod, check_size=True, n_threads=3, attempts=5):
         threading.Thread.__init__(self)
@@ -937,13 +634,15 @@ class fetch_results(threading.Thread):
         self.check_size = check_size
         self.n_threads = n_threads
         self.attempts = attempts
-        ## results holds the info from mod.results as a list,
-        ## with the addition of the fetching status at the end.
         self.results = []
+        
+        ## Ensure module has run to generate URLs
         if len(self.mod.results) == 0:
             self.mod.run()
+
             
     def run(self):
+        ## Start workers
         for _ in range(self.n_threads):
             t = threading.Thread(
                 target=fetch_queue,
@@ -952,45 +651,26 @@ class fetch_results(threading.Thread):
             t.daemon = True
             t.start()
 
-        ## fetch_q data is [fetch_results, fetch_path,
-        ## fetch_dt, fetch_module, retries, results]
-        attempts = self.attempts
-        while True:
-            for row in self.mod.results:
-                self.fetch_q.put(
-                    [row['url'],
-                     os.path.join(
-                         self.mod._outdir, row['dst_fn']
-                     ),
-                     row['data_type'],
-                     self.mod,
-                     self.attempts,
-                     self.results]
-                )
+        ## Populate queue
+        ## Queue item: [url, path, type, module, retries, results_ptr]
+        for row in self.mod.results:
+            self.fetch_q.put([
+                row['url'],
+                os.path.join(self.mod._outdir, row['dst_fn']),
+                row['data_type'],
+                self.mod,
+                self.attempts,
+                self.results
+            ])
 
-            self.fetch_q.join()
-            status = [x[3]==0 for x in self.results]
-            all_ok = len(status) == len(self.mod.results)                
-            if (all(status) and all_ok) or attempts < 0:
-                break
-            else:
-                attempts-=1
+        ## Wait
+        self.fetch_q.join()
 
-                
-## Fetch Modules
+## ==============================================
+## Fetch Modules (Base & Implementations)
+## ==============================================
 class FetchModule:
-    """The FetchModule super class to hold all the fetch modules.
-
-    Make a sub-class from this to add a new fetch module, and 
-    add it to the FetchesFactory to include it in the factory 
-    for CLI or API.
-
-    Each Fetch Module (sub-class) should define a `run` function 
-    that will gather a list of `results`. 
-
-    The `results` should be a list of 
-    [remote-url, destination-file, data-type]
-    """
+    """Base class for all fetch modules."""
     
     def __init__(
             self,
@@ -1003,57 +683,30 @@ class FetchModule:
             max_year=None,
             params={}
     ):
-        self.region = src_region # fetching region
-        self.callback = callback # callback, run after a fetch attempt
-        self.verbose = verbose # verbosity
-        self.outdir = outdir # the directoy to place the fetched data
-        self.params = params # FetchesFactory parameters
-        self.status = 0 # fetching status
-        self.results = [] # fetching results, a list of dicts
-        self.name = name # the name of the fetch module
+        self.region = src_region
+        self.callback = callback
+        self.verbose = verbose
+        self.outdir = outdir
+        self.params = params
+        self.status = 0
+        self.results = []
+        self.name = name
         self.min_year = utils.int_or(min_year)
         self.max_year = utils.int_or(max_year)
-        
-        ## some servers don't like us, or any 'bot' at all, so let's
-        ## pretend we're just a Mozilla user on Linux. 
-        #self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0'
-        }
+        self.headers = R_HEADERS.copy()
 
         if self.outdir is None:
             self._outdir = os.path.join(os.getcwd(), self.name)
         else:
             self._outdir = os.path.join(self.outdir, self.name)
 
-        # if not os.path.exists(self._outdir):
-        #     os.makedirs(self._outdir)
-            
-        ## for dlim support, we can check these variables for
-        ## to do the proper processing. Set these to their correct
-        ## values in the sub-class
-        self.data_format = None
-        self.src_srs = None
-        self.title = None
-        self.source = None
-        self.date = None
-        self.data_type = None
-        self.resolution = None
-        self.hdatum = None
-        self.vdatum = None
-        self.url = None
-
-        ## set a generic region of the entire world in WGS84 if no region
-        ## was specified or if its an invalid region...this will result in quite
-        ## a lot of downloading on global datasets, so be careful with this.
+        ## Default to whole world if region is invalid/missing
         if self.region is None or not self.region.valid_p():
             self.region = regions.Region().from_list([-180, 180, -90, 90])
 
             
     def run(self):
-        """define the `run` function in the sub-class"""
-        
-        raise(NotImplementedError)
+        raise NotImplementedError
 
     
     def fetch_entry(self, entry, check_size=True, retries=5):
@@ -1064,12 +717,12 @@ class FetchModule:
                 headers=self.headers,
             ).fetch_file(
                 os.path.join(self._outdir, entry['dst_fn']),
-                check_size=check_size
+                check_size=check_size,
+                tries=retries
             )
         except:
             status = -1
-        
-        return(status)
+        return status
 
     
     def fetch_results(self):
@@ -1088,141 +741,87 @@ class FetchModule:
 
         
     def add_entry_to_results(self, url, dst_fn, data_type, **kwargs):
-        """add a fetches results entry to the results list"""
-        
         entry = {'url': url, 'dst_fn': dst_fn, 'data_type': data_type}
-        for key in kwargs.keys():
-            entry[key] = kwargs[key]
-
+        entry.update(kwargs)
         self.results.append(entry)             
 
-
-## Default http fetches
+        
 class HttpDataset(FetchModule):
-    """fetch an http file"""
+    """Fetch an http file directly."""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def run(self):
-        self.add_entry_to_results(
-            self.params['mod'],
-            os.path.basename(self.params['mod']),
-            'https'
-        )
-
         
-## TESTING MODULES
+    def run(self):
+        if 'mod' in self.params:
+            self.add_entry_to_results(
+                self.params['mod'],
+                os.path.basename(self.params['mod']),
+                'https'
+            )
+
+            
 class Nominatim(FetchModule):
+    """Test module for Nominatim (Geocoding)."""
+    
     def __init__(self, q='boulder', **kwargs):
         super().__init__(name='nominatim', **kwargs)
         self.q = q
         self._nom_url = 'https://nominatim.openstreetmap.org/search?'
         self.headers = {
-            'User-Agent': ('Fetches/CUDEM'),
-            'referer': 'https://nominatim.openstreetmap.org/ui/search.html?q=seattle'
+            'User-Agent': 'Fetches/CUDEM',
+            'referer': 'https://nominatim.openstreetmap.org/ui/search.html'
         }
-
-    def run(self):
-        if utils.str_or(self.q) is not None:
-            q_url = f'{self._nom_url}q={self.q}&format=jsonv2'
-
-        _req = Fetch(
-            q_url,
-            verbose=self.verbose
-        ).fetch_req()
-        if _req is not None:
-            results = _req.json()
-            x = utils.float_or(results["lon"])
-            y = utils.float_or(results["lat"])
-            print(f'{x}, {y}')
-
-            
-class GPSCoordinates(FetchModule):
-    """GPS Coordinates
-
-    Fetch various coordinates for places
-    """
-    
-    def __init__(self, q = 'boulder', **kwargs):
-        super().__init__(name='gps_coordinates', **kwargs)
-        self.q = q
-
-        ## The various gps-coordinates URLs
-        self.gpsc_api_url = "http://www.gps-coordinates.net/api/"
-        self.gpsc_web_url = "http://www.gps-coordinates.net/id/"
 
         
     def run(self):
-        """Run the gps-coordiantes fetches module"""
+        if utils.str_or(self.q) is not None:
+            q_url = f'{self._nom_url}q={self.q}&format=jsonv2'
+            _req = Fetch(q_url, verbose=self.verbose).fetch_req()
+            if _req is not None:
+                results = _req.json()
+                ## Assuming list return
+                if results and isinstance(results, list):
+                    x = utils.float_or(results[0]["lon"])
+                    y = utils.float_or(results[0]["lat"])
+                    print(f'{x}, {y}')
 
+                    
+class GPSCoordinates(FetchModule):
+    """Fetch various coordinates for places via gps-coordinates.net."""
+    
+    def __init__(self, q='boulder', **kwargs):
+        super().__init__(name='gps_coordinates', **kwargs)
+        self.q = q
+        self.gpsc_api_url = "http://www.gps-coordinates.net/api/"
+
+        
+    def run(self):
         if utils.str_or(self.q) is not None:
             q_url = f'{self.gpsc_api_url}{self.q}'
-            qw_url = f'{self.gpsc_web_url}{self.q}'
+            _req = Fetch(q_url, verbose=self.verbose).fetch_req()
+            if _req is not None:
+                results = _req.json()
+                if results.get("responseCode") == '200':
+                    x = utils.float_or(results["longitude"])
+                    y = utils.float_or(results["latitude"])
+                    print(f'{x}, {y}')
+                else:
+                    print(results)
 
-        _req = Fetch(
-            q_url,
-            verbose=self.verbose
-        ).fetch_req()
-        if _req is not None:
-            results = _req.json()
-            if results["responseCode"] == '200':
-                x = utils.float_or(results["longitude"])
-                y = utils.float_or(results["latitude"])
-                print(f'{x}, {y}')
-            else:
-                print(results)
-
-
-## Fetches Module Parser
+                    
+## ==============================================
+## Fetches Factory
+## ==============================================
 class FetchesFactory(factory.CUDEMFactory):
-    """Acquire a fetches module. Add a new fetches module here to 
-    expose it in the  CLI or API via FetchesFactory.
+    """Factory to acquire and initialize specific fetch modules."""
     
-    Use the Factory in python by calling: FetchesFactory()"""
-
-    from . import gmrt
-    from . import margrav
-    from . import srtmplus
-    from . import synbath
-    from . import charts
-    from . import dav
-    from . import multibeam
-    from . import gebco
-    from . import gedtm30
-    from . import mgds
-    from . import trackline
-    from . import ehydro
-    from . import ngs
-    from . import hydronos
-    from . import nceithredds
-    from . import etopo
-    from . import tnm
-    from . import emodnet
-    from . import chs
-    from . import hrdem
-    from . import mrdem
-    from . import arcticdem
-    from . import bluetopo
-    from . import osm
-    from . import copernicus
-    from . import fabdem
-    from . import nasadem
-    from . import tides
-    from . import vdatum
-    from . import buoys
-    from . import earthdata
-    from . import usiei
-    from . import wsf
-    from . import hydrolakes
-    from . import bingbfp
-    from . import waterservices
-    from . import csb
-    from . import cptcity
-    from . import wadnr
-    from . import nswtb
-    from . import cdse
-    from . import gba
+    from . import gmrt, margrav, srtmplus, synbath, charts, dav, multibeam, gebco, gedtm30, \
+        mgds, trackline, ehydro, ngs, hydronos, nceithredds, etopo, tnm, emodnet, chs, \
+        hrdem, mrdem, arcticdem, bluetopo, osm, copernicus, fabdem, nasadem, tides, vdatum, \
+        buoys, earthdata, usiei, wsf, hydrolakes, bingbfp, waterservices, csb, cptcity, \
+        wadnr, nswtb, cdse, gba
     
     _modules = {
         'https': {'call': HttpDataset},
@@ -1231,7 +830,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'srtm_plus': {'call': srtmplus.SRTMPlus},
         'synbath': {'call': synbath.SynBath},
         'charts': {'call': charts.NauticalCharts},
-	    'digital_coast': {'call': dav.DAV},
+        'digital_coast': {'call': dav.DAV},
         'SLR': {'call': dav.SLR},
         'CoNED': {'call': dav.CoNED},
         'CUDEM': {'call': dav.CUDEM},
@@ -1271,195 +870,168 @@ class FetchesFactory(factory.CUDEMFactory):
         'usiei': {'call': usiei.USIEI},
         'wsf': {'call': wsf.WSF},
         'hydrolakes': {'call': hydrolakes.HydroLakes},
-        'bing_bfp': {'call': bingbfp.BingBFP},
+        'bingbfp': {'call': bingbfp.BingBFP},
         'waterservices': {'call': waterservices.WaterServices},
         'csb': {'call': csb.CSB},
         'cpt_city': {'call': cptcity.CPTCity},
         'gps_coordinates': {'call': GPSCoordinates},
-        'wa_dnr': {'call': wadnr.waDNR},
+        'wa_dnr': {'call': wadnr.WADNR},
         'nsw_tb': {'call': nswtb.NSW_TB},
         'sentinel2': {'call': cdse.Sentinel2},
         'gba': {'call': gba.GBA},
     }
-
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        
+
 ## ==============================================
 ## Command-line Interface (CLI)
-## $ fetches
-##
-## fetches cli
 ## ==============================================
-fetches_usage = lambda: """{cmd} ({version}): Fetches; Fetch and process remote elevation data
+class PrintModulesAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        factory.echo_modules(FetchesFactory._modules, values)
+        sys.exit(0)
 
-usage: {cmd} [ -hlqzAHR [ args ] ] MODULE ...
-
-Options:
-  -R, --region\t\tRestrict processing to the desired REGION 
-\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
-\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
-\t\t\tOR an OGR-compatible vector file with regional polygons. 
-\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
-\t\t\tIf a vector file is supplied, will use each region found therein.
-\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
-  -H, --threads\t\tSet the number of threads (1)
-  -A, --attempts\tSet the number of fetching attempts (5)
-  -l, --list\t\tReturn a list of fetch URLs in the given region.
-  -z, --no_check_size\tDon't check the size of remote data if local data exists.
-  -q, --quiet\t\tLower the verbosity to a quiet
-
-  --modules\t\tDisplay the module descriptions and usage
-  --help\t\tPrint the usage text
-  --version\t\tPrint the version information
-
-Supported FETCHES modules (see fetches --modules <module-name> for more info): 
-  {f_formats}
-""".format(cmd=os.path.basename(sys.argv[0]), 
-           version=__version__,
-           f_formats=utils.get_module_short_desc(FetchesFactory._modules))
-
-def fetches_cli(argv = sys.argv):
-    """run fetches from command-line
-
-See `fetches_cli_usage` for full cli options.
-    """
-
-    i_regions = []
-    these_regions = []
-    mods = []
-    mod_opts = {}
-    want_list = False
-    want_verbose = True
-    stop_threads = False
-    check_size = True
-    num_threads = 1
-    fetch_attempts = 5
+        
+def fetches_cli():
+    """Run fetches from command-line using argparse."""
     
-    ## parse command line arguments.
-    i = 1
-    while i < len(argv):
-        arg = argv[i]
-        if arg == '--region' or arg == '-R':
-            i_regions.append(str(argv[i + 1]))
-            i = i + 1
-        elif arg[:2] == '-R':
-            i_regions.append(str(arg[2:]))
-        elif arg == '-threads' or arg == '--threads' or arg == '-H':
-            num_threads = utils.int_or(argv[i + 1], 1)
-            i = i + 1
-        elif arg[:2] == '-H':
-            num_threads = utils.int_or(argv[2:], 1)
-        elif arg == '-attempts' or arg == '--attempts' or arg == '-A':
-            fetch_attempts = utils.int_or(argv[i + 1], 1)
-            i = i + 1
-        elif arg[:2] == '-A':
-            fetch_attempts = utils.int_or(argv[2:], 1)
-        elif arg == '--list' or arg == '-l':
-            want_list = True
-        elif arg == '--no_check_size' or arg == '-z':
-            check_size = False
-        elif arg == '--quiet' or arg == '-q':
-            want_verbose = False
-        elif arg == '--help' or arg == '-h':
-            sys.stderr.write(fetches_usage())
-            sys.exit(1)
-        elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(
-                os.path.basename(sys.argv[0]), __version__)
-                  )
-            sys.exit(1)
-        elif arg == '--modules' or arg == '-m':
-            utils.echo_modules(
-                FetchesFactory._modules,
-                None if i+1 >= len(argv) else sys.argv[i+1]
-            )
-            sys.exit(0)
-        elif arg[0] == '-':
-            sys.stderr.write(fetches_usage())
-            sys.exit(0)
-        else:
-            mods.append(arg)
-            
-        i = i + 1
+    parser = argparse.ArgumentParser(
+        description=f"%(prog)s ({__version__}): Fetch and process remote elevation data",
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=f"""
+Supported %(prog)s modules (see %(prog)s --modules <module-name> for more info): 
+{factory.get_module_short_desc(FetchesFactory._modules)}
+        
+CUDEM home page: <http://cudem.colorado.edu>
+        """
 
-    if len(mods) == 0:
-        sys.stderr.write(fetches_usage())
-        utils.echo_error_msg('you must select at least one fetch module')
+    )
+
+    parser.add_argument(
+        '-R', '--region',
+        action='append',
+        help=("Restrict processing to the desired REGION \n"
+              "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"
+              "OR an OGR-compatible vector file with regional polygons.")
+    )
+    parser.add_argument(
+        '-H', '--threads',
+        type=int,
+        default=1,
+        help="Set the number of threads (default: 1)"
+    )
+    parser.add_argument(
+        '-A', '--attempts',
+        type=int,
+        default=5,
+        help="Set the number of fetching attempts (default: 5)"
+    )
+    parser.add_argument(
+        '-l', '--list',
+        action='store_true',
+        help="Return a list of fetch URLs in the given region."
+    )
+    parser.add_argument(
+        '-z', '--no_check_size',
+        action='store_true',
+        help="Don't check the size of remote data if local data exists."
+    )
+    parser.add_argument(
+        '-q', '--quiet',
+        action='store_true',
+        help="Lower the verbosity to a quiet"
+    )
+    parser.add_argument(
+        '-m', '--modules',
+        nargs='?',
+        default=None,
+        action=PrintModulesAction,
+        help="Display the module descriptions and usage"
+    )
+    parser.add_argument(
+        '-v', '--version',
+        action='version',
+        version=f'fetches, version {__version__}'
+    )
+    parser.add_argument(
+        'modules_to_run',
+        nargs='*',
+        help="The modules to run (e.g., srtm_plus, gmrt, etc.)"
+    )
+
+    ## Parse arguments
+    args = parser.parse_args()
+
+    ## Validate Positional Arguments
+    if not args.modules_to_run:
+        parser.print_help()
+        utils.echo_error_msg('You must select at least one fetch module')
         sys.exit(-1)
 
-    these_regions = regions.parse_cli_region(i_regions, want_verbose)
-    if not these_regions:
+    ## Process Flags
+    want_verbose = not args.quiet
+    check_size = not args.no_check_size
+
+    ## Parse Regions
+    ## If no region provided, default to world.
+    if not args.region:
         these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
+    else:
+        these_regions = regions.parse_cli_region(args.region, want_verbose)
         
-    for rn, this_region in enumerate(these_regions):
-        if stop_threads:
-            return
-        
+    ## Execution Loop by region
+    for this_region in these_regions:
         x_fs = [
             FetchesFactory(
                 mod=mod,
                 src_region=this_region,
                 verbose=want_verbose
-            )._acquire_module() for mod in mods
+            )._acquire_module() for mod in args.modules_to_run
         ]
+        
         for x_f in x_fs:
             if x_f is None:
                 continue
             
             if want_verbose:
-                utils.echo_msg(
-                    'running fetch module {} on region {}...'.format(
-                        x_f.name, this_region.format('str')
-                    )
-                )
+                utils.echo_msg(f'running fetch module {x_f.name} on region {this_region.format("str")}...')
 
             try:
                 x_f.run()
             except (KeyboardInterrupt, SystemExit):
-                utils.echo_error_msg(
-                    'user breakage...please wait while fetches exits.'
-                )
+                utils.echo_error_msg('User breakage... exiting.')
                 sys.exit(-1)
                 
             if want_verbose:
-                utils.echo_msg(
-                    'found {} data files.'.format(len(x_f.results))
-                )
+                utils.echo_msg(f'found {len(x_f.results)} data files.')
                 
-            if len(x_f.results) == 0:
-                break
+            if not x_f.results:
+                continue
             
-            if want_list:
+            if args.list:
                 for result in x_f.results:
                     print(result['url'])
-                    print(result)
             else:
                 try:
                     fr = fetch_results(
                         x_f,
-                        n_threads=num_threads,
+                        n_threads=args.threads,
                         check_size=check_size,
-                        attempts=fetch_attempts
+                        attempts=args.attempts
                     )
                     fr.daemon = True                
                     fr.start()
                     fr.join()         
                 except (KeyboardInterrupt, SystemExit):
-                    utils.echo_error_msg(
-                        'user breakage...please wait while fetches exits.'
-                    )
+                    utils.echo_error_msg('User breakage... please wait while fetches exits.')
                     x_f.status = -1
-                    stop_threads = True
+                    ## Drain queue
                     while not fr.fetch_q.empty():
                         try:
                             fr.fetch_q.get(False)
-                        except Empty:
-                            continue
-                        
-                        fr.fetch_q.task_done()
-                        
-                
+                            fr.fetch_q.task_done()
+                        except queue.Empty:
+                            break
 ### End

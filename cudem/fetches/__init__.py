@@ -17,13 +17,13 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Code:
 
-__version__ = "0.5.1"
+__version__ = "0.6.0"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
+from . import FRED
 from . import fetches
 from . import gmrt
 from . import margrav

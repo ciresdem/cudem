@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## trackline.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,65 +21,91 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Query NOAA Trackline bathymetric data.
 ##
 ### Code:
 
+import json
+from cudem import utils
 from cudem.fetches import fetches
 
-## NOAA Trackline
+## ==============================================
+## Constants
+## ==============================================
+TRACKLINE_BASE_URL = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/trackline_combined_dynamic/MapServer/1'
+TRACKLINE_QUERY_URL = f'{TRACKLINE_BASE_URL}/query?'
+TRACKLINE_REQUEST_URL = 'http://www.ngdc.noaa.gov/trackline/request/?surveyIds='
+
+## ==============================================
+## Trackline Module
+## ==============================================
 class Trackline(fetches.FetchModule):
     """NOAA TRACKLINE bathymetric data.
 
     http://www.ngdc.noaa.gov/trackline/
 
-    ** This module won't fetch data ATM. Just returns a 
-    URL for a basket that has to then be submitted. :(
+    Note: This module currently does not download files directly. 
+    It generates a URL for a "shopping basket" containing the survey IDs 
+    found in the region, which must be submitted manually.
 
     < trackline >
     """
     
-    def __init__(self, where='1=1', **kwargs):
+    def __init__(self, where: str = '1=1', **kwargs):
         super().__init__(name='trackline', **kwargs)
         self.where = where
-        
-        ## The various trackline URLs
-        self._trackline_url = ('https://gis.ngdc.noaa.gov/arcgis/rest/services/'
-                               'web_mercator/trackline_combined_dynamic/MapServer/1')
-        self._trackline_query_url = '{0}/query?'.format(self._trackline_url)
 
         
     def run(self):
-        """Run the trackline fetching module"""
+        """Run the trackline fetching module."""
         
         if self.region is None:
-            return([])
+            return []
 
-        _data = {
+        ## Prepare ArcGIS REST Query
+        params = {
             'where': self.where,
             'outFields': '*',
             'geometry': self.region.format('bbox'),
-            'inSR':4326,
-            'outSR':4326,
-            'f':'pjson',
-            'returnGeometry':'False'
+            'inSR': 4326,
+            'outSR': 4326,
+            'f': 'pjson',
+            'returnGeometry': 'False'
         }
-        _req = fetches.Fetch(
-            self._trackline_query_url, verbose=self.verbose
-        ).fetch_req(params=_data)
-        if _req is not None:
-            features = _req.json()
-            ids = []
-            for feature in features['features']:
-                ids.append(feature['attributes']['SURVEY_ID'])
-                #data_link = feature['attributes']['DOWNLOAD_URL']
 
-            print(
-                'http://www.ngdc.noaa.gov/trackline/request/?surveyIds={}'.format(
-                    ','.join(ids)
-                )
-            )
+        ## Execute Request
+        req = fetches.Fetch(
+            TRACKLINE_QUERY_URL, 
+            verbose=self.verbose
+        ).fetch_req(params=params)
+
+        if req is not None:
+            try:
+                features = req.json()
+                
+                ## Extract Survey IDs
+                ids = []
+                if 'features' in features:
+                    ids = [
+                        f['attributes']['SURVEY_ID'] 
+                        for f in features['features'] 
+                        if 'attributes' in f and 'SURVEY_ID' in f['attributes']
+                    ]
+
+                if ids:
+                    basket_link = f"{TRACKLINE_REQUEST_URL}{','.join(ids)}"
+                    print(f"Trackline Basket URL: {basket_link}")
+                else:
+                    if self.verbose:
+                        utils.echo_msg("No Trackline surveys found in this region.")
+
+            except json.JSONDecodeError:
+                utils.echo_error_msg("Failed to parse Trackline response.")
+            except Exception as e:
+                utils.echo_error_msg(f"Error processing Trackline data: {e}")
+
+        return self
 
 ### End

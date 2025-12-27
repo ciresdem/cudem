@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## mgds.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,75 +21,94 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch marine geophysical data from the Marine Geoscience Data System (MGDS).
 ##
 ### Code:
 
 import lxml.etree
+from typing import List, Dict, Optional
 from cudem.fetches import fetches
 
-## MGDS
+## ==============================================
+## Constants
+## ==============================================
+MGDS_FILE_URL = 'https://www.marine-geo.org/services/FileServer?'
+MGDS_FILE_DOWNLOAD_URL = 'http://www.marine-geo.org/services/FileDownloadServer?'
+MGDS_METADATA_URL = 'http://www.marine-geo.org/services/FileDownloadServer/metadata?'
+MGDS_SEARCH_URL = 'http://www.marine-geo.org/services/search/datasets??'
+
+MGDS_NAMESPACE = 'https://www.marine-geo.org/services/xml/mgdsDataService'
+
+## ==============================================
+## MGDS Module
+## ==============================================
 class MGDS(fetches.FetchModule):
     """The Marine Geoscience Data System (MGDS)
 
-    Fetch marine data from MGDS
+    Fetch marine data from MGDS.
     
     MGDS is a trusted data repository that provides free public access 
-    to a curated collection of marine geophysical data products and 
-    complementary data related to understanding the formation and evolution 
-    of the seafloor and sub-seafloor.
+    to a curated collection of marine geophysical data products.
 
     https://www.marine-geo.org
 
-    data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, 
+    data_type options:
+    [Bathymetry, Bathymetry:Phase, Bathymetry:Swath, 
     Bathymetry:Swath:Ancillary, Bathymetry:Singlebeam, Bathymetry:BPI, 
     Bathymetry:ReferenceSurface, Bathymetry:Paelobathymetry]
-            
+
+    Configuration Example:            
     < mgds:data_type=Bathymetry >
     """
     
-    def __init__(self, data_type = 'Bathymetry', **kwargs):
+    def __init__(self, data_type: str = 'Bathymetry', **kwargs):
         super().__init__(name='mgds', **kwargs)
         self.data_type = data_type.replace(',', ':')
-        
-        ## The various MGDS URLs
-        self._mgds_file_url = 'https://www.marine-geo.org/services/FileServer?'
-        self._mgds_filedownload_url = 'http://www.marine-geo.org/services/FileDownloadServer?'
-        self._mgds_filemetadata_url = ('http://www.marine-geo.org/services/'
-                                       'FileDownloadServer/metadata?')
-        self._mgds_archive_url = 'http://www.marine-geo.org/services/FileDownloadServer/metadata?'
-        self._mgds_search_url = 'http://www.marine-geo.org/services/search/datasets??'
 
         
     def run(self):
-        """Run the MGDS fetching module"""
+        """Run the MGDS fetching module."""
 
         if self.region is None:
-            return([])
+            return []
 
-        self.data = {
-            'north':self.region.ymax,
-            'west':self.region.xmin,
-            'south':self.region.ymin,
-            'east':self.region.xmax,
-            'format':'summary',
-            'data_type':'{}'.format(self.data_type)
+        search_params = {
+            'north': self.region.ymax,
+            'west': self.region.xmin,
+            'south': self.region.ymin,
+            'east': self.region.xmax,
+            'format': 'summary',
+            'data_type': self.data_type
         }
-        req = fetches.Fetch(self._mgds_file_url).fetch_req(
-            params=self.data, tries=10, timeout=2
-        )
-        if req is not None:
-            req_xml = lxml.etree.fromstring(req.content)
-            req_results = req_xml.findall(
-                './/{https://www.marine-geo.org/services/xml/mgdsDataService}file'
-            )
-            for req_result in req_results:
-                name = req_result.attrib['name']
-                link = req_result.attrib['download']
-                self.add_entry_to_results(link, name, 'mgds')
-                
-        return(self)
 
+        ## Fetch Summary XML
+        req = fetches.Fetch(MGDS_FILE_URL).fetch_req(
+            params=search_params, 
+            tries=10, 
+            timeout=2
+        )
+
+        if req is not None:
+            try:
+                req_xml = lxml.etree.fromstring(req.content)
+                
+                ## Parse Results
+                ## Using namespace directly in findall
+                req_results = req_xml.findall(f'.//{{{MGDS_NAMESPACE}}}file')
+                
+                for req_result in req_results:
+                    name = req_result.attrib.get('name')
+                    link = req_result.attrib.get('download')
+                    
+                    if name and link:
+                        self.add_entry_to_results(link, name, 'mgds')
+                        
+            except lxml.etree.XMLSyntaxError as e:
+                pass
+
+        return self
+
+    
 ### End

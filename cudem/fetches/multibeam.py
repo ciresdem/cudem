@@ -1,8 +1,8 @@
-### fetches.py
+### multibeam.py
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## multibeam.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,42 +21,90 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch Multibeam bathymetry from NOAA NCEI, MBDB, and R2R.
 ##
 ### Code:
 
-import os, sys
+import os
 import re
-#from tqdm import tqdm
 from io import StringIO
+from typing import Optional, List, Dict, Any, Tuple
 from cudem import utils
 from cudem import regions
 from cudem.fetches import fetches
 
+## ==============================================
+## Constants
+## ==============================================
+## NOAA NCEI
+NCEI_DATA_URL = "https://data.ngdc.noaa.gov/platforms/"
+NCEI_METADATA_URL = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
+NCEI_SEARCH_URL = "https://gis.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
+NCEI_AUTOGRID_URL = "https://www.ngdc.noaa.gov/maps/autogrid/"
+NCEI_HTML_URL = "https://www.ngdc.noaa.gov/"
+
+## MBDB (ArcGIS)
+MBDB_DYNAMIC_URL = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/multibeam_footprints/MapServer'
+MBDB_FEATURES_URL = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/multibeam_datasets/FeatureServer'
+
+## R2R
+R2R_API_URL = 'https://service.rvdata.us/api/fileset/keyword/multibeam?'
+R2R_PRODUCT_URL = 'https://service.rvdata.us/api/product/?'
+
+## ==============================================
+## Helper Functions
+## ==============================================
+def _parse_mbsystem_inf_bounds(inf_text: StringIO) -> 'regions.Region':
+    """Parse spatial bounds from an MBSystem .inf file content."""
+    
+    minmax = [0, 0, 0, 0, 0, 0]
+    for line in inf_text:
+        parts = line.split()
+        if len(parts) > 1 and parts[0] == 'Minimum':
+            try:
+                if parts[1] == 'Longitude:':
+                    minmax[0] = utils.float_or(parts[2]) # xmin
+                    minmax[1] = utils.float_or(parts[5]) # xmax
+                elif parts[1] == 'Latitude:':
+                    minmax[2] = utils.float_or(parts[2]) # ymin
+                    minmax[3] = utils.float_or(parts[5]) # ymax
+                elif parts[1] == 'Depth:':
+                    minmax[4] = utils.float_or(parts[5]) * -1 # zmin
+                    minmax[5] = utils.float_or(parts[2]) * -1 # zmax
+            except (IndexError, ValueError):
+                continue
+    
+    return regions.Region().from_list(minmax)
+
+
+## ==============================================
+## Multibeam Module (NCEI)
+## ==============================================
 class Multibeam(fetches.FetchModule):
     """NOAA MULTIBEAM bathymetric data.
 
-    Fetch multibeam data from NOAA NCEI
-        
-    NCEI is the U.S. national archive for multibeam bathymetric data 
-    and holds more than 9 million nautical miles of ship trackline 
-    data recorded from over 2400 cruises and received from sources 
-    worldwide.
-
-    https://data.ngdc.noaa.gov/platforms/
-
-    <exclude_>survey_id and <exclude_>ship_id can be lists of surveys or ships, 
-    repsectively, using a '/' as a seperator.
-
-    < multibeam:processed=True:min_year=None:max_year=None:survey_id=None:ship_id=None:exclude_survey_id=None:exclude_ship_id=None >
+    Fetch multibeam data from NOAA NCEI.
+    
+    Configuration Example:
+    < multibeam:processed=True:min_year=None:max_year=None:survey_id=None:ship_id=None >
     """
     
     def __init__(
-            self, processed=True, survey_id=None, exclude_survey_id=None, ship_id=None,
-            exclude_ship_id=None, exclude=None, make_datalist=False, want_inf=True,
-            want_vdatum=False, inf_only=False, tables=False, **kwargs
+            self, 
+            processed: bool = True, 
+            survey_id: Optional[str] = None, 
+            exclude_survey_id: Optional[str] = None, 
+            ship_id: Optional[str] = None,
+            exclude_ship_id: Optional[str] = None, 
+            exclude: Optional[str] = None, 
+            make_datalist: bool = False, 
+            want_inf: bool = True,
+            want_vdatum: bool = False, 
+            inf_only: bool = False, 
+            tables: bool = False, 
+            **kwargs
     ):
         super().__init__(name='multibeam', **kwargs)
         self.processed_p = processed
@@ -66,30 +114,16 @@ class Multibeam(fetches.FetchModule):
         self.exclude_ship_id = exclude_ship_id
         self.exclude = exclude
         self.make_datalist = make_datalist
-        self.want_inf = want_inf
+        
         self.inf_only = inf_only
-        if self.inf_only:
-            self.want_inf = True
+        self.want_inf = True if inf_only else want_inf
             
         self.want_vdatum = want_vdatum
         self.tables = tables
         
-        ## various multibeam URLs
-        self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
-        self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
-        self._mb_search_url = "https://gis.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
-        self._mb_autogrid = "https://www.ngdc.noaa.gov/maps/autogrid/"
-        self._mb_html = "https://www.ngdc.noaa.gov/"
-        self._mb_json = "https://data.ngdc.noaa.gov/platforms/ocean/mgg/mb-archive.json"
-        self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]        
-
-        ## for dlim, data_format of 301 is multibeam data parsed with MBSystem.
-        self.data_format = 301
-        if self.want_vdatum:
-            self.src_srs = 'epsg:4326+3855'
-        else:
-            self.src_srs = 'epsg:4326'
-
+        ## Metadata
+        self.data_format = 301 # MBSystem
+        self.src_srs = 'epsg:4326+3855' if self.want_vdatum else 'epsg:4326'
         self.title = 'NOAA NCEI Multibeam bathymetric surveys'
         self.source = 'NOAA/NCEI'
         self.date = '1966 - 2022'
@@ -100,558 +134,402 @@ class Multibeam(fetches.FetchModule):
         self.url = 'https://www.ngdc.noaa.gov/mgg/bathymetry/multibeam.html'
 
         
-    def mb_inf_data_format(self, src_inf):
-        """extract the data format from the mbsystem inf file."""
-
-        with open(src_inf, errors='ignore') as iob:
-            for il in iob:
-                til = il.split()
-                if len(til) > 1:
-                    if til[0] == 'MBIO':
-                        return('{}'.format(til[4]))
-
-                    
-    def mb_inf_data_date(self, src_inf):
-        """extract the date from the mbsystem inf file."""
-
-        with open(src_inf, errors='ignore') as iob:
-            for il in iob:
-                til = il.split()
-                if len(til) > 1:
-                    if til[0] == 'Time:':
-                        return(til[3])
-
-                    
-    def mb_inf_perc_good(self, src_inf):
-        """extract the data format from the mbsystem inf file."""
-
-        with open(src_inf, errors='ignore') as iob:
-            for il in iob:
-                til = il.split(':')
-                if len(til) > 1:
-                    if til[0].strip() == 'Number of Good Beams':
-                        return(til[1].split()[-1].split('%')[0])
-
-
-    def want_generated(self, tmp_url):
-        #tmp_url = these_surveys[key]['1'][0][0]
-        _req = fetches.Fetch(
-            tmp_url,
-            verbose=False
-        ).fetch_req()
-        if _req is None or _req.status_code == 404:
-            tmp_url = tmp_url.split('/')
-            tmp_url.insert(-1, 'generated')
-            tmp_url = '/'.join(tmp_url)
-            
-            _req = fetches.Fetch(
-                tmp_url,
-                verbose=False
-            ).fetch_req()
-            if _req is not None and _req.status_code != 404:
-                want_generated = True
-        else:
-            want_generated = False    
-
-        return(want_generated)
-                    
-    def run(self):
-        """Run the multibeam fetches module"""
+    def _extract_inf_metadata(self, src_inf: str, key: str) -> Optional[str]:
+        """Generic extractor for local .inf files."""
         
-        these_surveys = {}
-        these_versions = {}
+        if not os.path.exists(src_inf):
+            return None
+            
+        try:
+            with open(src_inf, 'r', errors='ignore') as f:
+                for line in f:
+                    parts = line.split() if key != 'Number of Good Beams' else line.split(':')
+                    if len(parts) > 1:
+                        if key == 'MBIO' and parts[0] == 'MBIO':
+                            return str(parts[4])
+                        elif key == 'Time:' and parts[0] == 'Time:':
+                            return parts[3]
+                        elif key == 'Number of Good Beams' and parts[0].strip() == 'Number of Good Beams':
+                            return parts[1].split()[-1].split('%')[0]
+        except Exception:
+            return None
+        return None
+
+    
+    def mb_inf_data_format(self, src_inf: str) -> Optional[str]:
+        return self._extract_inf_metadata(src_inf, 'MBIO')
+
+    
+    def mb_inf_data_date(self, src_inf: str) -> Optional[str]:
+        return self._extract_inf_metadata(src_inf, 'Time:')
+
+    
+    def mb_inf_perc_good(self, src_inf: str) -> Optional[str]:
+        return self._extract_inf_metadata(src_inf, 'Number of Good Beams')
+
+    
+    def check_for_generated_data(self, base_url: str) -> bool:
+        """Check if a 'generated' directory exists for processed data."""
+        
+        ## Quick check on the specific file URL to see if it exists directly or needs 'generated' path        
+        req = fetches.Fetch(base_url, verbose=False).fetch_req()
+        if req is None or req.status_code == 404:
+            parts = base_url.split('/')
+            parts.insert(-1, 'generated')
+            gen_url = '/'.join(parts)
+            
+            req_gen = fetches.Fetch(gen_url, verbose=False).fetch_req()
+            if req_gen is not None and req_gen.status_code != 404:
+                return True
+        return False
+
+    
+    def run(self):
+        """Run the multibeam fetches module."""
+        
         if self.region is None:
-            return([])
-        else:
-            fetch_region = self.region.copy()
+            return []
+        
+        ## Search NCEI groovy script
+        params = {'geometry': self.region.format('bbox')}
+        req = fetches.Fetch(NCEI_SEARCH_URL).fetch_req(params=params, timeout=20)
+        
+        if req is None or req.status_code != 200:
+            utils.echo_error_msg(f'Failed to fetch multibeam request: {req.status_code if req else "None"}')
+            return []
 
-        _req = fetches.Fetch(
-            self._mb_search_url
-        ).fetch_req(
-            params={'geometry': fetch_region.format('bbox')},
-            timeout=20
-        )
-        if _req is not None and _req.status_code == 200:
-            utils.echo_msg(_req.url)
-            survey_list = _req.text.split('\n')[:-1]
-            #utils.echo_msg(survey_list)
-            for r in survey_list:
-                dst_pfn = r.split(' ')[0]
-                dst_p = dst_pfn.split('/')
-                dst_fn = dst_p[-1:][0]
-                survey = dst_p[6]
-                dn = dst_p[:-1]
-                version = dst_p[9][-1]
-                ship = dst_p[5]
-                data_url = self._mb_data_url + '/'.join(r.split('/')[3:])
-                date = re.search("([0-9]{8})", dst_pfn)
-                if self.survey_id is not None:
-                    if survey not in self.survey_id.split('/'):
-                        continue
+        utils.echo_msg(f"Query URL: {req.url}")
+        
+        ## Parse Results
+        ## Structure: Survey -> Version -> List of files
+        surveys_found = {} # {survey_name: {'date': date, 'versions': {ver: [files]}}}
 
-                if self.exclude_survey_id is not None:
-                    if survey in self.exclude_survey_id.split('/'):
-                        continue
+        lines = req.text.split('\n')
+        for line in lines:
+            if not line.strip(): continue
+            
+            ## Line format is path-like, e.g.: data/../survey/ship/..
+            parts = line.split(' ')[0].split('/') # Split path from potential trailing data
+            if len(parts) < 10: continue
 
-                if self.ship_id is not None:
-                    if ship.lower() not in [x.lower() for x in self.ship_id.split('/')]:
-                        continue
+            ## Extract Metadata from path
+            ## Typical Path: .../platforms/ocean/mgg/multibeam/data/version/SHIP/SURVEY/...
+            survey = parts[6]
+            ship = parts[5]
+            version = parts[9][-1] # '1' or '2' usually
+            filename = parts[-1]
+            
+            ## Construct Data URL
+            data_url = f"{NCEI_DATA_URL}{'/'.join(line.split('/')[3:]).split(' ')[0]}"
+            
+            ## Date Extraction
+            date_match = re.search(r"([0-9]{8})", filename)
+            date_str = date_match.group(0) if date_match else None
+            year = int(date_str[:4]) if date_str else None
 
-                if self.exclude_ship_id is not None:
-                    if ship.lower() in [x.lower() for x in self.exclude_ship_id.split('/')]:
-                        continue
+            ## Filters
+            if self.survey_id and survey not in self.survey_id.split('/'): continue
+            if self.exclude_survey_id and survey in self.exclude_survey_id.split('/'): continue
+            if self.ship_id and ship.lower() not in [x.lower() for x in self.ship_id.split('/')]: continue
+            if self.exclude_ship_id and ship.lower() in [x.lower() for x in self.exclude_ship_id.split('/')]: continue
+            
+            if self.min_year and year and year < self.min_year: continue
+            if self.max_year and year and year > self.max_year: continue
 
-                if date is not None:
-                    date = date[0]
-                    if self.min_year is not None and int(date[:4]) < self.min_year:
-                        continue
-                
-                    if self.max_year is not None and int(date[:4]) > self.max_year:
-                        continue
+            ## Store
+            if survey not in surveys_found:
+                surveys_found[survey] = {'date': date_str, 'versions': {}}
+            
+            if version not in surveys_found[survey]['versions']:
+                surveys_found[survey]['versions'][version] = []
 
-                self.date = date                    
-                if survey in these_surveys.keys():
-                    these_surveys[survey]['date'] = date
-                    mod_url = data_url.split(' ')[0]
-                    if version in these_surveys[survey].keys():
-                        these_surveys[survey][version].append(
-                            [data_url.split(' ')[0],
-                             os.path.join(self._outdir, '/'.join([survey, dst_fn])),
-                             'mb']
-                        )
-                    else:
-                        these_surveys[survey][version] = [
-                            [data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']
-                        ]
-                        
-                else:
-                    these_surveys[survey] = {version: [
-                        [data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']
-                    ]}
-                    these_surveys[survey]['date'] = date
+            local_path = os.path.join(self._outdir, survey, filename)
+            surveys_found[survey]['versions'][version].append([data_url, local_path, 'mb'])
 
-        else:
-            utils.echo_error_msg(
-                f'failed to fetch multibeam request, {_req.status_code}'
-            )
-                
-        #else:
-        with utils.ccp(
-                total=len(these_surveys.keys()),
-                desc='scanning NCEI Multibeam datasets',
-                leave=self.verbose
-        ) as pbar:
-            for key in these_surveys.keys():
+        ## Process Survey List
+        with utils.ccp(total=len(surveys_found), desc='Scanning NCEI Multibeam datasets', leave=self.verbose) as pbar:
+            for survey, data in surveys_found.items():
                 pbar.update()
-                want_generated = False
-                if self.processed_p:
-                    if '2' in these_surveys[key].keys():
-                        want_generated = self.want_generated(these_surveys[key]['2'][0][0])
-                        for v2 in these_surveys[key]['2']:
-                            if want_generated:
-                                v2_url = v2[0].split('/')
-                                v2_url.insert(-1, 'generated')
-                                v2_url = '/'.join(v2_url)
-                                v2_gen = [v2_url, v2[1], v2[2]]
-                                if not self.inf_only:
-                                    self.add_entry_to_results(*v2_gen)
-
-                                inf_url = self.inf_url(v2_gen)
-                            else:
-                                if not self.inf_only:
-                                    self.add_entry_to_results(*v2)
-
-                                inf_url = self.inf_url(v2)
-
-                            if self.want_inf:
-                                self.add_entry_to_results(
-                                    '{}.inf'.format(inf_url),
-                                    '{}.inf'.format(v2[1]),
-                                    'mb_inf'
-                                )
+                
+                versions = data['versions']
+                ## Prefer version '2' (Processed) if processed flag is True
+                target_version = '2' if self.processed_p and '2' in versions else '1'
+                
+                if target_version not in versions:
+                    ## Fallback if preferred missing.
+                    if not self.processed_p:
+                        ## Add all versions
+                        for v in versions:
+                            self._add_version_files(versions[v])
+                        continue
                     else:
-                        want_generated = self.want_generated(these_surveys[key]['1'][0][0])
-                        for v1 in these_surveys[key]['1']:
-                            if want_generated:
-                                v1_url = v1[0].split('/')
-                                v1_url.insert(-1, 'generated')
-                                v1_url = '/'.join(v1_url)
-                                v1_gen = [v1_url, v1[1], v1[2]]
-                                if not self.inf_only:
-                                    self.add_entry_to_results(*v1_gen)
+                        continue # Processed requested but v2 missing
 
-                                inf_url = self.inf_url(v1_gen)
-                            else:
-                                if not self.inf_only:
-                                    self.add_entry_to_results(*v1)
+                ## Process specific version files
+                file_list = versions[target_version]
+                if not file_list: continue
 
-                                inf_url = self.inf_url(v1)
+                ## Check for 'generated' directory (often holds the actual processed grids/data)
+                use_generated = self.check_for_generated_data(file_list[0][0])
+                
+                final_files = []
+                for f_entry in file_list:
+                    url, dst, fmt = f_entry
+                    if use_generated:
+                        u_parts = url.split('/')
+                        u_parts.insert(-1, 'generated')
+                        url = '/'.join(u_parts)
+                    
+                    final_files.append([url, dst, fmt])
 
-                            if self.want_inf:
-                                #inf_url = self.inf_url(v1)
-                                self.add_entry_to_results(
-                                    '{}.inf'.format(inf_url),
-                                    '{}.inf'.format(v1[1]),
-                                    'mb_inf'
-                                )
-                else:
-                    for keys in these_surveys[key].keys():
-                        want_generated = self.want_generated(these_surveys[key][keys][0][0])
-                        for survs in these_surveys[key][keys]:
-                            if want_generated:
-                                survs_url = survs[0].split('/')
-                                survs_url.insert(-1, 'generated')
-                                survs_url = '/'.join(survs_url)
-                                survs_gen = [survs_url, survs[1], survs[2]]
-                                if not self.inf_only:
-                                    self.add_entry_to_results(*survs_gen)
+                self._add_version_files(final_files)
 
-                                inf_url = self.inf_url(survs_gen)
-                            else:
-                                if not self.inf_only:
-                                    self.add_entry_to_results(*survs)
-
-                                inf_url = self.inf_url(survs)
-
-                            if self.want_inf:
-                                #inf_url = self.inf_url(survs)
-                                self.add_entry_to_results(
-                                    '{}.inf'.format(inf_url),
-                                    '{}.inf'.format(survs[1]),
-                                    'mb_inf'
-                                )
-
+        ## Tables / Datalist Output
         if self.tables:
             for entry in self.results:
-                survey, src_data, mb_fmt, mb_perc, mb_date \
-                    = self.parse_entry_inf(entry)
-                
-                print(survey, mb_date)
-            # for key in these_surveys.keys():
-            #     if these_surveys[key]['date'] is None:
-                
-            #     print(key, these_surveys[key]['date'])
+                inf_data = self.parse_entry_inf(entry, keep_inf=True) # Don't delete for table view?
+                if inf_data:
+                    print(f"{inf_data[0]} {inf_data[4]}")
                                 
         if self.make_datalist:
-            s_got = []
-            with open('mb_inf.txt', 'w') as mb_inf_txt:
-                for entry in self.results:
-                    try:
-                        survey, src_data, mb_fmt, mb_perc, mb_date \
-                            = self.parse_entry_inf(entry)
-                        if survey in s_got:
-                            continue
-                        
-                        this_year = int(utils.this_year()) \
-                            if self.min_year is None \
-                               else self.min_year
-                        this_weight = float(mb_perc) \
-                            * ((int(mb_date)-2000)/(this_year-2000))/100.
-                        mb_inf_txt.write(
-                            '{} -1 {}\n'.format(survey, this_weight)
-                        )
-                        s_got.append(survey)
-                    except:
-                        pass
-
-                    
-    def inf_url(self, entry):
-        if entry[0][-3:] == 'fbt':
-            inf_url = utils.fn_basename2(entry[0])
-        else:
-            inf_url = entry[0]
+            self._generate_datalist()
             
-        return(inf_url)            
+        return self
 
     
-    def echo_inf(self, entry):
-        print(self.parse_entry_inf(entry))
-
+    def _add_version_files(self, file_list: List[List[str]]):
+        """Helper to add files to results."""
         
-    def parse_entry_inf(self, entry, keep_inf=False, out_dir=None):
-        print(entry)
-        src_data = os.path.basename(entry['dst_fn'])
-        if src_data[-3:] == 'fbt':
-            src_mb = utils.fn_basename2(src_data)
-            inf_url = utils.fn_basename2(entry['url'])
-        else:
-            inf_url = entry['url']
-            src_mb = src_data
+        for entry in file_list:
+            url, dst, fmt = entry
             
-        survey = entry['url'].split('/')[7]
-        src_inf = os.path.join(self._outdir, '{}.inf'.format(entry['dst_fn']))
-        try:
-            status = fetches.Fetch(
-                '{}.inf'.format(inf_url), callback=self.callback, verbose=True
-            ).fetch_file(src_inf)
-        except:
-            utils.echo_warning_msg(
-                f'failed to fetch inf file: {inf_url}.inf'
-            )
-            status = -1
+            ## Determine INF url
+            ## .fbt files usually have .inf files with specific naming conventions
+            inf_url = utils.fn_basename2(url) + '.inf' if url.endswith('fbt') else url + '.inf'
             
-        if status == 0:
-            mb_fmt = self.mb_inf_data_format(src_inf)
-            mb_date = self.mb_inf_data_date(src_inf)
-            mb_perc = self.mb_inf_perc_good(src_inf)
-            if not keep_inf:
-                utils.remove_glob(src_inf)
+            if not self.inf_only:
+                self.add_entry_to_results(url, dst, fmt)
+            
+            if self.want_inf:
+                ## Add metadata file
+                self.add_entry_to_results(inf_url, dst + '.inf', 'mb_inf')
+
                 
-            return(survey, src_data, mb_fmt, mb_perc, mb_date)
+    def parse_entry_inf(self, entry: Dict, keep_inf: bool = False) -> Optional[Tuple]:
+        """Download and parse a local .inf file for an entry."""
+        
+        dst_fn = entry['dst_fn']
+        ## If entry is the MB data, we need to find the INF. If it IS the inf, we read it.
+        
+        inf_dst = dst_fn + '.inf'
+        
+        if entry['url'].endswith('.inf'):
+            inf_url = entry['url']
+        else:
+            base_url = utils.fn_basename2(entry['url']) if entry['url'].endswith('fbt') else entry['url']
+            inf_url = base_url + '.inf'
 
+        ## Fetch
+        if fetches.Fetch(inf_url, callback=self.callback, verbose=False).fetch_file(inf_dst) == 0:
+            survey = entry['url'].split('/')[7] 
+            mb_fmt = self.mb_inf_data_format(inf_dst)
+            mb_date = self.mb_inf_data_date(inf_dst)
+            mb_perc = self.mb_inf_perc_good(inf_dst)
+            
+            if not keep_inf:
+                utils.remove_glob(inf_dst)
+            
+            return (survey, os.path.basename(dst_fn), mb_fmt, mb_perc, mb_date)
+        return None
 
-class MBDB(fetches.FetchModule):
-    """MBDB fetching. This is a test module and does not work."""
     
-    def __init__(self, where='1=1', layer=1, list_surveys=False, want_inf=True, **kwargs):
+    def _generate_datalist(self):
+        """Generate a weighted datalist based on metadata."""
+        
+        seen = set()
+        with open('mb_inf.txt', 'w') as f:
+            for entry in self.results:
+                if entry['format'] == 'mb_inf': continue # Skip INF entries themselves
+                
+                res = self.parse_entry_inf(entry)
+                if not res: continue
+                
+                survey, _, _, mb_perc, mb_date = res
+                if survey in seen: continue
+                
+                try:
+                    yr = int(mb_date) if mb_date else 0
+                    perc = float(mb_perc) if mb_perc else 0
+                    
+                    ## Weighting
+                    ## (Year - 2000) factor
+                    current_year = self.min_year if self.min_year else int(utils.this_year())
+                    weight = perc * ((yr - 2000) / (current_year - 2000)) / 100.0
+                    
+                    f.write(f'{survey} -1 {weight}\n')
+                    seen.add(survey)
+                except (ValueError, TypeError):
+                    pass
+
+                
+## ==============================================
+## MBDB Module (ArcGIS)
+## ==============================================
+class MBDB(fetches.FetchModule):
+    """MBDB fetching (ArcGIS REST Services).
+
+    Configuration Example:
+    < mbdb >
+    """
+    
+    def __init__(self, where: str = '1=1', layer: int = 1, list_surveys: bool = False, want_inf: bool = True, **kwargs):
         super().__init__(name='mbdb', **kwargs)
         self.where = where        
-        self._mb_dynamic_url = ('https://gis.ngdc.noaa.gov/arcgis/rest/'
-                                'services/multibeam_footprints/MapServer')
-        self._mb_features_url = ('https://gis.ngdc.noaa.gov/arcgis/rest/'
-                                 'services/multibeam_datasets/FeatureServer')
-        self._mb_features_products_url = f'{self._mb_features_url}/0'
-        self._mb_features_processed_url = f'{self._mb_features_url}/1'
-        self._mb_features_raw_url = f'{self._mb_features_url}/2'
-
-        self._mb_dynamic_processed_url = f'{self._mb_dynamic_url}1'
-
-        self._mb_dynamic_query_url = '{0}/{1}/query?'.format(self._mb_dynamic_url, layer)
-        self._mb_features_query_url = '{0}/{1}/query?'.format(self._mb_features_url, layer)
-
         self.list_surveys = list_surveys
         self.want_inf = want_inf
-
-    def inf_parse(self, inf_text):
-        this_row = 0
-        minmax = [0,0,0,0,0,0]
-        for il in inf_text:
-            til = il.split()
-            if len(til) > 1:
-                if til[0] == 'Minimum':
-                    if til[1] == 'Longitude:':
-                        minmax[0] = utils.float_or(til[2])
-                        minmax[1] = utils.float_or(til[5])
-                    elif til[1] == 'Latitude:':
-                        minmax[2] = utils.float_or(til[2])
-                        minmax[3] = utils.float_or(til[5])
-                    elif til[1] == 'Depth:':
-                        minmax[4] = utils.float_or(til[5]) * -1
-                        minmax[5] = utils.float_or(til[2]) * -1
-
-        mbs_region = regions.Region().from_list(minmax)
-        return(mbs_region)
+        self._mb_features_query_url = f'{MBDB_FEATURES_URL}/{layer}/query?'
 
         
-    def check_inf_region(self, mb_url, keep_inf=False):
+    def check_inf_region(self, mb_url: str) -> Tuple[str, Optional['regions.Region']]:
+        """Fetch remote .inf file and parse its region."""
+        
+        ## Try finding the inf file
         src_mb = mb_url
-        inf_url = '{}.inf'.format(utils.fn_basename2(src_mb))
+        inf_url = f"{utils.fn_basename2(src_mb)}.inf"
+        
+        req = fetches.Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
+        if req is None:
+            ## Fallback
+            inf_url = f"{src_mb}.inf"
+            req = fetches.Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
+        
         inf_region = None
-        #try:
-        #utils.echo_msg(inf_url)
-        _req = fetches.Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
-        if _req is None:
-            inf_url = '{}.inf'.format(src_mb)
-            _req = fetches.Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
-        #except:
-        #    utils.echo_warning_msg('failed to fetch inf file: {}'.format(inf_url))
-        #    status = -1
-            
-        #if status == 0:
-        # if not keep_inf:
-        #     utils.remove_glob(src_inf)
-        if _req is not None:
-            src_inf = _req.text
-            inffile = StringIO(src_inf)
-            inffile.read()
-            inffile.seek(0)
-            inf_region = self.inf_parse(inffile)
-            inffile.close()
-            
-        return(inf_url, inf_region)
-        
-        
+        if req is not None and req.status_code == 200:
+            with StringIO(req.text) as f:
+                inf_region = _parse_mbsystem_inf_bounds(f)
+                
+        return inf_url, inf_region
+
+    
     def run(self):
-        """Run the MBDB fetching module"""
+        """Run the MBDB fetching module."""
         
         if self.region is None:
-            return([])
+            return []
 
-        _data = {
+        params = {
             'where': self.where,
             'outFields': '*',
             'geometry': self.region.format('bbox'),
-            'inSR':4326,
-            'outSR':4326,
-            'f':'pjson',
-            'returnGeometry':'false',
+            'inSR': 4326,
+            'outSR': 4326,
+            'f': 'pjson',
+            'returnGeometry': 'false',
         }
-        _req = fetches.Fetch(
-            self._mb_features_query_url, verbose=self.verbose
-        ).fetch_req(params=_data)
-        if _req is not None:
-            #print(_req.url)
-            #print(_req.text)
-            features = _req.json()
-            with utils.ccp(
-                    total=len(features['features']),
-                    desc='parsing mb surveys..',
-                    leave=self.verbose
-            ) as pbar:
-                #for feature in features['data']:
-                for feature in features['features']:
-                    feature_set_url = feature['attributes']['DOWNLOAD_URL']
-                    if feature_set_url is not None:
-                        feature_set_id = feature['attributes']['SURVEY_ID']
-                        dataset_id = feature['attributes']['DATASET_ID']
-                        survey_name = feature['attributes']['SURVEY_NAME']
-
-                        if self.list_surveys:
-                            print(feature_set_url)
-                        else:
-                            page = fetches.Fetch(feature_set_url, verbose=True).fetch_html()
-                            page_mb_links = page.xpath(f'//a[contains(@href, "/MB/")]/@href')
-                            with utils.ccp(
-                                    total=len(page_mb_links),
-                                    desc='parsing mb survey datasets..',
-                                    leave=self.verbose
-                            ) as pbar_inf:
-
-                                for mb in page_mb_links:
-                                    if 'gz' in mb:
-                                        mb = '{}.fbt'.format(utils.fn_basename2(mb))                                        
-                                        #mb_inf = f'{mb[:-3]}.inf'
-                                        
-                                    mb_inf, mb_inf_region = self.check_inf_region(mb)
-                                    #utils.echo_msg(mb_inf)
-                                    #utils.echo_msg(mb_inf_region)
-                                    if mb_inf_region is not None:
-                                        if regions.regions_intersect_ogr_p(mb_inf_region, self.region):
-                                            self.add_entry_to_results(mb, os.path.join(self._outdir, os.path.basename(mb)),'mbs')
-                                            
-                                            if self.want_inf:
-                                                self.add_entry_to_results(
-                                                    '{}.inf'.format(mb_inf),
-                                                    '{}.inf'.format(os.path.join(self._outdir, os.path.basename(mb_inf))),
-                                                    'mb_inf'
-                                                )                                            
-
-                                    pbar_inf.update()
-                            # mbs = [f'{x[:-3]}.fbt' for x in page.xpath(f'//a[contains(@href, "/MB/")]/@href')]
-                            # [self.check_inf_region(x) for x in mbs]
-                            # [self.add_entry_to_results(mb, os.path.join(self._outdir, os.path.basename(mb)),'mbs') for mb in mbs]
-                            #print(mbs)
-                        pbar.update()
-
+        
+        req = fetches.Fetch(self._mb_features_query_url, verbose=self.verbose).fetch_req(params=params)
+        if req is None:
+            return []
             
-            # for feature in features['features']:
-            #     print(feature)
+        features = req.json().get('features', [])
+        
+        with utils.ccp(total=len(features), desc='Parsing MBDB surveys', leave=self.verbose) as pbar:
+            for feature in features:
+                pbar.update()
+                
+                attrs = feature.get('attributes', {})
+                download_url = attrs.get('DOWNLOAD_URL')
+                
+                if not download_url: continue
+                
+                if self.list_surveys:
+                    print(download_url)
+                    continue
 
+                ## Scrape the download page for MB files
+                page = fetches.Fetch(download_url, verbose=False).fetch_html()
+                if page is None: continue
+                
+                ## Look for /MB/ links
+                mb_links = page.xpath('//a[contains(@href, "/MB/")]/@href')
+                
+                for mb in mb_links:
+                    ## Resolve full URL if relative. Usually absolute in these indexes, 
+                    if 'gz' in mb:
+                        mb_check_url = f"{utils.fn_basename2(mb)}.fbt"
+                    else:
+                        mb_check_url = mb
 
-
-class R2R(fetches.FetchModule):
-    def __init__(self, check_inf=False, **kwargs):
-        super().__init__(name='R2R', **kwargs)
-        self.check_inf = check_inf
-        self.r2r_api_url = 'https://service.rvdata.us/api/fileset/keyword/multibeam?'
-        self.r2r_api_manifest_url = 'https://service.rvdata.us/api/file_manifest/?'
-        self.r2r_api_product_url = 'https://service.rvdata.us/api/product/?'
-
-
-    def inf_parse(self, inf_text):
-        this_row = 0
-        minmax = [0,0,0,0,0,0]
-        for il in inf_text:
-            til = il.split()
-            if len(til) > 1:
-                if til[0] == 'Minimum':
-                    if til[1] == 'Longitude:':
-                        minmax[0] = utils.float_or(til[2])
-                        minmax[1] = utils.float_or(til[5])
-                    elif til[1] == 'Latitude:':
-                        minmax[2] = utils.float_or(til[2])
-                        minmax[3] = utils.float_or(til[5])
-                    elif til[1] == 'Depth:':
-                        minmax[4] = utils.float_or(til[5]) * -1
-                        minmax[5] = utils.float_or(til[2]) * -1
-
-        mbs_region = regions.Region().from_list(minmax)
-        return(mbs_region)
-
-
-    def check_inf_region(self, mb_url, keep_inf=False):
-        src_mb = mb_url
-        inf_url = '{}.inf'.format(utils.fn_basename2(src_mb))
-        inf_region = None
-        #try:
-        #utils.echo_msg(inf_url)
-        _req = fetches.Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
-        if _req is None:
-            inf_url = '{}.inf'.format(src_mb)
-            _req = fetches.Fetch(inf_url, callback=self.callback, verbose=False).fetch_req()
-        #except:
-        #    utils.echo_warning_msg('failed to fetch inf file: {}'.format(inf_url))
-        #    status = -1
-            
-        #if status == 0:
-        # if not keep_inf:
-        #     utils.remove_glob(src_inf)
-        if _req is not None:
-            src_inf = _req.text
-            inffile = StringIO(src_inf)
-            inffile.read()
-            inffile.seek(0)
-            inf_region = self.inf_parse(inffile)
-            inffile.close()
-            
-        return(inf_url, inf_region)
+                    ## Check spatial bounds via INF
+                    inf_url, inf_region = self.check_inf_region(mb_check_url)
+                    
+                    if inf_region and regions.regions_intersect_ogr_p(inf_region, self.region):
+                        self.add_entry_to_results(
+                            mb, 
+                            os.path.join(self._outdir, os.path.basename(mb)),
+                            'mbs'
+                        )
+                        
+                        if self.want_inf:
+                            self.add_entry_to_results(
+                                inf_url,
+                                os.path.join(self._outdir, os.path.basename(inf_url)),
+                                'mb_inf'
+                            )
+        return self
 
     
-    def run(self):
+## ==============================================
+## R2R Module
+## ==============================================
+class R2R(fetches.FetchModule):
+    """R2R Multibeam Fetching.
 
-        _data = {
-            'spatial_bounds': self.region.export_as_wkt(),
-        }
-        _req = fetches.Fetch(
-            self.r2r_api_url, verbose=self.verbose
-        ).fetch_req(params=_data)
-        if _req is not None:
-            features = _req.json()
-            #utils.echo_msg(features)
-            #utils.echo_msg('found {} cruises'.format(len(features['data'])))
-            with utils.ccp(
-                    total=len(features['data']),
-                    desc='parsing cruise datasets..',
-                    leave=self.verbose
-            ) as pbar:
-                for feature in features['data']:
-                    pbar.update()
-                    feature_set_url = feature['download_url']
-                    if feature_set_url is not None:
-                        feature_set_id = feature['fileset_id']
-                        cruise_id = feature['cruise_id']
-                        
-                        #product_url = '{}cruise_id={}?datatype=Bathymetry'.format(
-                        product_url = '{}cruise_id={}'.format(
-                            self.r2r_api_product_url, cruise_id
-                        )
-                        #utils.echo_msg(product_url)
-                        page = fetches.Fetch(product_url, verbose=True).fetch_req()
-                        page_json = page.json()
-                        if page_json is not None:
-                            page_data = page_json['data']
-                            if page_data is not None:
-                                for data in page_data:
-                                    #print(data['datatype_name'])
-                                    if data['datatype_name'] == 'Bathymetry':
-                                        #utils.echo_msg(data)
-                                        #utils.echo_msg(page_json)
-                                        actual_url = data['actual_url']
-                                        if actual_url is not None:
-                                            self.add_entry_to_results(
-                                                actual_url,
-                                                os.path.basename(actual_url),
-                                                'r2rBathymetry'
-                                            )
+    Configuration Example:
+    < r2r >
+    """
+    
+    def __init__(self, check_inf: bool = False, **kwargs):
+        super().__init__(name='R2R', **kwargs)
+        self.check_inf = check_inf
+
+        
+    def run(self):
+        """Run the R2R fetching module."""
+        
+        if self.region is None:
+            return []
+
+        params = {'spatial_bounds': self.region.export_as_wkt()}
+        
+        req = fetches.Fetch(R2R_API_URL, verbose=self.verbose).fetch_req(params=params)
+        if req is None:
+            return []
+            
+        data = req.json().get('data', [])
+        
+        with utils.ccp(total=len(data), desc='Parsing R2R datasets', leave=self.verbose) as pbar:
+            for item in data:
+                pbar.update()
+                
+                cruise_id = item.get('cruise_id')
+                if not cruise_id: continue
+                
+                ## Fetch Products for Cruise
+                prod_url = f"{R2R_PRODUCT_URL}cruise_id={cruise_id}"
+                prod_req = fetches.Fetch(prod_url, verbose=False).fetch_req()
+                
+                if prod_req and prod_req.status_code == 200:
+                    products = prod_req.json().get('data', [])
+                    for prod in products:
+                        if prod.get('datatype_name') == 'Bathymetry':
+                            actual_url = prod.get('actual_url')
+                            if actual_url:
+                                self.add_entry_to_results(
+                                    actual_url,
+                                    os.path.basename(actual_url),
+                                    'r2rBathymetry'
+                                )
+        return self
 
 ### End

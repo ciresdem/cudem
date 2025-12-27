@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## tides.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,100 +21,69 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch tide station information from NOAA/NOS via ArcGIS REST API.
 ##
 ### Code:
 
+from urllib.parse import urlencode
 from cudem.fetches import fetches
 
-## TIDES
+## ==============================================
+## Constants
+## ==============================================
+TIDES_API_URL = 'https://mapservices.weather.noaa.gov/static/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
+
+## ==============================================
+## Tides Module
+## ==============================================
 class Tides(fetches.FetchModule):
     """TIDE station information from NOAA/NOS
 
-    Fetch NOS Tide Stations, fetched file is a geojson with all included records
-    
-    Fields:
-
-    objectid ( type: esriFieldTypeOID , alias: objectid , editable: false , nullable: false )
-    id ( type: esriFieldTypeString , alias: id , editable: true , nullable: true , length: 50 )
-    name ( type: esriFieldTypeString , alias: name , editable: true , nullable: true , length: 50 )
-    affil ( type: esriFieldTypeString , alias: affil , editable: true , nullable: true , length: 50 )
-    latitude ( type: esriFieldTypeDouble , alias: latitude , editable: true , nullable: true )
-    longitude ( type: esriFieldTypeDouble , alias: longitude , editable: true , nullable: true )
-    data ( type: esriFieldTypeString , alias: data , editable: true , nullable: true , length: 200 )
-    dataapi ( type: esriFieldTypeString , alias: dataapi , editable: true , nullable: true , length: 200 )
-    accepted ( type: esriFieldTypeString , alias: accepted , editable: true , nullable: true , length: 50 )
-    epoch ( type: esriFieldTypeString , alias: epoch , editable: true , nullable: true , length: 50 )
-    units ( type: esriFieldTypeString , alias: units , editable: true , nullable: true , length: 50 )
-    orthodatum ( type: esriFieldTypeString , alias: orthodatum , editable: true , nullable: true , length: 50 )
-    mhhw ( type: esriFieldTypeDouble , alias: mhhw , editable: true , nullable: true )
-    mhw ( type: esriFieldTypeDouble , alias: mhw , editable: true , nullable: true )
-    mtl ( type: esriFieldTypeDouble , alias: mtl , editable: true , nullable: true )
-    msl ( type: esriFieldTypeDouble , alias: msl , editable: true , nullable: true )
-    dtl ( type: esriFieldTypeDouble , alias: dtl , editable: true , nullable: true )
-    mlw ( type: esriFieldTypeDouble , alias: mlw , editable: true , nullable: true )
-    mllw ( type: esriFieldTypeDouble , alias: mllw , editable: true , nullable: true )
-    stnd ( type: esriFieldTypeDouble , alias: stnd , editable: true , nullable: true )
-    mn ( type: esriFieldTypeDouble , alias: mn , editable: true , nullable: true )
-    dhq ( type: esriFieldTypeDouble , alias: dhq , editable: true , nullable: true )
-    dlq ( type: esriFieldTypeDouble , alias: dlq , editable: true , nullable: true )
-    hwi ( type: esriFieldTypeDouble , alias: hwi , editable: true , nullable: true )
-    lwi ( type: esriFieldTypeDouble , alias: lwi , editable: true , nullable: true )
-    gt ( type: esriFieldTypeDouble , alias: gt , editable: true , nullable: true )
-    navd88 ( type: esriFieldTypeDouble , alias: navd88 , editable: true , nullable: true )
-    wl_max ( type: esriFieldTypeDouble , alias: wl_max , editable: true , nullable: true )
-    max_date ( type: esriFieldTypeString , alias: max_date , editable: true , nullable: true , length: 50 )
-    wl_min ( type: esriFieldTypeDouble , alias: wl_min , editable: true , nullable: true )
-    min_date ( type: esriFieldTypeString , alias: min_date , editable: true , nullable: true , length: 50 )
+    Fetch NOS Tide Stations. Fetched file is a GeoJSON (or pjson) 
+    containing records for stations within the region.
     
     https://tidesandcurrents.noaa.gov/
 
+    Configuration Example:
     < tides >
     """
     
     def __init__(self, **kwargs):
         super().__init__(name='tides', **kwargs)
-
-        ## Various TIDES URLs
-        self._stations_api_url_rest = ('https://idpgis.ncep.noaa.gov/arcgis/rest/'
-                                       'services/NOS_Observations/CO_OPS_Products/'
-                                       'FeatureServer/0/query?')
-        self._stations_api_url_tnc = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?'
-        self._stations_api_url = ('https://mapservices.weather.noaa.gov/static/rest/'
-                                  'services/NOS_Observations/CO_OPS_Products/'
-                                  'FeatureServer/0/query?')
-
-        ## for dlim
         self.src_srs = 'epsg:4326'
 
-        
     def run(self):
-        """Run the TIDES fetching module"""
+        """Run the TIDES fetching module."""
         
         if self.region is None:
-            return([])
+            return []
         
-        _data = {
+        ## Prepare ArcGIS REST Query
+        params = {
             'outFields': '*',
             'units': 'esriSRUnit_Meter',
             'geometry': self.region.format('bbox'),
-            'inSR':4326,
-            'outSR':4326,
-            'f':'pjson',
+            'inSR': 4326,
+            'outSR': 4326,
+            'f': 'pjson',
         }
-        _req = fetches.Fetch(
-            self._stations_api_url,
-            verbose=self.verbose
-        ).fetch_req(params=_data)
-        if _req is not None:
-            self.add_entry_to_results(
-                _req.url,
-                'tides_results_{}.json'.format(self.region.format('fn')),
-                'tides'
-            )
+        
+        ## Construct URL
+        query_string = urlencode(params)
+        full_url = f"{TIDES_API_URL}{query_string}"
+        
+        ## Define Output Filename
+        out_fn = f"tides_results_{self.region.format('fn')}.json"
+        
+        ## Add to results
+        self.add_entry_to_results(
+            full_url,
+            out_fn,
+            'tides'
+        )
             
-        return(self)
+        return self
 
 ### End

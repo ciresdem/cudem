@@ -23,47 +23,82 @@
 ##
 ### Commentary:
 ##
+## Fetch CPT color palettes from CPT City.
 ##
 ### Code:
 
 import zipfile
 from io import BytesIO
+from typing import Optional
 import requests
+from cudem import utils
 from cudem.fetches import fetches
 
+## ==============================================
+## Constants
+## ==============================================
+CPT_PUB_URL = 'http://seaviewsensing.com/pub/'
+CPT_PKG_BASE_URL = 'http://seaviewsensing.com/pub/cpt-city/pkg/'
+PACKAGE_XML_URL = f"{CPT_PKG_BASE_URL}package.xml"
+
+## ==============================================
+## CPT City Module
+## ==============================================
 class CPTCity(fetches.FetchModule):
     """CPT City
 
     Fetch various CPT files for DEM hillshades, etc.
     """
     
-    def __init__(self, q = None, **kwargs):
+    def __init__(self, q: Optional[str] = None, **kwargs):
         super().__init__(name='cpt_city', **kwargs)
         self.q = q
 
-        ## The various cpt-city URLs
-        #self.cpt_pub_url = 'http://soliton.vm.bytemark.co.uk/pub/' # dead url
-        self.cpt_pub_url = 'http://seaviewsensing.com/pub/'
-        self.cpt_pkg_url = self.cpt_pub_url + 'cpt-city/pkg/'
-
         
     def run(self):
-        """Run the cpt-city fetches module"""
+        """Run the cpt-city fetches module."""
         
-        cpt_xml = fetches.iso_xml(self.cpt_pkg_url + "package.xml")
-        cpt_url_bn = cpt_xml.xml_doc.find('cpt').text
-        cpt_zip = requests.get(self.cpt_pkg_url + cpt_url_bn)
-        zip_ref = zipfile.ZipFile(BytesIO(cpt_zip.content))
-        zip_cpts = zip_ref.namelist()
-
-        if self.q is not None:
-            mask = [self.q in x for x in zip_cpts]
-            ff = [b for a, b in zip(mask, zip_cpts) if a]
-        else:
-            ff = zip_cpts
+        ## Fetch Package XML
+        try:
+            cpt_xml = fetches.iso_xml(PACKAGE_XML_URL)
+            if cpt_xml.xml_doc is None:
+                utils.echo_error_msg("Failed to parse CPT City package.xml")
+                return self
+                
+            cpt_node = cpt_xml.xml_doc.find('cpt')
+            if cpt_node is None or not cpt_node.text:
+                 utils.echo_error_msg("Could not find 'cpt' tag in package.xml")
+                 return self
+                 
+            cpt_zip_filename = cpt_node.text
             
-        [self.add_entry_to_results(
-            self.cpt_pub_url + f, f.split('/')[-1], 'cpt'
-        ) for f in ff]
+            ## Fetch the Main Zip
+            zip_url = f"{CPT_PKG_BASE_URL}{cpt_zip_filename}"
+            req = requests.get(zip_url)
+            req.raise_for_status()
+            
+            with zipfile.ZipFile(BytesIO(req.content)) as zip_ref:
+                zip_cpts = zip_ref.namelist()
+
+            ## Filter results
+            if self.q:
+                ## Simple substring match
+                filtered_files = [x for x in zip_cpts if self.q in x]
+            else:
+                filtered_files = zip_cpts
+
+            ## Generate download links (pointing to individual files on the server)
+            for f in filtered_files:
+                f_url = f"{CPT_PUB_URL}{f}"
+                f_fn = f.split('/')[-1]
+                
+                ## Filter for actual files, not directories
+                if not f.endswith('/'):
+                    self.add_entry_to_results(f_url, f_fn, 'cpt')
+
+        except Exception as e:
+            utils.echo_error_msg(f"Error running CPT City fetch: {e}")
+
+        return self
 
 ### End

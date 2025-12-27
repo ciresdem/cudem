@@ -95,6 +95,9 @@ class Region:
     def xy_region(self):
         return [self.xmin, self.xmax, self.ymin, self.ymax]
 
+    @property
+    def xy_extent(self):
+        return [self.xmin, self.ymin, self.xmax, self.ymax]
     
     @property
     def z_region(self):
@@ -920,14 +923,14 @@ def quarter_tile_from_coordinates(x=None, y=None):
     return None
 
 
-###############################################################################
+## ==============================================
 ## Command-line Interface (CLI)
-###############################################################################
+## ==============================================
 def regions_cli():
     """Run regions from command-line using argparse."""
     
     parser = argparse.ArgumentParser(
-        description=f"Process and generate regions.",
+        description=f"%(prog)s ({__version__}): Process and generate regions.",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog="CUDEM home page: <http://cudem.colorado.edu>"
     )

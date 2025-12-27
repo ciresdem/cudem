@@ -44,6 +44,8 @@ fetches = 'cudem.fetches.fetches:fetches_cli'
 vdatums = 'cudem.vdatums:vdatums_cli'
 perspecto = 'cudem.perspecto.perspecto:perspecto_cli'
 grits = 'cudem.grits.grits:grits_cli'
+bing_bfp = 'cudem.fetches.bingbfp:bing_bfp_cli'
+osm_coast = 'cudem.fetches.osm:osm_coast_cli'
 
 #[tools.setuptools.packages.find]
 #where=['cudem']

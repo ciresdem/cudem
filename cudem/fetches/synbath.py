@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## synbath.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,50 +21,64 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch UCSD SynBath global bathymetry data.
 ##
 ### Code:
 
+from typing import Optional
 from cudem import utils
 from cudem.fetches import fetches
 
+## ==============================================
+## Constants
+## ==============================================
+SYNBATH_URL = 'https://topex.ucsd.edu/pub/synbath/SYNBATH_V2.0.nc'
+
+## ==============================================
+## SynBath Module
+## ==============================================
 class SynBath(fetches.FetchModule):
     """UCSD SynBath dataset
 
+    Fetch SynBath (Synthetic Bathymetry) global grid.
     Currently only fetches entire grid. Subset in dlim, or elsewhere.
     
     https://topex.ucsd.edu/pub/synbath/
     https://topex.ucsd.edu/pub/synbath/SYNBATH_publication.pdf
 
-    < gebco:upper_limit=None:lower_limit=None >
+    Configuration Example:
+    < synbath:upper_limit=None:lower_limit=None >
     """
     
-    def __init__(self, upper_limit=None, lower_limit=None, **kwargs):
+    def __init__(self, upper_limit: Optional[float] = None, lower_limit: Optional[float] = None, **kwargs):
         super().__init__(name='synbath', **kwargs)
         
-        ## various gebco URLs
-        self._synbath_url_1_2 = 'https://topex.ucsd.edu/pub/synbath/SYNBATH_V1.2.nc'
-        self._synbath_url = 'https://topex.ucsd.edu/pub/synbath/SYNBATH_V2.0.nc'
+        ## Set the fetching region and restrict by z-region if desired.
+        ## Note: This affects downstream processing, not the fetch itself (which grabs the whole file).
+        if self.region is not None:
+            self.synbath_region = self.region.copy()
+            self.synbath_region.zmax = utils.float_or(upper_limit)
+            self.synbath_region.zmin = utils.float_or(lower_limit)
+        else:
+            self.synbath_region = None
 
-        ## set the fetching region, restrict by z-region if desired.
-        self.synbath_region = self.region.copy()
-        self.synbath_region.zmax = utils.float_or(upper_limit)
-        self.synbath_region.zmin = utils.float_or(lower_limit)
-
-        ## for dlim
+        ## Data format 200 is typically GDAL/NetCDF
         self.data_format = 200
         self.src_srs = 'epsg:4326+3855'
 
         
     def run(self):
-        """Run the SynBath fetching module"""
-
+        """Run the SynBath fetching module."""
+        
         self.add_entry_to_results(
-            self._synbath_url,
+            SYNBATH_URL,
             'SYNBATH_V2_0.nc',
             'synbath'
         )
+        
+        return self
 
+    
 ### End

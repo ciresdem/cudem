@@ -1,8 +1,8 @@
 ### mrdem.py
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2023 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## mrdem.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,33 +21,59 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch Multi-Resolution Digital Elevation Model (MRDEM) data (Canada).
 ##
 ### Code:
 
+import os
+from typing import Optional
 from cudem.fetches import fetches
 
-class MRDEM(fetches.FetchModule):
-    def __init__(self, **kwargs):
-        super().__init__(name='mrdem', **kwargs)
-        # self.mrdem_dtm_url = ('https://datacube-prod-data-public.s3.ca-central-1.'
-        #                       'amazonaws.com/store/elevation/mrdem/mrdem-30/'
-        #                       'mrdem-30-dtm.vrt')
-        # self.mrdem_dsm_url = ('https://datacube-prod-data-public.s3.ca-central-1.'
-        #                       'amazonaws.com/store/elevation/mrdem/mrdem-30/'
-        #                       'mrdem-30-dsm.vrt')
+## ==============================================
+## Constants
+## ==============================================
+MRDEM_BASE_URL = 'https://canelevation-dem.s3.ca-central-1.amazonaws.com/mrdem-30'
+MRDEM_DTM_URL = f'{MRDEM_BASE_URL}/mrdem-30-dtm.vrt'
+MRDEM_DSM_URL = f'{MRDEM_BASE_URL}/mrdem-30-dsm.vrt'
 
-        self.mrdem_dtm_url = 'https://canelevation-dem.s3.ca-central-1.amazonaws.com/mrdem-30/mrdem-30-dtm.vrt'
-        self.mrdem_dsm_url = 'https://canelevation-dem.s3.ca-central-1.amazonaws.com/mrdem-30/mrdem-30-dsm.vrt'
+## ==============================================
+## MRDEM Module
+## ==============================================
+class MRDEM(fetches.FetchModule):
+    """Multi-Resolution Digital Elevation Model (MRDEM)
+    
+    Fetches VRT pointers for the Canadian MRDEM-30 dataset.
+    
+    Args:
+        datatype (str): 'dtm' (Digital Terrain Model) or 'dsm' (Digital Surface Model).
+                        Defaults to 'dtm'.
+
+    Configuration Example:
+    < mrdem:datatype=dtm >
+    """
+    
+    def __init__(self, datatype: str = 'dtm', **kwargs):
+        super().__init__(name='mrdem', **kwargs)
+        self.datatype = datatype.lower() if datatype else 'dtm'
 
         
     def run(self):
+        """Run the MRDEM fetching module."""
+        
+        ## Determine which URL to use based on datatype
+        if self.datatype == 'dsm':
+            url = MRDEM_DSM_URL
+        else:
+            url = MRDEM_DTM_URL
+
         self.add_entry_to_results(
-            self.mrdem_dtm_url,
-            self.mrdem_dtm_url.split('/')[-1],
+            url,
+            os.path.basename(url),
             'vrt'
         )
+        
+        return self
 
 ### End

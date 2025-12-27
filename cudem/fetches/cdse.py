@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## cdse.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,94 +21,104 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch data from the Copernicus Data Space Ecosystem (CDSE).
 ##
 ### Code:
-#import os
-#import json
+
 import requests
-#import boto3
-from tqdm import tqdm
-#import time
 import netrc
 import datetime
-from cudem import utils
-from cudem import regions
-from cudem.fetches import fetches
-import certifi
-try:
-    from urllib.parse import urlparse
-    from urllib.request import urlopen, Request, build_opener, HTTPCookieProcessor
-    from urllib.error import HTTPError, URLError
-except ImportError:
-    from urlparse import urlparse
-    from urllib2 import urlopen, Request, HTTPError, URLError, build_opener, HTTPCookieProcessor
-
 import xml.etree.ElementTree as ET
+from urllib.parse import urlparse
+from typing import Optional, List, Dict, Tuple
 
-## CDSE
+from cudem import utils
+from cudem.fetches import fetches
+
+## ==============================================
+## Constants
+## ==============================================
+CDSE_CATALOGUE_URL = "https://catalogue.dataspace.copernicus.eu/odata/v1"
+CDSE_AUTH_URL = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token"
+
+## ==============================================
+## CDSE Module
+## ==============================================
 class CDSE(fetches.FetchModule):
-    """Copernicus Data Space Ecosystem
+    """Copernicus Data Space Ecosystem Fetch Module
 
+    Fetches satellite imagery (e.g., Sentinel-2) from the Copernicus Data Space Ecosystem.
+    Requires a valid account in your .netrc file.
+
+
+    Configuration Example:
     < cdse:collection_name=SENTINEL-2:product_type=S2MSI1C:time_start='':time_end='':max_cloud_cover=1 >
     """
     
-    def __init__(self, collection_name='SENTINEL-2', product_type='S2MSI1C',
-                 max_cloud_cover=None, time_start='', time_end='', **kwargs):
+    def __init__(self, collection_name: str = 'SENTINEL-2', product_type: str = 'S2MSI1C',
+                 max_cloud_cover: Optional[float] = None, time_start: str = '', time_end: str = '', **kwargs):
         super().__init__(name='cdse', **kwargs)
 
-        # base URL of the product catalogue
-        self.catalogue_odata_url = "https://catalogue.dataspace.copernicus.eu/odata/v1"
-        self._auth_openeo_url = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token'
-        
         self.collection_name = collection_name
         self.product_type = product_type
         self.max_cloud_cover = utils.float_or(max_cloud_cover)
-        self.aoi = self.region.export_as_wkt().replace('POLYGON ', 'POLYGON')
-        self.time_start = time_start
-        self.time_end = time_end
+        
+        ## Geometry for OData query
+        if self.region:
+            self.aoi = self.region.export_as_wkt().replace('POLYGON ', 'POLYGON')
+        else:
+            self.aoi = None
 
-        #print(self.time_start, self.time_end)
-        if self.time_start != '' or self.time_end != '':
-            self.time_start = datetime.datetime.fromisoformat(self.time_start).isoformat(timespec='milliseconds') + 'Z' if self.time_start != '' else ''
-            self.time_end = datetime.datetime.fromisoformat(self.time_end).isoformat(timespec='milliseconds') + 'Z' if self.time_end != '' else ''
+        ## Format Timestamps
+        self.time_start = self._format_date(time_start)
+        self.time_end = self._format_date(time_end)
             
+        ## Authentication
         self.access_token = self.get_auth_token()
-        self.headers = {
-            'Authorization': f'Bearer {self.access_token}',
-        }
+        if self.access_token:
+            self.headers = {'Authorization': f'Bearer {self.access_token}'}
+        else:
+            self.headers = {}
+            utils.echo_warning_msg("Could not acquire CDSE Access Token. Requests may fail.")
 
-
-    def get_userpass(self):
+            
+    def _format_date(self, date_str: str) -> str:
+        """Formats an ISO date string for the OData filter."""
+        
+        if not date_str:
+            return ''
         try:
-            info = netrc.netrc()
-            username, account, password \
-                = info.authenticators(urlparse(self._auth_openeo_url).hostname)
-            errprefix = 'netrc error: '
-        except Exception as e:
-            if (not ('No such file' in str(e))):
-                print('netrc error: {0}'.format(str(e)))
-            username = None
-            password = None
-
-        return(username, password)
-
-    
-    def get_auth_token(self):
-        try:
-            info = netrc.netrc()
-            username, account, password \
-                = info.authenticators(urlparse(self._auth_openeo_url).hostname)
-            errprefix = 'netrc error: '
-        except Exception as e:
-            if (not ('No such file' in str(e))):
-                print('netrc error: {0}'.format(str(e)))
-            username = None
-            password = None
+            dt = datetime.datetime.fromisoformat(date_str)
+            return dt.isoformat(timespec='milliseconds') + 'Z'
+        except ValueError:
+            return ''
 
         
+    def get_credentials_from_netrc(self) -> Tuple[Optional[str], Optional[str]]:
+        """Retrieve username and password from .netrc."""
+        
+        try:
+            info = netrc.netrc()
+            auth = info.authenticators(urlparse(CDSE_AUTH_URL).hostname)
+            if auth:
+                return auth[0], auth[2]
+        except Exception as e:
+            if 'No such file' not in str(e):
+                utils.echo_error_msg(f"netrc error: {e}")
+        return None, None
+
+    
+    def get_auth_token(self) -> Optional[str]:
+        """Authenticate with CDSE and retrieve an access token."""
+        
+        username, password = self.get_credentials_from_netrc()
+        
+        if not username or not password:
+            utils.echo_warning_msg("No credentials found in .netrc for CDSE.")
+            return None
+
         data = {
             "client_id": "cdse-public",
             "grant_type": "password",
@@ -117,306 +127,117 @@ class CDSE(fetches.FetchModule):
         }
 
         try:
-            # Make the POST request to the authentication server.
-            response = requests.post(self._auth_openeo_url, data=data)
+            response = requests.post(CDSE_AUTH_URL, data=data)
             response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
-
-            # Extract the access token from the response.
-            access_token = response.json()["access_token"]
-            print("Successfully retrieved access token.")
-
+            token = response.json().get("access_token")
+            if self.verbose:
+                utils.echo_msg("Successfully retrieved CDSE access token.")
+            return token
         except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
-            access_token = None
-
-        return(access_token)
+            utils.echo_error_msg(f"CDSE Authentication failed: {e}")
+            return None
 
         
+    def _resolve_redirects(self, initial_url: str) -> str:
+        """Manually resolve redirects to get the final download URL."""
+        
+        url = initial_url
+        ## Loop limit to prevent infinite redirects
+        for _ in range(10):
+            req = fetches.Fetch(url, headers=self.headers, allow_redirects=False).fetch_req()
+            if req and req.status_code in (301, 302, 303, 307):
+                url = req.headers["Location"]
+            else:
+                break
+        return url
+
+    
     def run(self):
-        search_query = (f"{self.catalogue_odata_url}/Products?$filter=Collection/Name eq '{self.collection_name}'"
-                        f" and Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType'"
-                        f" and att/OData.CSC.StringAttribute/Value eq '{self.product_type}')"
-                        f" and OData.CSC.Intersects(area=geography'SRID=4326;{self.aoi}')")
+        """Execute the query and generate download links."""
         
-        if self.time_start != '':
-            search_query += f' and ContentDate/Start gt {self.time_start}'
+        if not self.aoi or not self.access_token:
+            return self
 
-        if self.time_end != '':
-            search_query += f' and ContentDate/Start lt {self.time_end}'
+        ## Build OData Filter
+        filters = [
+            f"Collection/Name eq '{self.collection_name}'",
+            f"Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType' and att/OData.CSC.StringAttribute/Value eq '{self.product_type}')",
+            f"OData.CSC.Intersects(area=geography'SRID=4326;{self.aoi}')"
+        ]
 
-
+        if self.time_start:
+            filters.append(f"ContentDate/Start gt {self.time_start}")
+        if self.time_end:
+            filters.append(f"ContentDate/Start lt {self.time_end}")
         if self.max_cloud_cover is not None:
-            search_query += f" and Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' and att/OData.CSC.DoubleAttribute/Value le {self.max_cloud_cover})"
-            
-        response = requests.get(search_query).json()
-        results = response['value']
-        # Select identifier of the first product
-        with tqdm(total = len(results),
-                  desc='parsing datasets...',
-                  leave=self.verbose) as pbar:
+            filters.append(f"Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' and att/OData.CSC.DoubleAttribute/Value le {self.max_cloud_cover})")
+
+        query_url = f"{CDSE_CATALOGUE_URL}/Products?$filter={' and '.join(filters)}"
+        utils.echo_msg(query_url)
+        try:
+            response = requests.get(query_url).json()
+        except Exception as e:
+            utils.echo_error_msg(f"Error querying CDSE Catalogue: {e}")
+            return self
+
+        results = response.get('value', [])
+        
+        with utils.ccp(total=len(results), desc='Parsing datasets...', leave=self.verbose) as pbar:
             for result in results:
                 pbar.update()
-                product_identifier = result['Id']
-                product_name = result['Name']
+                try:
+                    product_id = result['Id']
+                    product_name = result['Name']
+                    
+                    ## Fetch Metadata XML to determine file structure
+                    ## Note: S2MSI1C usually has a specific structure node path
+                    meta_url = f"{CDSE_CATALOGUE_URL}/Products({product_id})/Nodes({product_name})/Nodes(MTD_MSIL1C.xml)/$value"
+                    
+                    ## Resolve initial download URL redirect
+                    final_meta_url = self._resolve_redirects(meta_url)
+                    
+                    ## Fetch content
+                    meta_req = fetches.Fetch(final_meta_url, headers=self.headers, verify=True, allow_redirects=True).fetch_req()
+                    if not meta_req:
+                        continue
 
-                url = f"{self.catalogue_odata_url}/Products({product_identifier})/Nodes({product_name})/Nodes(MTD_MSIL1C.xml)/$value"
-                _req = fetches.Fetch(url, headers=self.headers, allow_redirects=False).fetch_req()
-                while _req.status_code in (301, 302, 303, 307):
-                    url = _req.headers["Location"]
-                    _req = fetches.Fetch(url, headers=self.headers, allow_redirects=False).fetch_req()
+                    root = ET.fromstring(meta_req.text.encode('utf-8'))
 
-                _req = fetches.Fetch(url, headers=self.headers, verify=True, allow_redirects=True).fetch_req()
+                    ## Parse Band Locations (Specific to Sentinel-2 S2MSI1C structure)
+                    ## Navigating XML: root -> Granule List -> Granule -> IMAGE_FILE (Band 2, 3, 4 typically)
+                    ## Adjust indices based on known XML structure safety
+                    granule_list = root.find(".//GranuleList") 
+                    if granule_list is not None and len(granule_list) > 0:
 
-                root = ET.fromstring(_req.text.encode('utf-8'))
+                        ## We look for Bands 2, 3, 4 (Blue, Green, Red) usually
+                        image_files = root.findall(".//IMAGE_FILE")
+                        ## Filter for B02, B03, B04
+                        target_bands = [img.text for img in image_files if img.text.endswith('B02') or img.text.endswith('B03') or img.text.endswith('B04')]
 
-                # Get the location of individual bands in Sentinel-2 granule
-                band_location = []
-                band_location.append(f"{product_name}/{root[0][0][12][0][0][1].text}.jp2".split("/"))
-                band_location.append(f"{product_name}/{root[0][0][12][0][0][2].text}.jp2".split("/"))
-                band_location.append(f"{product_name}/{root[0][0][12][0][0][3].text}.jp2".split("/"))
+                        for band_path in target_bands:
+                            ## Path in XML is like: GRANULE/L1C_T.../IMG_DATA/T..._B02
+                            ## CDSE Node structure requires traversing the path components
+                            parts = band_path.split('/')
+                            ## Construct Node URL: Nodes(GRANULE)/Nodes(L1C...)/Nodes(IMG_DATA)/Nodes(File)
+                            node_path = "/".join([f"Nodes({p})" for p in parts])
+                             
+                            file_url = f"{CDSE_CATALOGUE_URL}/Products({product_id})/Nodes({product_name})/{node_path}.jp2/$value"
+                             
+                            self.add_entry_to_results(
+                                file_url,
+                                f"{parts[-1]}.jp2",
+                                'SENTINEL 2LA'
+                            )
 
-                bands = []
-                for band_file in band_location:
-                    url = f"{self.catalogue_odata_url}/Products({product_identifier})/Nodes({product_name})/Nodes({band_file[1]})/Nodes({band_file[2]})/Nodes({band_file[3]})/Nodes({band_file[4]})/$value"
-                    #print(url)
-                    self.add_entry_to_results(
-                        url,
-                        band_file[4],
-                        'SENTINEL 2LA'
-                    )
+                except Exception as e:
+                    if self.verbose:
+                        utils.echo_warning_msg(f"Error parsing result {result.get('Name', 'unknown')}: {e}")
+                    continue
 
-                
+        return self
+
 class Sentinel2(CDSE):
     def __init__(self, **kwargs):
         super().__init__(collection_name='SENTINEL-2', product_type='S2MSI1C', **kwargs)
-        
-            
-# class CDSE_s3(fetches.FetchModule):
-#     """
-#     """
-    
-#     def __init__(self, eo_product_name=None, **kwargs):
-#         super().__init__(name='cdse', **kwargs)
-#         self._openeo_url = 'https://openeo.dataspace.copernicus.eu'
-#         self._auth_openeo_url = 'https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token'
-#         self.eo_product_name = eo_product_name
-#         #self._auth_openeo_url = 'https://identity.dataspace.copernicus.eu'
-#         ## Set up the earthdata credentials, and add it to our headers
-#         #credentials = fetches.get_credentials(None, authenticator_url=self._auth_openeo_url)
-#         #utils.echo_msg(credentials)
-#         # self.headers = {
-#         #     'Authorization': 'Basic {0}'.format(credentials),
-#         #     'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) '
-#         #                    'Gecko/20100101 Firefox/89.0')
-#         # }
-
-#         access_token = self.get_auth_token()
-#         self.headers = {
-#             'Authorization': f'Bearer {self.access_token}',
-#         }
-        
-#         self.config = {
-#             "auth_server_url": "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token",
-#             "odata_base_url": "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
-#             "s3_endpoint_url": "https://eodata.dataspace.copernicus.eu",
-#         }
-
-        
-#     def get_userpass(self):
-#         try:
-#             info = netrc.netrc()
-#             username, account, password \
-#                 = info.authenticators(urlparse(self._auth_openeo_url).hostname)
-#             errprefix = 'netrc error: '
-#         except Exception as e:
-#             if (not ('No such file' in str(e))):
-#                 print('netrc error: {0}'.format(str(e)))
-#             username = None
-#             password = None
-
-#         return(username, password)
-        
-#     def get_auth_token(self):
-#         try:
-#             info = netrc.netrc()
-#             username, account, password \
-#                 = info.authenticators(urlparse(self._auth_openeo_url).hostname)
-#             errprefix = 'netrc error: '
-#         except Exception as e:
-#             if (not ('No such file' in str(e))):
-#                 print('netrc error: {0}'.format(str(e)))
-#             username = None
-#             password = None
-
-        
-#         data = {
-#             "client_id": "cdse-public",
-#             "grant_type": "password",
-#             "username": username,
-#             "password": password,
-#         }
-
-#         try:
-#             # Make the POST request to the authentication server.
-#             response = requests.post(self._auth_openeo_url, data=data)
-#             response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
-
-#             # Extract the access token from the response.
-#             access_token = response.json()["access_token"]
-#             print("Successfully retrieved access token.")
-
-#         except requests.exceptions.RequestException as e:
-#             print(f"An error occurred: {e}")
-#             access_token = None
-
-#         return(access_token)
-
-
-#     def get_eo_product_details(self, eo_product_name):
-#         """
-#         Retrieve EO product details using the OData API to determine the S3 path.
-#         """
-        
-#         odata_url = f"{self.config['odata_base_url']}?$filter=Name eq '{eo_product_name}'"
-#         response = requests.get(odata_url, headers=self.headers)
-#         if response.status_code == 200:
-#             eo_product_data = response.json()["value"][0]
-#             return(eo_product_data["Id"], eo_product_data["S3Path"])
-#         else:
-#             print(f"Failed to retrieve EO product details. Status code: {response.status_code}")
-#             exit(1)
-
-            
-#     def get_temporary_s3_credentials(self):
-#         """
-#         Create temporary S3 credentials by calling the S3 keys manager API.
-#         """
-        
-#         credentials_response = requests.post("https://s3-keys-manager.cloudferro.com/api/user/credentials", headers=self.headers)
-#         if credentials_response.status_code == 200:
-#             s3_credentials = credentials_response.json()
-#             print("Temporary S3 credentials created successfully.")
-#             print(f"access: {s3_credentials['access_id']}")
-#             print(f"secret: {s3_credentials['secret']}")
-#             return(s3_credentials)        
-#         else:
-#             print(f"Failed to create temporary S3 credentials. Status code: {credentials_response.status_code}")
-#             print("Product download aborted.")
-#             exit(1)
-
-#     def format_filename(self, filename, length=40):
-#         """
-#         Format a filename to a fixed length, truncating if necessary.
-#         """
-        
-#         if len(filename) > length:
-#             return(filename[:length - 3] + '...')
-#         else:
-#             return(filename.ljust(length))
-
-        
-#     def download_file_s3(self, s3, bucket_name, s3_key, local_path, failed_downloads):
-#         """
-#         Download a file from S3 with a progress bar.
-#         Track failed downloads in a list.
-#         """
-        
-#         try:
-#             file_size = s3.head_object(Bucket=bucket_name, Key=s3_key)['ContentLength']
-#             formatted_filename = self.format_filename(os.path.basename(local_path))
-#             with tqdm(total=file_size, unit='B', unit_scale=True, desc=formatted_filename, ncols=80, bar_format='{desc:.40}|{bar:20}| {percentage:3.0f}% {n_fmt}/{total_fmt}B') as pbar:
-#                 def progress_callback(bytes_transferred):
-#                     pbar.update(bytes_transferred)
-
-#                 s3.download_file(bucket_name, s3_key, local_path, Callback=progress_callback)
-#         except Exception as e:
-#             print(f"Failed to download {s3_key}. Error: {e}")
-#             failed_downloads.append(s3_key)
-
-            
-#     def traverse_and_download_s3(self, s3_resource, bucket_name, base_s3_path, local_path, failed_downloads):
-#         """
-#         Traverse the S3 bucket and download all files under the specified prefix.
-#         """
-#         bucket = s3_resource.Bucket(bucket_name)
-#         files = bucket.objects.filter(Prefix=base_s3_path)
-        
-#         for obj in files:
-#             s3_key = obj.key
-#             relative_path = os.path.relpath(s3_key, base_s3_path)
-#             local_path_file = os.path.join(local_path, relative_path)
-#             local_dir = os.path.dirname(local_path_file)
-#             os.makedirs(local_dir, exist_ok=True)
-#             self.download_file_s3(s3_resource.meta.client, bucket_name, s3_key, local_path_file, failed_downloads)
-
-#     def run(self):
-#         # # Step 1: Retrieve the access token
-#         # access_token = get_access_token(config, args.username, args.password)
-
-#         # # Step 2: Set up headers for API calls
-#         # headers = {
-#         #     "Authorization": f"Bearer {access_token}",
-#         #     "Accept": "application/json"
-#         # }
-
-#         # Step 3: Get EO product details (including S3 path)
-#         eo_product_id, s3_path = self.get_eo_product_details(self.eo_product_name)
-#         bucket_name, base_s3_path = s3_path.lstrip('/').split('/', 1)
-
-#         # Step 4: Get temporary S3 credentials
-#         s3_credentials = self.get_temporary_s3_credentials()
-
-#         # Step 5: Set up S3 client and resource with temporary credentials
-#         time.sleep(5)  # Ensure the key pair is installed
-#         s3_resource = boto3.resource(
-#             's3',
-#             endpoint_url=self.config["s3_endpoint_url"],
-#             aws_access_key_id=s3_credentials["access_id"],
-#             aws_secret_access_key=s3_credentials["secret"]
-#         )
-
-#         # Step 6: Create the top-level folder and start download
-#         top_level_folder = self.eo_product_name
-#         os.makedirs(top_level_folder, exist_ok=True)
-#         failed_downloads = []
-#         self.traverse_and_download_s3(s3_resource, bucket_name, base_s3_path, top_level_folder, failed_downloads)
-
-#         # bucket = s3_resource.Bucket(bucket_name)
-#         # files = bucket.objects.filter(Prefix=base_s3_path)
-#         # #print(files)
-
-#         # for obj in files:
-#         #     s3_key = obj.key
-#         #     relative_path = os.path.relpath(s3_key, base_s3_path)
-#         #     #print(bucket_name, s3_key)
-#         #     #local_path_file = os.path.join(local_path, relative_path)
-#         #     #local_dir = os.path.dirname(local_path_file)
-#         #     #os.makedirs(local_dir, exist_ok=True)
-#         #     #self.download_file_s3(s3_resource.meta.client, bucket_name, s3_key, local_path_file, failed_downloads)
-
-#         #     self.add_entry_to_results(
-#         #         f'{self.config["s3_endpoint_url"]}/{s3_key}',
-#         #         os.path.basename(s3_key),
-#         #         'SENTINEL 2LA'
-#         #     )
-
-        
-#         # # Step 7: Print final status
-#         # if not failed_downloads:
-#         #     print("Product download complete.")
-#         # else:
-#         #     print("Product download incomplete:")
-#         #     for failed_file in failed_downloads:
-#         #         print(f"- {failed_file}")
-
-#         # # Step 7: Delete the temporary S3 credentials
-#         # delete_response = requests.delete(f"https://s3-keys-manager.cloudferro.com/api/user/credentials/access_id/{s3_credentials['access_id']}", headers=self.headers)
-#         # if delete_response.status_code == 204:
-#         #     print("Temporary S3 credentials deleted successfully.")
-#         # else:
-#         #     print(f"Failed to delete temporary S3 credentials. Status code: {delete_response.status_code}")
-
-        
-#         return(self)
 
 ### End

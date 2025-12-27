@@ -44,12 +44,11 @@ except ImportError:
 
 
 class Hillshade(perspecto.Perspecto):
-    """
-    Generate a Hillshade Image using GDAL and Numpy blending.
+    """Generate a Hillshade Image using GDAL and Numpy blending.
     
     Supports various blending modes:
     https://en.wikipedia.org/wiki/Blend_modes#Overlay
-    
+
     Configuration Example:
     < hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
     """

@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## bingbfp.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,250 +21,328 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch and process Microsoft Bing Building Footprints.
 ##
 ### Code:
 
 import os
-import mercantile
+import sys
 import csv
-from tqdm import tqdm
+import mercantile
+import argparse
+from typing import List, Optional, Union, Tuple, Any
 from osgeo import ogr
 from cudem import utils
 from cudem import gdalfun
+from cudem import regions
 from cudem.fetches import fetches
 
+## ==============================================
+## Constants
+## ==============================================
+BING_CSV_URL = 'https://minedbuildings.z5.web.core.windows.net/global-buildings/dataset-links.csv'
+BING_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+    'referer': 'https://lz4.overpass-api.de/'
+}
 
-class bingBuildings:
-    def __init__(self, region=None, verbose=True, attempts=5, n_threads=5, cache_dir='.'):
+## ==============================================
+## Bing Building Footprints Fetch Module
+## ==============================================
+class BingBFP(fetches.FetchModule):
+    """Bing Building Footprints Fetch Module
+    
+    Fetches building footprint data from Microsoft's Global ML Building Footprints.
+    https://github.com/microsoft/GlobalMLBuildingFootprints
+
+    Configuration Example:
+    < bingbfp >
+    """
+    
+    def __init__(self, **kwargs):
+        super().__init__(name='bingbfp', **kwargs)
+        self.headers = BING_HEADERS
+
+    def run(self):
+        """Run the Bing BFP fetches module.
+        
+        Calculates QuadKeys for the region and parses the Microsoft CSV to find
+        relevant download links.
+        """
+        
+        if self.region is None:
+            return []
+
+        ## Calculate QuadKeys for Zoom Level 9 covering the region
+        quad_keys = set()
+        for tile in list(mercantile.tiles(*self.region.xy_extent, zooms=9)):
+            quad_keys.add(int(mercantile.quadkey(tile)))
+            
+        bing_csv_path = os.path.join(self._outdir, os.path.basename(BING_CSV_URL))
+        
+        ## Download the dataset links CSV
+        try:
+            status = fetches.Fetch(BING_CSV_URL, verbose=self.verbose).fetch_file(bing_csv_path)
+        except Exception as e:
+            utils.echo_error_msg(f"Error fetching Bing CSV: {e}")
+            status = -1
+            
+        if status == 0 and os.path.exists(bing_csv_path):
+            with open(bing_csv_path, mode='r', newline='', encoding='utf-8') as bc:
+                reader = csv.reader(bc)
+                next(reader) # Skip header
+                
+                ## Filter rows: [Location, QuadKey, Url]
+                ## CSV format expected: Location, QuadKey, Url, Size, etc.
+                for row in reader:
+                    try:
+                        qk = int(row[1])
+                        if qk in quad_keys:
+                            url = row[2]
+                            location = row[0]
+                            filename = f"{url.split('/')[-1]}"
+                            ## Prefixing filename with QuadKey and Location to avoid collisions
+                            dst_fn = f"{location}_{qk}_{filename}"
+                            
+                            self.add_entry_to_results(url, dst_fn, 'bing')
+                    except ValueError:
+                        continue
+        else:
+            utils.echo_error_msg('Could not fetch BING dataset-links.csv')
+
+        return self
+
+## ==============================================
+## Workflow Class
+## ==============================================
+class BingBuildings:
+    """High-level class to manage fetching and processing of Bing Buildings."""
+
+    def __init__(self, region=None, verbose: bool = True, attempts: int = 5, n_threads: int = 5, cache_dir: str = '.'):
         self.region = region
         self.verbose = verbose
         self.attempts = attempts
         self.n_threads = n_threads
         self.cache_dir = cache_dir
-        
-        self.this_bldg = None
+        self.fetch_module: Optional[BingBFP] = None
 
         
-    def __call__(self, out_fn=None, return_geom=True, overwrite=False):
-        if self.region is None or not self.region.valid_p():
+    def __call__(self, out_fn: str = None, return_geom: bool = True, overwrite: bool = False) -> Union[str, List[ogr.Geometry], None]:
+        """Main entry point to run the fetch and process pipeline."""
+        
+        if self.region is None or not self.region.is_valid():
             utils.echo_error_msg(f'{self.region} is an invalid region')
-            return(None)
+            return None
 
+        ## Determine output filename
         if not return_geom:
             if out_fn is None or not isinstance(out_fn, str):
-                out_fn = '{}.gpkg'.format(utils.append_fn('bing_buildings', self.region, 1))
+                out_fn = utils.append_fn('bing_buildings', self.region, 1) + '.gpkg'
                 
-            if not overwrite:
-                if os.path.exists(out_fn):
-                    return(out_fn)
-            else:
+            if not overwrite and os.path.exists(out_fn):
+                if self.verbose:
+                    utils.echo_msg(f'Output file {out_fn} exists, skipping...')
+                return out_fn
+            elif overwrite:
                 utils.remove_glob(out_fn)
         else:
             out_fn = None
 
+        utils.echo_msg(out_fn)
+        ## Run Processing
         out_fn, bing_geoms = self.process(out_fn)
                 
         if return_geom:            
-            return(bing_geoms)
+            return bing_geoms
         else:
-            return(out_fn)
-                
-                
+            return out_fn
+
+        
     def init_fetch(self):
-        self.this_bldg = BingBFP(
+        """Initialize the FetchModule."""
+        
+        self.fetch_module = BingBFP(
             src_region=self.region,
             verbose=self.verbose,
             outdir=self.cache_dir
         )
 
         
-    def fetch(self):
-        if self.this_bldg is None:
+    def fetch(self) -> fetches.fetch_results:
+        """Execute the fetching process."""
+        
+        if self.fetch_module is None:
             self.init_fetch()
             
-        self.this_bldg.run()
+        self.fetch_module.run()
+        
+        ## Threaded downloader
         fr = fetches.fetch_results(
-            self.this_bldg, check_size=False, attempts=self.attempts, n_threads=self.n_threads
+            self.fetch_module, 
+            check_size=False, 
+            attempts=self.attempts, 
+            n_threads=self.n_threads
         )
-        fr.daemon=True
+        fr.daemon = True
         fr.start()
         fr.join()
-        return(fr)
+        return fr
 
-
-    def process(self, out_fn):
+    
+    def process(self, out_fn: Optional[str]) -> Tuple[Optional[str], List[ogr.Geometry]]:
+        """Process downloaded files into a unified geometry list or file."""
+        
         bldg_geoms = []
-        if self.this_bldg is None:
-            self.this_bldg = self.fetch()
+        
+        ## Ensure data is fetched
+        results_handler = self.fetch()
+        ## Note: self.fetch() runs the fetcher. access results from self.fetch_module.results        
+        ## We need to access the results that were populated in the module
+        results = self.fetch_module.results
 
-        with tqdm(
-                total=len(self.this_bldg.results),
-                desc='processing buildings',
-                leave=self.verbose
-        ) as pbar:
-            for n, bing_result in enumerate(self.this_bldg.results):
-                if bing_result[-1] == 0:
-                    bing_gz = bing_result[1]
+        with utils.ccp(total=len(results), desc='Processing Buildings', leave=self.verbose) as pbar:
+            for entry in results:
+                ## entry is a dict: {'url':..., 'dst_fn':..., 'data_type':...}
+                ## Check actual file existence since fetch_results updates status in place or we check local path
+                
+                local_path = os.path.join(self.fetch_module._outdir, entry['dst_fn'])
+                if os.path.exists(local_path):
                     try:
-                        bing_gj = utils.gunzip(bing_gz, self.cache_dir)
-                        os.rename(bing_gj, bing_gj + '.geojson')
-                        bing_gj = bing_gj + '.geojson'
-                        bldg_ds = ogr.Open(bing_gj, 0)
-                        bldg_layer = bldg_ds.GetLayer()
-
-                        _boundsGeom = None
-                        if self.region is not None:
-                            _boundsGeom = self.region.export_as_geom()                            
-                            bldg_layer.SetSpatialFilter(_boundsGeom)
+                        ## Unzip
+                        # utils.gunzip returns the path to the unzipped file
+                        bing_gj = utils.gunzip(local_path, self.cache_dir)
                         
-                        bldg_geom = gdalfun.ogr_union_geom(
-                            bldg_layer, verbose=False
-                        )
-                        bldg_geoms.append(bldg_geom)
-                        bldg_ds = None
-                        #utils.remove_glob(bing_gj)
-                    except Exception as e:
-                        utils.echo_error_msg(f'could not process bing bfp, {e}')
+                        ## Rename/Prepare for OGR
+                        ## Ensure it has a recognized extension if gunzip didn't provide one
+                        if not bing_gj.endswith('.geojson') and not bing_gj.endswith('.json'):
+                            new_name = bing_gj + '.geojson'
+                            os.rename(bing_gj, new_name)
+                            bing_gj = new_name
 
-                    #utils.remove_glob(bing_gz)
+                        ## Open with OGR
+                        bldg_ds = ogr.Open(bing_gj, 0) # 0 = ReadOnly
+                        if bldg_ds:
+                            bldg_layer = bldg_ds.GetLayer()
+
+                            ## Spatial Filter
+                            if self.region is not None:
+                                _boundsGeom = self.region.export_as_geom()                            
+                                bldg_layer.SetSpatialFilter(_boundsGeom)
+                            
+                            ## Union Geometries
+                            bldg_geom = gdalfun.ogr_union_geom(bldg_layer, verbose=False)
+                            if bldg_geom:
+                                bldg_geoms.append(bldg_geom)
+                            
+                            bldg_ds = None # Close DS
+
+                        ## Cleanup unzipped file to save space
+                        utils.remove_glob(bing_gj) 
+
+                    except Exception as e:
+                        utils.echo_error_msg(f'Could not process Bing BFP file {local_path}: {e}')
+
+                    ## Cleanup downloaded gz file
+                    utils.remove_glob(local_path)
 
                 pbar.update()
 
-        if out_fn is not None:
+        ## Output to file if requested
+        if out_fn is not None and bldg_geoms:
             gdalfun.ogr_geoms2ogr(bldg_geoms, out_fn, ogr_format='GPKG')
         
-        return(out_fn, bldg_geoms)        
+        return out_fn, bldg_geoms        
 
+## ==============================================
+## Command-line Interface (CLI)
+## ==============================================
+def bing_bfp_cli():
+    parser = argparse.ArgumentParser(
+        description="Fetch and process Microsoft Bing Building Footprints.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        epilog="CUDEM home page: <http://cudem.colorado.edu>"
+    )
 
-def fetch_buildings(region=None, verbose=True, cache_dir='./'):
-    """fetch building footprints from BING"""
+    parser.add_argument(
+        '-R', '--region',
+        required=True,
+        help=("Restrict processing to the desired REGION \n"
+              "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"
+              "OR an OGR-compatible vector file with regional polygons.")
+    )
+    parser.add_argument(
+        '-o', '--output',
+        help="Output filename (GPKG). If not provided, a default name is generated."
+    )
+    parser.add_argument(
+        '-c', '--cache-dir',
+        default='.',
+        help="Directory to cache downloaded files."
+    )
+    parser.add_argument(
+        '-t', '--threads',
+        type=int,
+        default=5,
+        help="Number of download threads."
+    )
+    parser.add_argument(
+        '-a', '--attempts',
+        type=int,
+        default=5,
+        help="Number of retry attempts for downloads."
+    )
+    parser.add_argument(
+        '-q', '--quiet',
+        action='store_true',
+        help="Suppress verbose output."
+    )
+    parser.add_argument(
+        '--overwrite',
+        action='store_true',
+        help="Overwrite existing output file."
+    )
 
-    if region.valid_p():
-        if verbose:
-            utils.echo_msg(
-                f'fetching buildings for region {region}'
-            )
+    args = parser.parse_args()
 
-        this_bldg = BingBFP(
-            src_region=region,
-            verbose=verbose,
-            outdir=cache_dir
+    ## Create Region
+    try:
+        region = regions.parse_cli_region([args.region], not args.quiet)[0]
+        if not region.is_valid():
+            raise ValueError("Region is invalid.")
+    except Exception as e:
+        utils.echo_error_msg(f"Error parsing region: {e}")
+        sys.exit(1)
+
+    ## Initialize BingBuildings Workflow
+    bing = BingBuildings(
+        region=region,
+        verbose=not args.quiet,
+        attempts=args.attempts,
+        n_threads=args.threads,
+        cache_dir=args.cache_dir
+    )
+
+    ## Run
+    try:
+        out_file = bing(
+            out_fn=args.output,
+            return_geom=False,
+            overwrite=args.overwrite
         )
-        this_bldg.run()
-        fr = fetches.fetch_results(this_bldg)
-        #, check_size=False)
-        fr.daemon=True
-        fr.start()
-        fr.join()
-        return(fr)
 
-    return(None)
-
-
-def process_buildings(this_bing, region=None, return_geom=False, verbose=True, cache_dir='./', overwrite=False):
-    if not return_geom:
-        out_fn = utils.append_fn('bing_buildings.gpkg', region, 1)
-        if overwrite:
-            if os.path.exists(out_fn):
-                return(out_fn)
-            else:
-                utils.remove_glob(out_fn)
-            
-    bldg_geoms = []
-    if this_bing is not None:
-        with tqdm(
-                total=len(this_bing.results),
-                desc='processing buildings',
-                leave=verbose
-        ) as pbar:
-            for n, bing_result in enumerate(this_bing.results):
-                if bing_result[-1] == 0:
-                    bing_gz = bing_result[1]
-                    try:
-                        bing_gj = utils.gunzip(bing_gz, cache_dir)
-                        os.rename(bing_gj, bing_gj + '.geojson')
-                        bing_gj = bing_gj + '.geojson'
-                        bldg_ds = ogr.Open(bing_gj, 0)
-                        bldg_layer = bldg_ds.GetLayer()
-                        bldg_geom = gdalfun.ogr_union_geom(
-                            bldg_layer, verbose=False
-                        )
-                        bldg_geoms.append(bldg_geom)
-                        bldg_ds = None
-                        utils.remove_glob(bing_gj)
-                    except Exception as e:
-                        utils.echo_error_msg(f'could not process bing bfp, {e}')
-
-                    utils.remove_glob(bing_gz)
-
-                pbar.update()
-
-    if return_geom:
-        return(bldg_geoms)
-    else:
-        return(gdalfun.geoms2ogr(bldg_geoms, out_fn, ogr_format='GPKG'))
-
-    
-## BING Building Footprints
-class BingBFP(fetches.FetchModule):
-    """Bing Building Footprints
-
-    https://github.com/microsoft/GlobalMLBuildingFootprints
-    """
-    
-    def __init__(self, **kwargs):
-        super().__init__(name='bingbfp', **kwargs)
-
-        ## The various BING-BFP URLs
-        self._bing_bfp_csv = ('https://minedbuildings.z5.web.core.windows.net/'
-                              'global-buildings/dataset-links.csv')
-
-        ## Set the user-agent and referer
-        self.headers = {
-            'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) '
-                           'Gecko/20100101 Firefox/89.0'),
-            'referer': 'https://lz4.overpass-api.de/'
-        }
-
-        
-    def run(self):
-        """Run the Bing BFP fetches module"""
-        
-        if self.region is None:
-            return([])
-
-        bbox = self.region.format('bbox')
-        quad_keys = set()
-        for tile in list(
-                mercantile.tiles(
-                    self.region.xmin, self.region.ymin,
-                    self.region.xmax, self.region.ymax, zooms=9
-                )
-        ):
-            quad_keys.add(int(mercantile.quadkey(tile)))
-            
-        quad_keys = list(quad_keys)
-        #utils.echo_msg('The input area spans {} tiles: {}'.format(len(quad_keys), quad_keys))
-        #utils.echo_msg('The input area spans {} tiles.'.format(len(quad_keys)))
-        bing_csv = os.path.join(self._outdir, os.path.basename(self._bing_bfp_csv))
-        try:
-            status = fetches.Fetch(self._bing_bfp_csv, verbose=self.verbose).fetch_file(bing_csv)
-        except:
-            status = -1
-            
-        if status == 0 and os.path.exists(bing_csv):
-            with open(bing_csv, mode='r') as bc:
-                reader = csv.reader(bc)
-                next(reader)
-                bd = [[row[2], row[1], row[0]] for row in reader if int(row[1]) in quad_keys]
-
-            [self.add_entry_to_results(
-                line[0], '{}_{}_{}'.format(line[2], line[1], os.path.basename(line[0])), 'bing'
-            ) for line in bd]
+        if out_file and os.path.exists(out_file):
+            utils.echo_msg(f"Successfully generated: {out_file}")
         else:
-            utils.echo_error_msg('could not fetch BING dataset-links.csv')
+            utils.echo_error_msg("No output generated (data might not exist in this region).")
 
+    except Exception as e:
+        utils.echo_error_msg(f"Process failed: {e}")
+        sys.exit(1)
+
+        
+if __name__ == '__main__':
+    bing_bfp_cli()
+    
 ### End

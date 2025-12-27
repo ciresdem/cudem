@@ -59,9 +59,9 @@ try:
 except ImportError:
     USE_TQDM = False
 
-###############################################################################
+## ==============================================
 ## General Utility Functions
-###############################################################################
+## ==============================================
 THIS_DIR, THIS_FILENAME = os.path.split(__file__)
 CUDEM_DATA = os.path.join(THIS_DIR, 'data')
 
@@ -373,6 +373,21 @@ def str_or(instr, or_val=None, replace_quote=True):
         return or_val
 
     
+def list_str(l: list) -> str:
+    """
+    Format a list of items into a numbered string representation.
+    
+    Args:
+        l (list): The list of items to format.
+        
+    Returns:
+        str: A string with each item on a new line, prefixed by its index.
+             Example: "0: Item A\n1: Item B"
+    """
+    
+    return '\n'.join([f'{i}: {x}' for i, x in enumerate(l)])
+    
+    
 def range_pairs(lst):
     return [(lst[i], lst[i+1]) for i in range(len(lst) - 1)]
 
@@ -516,9 +531,9 @@ def num_strings_to_range(*args):
     return None
 
 
-###############################################################################
+## ==============================================
 ## Geotransform functions
-###############################################################################
+## ==============================================
 def _geo2pixel(geo_x, geo_y, geo_transform, node='grid'):
     """Convert a geographic x,y value to a pixel location."""
     
@@ -606,9 +621,9 @@ def x360(x):
     else: return ((x + 180) % 360) - 180
 
     
-###############################################################################
+## ==============================================
 ## Archives (zip/gzip/etc.)
-###############################################################################
+## ==============================================
 def unbz2(bz2_file, outdir='./', overwrite=False):
     newfilepath = os.path.splitext(bz2_file)[0]
     if not os.path.exists(newfilepath):
@@ -794,9 +809,9 @@ def p_f_unzip(src_file, fns=None, outdir='./', tmp_fn=False, verbose=True):
     return src_procs
 
 
-###############################################################################
+## ==============================================
 ## srcwin functions
-###############################################################################
+## ==============================================
 def fix_srcwin(srcwin, xcount, ycount):
     """geo_transform is considered in grid-node to properly capture the region"""
     
@@ -901,9 +916,9 @@ def fill_for(arr, iterations=3):
     return filled_arr_iter
 
 
-###############################################################################
+## ==============================================
 ## MB-System functions
-###############################################################################
+## ==============================================
 def mb_inf(src_xyz, src_fmt=168):
     """Generate an info (.inf) file from a src_xyz file using MBSystem."""
     
@@ -917,9 +932,9 @@ def mb_inf(src_xyz, src_fmt=168):
     return mb_inf_parse(f'{src_xyz.name}.inf')
 
 
-###############################################################################
+## ==============================================
 ## System Command Functions
-###############################################################################
+## ==============================================
 cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) 
                            for path in os.environ['PATH'].split(os.pathsep))
 
@@ -1068,9 +1083,9 @@ def config_check(chk_config_file=True, chk_vdatum=False,
     return _waff_co
 
 
-###############################################################################
+## ==============================================
 ## Verbosity / Progress
-###############################################################################
+## ==============================================
 DST_PORT = sys.stderr
 MSG_LEVEL = 1
 MSG_LEVELS = {'debug': 0, 'info': 1, 'proc': 2, 'warning': 3, 'error': 4}
@@ -1159,11 +1174,9 @@ def get_calling_module_name(stack_level=1):
     return inspect.getmodulename(caller_frame.filename)
 
 
-###############################################################################
 ## echo message `m` to sys.stderr using
 ## auto-generated prefix
 ## lambda runs: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
-###############################################################################
 echo_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='info', use_tqdm=USE_TQDM, dst_port=DST_PORT)
 echo_msg_bold = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='info', bold=True, use_tqdm=USE_TQDM, dst_port=DST_PORT)
 echo_msg_inline = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='info', nl=False, use_tqdm=USE_TQDM, dst_port=DST_PORT)
@@ -1171,7 +1184,6 @@ echo_debug_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_lev
 echo_error_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='error', use_tqdm=USE_TQDM, dst_port=DST_PORT)
 echo_warning_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='warning', use_tqdm=USE_TQDM, dst_port=DST_PORT)
 
-###############################################################################
 ## Module Descriptions
 ## echo cudem module options
 ## modules are a dictionary with the module name
@@ -1180,7 +1192,6 @@ echo_warning_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_l
 ## uses <class>.__doc__ as description
 ## e.g.
 ## _cudem_module_long_desc({'module_name': {'class': MyClass}})
-###############################################################################
 _cudem_module_short_desc = lambda m: ', '.join([f'{key}' for key in m])
 _cudem_module_name_short_desc = lambda m: ',  '.join([f'{m[key]["name"]} ({key})' for key in m])
 _cudem_module_long_desc = lambda m: f'{os.path.basename(sys.argv[0])} modules:\n% {os.path.basename(sys.argv[0])} ... <mod>:key=val:key=val...\n\n  ' + '\n  '.join([f'\033[1m{str(key):14}\033[0m{m[key]["call"].__doc__}\n' for key in m]) + '\n'
@@ -1196,9 +1207,9 @@ def echo_modules(module_dict, key):
             sys.stderr.write(f'Invalid Module Key: {key}\nValid Modules: {_cudem_module_short_desc(module_dict)}\n')
     sys.stderr.flush()
 
-###############################################################################
+## ==============================================
 ## Progress indicator...
-###############################################################################
+## ==============================================
 class CudemCommonProgress:
     """Cudem Common Progress
 
@@ -1487,9 +1498,9 @@ def physical_cpu_count():
         return mp.cpu_count()
 
     
-###############################################################################
+## ==============================================
 ## Error / Analysis Plotting
-###############################################################################
+## ==============================================
 def _err_fit_plot(
         xdata, ydata, out, fitfunc, bins_final, std_final,
         sampling_den, max_int_dist, dst_name='unc',

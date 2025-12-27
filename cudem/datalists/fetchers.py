@@ -351,7 +351,7 @@ class DNRFetcher(Fetcher):
     """
 
     __doc__ = '''{}\nFetches Module: <wadnr> - {}'''.format(
-        __doc__, fetches.wadnr.waDNR.__doc__
+        __doc__, fetches.wadnr.WADNR.__doc__
     )
     
     def __init__(self, **kwargs):

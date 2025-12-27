@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## srtmplus.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,65 +21,76 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch SRTM15+ global bathymetry/topography.
 ##
 ### Code:
 
+from cudem import utils
 from cudem.fetches import fetches
 
-## SRTM Plus
+## ==============================================
+## Constants
+## ==============================================
+SRTM_PLUS_CGI_URL = 'https://topex.ucsd.edu/cgi-bin/get_srtm15.cgi'
+
+## ==============================================
+## SRTM Plus Module
+## ==============================================
 class SRTMPlus(fetches.FetchModule):
     """SRTM15+: GLOBAL BATHYMETRY AND TOPOGRAPHY AT 15 ARCSECONDS.
 
     https://topex.ucsd.edu/WWW_html/srtm15_plus.html
-    http://topex.ucsd.edu/sandwell/publications/180_Tozer_SRTM15+.pdf
-    https://topex.ucsd.edu/pub/srtm15_plus/
-    https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
     
+    Configuration Example:
     < srtm_plus >
     """
     
     def __init__(self, **kwargs):
         super().__init__(name='srtm_plus', **kwargs)
 
-        ## The srtm_plus URL
-        self._srtm_url = 'https://topex.ucsd.edu/cgi-bin/get_srtm15.cgi'
-
-        ## for dlim, data_format of 168 is xyz-file, skip the first line
+        ## Metadata
+        ## 168 is xyz-file, skip the first line (header)
         self.data_format = '168:skip=1'
-        self.src_srs = 'epsg:4326+3855'
+        self.src_srs = 'epsg:4326+3855' # WGS84 + EGM2008
 
         self.title = 'SRTM+'
-        self.source = 'Scripps Institude of Oceanography'
+        self.source = 'Scripps Institution of Oceanography'
         self.date = '2014'
         self.data_type = 'Topographic/Bathymetric Raster'
-        self.resolution = '60 arc-seconds'
+        self.resolution = '15 arc-seconds' # Updated description to match 15+ name
         self.hdatum = 'WGS84'
         self.vdatum = 'MSL'
-        self.url = self._srtm_url
+        self.url = SRTM_PLUS_CGI_URL
 
         
     def run(self):
-        '''Run the SRTM fetching module.'''
+        """Run the SRTM fetching module."""
         
         if self.region is None:
-            return([])
+            return []
 
-        self.data = {
-            'north':self.region.ymax,
-            'west':self.region.xmin,
-            'south':self.region.ymin,
-            'east':self.region.xmax
+        ## Prepare CGI Parameters
+        data = {
+            'north': self.region.ymax,
+            'west': self.region.xmin,
+            'south': self.region.ymin,
+            'east': self.region.xmax
         }
-        _req = fetches.Fetch(self._srtm_url, verify=False).fetch_req(params=self.data)
-        if _req is not None:
-            outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
+        
+        ## Execute Request
+        ## Verify=False is often needed for Scripps legacy CGI endpoints due to cert issues
+        req = fetches.Fetch(self.url, verify=False).fetch_req(params=data)
+        
+        if req is not None:
+            out_fn = f"srtm_{self.region.format('fn')}.xyz"
             self.add_entry_to_results(
-                _req.url,
-                outf,
+                req.url,
+                out_fn,
                 'srtm'
             )
             
+        return self
+
 ### End

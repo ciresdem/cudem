@@ -584,13 +584,13 @@ class Vdatum:
         else: 
             return [], -1
 
-        
-###############################################################################
+
+## ==============================================
 ## Command-line Interface (CLI)
-###############################################################################
+## ==============================================        
 def vdatums_cli():
     parser = argparse.ArgumentParser(
-        description=f'Transform a grid between vertical datums',
+        description=f'%(prog)s ({__version__}): Transform a grid between vertical datums',
         epilog="CUDEM home page: <http://cudem.colorado.edu>"
     )
     

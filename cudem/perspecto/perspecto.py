@@ -103,7 +103,11 @@ class Perspecto:
         min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
         max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
 
-        if os.path.exists(self.cpt):
+
+        if self.cpt is None:
+            self.cpt = cpt.generate_etopo_cpt(min_z, max_z)
+            
+        elif os.path.exists(self.cpt):
             utils.echo_msg(
                 f"processing cpt {self.cpt}, want_gdal is {want_gdal}, split_cpt: {self.split_cpt}"
             )
@@ -111,7 +115,7 @@ class Perspecto:
                 self.cpt, min_z, max_z, gdal=want_gdal, split_cpt=self.split_cpt
             )
         else:
-            # Attempt to fetch city CPT
+            ## Attempt to fetch city CPT
             self.cpt = cpt.process_cpt(
                 cpt.fetch_cpt_city(q=self.cpt),
                 min_z,
@@ -120,6 +124,7 @@ class Perspecto:
                 split_cpt=self.split_cpt
             )
 
+        ## If cpt is still None, generate the default ETOPO cpt
         if self.cpt is None:
             self.cpt = cpt.generate_etopo_cpt(min_z, max_z)                
             
@@ -224,7 +229,7 @@ class PrintModulesAction(argparse.Action):
         
 def perspecto_cli():
     parser = argparse.ArgumentParser(
-        description="Generate iMAGEs from a DEM",
+        description="%(prog)s ({__version__}): Generate iMAGEs from a DEM",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=f"""
 Supported %(prog)s modules (see %(prog)s --modules <module-name> for more info): 

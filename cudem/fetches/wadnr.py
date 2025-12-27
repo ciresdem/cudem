@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## wadnr.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,141 +21,147 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch Washington State Department of Natural Resources (WA DNR) LiDAR data.
 ##
 ### Code:
 
 import json
+from typing import Optional, List, Any, Dict
 from cudem import regions
 from cudem.fetches import fetches
 
-class waDNR(fetches.FetchModule):
+## ==============================================
+## Constants
+## ==============================================
+WA_DNR_BASE_URL = "https://lidarportal.dnr.wa.gov"
+WA_DNR_DOWNLOAD_URL = f"{WA_DNR_BASE_URL}/download?"
+WA_DNR_REST_URL = f"{WA_DNR_BASE_URL}/arcgis/rest/services/lidar/wadnr_hillshade/MapServer"
+WA_DNR_LAYERS_URL = f"{WA_DNR_REST_URL}/layers?f=pjson"
+
+## ==============================================
+## WaDNR Module
+## ==============================================
+class WADNR(fetches.FetchModule):
     """Washington State Department of Natural Resources lidar data.
+    
+    Fetches LiDAR data from the WA DNR portal based on region intersection.
     """
     
-    def __init__(self, ids=None, **kwargs):
+    def __init__(self, ids: Optional[str] = None, **kwargs):
         super().__init__(name='waDNR', **kwargs) 
 
-        ## The various urls to use for GMRT
-        self._wa_dnr_url = "https://lidarportal.dnr.wa.gov/download?"
-        self._wa_dnr_rest = ('https://lidarportal.dnr.wa.gov/arcgis/rest'
-                             '/services/lidar/wadnr_hillshade/MapServer')
-        self._wa_dnr_ids = ('https://lidarportal.dnr.wa.gov/arcgis/rest/'
-                            'services/lidar/wadnr_hillshade/MapServer/identify')
-        self._wa_dnr_layers = ('https://lidarportal.dnr.wa.gov/arcgis/rest/'
-                               'services/lidar/wadnr_hillshade/MapServer/layers?f=pjson')
-        self._wa_dnr_cap = ('https://lidarportal.dnr.wa.gov/arcgis/services/'
-                            'lidar/wadnr_hillshade/MapServer/WmsServer?'
-                            'service=WMS&request=GetCapabilities')
-        self._wa_dnr_map = ('https://lidarportal.dnr.wa.gov/arcgis/services/'
-                            'lidar/wadnr_hillshade/MapServer/WmsServer?'
-                            'service=WMS&request=GetMap')
-        
-        ## for dlim, data format is -2 for a zip file, projections vary
-        self.data_format = -2
+        ## Metadata
+        self.data_format = -2 # zip file
         self.src_srs = None
         self.title = 'Washington DNR Lidar'
         self.source = 'Washington DNR'
-        self.date = None
         self.data_type = 'lidar'
-        self.resolution = None
-        self.hdatum = None
-        self.vdatum = None
-        self.url = self._wa_dnr_url
+        self.url = WA_DNR_DOWNLOAD_URL
         
-        ## Firefox on windows for this one.
+        ## Headers (Browser emulation often required)
         self.headers = {
-            'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) '
-                           'Gecko/20100101 Firefox/89.0')
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
         }
 
-        if ids is not None:
-            self.ids = [int(x) for x in ids.split('/')]
-        else:
-            self.ids = []
+        ## ID filtering
+        self.ids = [int(x) for x in ids.split('/')] if ids else []
 
-            
-    def find_ids(self):
-        self.data = {
-            'geometry': self.region.format('bbox'),
-            'format': 'json',
-        }
+    def find_ids(self) -> List[List[Any]]:
+        """Query the map server to find layer IDs intersecting the region."""
+        
+        ## Fetch layer metadata
+        req = fetches.Fetch(WA_DNR_LAYERS_URL, verbose=self.verbose).fetch_req(tries=10, timeout=5)
+        if req is None:
+            return []
 
-        layers_req = fetches.Fetch(
-            self._wa_dnr_layers
-        ).fetch_req(
-            tries=10, timeout=2
-        )
+        try:
+            layers_json = req.json()
+        except json.JSONDecodeError:
+            return []
 
-        layer_srs = 'epsg:3857'
         layers_in_region = []
-        if layers_req is not None:
-            layers_json = layers_req.json()
-            for layer in layers_json['layers']:
-                layer_name = layer['name']
-                layer_id = layer['id']
-                layer_sublayers = layer['subLayers']
-                    
-                if 'parentLayer' in layer.keys():
-                    layer_parent_layer = layer['parentLayer']
-                else:
-                    layer_parent_layer = None
-                    
-                layer_type = layer['type']
-                layer_region = regions.Region(src_srs='epsg:3857').from_list(
-                    [layer['extent']['xmin'], layer['extent']['xmax'],
-                     layer['extent']['ymin'], layer['extent']['ymax']]
-                ).warp('epsg:4326')
+        
+        ## WA DNR layers are typically in Web Mercator (EPSG:3857)
+        ## We need to warp the extents to EPSG:4326 to check against self.region        
+        for layer in layers_json.get('layers', []):
+            layer_name = layer.get('name')
+            sub_layers = layer.get('subLayers', [])
+            
+            ## Extract extent
+            extent = layer.get('extent')
+            if not extent:
+                continue
 
-                if len(layer_sublayers) > 0:
-                    if regions.regions_intersect_ogr_p(layer_region, self.region):
-                        layers_in_region.append(
-                            [
-                                layer_name,
-                                min([int(x['name'][:-1])-1 for x in layer_sublayers])
-                            ]
-                        )
-                        
-        if len(self.ids) > 0:
+            ## Construct region from extent and warp to WGS84
+            try:
+                layer_region = regions.Region(src_srs='epsg:3857').from_list([
+                    extent['xmin'], extent['xmax'],
+                    extent['ymin'], extent['ymax']
+                ]).warp('epsg:4326')
+            except Exception:
+                continue
+
+            ## Check Intersection and Extract IDs
+            if sub_layers and regions.regions_intersect_ogr_p(layer_region, self.region):
+                try:
+                    ## WA DNR specific ID logic:
+                    valid_ids = []
+                    for sub in sub_layers:
+                        try:
+                            ## Attempt to parse ID from sublayer name
+                            parsed_id = int(sub['name'][:-1]) - 1
+                            valid_ids.append(parsed_id)
+                        except (ValueError, TypeError):
+                            continue
+                    
+                    if valid_ids:
+                        layers_in_region.append([layer_name, min(valid_ids)])
+
+                except Exception:
+                    continue
+
+        ## Filter by user-provided IDs if present
+        if self.ids:
             layers_in_region = [x for x in layers_in_region if x[1] in self.ids]
             
-        return(layers_in_region)
+        return layers_in_region
 
     
     def run(self):
-        '''Run the GMRT fetching module'''
+        """Run the WA DNR fetching module."""
 
         if self.region is None:
-            return([])
+            return []
 
         layers_in_region = self.find_ids()        
-        data = {}
-        for l in layers_in_region:
-            if 'ids' in data.keys():
-                data['ids'].append(l[1])
-            else:
-                data['ids'] = [int(l[1])]
-
-            data['geojson'] = json.dumps({
-                'type': 'Polygon',
-                'coordinates': [self.region.export_as_polygon()]
-            })
+        
+        for layer_name, layer_id in layers_in_region:
             
-            data_req = fetches.Fetch(
-                self._wa_dnr_url
-            ).fetch_req(
-                params=data, tries=10, timeout=2
-            )
+            ## Construct payload
+            ## WA DNR download endpoint expects a polygon and a list of IDs
+            payload = {
+                'ids': [layer_id],
+                'format': 'json',
+                'geojson': json.dumps({
+                    'type': 'Polygon',
+                    'coordinates': [self.region.export_as_polygon()]
+                })
+            }
+            
+            ## Fetch the download link
+            ## The endpoint usually returns a redirect or a JSON with the file link
+            req = fetches.Fetch(
+                WA_DNR_DOWNLOAD_URL, 
+                verbose=self.verbose
+            ).fetch_req(params=payload, tries=10, timeout=10)
 
-            if data_req is not None and data_req.status_code == 200:
-                self.add_entry_to_results(
-                    data_req.url, '{}_{}.zip'.format(l[0], l[1]), 'wa_dnr'
-                )
+            if req is not None and req.status_code == 200:
+                out_fn = f"{layer_name}_{layer_id}.zip"
+                self.add_entry_to_results(req.url, out_fn, 'wa_dnr')
                 
-            data = {}
-                
-        return(self)
+        return self
 
+    
 ### End

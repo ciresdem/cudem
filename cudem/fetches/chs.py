@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## chs.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,89 +21,123 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch bathymetric soundings from the Canadian Hydrographic Service (CHS).
 ##
 ### Code:
 
 import lxml.etree
+from urllib.parse import urlencode
+from typing import List, Dict, Optional, Any
+
 from cudem import regions
 from cudem.fetches import fetches
 
-## CHS - Canada Hydro
-class CHS(fetches.FetchModule):
-    """Canadian Hydrographic Service Non-Navigational (NONNA) 
-    Bathymetric Data
+## ==============================================
+## Constants
+## ==============================================
+CHS_WCS_URL = 'https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs?'
 
-    Fetch bathymetric soundings from the CHS
+## WCS Namespaces
+NAMESPACES = {
+    'gml': 'http://www.opengis.net/gml/3.2',
+    'wcs': 'http://www.opengis.net/wcs/2.0',
+    'ows': 'http://www.opengis.net/ows/2.0'
+}
+
+## ==============================================
+## CHS Module
+## ==============================================
+class CHS(fetches.FetchModule):
+    """Canadian Hydrographic Service Non-Navigational (NONNA) Bathymetric Data.
+
+    Fetch bathymetric soundings from the CHS via WCS.
     
     https://open.canada.ca
     https://open.canada.ca/data/en/dataset/d3881c4c-650d-4070-bf9b-1e00aabf0a1d
 
-    datatypes: 10 or 100
+    datatypes: 10 or 100 (resolution in meters)
 
+    Configuration Example:
     < chs:datatype=10 >
     """
     
-    def __init__(self, datatype='100', **kwargs):
+    def __init__(self, datatype: str = '100', **kwargs):
         super().__init__(name='chs', **kwargs)
 
-        ## The various CHS URLs
-        self._chs_api_url = ('https://geoportal.gc.ca/arcgis/rest/services/'
-                             'FGP/CHS_NONNA_100/MapServer/0/query?')
-        self._chs_url_geoserver = 'https://data.chs-shc.ca/geoserver/wcs?'
-        self._chs_url = 'https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs?' # new
         self.datatypes = ['10', '100']
         self.datatype = str(datatype) if str(datatype) in self.datatypes else '100'
+        self._chs_url = CHS_WCS_URL
 
         
     def run(self):
-        """Run the CHS fetching module"""
+        """Run the CHS fetching module."""
 
-        if self.region is None: return([])
-        _data = {
+        if self.region is None:
+            return []
+
+        ## DescribeCoverage to get dataset bounds
+        desc_data = {
             'request': 'DescribeCoverage',
             'version': '2.0.1',
-            'CoverageID': 'nonna__NONNA {} Coverage'.format(self.datatype),
+            'CoverageID': f'nonna__NONNA {self.datatype} Coverage',
             'service': 'WCS'
         }
-        _req = fetches.Fetch(self._chs_url).fetch_req(params=_data)
-        _results = lxml.etree.fromstring(_req.text.encode('utf-8'))        
-        g_env = _results.findall(
-            './/{http://www.opengis.net/gml/3.2}GridEnvelope',
-            namespaces=fetches.namespaces
-        )[0]
-        hl = [float(x) for x in g_env.find(
-            '{http://www.opengis.net/gml/3.2}high'
-        ).text.split()]
-        g_bbox = _results.findall(
-            './/{http://www.opengis.net/gml/3.2}Envelope'
-        )[0]
-        lc = [float(x) for x in g_bbox.find(
-            '{http://www.opengis.net/gml/3.2}lowerCorner'
-        ).text.split()]
-        uc = [float(x) for x in g_bbox.find(
-            '{http://www.opengis.net/gml/3.2}upperCorner'
-        ).text.split()]
-        ds_region = regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]])
-        resx = (uc[1] - lc[1]) / hl[0]
-        resy = (uc[0] - lc[0]) / hl[1]
-        if regions.regions_intersect_ogr_p(self.region, ds_region):
-            _wcs_data = {
-                'request': 'GetCoverage',
-                'version': '2.0.1',
-                'CoverageID': 'nonna__NONNA {} Coverage'.format(self.datatype),
-                'service': 'WCS',
-                'subset': ['Long({},{})'.format(self.region.xmin, self.region.xmax),
-                           'Lat({},{})'.format(self.region.ymin, self.region.ymax)],
-                'subsettingcrs': 'http://www.opengis.net/def/crs/EPSG/0/4326',
-                'outputcrs': 'http://www.opengis.net/def/crs/EPSG/0/4326'
-            }
-            _wcs_req = fetches.Fetch(self._chs_url).fetch_req(params=_wcs_data)
-            outf = 'chs_nonna{}_{}.tif'.format(self.datatype, self.region.format('fn'))
-            self.add_entry_to_results(_wcs_req.url, outf, 'chs')
+        
+        req = fetches.Fetch(self._chs_url).fetch_req(params=desc_data)
+        if req is None:
+            return self
+
+        try:
+            ## Parse XML Response
+            root = lxml.etree.fromstring(req.text.encode('utf-8'))
             
-        return(self)
+            ## Find Envelope (Bounding Box)
+            envelope = root.find('.//gml:Envelope', namespaces=NAMESPACES)
+            
+            if envelope is None:
+                ## Fallback for some server responses
+                envelope = root.find('.//{http://www.opengis.net/gml/3.2}Envelope')
+
+            if envelope is not None:
+                lc_node = envelope.find('gml:lowerCorner', namespaces=NAMESPACES)
+                uc_node = envelope.find('gml:upperCorner', namespaces=NAMESPACES)
+                
+                if lc_node is not None and uc_node is not None:
+                    lc = [float(x) for x in lc_node.text.split()]
+                    uc = [float(x) for x in uc_node.text.split()]
+                    
+                    ds_region = regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]])
+                    
+                    ## Check Intersection
+                    if regions.regions_intersect_ogr_p(self.region, ds_region):
+                        
+                        ## Construct GetCoverage URL
+                        ## CHS Server Axis labels are 'Lat' and 'Long'.
+                        wcs_params = [
+                            ('request', 'GetCoverage'),
+                            ('version', '2.0.1'),
+                            ('CoverageID', f'nonna__NONNA {self.datatype} Coverage'),
+                            ('service', 'WCS'),
+                            ('subset', [f'Long({self.region.xmin},{self.region.xmax})',
+                                        f'Long({self.region.ymin},{self.region.ymax})']),
+                            ('subsettingcrs', 'http://www.opengis.net/def/crs/EPSG/0/4326'),
+                            ('outputcrs', 'http://www.opengis.net/def/crs/EPSG/0/4326')
+                        ]
+                        
+                        ## Generate URL without making a request
+                        query_string = urlencode(wcs_params)
+                        full_url = f"{self._chs_url}{query_string}"
+                        
+                        out_fn = f"chs_nonna{self.datatype}_{self.region.format('fn')}.tif"
+                        
+                        self.add_entry_to_results(full_url, out_fn, 'chs')
+
+        except Exception as e:
+            if self.verbose:
+                print(f"Error parsing CHS WCS response: {e}")
+
+        return self
 
 ### End

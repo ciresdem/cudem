@@ -1,8 +1,8 @@
 ### ngs.py
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2019 - 2025 Regents of the University of Colorado
 ##
-## fetches.py is part of CUDEM
+## ngs.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -21,68 +21,84 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Fetch NGS Monuments from NOAA.
 ##
 ### Code:
 
+from urllib.parse import urlencode
+from cudem import utils
 from cudem.fetches import fetches
 
-## NGS - geodesic monuments
+## ==============================================
+## Constants
+## ==============================================
+NGS_SEARCH_URL = 'http://geodesy.noaa.gov/api/nde/bounds?'
+
+## ==============================================
+## NGS Module
+## ==============================================
 class NGS(fetches.FetchModule):
     """NGS Monuments
     
     NGS provides Information about survey marks (including bench marks) 
     in text datasheets or in GIS shapefiles. 
 
-    Note some survey markers installed by other organizations may not 
+    Note: Some survey markers installed by other organizations may not 
     be available through NGS.
 
     Fetch NGS monuments from NOAA
     
     http://geodesy.noaa.gov/
 
+    Configuration Example:
     < ngs:datum=geoidHt >
     """
 
-    def __init__(self, datum='geoidHt', **kwargs):
+    def __init__(self, datum: str = 'geoidHt', **kwargs):
         super().__init__(name='ngs', **kwargs)
-        if datum not in ['orthoHt', 'geoidHt', 'z', 'ellipHeight']:
+        
+        valid_datums = ['orthoHt', 'geoidHt', 'z', 'ellipHeight']
+        if datum not in valid_datums:
             utils.echo_warning_msg(
-                'could not parse {}, falling back to geoidHt'.format(datum)
+                f'Could not parse datum {datum}, falling back to geoidHt'
             )
             self.datum = 'geoidHt'
         else:
             self.datum = datum
 
-        ## The various NGS URLs
-        self._ngs_search_url = 'http://geodesy.noaa.gov/api/nde/bounds?'
-
-        ## for dlim
         self.src_srs = 'epsg:4326'
 
         
-    def run(self, csv=False):
+    def run(self):
         """Run the NGS (monuments) fetching module."""
         
         if self.region is None:
-            return([])
+            return []
         
-        _data = {
-            'maxlon':self.region.xmax,
-            'minlon':self.region.xmin,
-            'maxlat':self.region.ymax,
-            'minlat':self.region.ymin
+        ## Construct Query Parameters
+        params = {
+            'maxlon': self.region.xmax,
+            'minlon': self.region.xmin,
+            'maxlat': self.region.ymax,
+            'minlat': self.region.ymin
         }
-        _req = fetches.Fetch(self._ngs_search_url).fetch_req(params=_data)
-        if _req is not None:
-            self.add_entry_to_results(
-                _req.url,
-                'ngs_results_{}.json'.format(self.region.format('fn')),
-                'ngs'
-            )
+        
+        ## Generate URL
+        query_string = urlencode(params)
+        full_url = f"{NGS_SEARCH_URL}{query_string}"
+        
+        ## Output Filename
+        out_fn = f"ngs_results_{self.region.format('fn')}.json"
+        
+        self.add_entry_to_results(
+            full_url,
+            out_fn,
+            'ngs'
+        )
             
-        return(self)
+        return self
 
+    
 ### End
