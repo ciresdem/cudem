@@ -21,20 +21,14 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
-### Examples:
-##
-### TODO:
 ##
 ### Code:
 
 import os
 import re
 import numpy as np
-#from tqdm import tqdm
-
 from osgeo import gdal
 
 from cudem import utils
@@ -42,6 +36,9 @@ from cudem import regions
 from cudem import gdalfun
 from cudem.datalists.dlim import ElevationDataset
 
+## ==============================================
+## dlim GDALFile Module
+## ==============================================
 class GDALFile(ElevationDataset):
     """providing a GDAL raster dataset parser.
 

@@ -1471,7 +1471,11 @@ if USE_TQDM:
     class ccp(tqdm):
         def __init__(self, **kwargs):
             mod_name = get_calling_module_name(stack_level=2)
-            kwargs['desc'] = f'[ \033[32m\033[1mPROC\033[m ] {mod_name}: {kwargs.get("desc", "")}'
+            orig_desc = kwargs.get("desc", "")
+            desc_width = shutil.get_terminal_size().columns - 30
+            shortened_desc = orig_desc[:desc_width]
+            desc = shortened_desc if len(orig_desc) > desc_width else orig_desc
+            kwargs['desc'] = f'[ \033[32m\033[1mPROC\033[m ] {mod_name}: {desc}'
             kwargs['file'] = DST_PORT
             super().__init__(**kwargs)
 else:

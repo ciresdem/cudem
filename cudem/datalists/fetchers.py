@@ -21,12 +21,8 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
-### Examples:
-##
-### TODO:
 ##
 ### Code:
 
@@ -43,6 +39,10 @@ from cudem import vdatums
 from cudem import fetches
 from cudem.datalists.dlim import ElevationDataset
 
+
+## ==============================================
+## dlim Fetcher classes
+## ==============================================
 class Fetcher(ElevationDataset):
     """The default fetches dataset type; dlim Fetcher dataset class
 

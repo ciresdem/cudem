@@ -94,25 +94,13 @@ import glob
 import math
 import traceback
 import warnings
-
-# import threading
-# import multiprocessing as mp
-# mp.set_start_method('spawn')
-# try:
-#    import Queue as queue
-# except: import queue as queue
-        
 import numpy as np
-# from scipy.spatial import ConvexHull
-# import lxml.etree
-
 import pyproj
 from osgeo import gdal
 from osgeo import ogr
 import h5py as h5
 import netCDF4 as nc
 
-#import cudem
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
@@ -134,9 +122,9 @@ gdal.SetConfigOption(
     'CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null'
 ) 
 
-###############################################################################
+## ==============================================
 ## dataset masking and spatial metadata functions
-###############################################################################
+## ==============================================
 def scan_mask_bands(
         src_ds, skip_band='Full Data Mask', mask_level=0, verbose=True
 ):
@@ -596,10 +584,10 @@ def polygonize_mask_multibands2(
     return(dst_layer, ogr_format)
 
 
-###############################################################################
+## ==============================================
 ## Datalist convenience functions
 ## data_list is a list of dlim supported datasets
-###############################################################################
+## ==============================================
 def get_factory_exts():
     fmts = []
     for key in DatasetFactory()._modules.keys():
@@ -860,9 +848,9 @@ def init_data(data_list, **kwargs):
         return(None)
     
         
-###############################################################################
+## ==============================================
 ## ElevationDataset and sub-modules
-###############################################################################
+## ==============================================
 class ElevationDataset:
     """representing an Elevation Dataset
     
@@ -1887,9 +1875,9 @@ class ElevationDataset:
         for this_entry in self.data_entries:
             yield(this_entry)
 
-    ###########################################################################
+    ## ==============================================            
     ## yield points, where points are a numpy rec-array with 'xyzwu'
-    ###########################################################################
+    ## ==============================================            
     def yield_points(self):
         """yield the numpy xyz rec array points from the dataset.
 
@@ -2011,12 +1999,12 @@ class ElevationDataset:
         self.transform['transformer'] = self.transform['vert_transformer'] = None
 
 
-    ###########################################################################
+    ## ==============================================            
     ## mask and yield, mask the incoming data to the masks specified in
     ## self.mask, which is a list of factory formatted strings, such as:
     ## ['masks/cudem_masks.shp:verbose=True:invert=False',
     ##  'mask_fn=usgs/OzetteLake.gpkg:verbose=True:invert=False']
-    ###########################################################################
+    ## ==============================================            
     def mask_and_yield_array(self):
         """mask the incoming array from `self.yield_array` 
         and yield the results.
@@ -2212,11 +2200,11 @@ class ElevationDataset:
                         )       
                     src_ds = ds_band = None
 
-
-    ###########################################################################
+                    
+    ## ==============================================
     ## yield the data either as xyz or as binned arrays, the latter of which
     ## depends on self.region, self.x_inc and self.y_inc to be set.
-    ###########################################################################
+    ## ==============================================
     def yield_xyz(self):
         """Yield the data as xyz points
 
@@ -2441,10 +2429,10 @@ class ElevationDataset:
                     yield(out_xyz)
         sds.close()
 
-        
-    ###########################################################################       
+
+    ## ==============================================
     ## Data Dump/Export/Archive
-    ###########################################################################
+    ## ==============================================
     def _xyz_dump(self, this_xyz, dst_port=sys.stdout, encode=False):
         this_xyz.dump(
             include_w=True if self.weight is not None else False,
@@ -2491,10 +2479,11 @@ class ElevationDataset:
             #     encode=encode,
             #     precision=self.dump_precision
             # )
+
             
-    ###########################################################################
-    ## Data export 
-    ###########################################################################
+    ## ==============================================            
+    ## Data export
+    ## ==============================================
     def export_xyz_as_list(self, z_only = False):
         """return the XYZ data from the dataset as python list
 
@@ -2679,9 +2668,9 @@ class ElevationDataset:
 
         mask_dataset = None
 
-    ###########################################################################
+    ## ==============================================
     ## Data archive
-    ###########################################################################        
+    ## ==============================================
     def _archive_xyz_test(self, **kwargs):
         srs_all = []
         a_name = None
@@ -2847,9 +2836,9 @@ class ElevationDataset:
         
         return(this_archive.inf())
 
-    ###########################################################################    
+    ## ==============================================
     ## Fetching
-    ###########################################################################        
+    ## ==============================================
     def fetch_data(self, fetches_module, check_size=True):
         this_fetches = fetches.FetchesFactory(
             mod=fetches_module,
@@ -2947,10 +2936,11 @@ class FactoryDatalists(ElevationDataset):
 class CRMDatalist(FactoryDatalists):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)    
-        
-###############################################################################
+
+
+## ==============================================
 ## Datasets Factory - module parser
-###############################################################################                
+## ==============================================
 class DatasetFactory(factory.CUDEMFactory):
     """Dataset Factory Settings and Generator
     
@@ -3199,12 +3189,12 @@ class DatasetFactory(factory.CUDEMFactory):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    ###########################################################################        
+    ## ==============================================
     ## redefine the factory default _parse_mod function for datasets
     ## the mod in this case is a datalist entry and the format key
     ## becomes the module
     ## TODO: use csv module to parse
-    ###########################################################################
+    ## ==============================================
     def _parse_mod(self, mod=None):
         """parse the datalist entry line"""
         
@@ -3474,12 +3464,12 @@ class DatasetFactory(factory.CUDEMFactory):
             )
 
 
-###############################################################################
+## ==============================================
 ## Command-line Interface (CLI)
 ## $ dlim
 ##
 ## datalists cli
-###############################################################################
+## ==============================================
 datalists_usage = lambda: """{cmd} ({dl_version}): DataLists IMproved; 
 Process and generate datalists
 
@@ -3778,6 +3768,7 @@ See `datalists_usage` for full cli options.
     #pnt_fltrs = [':'.join(f.split('//')) for f in pnt_fltrs]
     if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, want_verbose)
+    if not these_regions: these_regions = [None]
     for rn, this_region in enumerate(these_regions):
         ## buffer the region by `extend` if xy_inc is set
         ## this effects the output naming of masks/stacks!
