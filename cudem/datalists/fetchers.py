@@ -166,7 +166,7 @@ class Fetcher(ElevationDataset):
         
         if not self.fetch_module: return
 
-        ## Run the Fetch Logic
+        ## Run the Fetcher
         if len(self.fetch_module.results) == 0:
             try:
                 self.fetch_module.run()
@@ -308,7 +308,7 @@ class DAVFetcher_CoNED(Fetcher):
     def yield_ds(self, result):
         from cudem.datalists.dlim import DatasetFactory
         
-        ## SRS Detection Logic
+        ## SRS Detection
         try:
             vdatum = self.fetch_module.vdatum
             if not self.cog:
@@ -541,7 +541,7 @@ class GEBCOFetcher(Fetcher):
             exts=['tif'], outdir=self.fetch_module._outdir, verbose=self.verbose
         )
         
-        ## TID (Type Identifier) Masking Logic
+        ## TID (Type Identifier) Masking
         if self.exclude_tid:
             ## Fetch TID Grid
             if fetches.fetches.Fetch(self.fetch_module._gebco_urls['gebco_tid']['geotiff'], verbose=self.verbose).fetch_file(
@@ -947,8 +947,12 @@ class BlueTopoFetcher(Fetcher):
             )[0]
 
         if self.mask:
-            # Mask logic...
-            pass
+            new_mask = utils.make_temp_fn('test_tmp_mask')
+            gdalfun.gdal_mask(
+                sid, self.mask['mask'], new_mask, msk_value=1, verbose=True
+            )
+            os.replace(new_mask, sid)
+
 
         self.fetches_params['data_format'] = f'200:band_no=1:mask={sid}:uncertainty_mask=2' + (':weight_mask=2' if self.unc_weights else '')
         yield DatasetFactory(**self.fetches_params)._acquire_module()        

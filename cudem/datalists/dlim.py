@@ -917,7 +917,7 @@ class ElevationDataset:
                         has_valid = True
                         
                         # Calculate cell bounds
-                        # Assuming Grid (0,0) is Top-Left (standard raster/PointPixels logic)
+                        # Assuming Grid (0,0) is Top-Left (standard raster/PointPixels)
                         cell_ymax = region.ymax - (y * y_inc)
                         cell_ymin = region.ymax - ((y + 1) * y_inc)
                         cell_xmin = region.xmin + (x * x_inc)
@@ -2540,7 +2540,7 @@ def datalists_cli():
     filter_grp.add_argument(
         '--invert-region', '-v', 
         action='store_true', 
-        help="Invert the region mask logic."
+        help="Invert the region mask."
     )
 
     ## --- Output Options (Mutually Exclusive) ---
@@ -2669,8 +2669,6 @@ def datalists_cli():
     if args.extend:
         parts = str(args.extend).split(':')
         extend_cells = utils.int_or(parts[0], 0)
-        # Assuming percentage handling logic is inside regions or init_data if needed
-        # Original CLI just parsed it; passing 'extend' integer to buffer logic below
 
     ## Handle Regions
     these_regions = regions.parse_cli_region(args.region, not args.quiet) if args.region else [None]
