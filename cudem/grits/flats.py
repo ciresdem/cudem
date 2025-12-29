@@ -59,7 +59,7 @@ class Flats(grits.Grits):
 
                 for srcwin in gdalfun.gdal_yield_srcwin(
                         src_ds, n_chunk=self.n_chunk,
-                        step=self.n_chunk, verbose=True
+                        step=self.n_chunk, verbose=self.verbose
                 ):
                     src_arr = self.ds_band.ReadAsArray(*srcwin).astype(float)
                     uv, uv_counts = np.unique(src_arr, return_counts=True)
