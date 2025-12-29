@@ -198,7 +198,8 @@ class Multibeam(fetches.FetchModule):
             utils.echo_error_msg(f'Failed to fetch multibeam request: {req.status_code if req else "None"}')
             return []
 
-        utils.echo_msg(f"Query URL: {req.url}")
+        if self.verbose:
+            utils.echo_msg(f"Query URL: {req.url}")
         
         ## Parse Results
         ## Structure: Survey -> Version -> List of files
