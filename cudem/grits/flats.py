@@ -76,7 +76,8 @@ class Flats(grits.Grits):
                     dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
                 
         dst_ds = None
-        utils.echo_msg(f'removed {count} flats.')
-        return(self.dst_dem, 0)
+        if self.verbose:
+            utils.echo_msg(f'removed {count} flats.')            
+        return self.dst_dem, 0
 
 ### End

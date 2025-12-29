@@ -236,6 +236,7 @@ def init_data(data_list, **kwargs):
     ## Map convenience kwargs to standard internal keys
     kwargs['weight'] = kwargs.get('want_weight', kwargs.get('weight'))
     kwargs['uncertainty'] = kwargs.get('want_uncertainty', kwargs.get('uncertainty'))
+    kwargs['verbose'] = kwargs.get('want_verbose', kwargs.get('verbose'))
 
     try:
         for dl in data_list:
@@ -2445,6 +2446,12 @@ class DatasetFactory(factory.CUDEMFactory):
 ##
 ## datalists cli
 ## ==============================================
+class StackModeChoices(list):
+    def __contains__(self, item):
+        matches = [choice for choice in self if item.split(':')[0] in choice]
+        return len(matches) == 1  # Only allow if it's a unique match
+    
+
 def datalists_cli():
     """Run datalists from command-line using argparse."""
 
@@ -2496,7 +2503,7 @@ def datalists_cli():
     proc_grp.add_argument(
         '-A', '--stack-mode', 
         default='mean',
-        choices=['mean', 'min', 'max', 'mixed', 'supercede'],
+        choices=StackModeChoices(['mean', 'min', 'max', 'mixed', 'supercede']),
         help="Set the STACK MODE (with -E and -R). Default: mean."
     )
     proc_grp.add_argument(
@@ -2637,7 +2644,7 @@ def datalists_cli():
 
     if args.glob:
         import glob
-        # Flatten format list
+        ## Flatten format list
         for key, mod in DatasetFactory._modules.items():
             if key != -1 and key != '_factory':
                 for fmt in mod.get('fmts', []):

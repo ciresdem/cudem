@@ -244,7 +244,7 @@ class GDALFile(ElevationDataset):
         # Handle Flats Removal (Grits)
         if self.remove_flat:
             grits_filter = grits.GritsFactory(
-                mod='flats', src_dem=self.fn, cache_dir=self.cache_dir, verbose=True
+                mod='flats', src_dem=self.fn, cache_dir=self.cache_dir, verbose=False
             )._acquire_module()
             if grits_filter is not None:
                 grits_filter()                
@@ -364,7 +364,7 @@ class GDALFile(ElevationDataset):
                 else None,                
                 sample_alg=self.sample_alg,
                 ndv=ndv,
-                verbose=self.verbose,
+                verbose=False,
                 co=["COMPRESS=DEFLATE", "TILED=YES"]
             )[0]
             

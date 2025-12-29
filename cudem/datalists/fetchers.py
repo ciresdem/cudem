@@ -74,7 +74,7 @@ class Fetcher(ElevationDataset):
         ## Initialize the underlying Fetch Module (from cudem.fetches)
         self.fetch_module = fetches.fetches.FetchesFactory(
             mod=self.fn, src_region=self.wgs_region,
-            callback=callback, verbose=self.verbose,
+            callback=callback, verbose=False,
             outdir=outdir,
         )._acquire_module()
 
@@ -128,13 +128,13 @@ class Fetcher(ElevationDataset):
             
             ## Fetch OSM Coastline
             this_osm = osm.osmCoastline(
-                region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir
+                region=self.region, chunks=True, verbose=False, attempts=5, cache_dir=self.cache_dir
             )
             coast_mask = this_osm(return_geom=False, overwrite=False)
 
             ## Fetch OSM Water
             this_osm_water = osm.osmCoastline(
-                region=self.region, chunks=True, verbose=self.verbose, attempts=5, cache_dir=self.cache_dir, q='water'
+                region=self.region, chunks=True, verbose=False, attempts=5, cache_dir=self.cache_dir, q='water'
             )
             water_mask = this_osm_water(return_geom=False, overwrite=False)
             
