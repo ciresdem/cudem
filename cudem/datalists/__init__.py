@@ -17,28 +17,23 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Code:
 
-__version__ = "0.5.2"
+__version__ = "1.0.1"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
 from . import inf
 from . import dlim
-from . import ziplists
+from . import ziplistfile
 from . import xyzfile
 from . import lasfile
 from . import gdalfile
 from . import ogrfile
-# from . import cudemf
 from . import mbsfile
 from . import swotfile
 from . import icesat2file
 from . import fetchers
-from . import datalists
-# from . import globato
-#from . import dlim_factory
-
+from . import datalistfile
 
 ### End

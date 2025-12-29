@@ -2154,9 +2154,7 @@ def sample_warp(
         desc = f'Warping {src_dem}'
         pbar = utils.ccp(desc=desc, total=100, leave=verbose)
         ## Callback wrapper for GDAL
-        def pbar_update(pct, msg, data):
-            pbar.update((pct * 100) - pbar.n)
-            return 1
+        pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)
 
     try:
         dst_ds = gdal.Warp(
@@ -2180,10 +2178,12 @@ def sample_warp(
             outputType=ot,
             callback=pbar_update
         )
+    except:
+        utils.echo_error_msg(f'could not warp raster {src_dem}')
     finally:
         if verbose:
             pbar.close()
-        
+
     if dst_dem is None:
         return dst_ds, 0
     else:

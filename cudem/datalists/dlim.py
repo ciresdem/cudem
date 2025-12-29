@@ -94,23 +94,29 @@ import glob
 import math
 import traceback
 import warnings
+import shlex
+import argparse
+from typing import Optional, List, Dict, Any, Union
+
 import numpy as np
 import pyproj
-from osgeo import gdal
-from osgeo import ogr
 import h5py as h5
 import netCDF4 as nc
+from osgeo import gdal, ogr
 
 from cudem import utils
 from cudem import regions
-from cudem import xyzfun
+from cudem import srsfun
 from cudem import gdalfun
 from cudem import factory
 from cudem import vdatums
+from cudem import xyzfun
 from cudem import fetches
-from cudem import grits
-from cudem import srsfun
 from cudem import pointz
+from cudem.grits import grits
+from cudem.globato import globato
+from cudem.datalists import inf
+from cudem.fetches import fetches
 from . import __version__
 from . import inf
 
@@ -123,469 +129,7 @@ gdal.SetConfigOption(
 ) 
 
 ## ==============================================
-## dataset masking and spatial metadata functions
-## ==============================================
-def scan_mask_bands(
-        src_ds, skip_band='Full Data Mask', mask_level=0, verbose=True
-):
-    mask_level = utils.int_or(mask_level, 0)
-    src_infos = gdalfun.gdal_infos(src_ds)
-    band_infos = {}    
-    with utils.ccp(
-            desc='scanning mask bands.',
-            total=src_ds.RasterCount,
-            leave=verbose
-    ) as pbar:         
-        for b in range(1, src_ds.RasterCount+1):
-            pbar.update()
-            this_band = src_ds.GetRasterBand(b)
-            this_band_md = this_band.GetMetadata()
-            this_band_name = this_band.GetDescription()
-            if this_band_name == skip_band:
-                continue
-
-            if len(this_band_name.split('/')) > 1:
-                this_band_name = this_band_name.split('/')[1]
-                
-            if not this_band_name in band_infos.keys():
-                band_infos[this_band_name] = {'bands': [b],
-                                              'metadata': this_band_md}
-            else:
-                band_infos[this_band_name]['bands'].append(b)
-                
-            band_md = band_infos[this_band_name]['metadata']
-            for k in this_band_md.keys():
-                if k not in band_md.keys() \
-                   or band_md[k] is None \
-                   or band_md[k] == 'None':
-                    if this_band_md[k] != 'None':
-                        band_md[k] = this_band_md[k]
-                            
-                if k == 'name':
-                    band_md[k] = this_band_name                
-                elif k == 'date' \
-                     or k == 'weight' \
-                     or k == 'uncertainty':
-                    band_md[k] = utils.num_strings_to_range(band_md[k], this_band_md[k])
-                elif band_md[k] not in this_band_md[k].split('/') \
-                     and band_md[k] != this_band_md[k]:
-                    if str(this_band_md[k]) != 'None':
-                        band_md[k] = ','.join([band_md[k], this_band_md[k]])
-                    
-            band_infos[this_band_name]['metadata'] = band_md
-            
-    return(band_infos)
-
-
-def ogr_mask_footprints(
-        src_ds, ogr_format='GPKG', dst_srs='epsg:4326',
-        mask_level=0, verbose=True
-):
-    
-    src_infos = scan_mask_bands(
-        src_ds, mask_level=mask_level, verbose=verbose
-    )
-    ## initialize output vector
-    dst_ogr_fn = (f'{utils.fn_basename2(src_ds.GetDescription())}_sm'
-                  '.{gdalfun.ogr_fext(ogr_format)}')
-    driver = ogr.GetDriverByName(ogr_format)
-    ds = driver.CreateDataSource(dst_ogr_fn)
-    srs = srsfun.osr_srs(src_ds.GetProjectionRef())
-    if ds is not None: 
-        layer = ds.CreateLayer('footprint', srs, ogr.wkbMultiPolygon)
-    else:
-        layer = None
-
-    #layer.CreateField(ogr.FieldDefn('location', ogr.OFTString))
-    field_names = [field.name for field in layer.schema]
-    for key in src_infos.keys():
-        for md in src_infos[key]['metadata'].keys():
-            #if md[:10] not in field_names and md not in field_names:
-            if md not in field_names:
-                layer.CreateField(ogr.FieldDefn(md, ogr.OFTString))
-                field_names = [field.name for field in layer.schema]
-
-    [layer.SetFeature(feature) for feature in layer]
-    ds = layer = None
-    ## generate a footprint of each group of bands from src_infos
-    with utils.ccp(
-            desc='generating mask footprints',
-            total=len(src_infos.keys()),
-            leave=verbose
-    ) as pbar:
-        for i, key in enumerate(src_infos.keys()):
-            footprint_cmd = 'gdal_footprint {} {} -combine_bands union -max_points unlimited {} -no_location'.format(
-                src_ds.GetDescription(),
-                dst_ogr_fn,
-                ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']]),
-            )
-            utils.run_cmd(footprint_cmd, verbose=False)
-            pbar.update()
-            
-    with utils.ccp(
-            desc='setting mask metadata',
-            total=len(src_infos.keys()),
-            leave=verbose
-    ) as pbar:
-        for i, key in enumerate(src_infos.keys()):
-            ## update db using ogrinfo
-            key_val = ', '.join(
-                ["'{}' = '{}'".format(
-                    x, src_infos[key]['metadata'][x]
-                ) for x in src_infos[key]['metadata'].keys()]
-            )
-            sql = "UPDATE {name} SET {key_val} WHERE rowid = {f}".format(
-                name='footprint',
-                key_val=key_val,
-                value=src_infos[key]['metadata'][md],
-                f=i+1
-            )
-            utils.run_cmd(
-                'ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql),
-                verbose=False
-            )
-            pbar.update()
-            
-    return(glob.glob('{}.*'.format(utils.fn_basename2(dst_ogr_fn))), ogr_format)
-
-
-def merge_mask_bands_by_name(
-        src_ds, verbose=True, skip_band='Full Data Mask', mask_level=0
-):
-    """merge data mask raster bands based on the top-level datalist name"""
-
-    band_infos = scan_mask_bands(
-        src_ds, mask_level=mask_level, verbose=verbose
-    )
-    mask_level = utils.int_or(mask_level, 0)
-    src_infos = gdalfun.gdal_infos(src_ds)
-    ## create new mem gdal ds to hold new raster
-    gdt = gdal.GDT_Byte
-    driver = gdal.GetDriverByName('MEM')
-    m_ds = driver.Create(
-        utils.make_temp_fn('tmp'),
-        src_infos['nx'],
-        src_infos['ny'],
-        len(band_infos.keys()),
-        gdt
-    )
-    m_ds.SetGeoTransform(src_infos['geoT'])
-    m_ds.SetProjection(gdalfun.osr_wkt(src_infos['proj']))
-    m_ds.SetDescription(src_ds.GetDescription())
-
-    with utils.ccp(
-            desc='generating merged mask dataset.',
-            total=len(band_infos.keys()),
-            leave=verbose
-    ) as pbar:    
-        for i, m in enumerate(band_infos.keys()):
-            m_band = m_ds.GetRasterBand(i+1)
-            m_band.SetDescription(m)
-            m_band.SetNoDataValue(0)
-            m_band_array = m_band.ReadAsArray()
-
-            try:
-                m_band.SetMetadata(band_infos[m]['metadata'])
-            except:
-                try:
-                    band_md = m_band.GetMetadata()
-                    for key in band_infos[m]['metadata'].keys():
-                        if band_md[key] is None:
-                            del band_md[key]
-
-                    m_band.SetMetadata(band_md)
-                except Exception as e:
-                    utils.echo_error_msg(
-                        'could not set band metadata: {}; {}'.format(
-                            band_md, e
-                        )
-                    )
-
-            with utils.ccp(
-                    desc='merging {} mask bands.'.format(m),
-                    total=len(band_infos[m]['bands']),
-                    leave=verbose
-            ) as merge_pbar:                        
-                for b in band_infos[m]['bands']:
-                    this_band = src_ds.GetRasterBand(b)
-                    this_band_array = this_band.ReadAsArray()
-                    m_band_array[this_band_array > 0] = 1
-                    this_band = this_band_array = None
-                    merge_pbar.update()
-                    
-            m_band.WriteArray(m_band_array)
-            m_ds.FlushCache()
-
-            pbar.update()
-
-    return(m_ds)
-
-
-def polygonize_mask_multibands(
-        src_ds,
-        output = None,
-        ogr_format = 'GPKG',
-        mask_level = 0,
-        verbose = True
-):
-    """polygonze a multi-band mask raster. 
-
-    -----------
-    Parameters:
-    src_ds (GDALDataset): the source multi-band raster as a gdal 
-                          dataset object
-    dst_srs (str): the output srs
-    ogr_format (str): the output OGR format
-    verbose (bool): be verbose
-
-    -----------
-    Returns:
-    tuple: (dst_layer, ogr_format)
-    """
-
-    mask_level = utils.int_or(mask_level, 0)
-    src_ds = merge_mask_bands_by_name(
-        src_ds, mask_level=mask_level, verbose=verbose
-    )
-    dst_layer = '{}_sm'.format(
-        utils.fn_basename2(src_ds.GetDescription()) \
-        if output is None \
-        else os.path.basename(output)
-    )
-    dst_vector = os.path.join(
-        os.path.dirname(output) if output is not None else '',
-        f'{dst_layer}.{gdalfun.ogr_fext(ogr_format)}'
-    )
-    #dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
-    #utils.remove_glob('{}.*'.format(dst_layer))
-    utils.remove_glob('{}.*'.format(utils.fn_basename2(dst_vector)))
-    srs = srsfun.osr_srs(src_ds.GetProjectionRef())
-    driver = ogr.GetDriverByName(ogr_format)
-    ds = driver.CreateDataSource(dst_vector)
-    if ds is not None: 
-        layer = ds.CreateLayer(
-            dst_layer, srs, ogr.wkbMultiPolygon
-        )
-        [layer.SetFeature(feature) for feature in layer]
-    else:
-        layer = None
-
-    layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-    layer.StartTransaction()
-    defn = None
-
-    #field_names_to_delete = ['DN', 'Name', 'Uncertainty']
-    
-    with utils.ccp(
-            desc='polygonizing mask bands.',
-            total=src_ds.RasterCount,
-            leave=verbose
-    ) as pbar:
-        for b in range(1, src_ds.RasterCount+1):
-            pbar.update()
-            this_band = src_ds.GetRasterBand(b)
-            this_band_md = this_band.GetMetadata()
-            this_band_name = this_band.GetDescription()
-            b_infos = gdalfun.gdal_infos(src_ds, scan=True, band=b)
-            field_names = [field.name for field in layer.schema]
-            this_band_md = {k.title():v for k,v in this_band_md.items()}            
-            for k in this_band_md.keys():
-                if k not in field_names:
-                    layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
-
-            if 'Title' not in this_band_md.keys():
-                if 'Title' not in field_names:
-                    layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
-
-            if b_infos['zr'][1] == 1:
-                tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
-                    '{}_poly'.format(this_band_name)
-                )
-                if tmp_ds is not None:
-                    tmp_layer = tmp_ds.CreateLayer(
-                        '{}_poly'.format(this_band_name), srs, ogr.wkbMultiPolygon
-                    )
-                    tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-                    tmp_name = str(this_band_name)                                    
-                    for k in this_band_md.keys():
-                        tmp_layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
-
-                    if 'Title' not in this_band_md.keys():
-                        tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
-
-                    ## fill tmp_layer with all associated bands in band_infos...
-                    status = gdal.Polygonize(
-                        this_band,
-                        None,
-                        tmp_layer,
-                        tmp_layer.GetLayerDefn().GetFieldIndex('DN'),
-                        [],
-                        #callback = gdal.TermProgress if verbose else None
-                        callback = None
-                    )
-
-                    if len(tmp_layer) > 0:
-                        if defn is None:
-                            defn = layer.GetLayerDefn()
-
-                        out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
-                        with utils.ccp(
-                                desc='creating feature {}...'.format(this_band_name),
-                                total=len(this_band_md.keys()),
-                                leave=verbose
-                        ) as feat_pbar:
-                            for k in this_band_md.keys():
-                                feat_pbar.update()
-                                out_feat.SetField(k, this_band_md[k])
-
-                            if 'Title' not in this_band_md.keys():
-                                out_feat.SetField('Title', tmp_name)
-
-                            out_feat.SetField('DN', b)
-                            status = layer.CreateFeature(out_feat)
-                            #layer.SetFeature(out_feat)
-                
-                # if verbose:
-                #     utils.echo_msg('polygonized {}'.format(this_band_name))
-                tmp_ds = tmp_layer = None
-                
-    layer.CommitTransaction()
-    ds = src_ds = None
-    
-    ds = ogr.Open(dst_vector, 1)
-    field_names_to_delete = ['DN', 'Name', 'Uncertainty']
-    for fnd in field_names_to_delete:
-        ds.ExecuteSQL(f'ALTER TABLE {dst_layer} DROP COLUMN {fnd}')
-
-    ds = None
-
-    return(dst_layer, ogr_format)
-
-
-def polygonize_mask_multibands2(
-        src_ds,
-        output = None,
-        ogr_format = 'GPKG',
-        mask_level = 0,
-        verbose = True
-):
-    """polygonze a multi-band mask raster. 
-
-    -----------
-    Parameters:
-    src_ds (GDALDataset): the source multi-band raster as a gdal dataset object
-    dst_srs (str): the output srs
-    ogr_format (str): the output OGR format
-    verbose (bool): be verbose
-
-    -----------
-    Returns:
-    tuple: (dst_layer, ogr_format)
-    """
-
-    mask_level = utils.int_or(mask_level, 0)
-    band_infos = scan_mask_bands(src_ds, mask_level=mask_level, verbose=verbose)
-    dst_layer = '{}_sm'.format(
-        utils.fn_basename2(src_ds.GetDescription()) if output is None else output
-    )
-    dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
-    utils.remove_glob('{}.*'.format(dst_layer))
-    srs = srsfun.osr_srs(src_ds.GetProjectionRef())
-    driver = ogr.GetDriverByName(ogr_format)
-    ds = driver.CreateDataSource(dst_vector)
-    if ds is not None: 
-        layer = ds.CreateLayer(
-            'footprints', srs, ogr.wkbMultiPolygon
-        )
-        [layer.SetFeature(feature) for feature in layer]
-    else:
-        layer = None
-
-    layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-    #layer.StartTransaction()
-    defn = None
-    
-    with utils.ccp(
-            desc='polygonizing mask bands.',
-            total=len(band_infos.keys()),
-            leave=verbose
-    ) as pbar:
-        for i, m in enumerate(band_infos.keys()):
-            field_names = [field.name for field in layer.schema]
-            this_md = {k.title():v for k,v in band_infos[m]['metadata'].items()}            
-            for k in this_md.keys():
-                if k not in field_names:
-                    layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
-
-            if 'Title' not in this_md.keys():
-                if 'Title' not in field_names:
-                    layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
-
-            tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
-                '{}_poly'.format(m)
-            )
-            if tmp_ds is not None:
-                tmp_layer = tmp_ds.CreateLayer(
-                    '{}_poly'.format(m), srs, ogr.wkbMultiPolygon
-                )
-                tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-                tmp_name = str(m)                                    
-                for k in this_md.keys():
-                    tmp_layer.CreateField(ogr.FieldDefn(k, ogr.OFTString))
-
-                if 'Title' not in this_md.keys():
-                    tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
-
-                with utils.ccp(
-                        desc='polygonizing {} mask bands from {}.'.format(
-                            len(band_infos[m]['bands']), m,
-                        ),
-                        total=len(band_infos[m]['bands']),
-                        leave=verbose
-                ) as poly_pbar:                                            
-                    for b in band_infos[m]['bands']:
-                        this_band = src_ds.GetRasterBand(b)
-                        status = gdal.Polygonize(
-                            this_band,
-                            None,
-                            tmp_layer,
-                            tmp_layer.GetLayerDefn().GetFieldIndex('DN'),
-                            [],
-                            #callback = gdal.TermProgress if verbose else None
-                            callback = None
-                        )
-                        poly_pbar.update()
-
-                if len(tmp_layer) > 0:
-                    if defn is None:
-                        defn = layer.GetLayerDefn()
-
-                    out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
-                    with utils.ccp(
-                            desc='creating feature {}...'.format(m),
-                            total=len(this_md.keys()),
-                            leave=verbose
-                    ) as feat_pbar:
-                        for k in this_md.keys():
-                            feat_pbar.update()
-                            out_feat.SetField(k, this_md[k])
-
-                        if 'Title' not in this_md.keys():
-                            out_feat.SetField('Title', tmp_name)
-
-                        out_feat.SetField('DN', b)
-                        status = layer.CreateFeature(out_feat)
-                        layer.SetFeature(out_feat)
-                                    
-            tmp_ds = tmp_layer = None
-            pbar.update()    
-    #layer.CommitTransaction()            
-    ds = src_ds = None
-    return(dst_layer, ogr_format)
-
-
-## ==============================================
-## Datalist convenience functions
+## Datalist Helper Functions
 ## data_list is a list of dlim supported datasets
 ## ==============================================
 def get_factory_exts():
@@ -597,6 +141,7 @@ def get_factory_exts():
                     fmts.append(f)
                     
     return(fmts)
+
 
 def make_datalist(data_list, want_weight, want_uncertainty, region,
                   src_srs, dst_srs, x_inc, y_inc, sample_alg,
@@ -671,241 +216,103 @@ def h5_get_datasets_from_grp(grp, count = 0, out_keys = []):
     return(count, out_keys)
 
 
-# ## initialize a list of datasets into a dataset object
-# def init_data_(data_list,
-#               region=None,
-#               src_srs=None,
-#               dst_srs=None,
-#               src_geoid=None,
-#               dst_geoid='g2018',
-#               xy_inc=(None, None),
-#               sample_alg='auto',
-#               want_weight=False,
-#               want_uncertainty=False,
-#               want_verbose=True,
-#               want_mask=False,
-#               want_sm=False,
-#               invert_region=False,
-#               cache_dir=None,
-#               dump_precision=4,
-#               pnt_fltrs=None,
-#               stack_fltrs=None,
-#               stack_node=True,
-#               stack_mode='mean',
-#               upper_limit=None,
-#               lower_limit=None,
-#               mask=None):
-#     """initialize a datalist object from a list of supported dataset entries"""
-
-#     from . import datalists
-#     from . import xyzfile
-    
-#     try:
-#         #utils.echo_msg(data_list)
-#         xdls = []
-#         for dl in data_list:
-#             #utils.echo_msg(dl)
-#             if dl is sys.stdin:
-#                 xdls.append(xyzfile.XYZFile(fn=dl, data_format=168))
-#             elif isinstance(dl, str):
-#                 xdls.append(
-#                     DatasetFactory(
-#                         mod=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-#                         data_format = None,
-#                         weight=None if not want_weight else 1,
-#                         uncertainty=None if not want_uncertainty else 0,
-#                         src_srs=src_srs,
-#                         dst_srs=dst_srs,
-#                         src_geoid=src_geoid,
-#                         dst_geoid=dst_geoid,
-#                         x_inc=xy_inc[0],
-#                         y_inc=xy_inc[1],
-#                         sample_alg=sample_alg,
-#                         parent=None,
-#                         src_region=region,
-#                         invert_region=invert_region,
-#                         cache_dir=cache_dir,
-#                         want_mask=want_mask,
-#                         want_sm=want_sm,
-#                         verbose=want_verbose,
-#                         dump_precision=dump_precision,
-#                         pnt_fltrs=pnt_fltrs,
-#                         stack_fltrs=stack_fltrs,
-#                         stack_node=stack_node,
-#                         stack_mode=stack_mode,
-#                         upper_limit=None,
-#                         lower_limit=None,
-#                         mask=mask
-#                     )._acquire_module()
-#                 )
-#             elif isinstance(dl, dict):
-
-#                 if dl['kwargs']['src_region'] is not None:
-#                     dl['kwargs']['src_region'] = regions.Region().from_list(
-#                         dl['kwargs']['src_region']
-#                 )
-#                 dl['kwargs']['xinc'] = xy_inc[0]
-#                 dl['kwargs']['yinc'] = xy_inc[1]
-#                 xdls.append(
-#                     DatasetFactory(
-#                         mod_name=dl['mod_name'], mod_args=dl['mod_args'], **dl['kwargs']
-#                     )._acquire_module()
-#                 )
-
-#         #utils.echo_msg(region)
-#         utils.echo_msg(xdls)
-#         if len(xdls) > 1:
-#             this_datalist = datalists.Scratch(
-#                 fn=xdls,
-#                 data_format=-3,
-#                 weight=None if not want_weight else 1,
-#                 uncertainty=None if not want_uncertainty else 0,
-#                 src_srs=src_srs,
-#                 dst_srs=dst_srs,
-#                 src_geoid=src_geoid,
-#                 dst_geoid=dst_geoid,
-#                 x_inc=xy_inc[0],
-#                 y_inc=xy_inc[1],
-#                 sample_alg=sample_alg,
-#                 parent=None,
-#                 src_region=region,
-#                 invert_region=invert_region,
-#                 cache_dir=cache_dir,
-#                 want_mask=want_mask,
-#                 want_sm=want_sm,
-#                 verbose=want_verbose,
-#                 dump_precision=dump_precision,
-#                 pnt_fltrs=pnt_fltrs,
-#                 stack_fltrs=stack_fltrs,
-#                 stack_node=stack_node,
-#                 stack_mode=stack_mode,
-#                 upper_limit=None,
-#                 lower_limit=None,
-#                 mask=mask
-#             )
-
-#         elif len(xdls) > 0:
-#             this_datalist = xdls[0]
-#         else:
-#             this_datalist = None
-
-#         return(this_datalist)
-    
-#     except Exception as e:
-#         #utils.echo_warning_msg('failed to parse datalist obs')
-#         utils.echo_error_msg(
-#             f'could not initialize data, {data_list}: {e}'
-#         )
-#         return(None)
-
 def init_data(data_list, **kwargs):
-    """initialize a datalist object from a list of supported dataset entries"""
+    """
+    Initialize a datalist object from a list of supported dataset entries.
+    
+    Args:
+        data_list (list): A list containing file paths (str), dicts, or sys.stdin.
+        **kwargs: Additional arguments passed to the dataset constructors.
+    
+    Returns:
+        Datalist object or None.
+    """
 
     from . import datalists
     from . import xyzfile
     
-    try:
-        xdls = []
-        kwargs['weight'] = kwargs.get('want_weight')
-        kwargs['uncertainty'] = kwargs.get('want_uncertainty')
+    xdls = []
+    
+    ## Map convenience kwargs to standard internal keys
+    kwargs['weight'] = kwargs.get('want_weight', kwargs.get('weight'))
+    kwargs['uncertainty'] = kwargs.get('want_uncertainty', kwargs.get('uncertainty'))
 
+    try:
         for dl in data_list:
+            ## Handle Standard Input (Pipe)
             if dl is sys.stdin:
                 xdls.append(xyzfile.XYZFile(fn=dl, data_format=168, **kwargs))
 
+            ## Handle String Entries (e.g. "path/to/data.xyz,168,1")
             elif isinstance(dl, str):
-                kwargs['mod'] = " ".join(['-' if x == "" else x for x in dl.split(",")])
-                utils.echo_msg(kwargs)
-                xdls.append(DatasetFactory(**kwargs)._acquire_module())
+                ## Convert CSV-style input to Space-delimited string for the Factory parser.
+                ## Replaces empty CSV fields (,,) with hyphens (-) which Factory recognizes as "inherit/default".
+                ## Example: "data.tif,,0.5" -> "data.tif - 0.5"
+                entry_str = " ".join(['-' if x.strip() == "" else x for x in dl.split(",")])
+                
+                ## Pass the formatted string as 'mod' to the factory
+                ds = DatasetFactory(mod=entry_str, **kwargs)._acquire_module()
+                if ds:
+                    xdls.append(ds)
 
+            ## Handle Dictionary Entries
             elif isinstance(dl, dict):
-                if dl['kwargs']['src_region'] is not None:
+                ## Ensure source region is a Region object if provided
+                if dl.get('kwargs', {}).get('src_region') is not None:
                     dl['kwargs']['src_region'] = regions.Region().from_list(
                         dl['kwargs']['src_region']
-                )
-                #dl['kwargs']['xinc'] = xy_inc[0]
-                #dl['kwargs']['yinc'] = xy_inc[1]
-                xdls.append(
-                    DatasetFactory(
-                        mod_name=dl['mod_name'], mod_args=dl['mod_args'], **dl['kwargs']
-                    )._acquire_module()
-                )
+                    )
+                
+                ## Merge global kwargs with specific entry kwargs
+                ## Entry kwargs take precedence
+                combined_kwargs = kwargs.copy()
+                combined_kwargs.update(dl.get('kwargs', {}))
 
+                ds = DatasetFactory(
+                    mod=dl.get('mod_name'), 
+                    **combined_kwargs
+                )._acquire_module()
+                
+                if ds:
+                    xdls.append(ds)
+
+        ## Wrap Results
         if len(xdls) > 1:
+            ## If multiple datasets, wrap them in a Scratch datalist (in-memory list)
             this_datalist = datalists.Scratch(fn=xdls, data_format=-3, **kwargs)
         elif len(xdls) > 0:
+            ## If single dataset, return it directly
             this_datalist = xdls[0]
         else:
             this_datalist = None
 
-        return(this_datalist)
-    
+        return this_datalist
+
     except Exception as e:
-        #utils.echo_warning_msg('failed to parse datalist obs')
-        utils.echo_error_msg(
-            f'could not initialize data, {data_list}: {e}'
-        )
-        return(None)
+        utils.echo_error_msg(f'Could not initialize data from {data_list}: {e}')
+        return None
+
     
-        
 ## ==============================================
-## ElevationDataset and sub-modules
+## ElevationDataset
+## Base Elevation Dataset Class
 ## ==============================================
 class ElevationDataset:
-    """representing an Elevation Dataset
+    """Representing an Elevation Dataset.
     
-    This is the super class for all datalist (dlim) datasets .    
-    Each dataset sub-class should define a dataset-specific    
+    This is the super class for all datalist (dlim) datasets.
+    Each dataset sub-class should define a dataset-specific
     data parser <self.parse> and a <self.generate_inf> function to generate
-    inf files. 
+    inf files.
 
-    Specifically, each sub-dataset should minimally define the following 
-    functions:
-
-    sub_ds.__init__
-    sub_ds.yield_points
-
-    -----------
-    Where:
-
-    generate_inf generates a dlim compatible inf file,
-    parse yields the dlim dataset module
-    yield_points yields the data as a numpy rec-array with 'x', 'y', 'z' 
-    and optionally 'w' and 'u'
-
-    -----------
-    Parameters:
-
-    fn: dataset filename or fetches module
-    data_format: dataset format
-    weight: dataset weight
-    uncertainty: dataset uncertainty
-    mask: mask the dataset
-    src_srs: dataset source srs
-    dst_srs: dataset target srs
-    src_geoid: dataset source geoid (if applicable)
-    dst_geoid: dataset target geoid
-    x_inc: target dataset x/lat increment
-    y_inc: target dataset y/lon increment
-    want_mask: generate a mask of the data
-    want_sm: generate spatial metadata vector
-    sample_alg: the gdal resample algorithm
-    parent: dataset parent obj
-    region: ROI
-    invert_region: invert the region
-    stack_node: output x/y data as mean of input x/y instead of cell center
-    stack_mode: 'min', 'max', 'supercede', 'mean'
-    cache_dir: cache_directory
-    verbose: be verbose
-    remote: dataset is remote
-    dump_precision: specify the float precision of the dumped xyz data
-    params: the factory parameters
-    metadata: dataset metadata
+    Minimally required methods in subclasses:
+        - __init__
+        - yield_points(self)
     """
 
     gdal_sample_methods = [
         'near', 'bilinear', 'cubic', 'cubicspline', 'lanczos',
-        'average', 'mode',  'max', 'min', 'med', 'Q1', 'Q3', 'sum',
+        'average', 'mode', 'max', 'min', 'med', 'Q1', 'Q3', 'sum',
         'auto'
     ]
 
@@ -913,8 +320,6 @@ class ElevationDataset:
         'min', 'max', 'mean', 'supercede', 'mixed'
     ]
 
-    ## todo: add transformation grid option
-    ## (stacks += transformation_grid), geoids
     def __init__(self,
                  fn=None,
                  data_format=None,
@@ -933,8 +338,8 @@ class ElevationDataset:
                  parent=None,
                  src_region=None,
                  invert_region=False,
-                 pnt_fltrs=[],
-                 stack_fltrs=[],
+                 pnt_fltrs=None,
+                 stack_fltrs=None,
                  stack_node=True,
                  stack_mode='mean',
                  cache_dir=None,
@@ -943,45 +348,48 @@ class ElevationDataset:
                  dump_precision=6,
                  upper_limit=None,
                  lower_limit=None,
-                 params={},
-                 metadata={
-                     'name':None, 'title':None, 'source':None, 'date':None,
-                     'data_type':None, 'resolution':None, 'hdatum':None,
-                     'vdatum':None, 'url':None
-                 },
+                 params=None,
+                 metadata=None,
                  **kwargs):
-        self.fn = fn # dataset filename or fetches module
-        self.data_format = data_format # dataset format
-        self.weight = weight # dataset weight
-        self.uncertainty = uncertainty # dataset uncertainty
-        self.mask = mask #{'mask': mask, 'invert': False}#mask # dataset mask
-        self.src_srs = src_srs # dataset source srs
-        self.dst_srs = dst_srs # dataset target srs
-        self.src_geoid = src_geoid # dataset source geoid
-        self.dst_geoid = dst_geoid # dataset target geoid
-        self.x_inc = utils.str2inc(x_inc) # target dataset x/lat increment
-        self.y_inc = utils.str2inc(y_inc) # target dataset y/lon increment
-        self.stack_fltrs = stack_fltrs # pass the stack, if generated, through grits filters
-        self.pnt_fltrs = pnt_fltrs # pass the points through filters
-        self.want_mask = want_mask # mask the data
-        self.want_sm = want_sm # generate spatial metadata vector
+        
+        self.fn = fn
+        self.data_format = data_format
+        self.weight = weight
+        self.uncertainty = uncertainty
+        self.mask = mask
+        self.src_srs = src_srs
+        self.dst_srs = dst_srs
+        self.src_geoid = src_geoid
+        self.dst_geoid = dst_geoid
+        self.x_inc = utils.str2inc(x_inc)
+        self.y_inc = utils.str2inc(y_inc)
+        self.stack_fltrs = stack_fltrs if stack_fltrs else []
+        self.pnt_fltrs = pnt_fltrs if pnt_fltrs else []
+        self.want_mask = want_mask
+        self.want_sm = want_sm
+        
         if self.want_sm:
             self.want_mask = True
             
-        self.sample_alg = sample_alg # the gdal resample algorithm
-        self.metadata = copy.deepcopy(metadata) # dataset metadata
-        self.parent = parent # dataset parent obj
-        self.region = src_region # ROI
+        self.sample_alg = sample_alg
+        self.metadata = copy.deepcopy(metadata) if metadata else {
+            'name': None, 'title': None, 'source': None, 'date': None,
+            'data_type': None, 'resolution': None, 'hdatum': None,
+            'vdatum': None, 'url': None
+        }
+        self.parent = parent
+        
+        self.region = src_region
         if self.region is not None:
             self.region = regions.Region().from_user_input(self.region)
             
-        self.invert_region = invert_region # invert the region
-        self.cache_dir = cache_dir # cache_directory
-        self.verbose = verbose # be verbose
-        self.remote = remote # dataset is remote
-        self.dump_precision = dump_precision # the precision of the dumped xyz data
-        self.stack_node = stack_node # yield avg x/y data instead of center
-        self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
+        self.invert_region = invert_region
+        self.cache_dir = cache_dir
+        self.verbose = verbose
+        self.remote = remote
+        self.dump_precision = dump_precision
+        self.stack_node = stack_node
+        self.stack_mode = stack_mode
         self._init_stack_mode()
 
         self.upper_limit = utils.float_or(upper_limit)
@@ -989,14 +397,11 @@ class ElevationDataset:
 
         self.infos = inf.INF(
             name=self.fn, file_hash='0', numpts=0, fmt=self.data_format
-        ) # infos blob
+        )
 
-        # for kwarg in kwargs:
-        #     if kwarg not in self.__dict__.keys():
-        #         utils.echo_warning_msg('{} is not a valid parameter'.format(kwarg))
-        
-        self.params = params # the factory parameters
+        self.params = params
         if not self.params:
+            self.params = {}
             self.params['kwargs'] = self.__dict__.copy()
             self.params['mod'] = self.fn
             self.params['mod_name'] = self.data_format
@@ -1004,11 +409,11 @@ class ElevationDataset:
 
             
     def __str__(self):
-        return(f'<Dataset: {self.metadata["name"]} - {self.fn}>')
+        return f'<Dataset: {self.metadata.get("name")} - {self.fn}>'
 
     
     def __repr__(self):
-        return(f'<Dataset: {self.metadata["name"]} - {self.fn}>')
+        return f'<Dataset: {self.metadata.get("name")} - {self.fn}>'
 
     
     def __call__(self):
@@ -1016,50 +421,39 @@ class ElevationDataset:
 
         
     def _init_stack_mode(self):
-        opts, self.stack_mode_name, self.stack_mode_args \
-            = factory.parse_fmod(self.stack_mode)
+        opts, self.stack_mode_name, self.stack_mode_args = factory.parse_fmod(self.stack_mode)
 
         if self.stack_mode_name not in self.stack_modes:
-            utils.echo_warning_msg(
-                f'{self.stack_mode_name} is not a valid stack mode'
-            )
+            utils.echo_warning_msg(f'{self.stack_mode_name} is not a valid stack mode')
             self.stack_mode_name = 'mean'
         
-        if 'mask_level' not in self.stack_mode_args.keys():
+        if 'mask_level' not in self.stack_mode_args:
             self.stack_mode_args['mask_level'] = -1
 
             
     def _init_mask(self, mask):
         opts = factory.fmod2dict(mask, {})
-        if 'mask_fn' not in opts.keys():
-            if '_module' in opts.keys():
+        if 'mask_fn' not in opts:
+            if '_module' in opts:
                 opts['mask_fn'] = opts['_module']
             else:
                 utils.echo_error_msg(f'could not parse mask {self.mask}')
-                return(None)
+                return None
 
-        if 'invert' not in opts.keys():
-            opts['invert'] = False
+        opts.setdefault('invert', False)
+        opts.setdefault('verbose', False)
+        opts.setdefault('min_z', None)
+        opts.setdefault('max_z', None)
+
+        if opts['min_z'] is not None: opts['min_z'] = utils.float_or(opts['min_z'])
+        if opts['max_z'] is not None: opts['max_z'] = utils.float_or(opts['max_z'])
             
-        if 'verbose' not in opts.keys():
-            opts['verbose'] = False
-
-        if 'min_z' not in opts.keys():
-            opts['min_z'] = None
-        else:
-            opts['min_z'] = utils.float_or(opts['min_z'])
-
-        if 'max_z' not in opts.keys():
-            opts['max_z'] = None
-        else:
-            opts['max_z'] = utils.float_or(opts['max_z'])
-            
-        # mask is ogr, rasterize it
+        # Mask is OGR, rasterize it
         opts['ogr_or_gdal'] = gdalfun.ogr_or_gdal(opts['mask_fn'])
+        
+        data_mask = opts['mask_fn']
         if opts['ogr_or_gdal'] == 1: 
-            if self.region is not None \
-               and self.x_inc is not None \
-               and self.y_inc is not None:
+            if self.region is not None and self.x_inc is not None and self.y_inc is not None:
                 data_mask = gdalfun.ogr2gdal_mask(
                     opts['mask_fn'],
                     region=self.region,
@@ -1070,19 +464,14 @@ class ElevationDataset:
                     verbose=True,
                     temp_dir=self.cache_dir,
                 )
-                opts['ogr_or_gdal'] = 0
-            else:    
-                data_mask = opts['mask_fn']
-        else:
-            data_mask = opts['mask_fn']
-
-        opts['data_mask'] = data_mask
-        return(opts)
+                opts['ogr_or_gdal'] = 0 # Now it's a raster
         
-                    
+        opts['data_mask'] = data_mask
+        return opts
+
+    
     def _set_params(self, **kwargs):
         metadata = copy.deepcopy(self.metadata)
-        #metadata['name'] = self.fn
         _params = {
             'parent': self,
             'weight': self.weight,
@@ -1103,73 +492,59 @@ class ElevationDataset:
             'metadata': metadata,
             'stack_mode': self.stack_mode,
         }
-        for kw in kwargs.keys():
+        for kw in kwargs:
             _params[kw] = kwargs[kw]
 
-        return(_params)
+        return _params
 
     
     def _copy_params(self, **kwargs):
-        _params = {i:self.params['kwargs'][i] for i in self.params['kwargs'] if i!='params'}
-        for kw in kwargs.keys():
+        _params = {i: self.params['kwargs'][i] for i in self.params['kwargs'] if i != 'params'}
+        for kw in kwargs:
             _params[kw] = kwargs[kw]
 
-        return(_params)
+        return _params
 
-
+    
     def _sub_init(self):
         pass
-        
+
     
     def initialize(self):
         self._sub_init()
         self._fn = None # temp filename holder
-        self.data_region = None # self.region and inf.region reduced
-        self.inf_region = None # inf region
-        self.archive_datalist = None # the datalist of the archived data
-        self.data_entries = [] # 
-        self.data_lists = {} #
-        self.cache_dir = utils.cudem_cache() \
-            if self.cache_dir is None \
-               else self.cache_dir # cache directory
-        if self.sample_alg not in self.gdal_sample_methods: # gdal_warp resmaple algorithm 
+        self.data_region = None 
+        self.inf_region = None 
+        self.archive_datalist = None
+        self.data_entries = [] 
+        self.data_lists = {} 
+        
+        self.cache_dir = utils.cudem_cache() if self.cache_dir is None else self.cache_dir
+        
+        if self.sample_alg not in self.gdal_sample_methods: 
             utils.echo_warning_msg(
-                (f'{self.sample_alg} is not a valid gdal warp resample algorithm, '
-                 'falling back to `auto`')
+                f'{self.sample_alg} is not a valid gdal warp resample algorithm, falling back to `auto`'
             )
             self.sample_alg = 'auto'
 
         if utils.fn_url_p(self.fn):
             self.remote = True
 
-        ## initialize transform
+        ## Initialize transform
         self.transform = {
-            'src_horz_crs': None,
-            'dst_horz_crs': None,
-            'src_vert_crs': None,
-            'dst_vert_crs': None,
-            'src_vert_epsg': None,
-            'dst_vert_epsg': None,
-            'pipeline': None,
-            'trans_fn': None,
-            'trans_fn_unc': None,
-            'trans_region': None,
-            'transformer': None,
-            'vert_transformer': None,
+            'src_horz_crs': None, 'dst_horz_crs': None,
+            'src_vert_crs': None, 'dst_vert_crs': None,
+            'src_vert_epsg': None, 'dst_vert_epsg': None,
+            'pipeline': None, 'trans_fn': None,
+            'trans_fn_unc': None, 'trans_region': None,
+            'transformer': None, 'vert_transformer': None,
             'want_vertical': False,
-        } # pyproj transformation info
-
+        }
 
         if self.valid_p():
-            #try:
             self.infos = self.inf(
-                check_hash=True if self.data_format == -1 else False
+                check_hash=True if self.data_format == -1 else False, make_block_mean=False
             )
-            # except:
-            #    utils.echo_error_msg(
-            #        f'could not parse dataset {self.fn}'
-            #    )
-            #    return(self)
              
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
@@ -1181,14 +556,10 @@ class ElevationDataset:
                         infos=self.infos,
                         cache_dir=self.cache_dir
                     )
-                    #self.set_transform()
                 except Exception as e:
-                    utils.echo_error_msg(
-                        f'could not set transformation on {self.fn}, {e}'
-                    )
+                    utils.echo_error_msg(f'could not set transformation on {self.fn}, {e}')
 
             self.set_yield(use_blocks=False)
-            #self.set_yield()
 
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
             self.pnt_fltrs = [self.pnt_fltrs]
@@ -1196,20 +567,18 @@ class ElevationDataset:
         if self.mask is not None and isinstance(self.mask, str):
             self.mask = [self.mask]
             
-        return(self)
+        return self
 
     
     def fetch(self):
-        """fetch remote data from self.data_entries"""
+        """Fetch remote data from self.data_entries."""
         
         for entry in self.data_entries:
             if entry.remote:
                 if entry._fn is None:
                     entry._fn = os.path.basename(self.fn)
                     
-                f = utils.Fetch(
-                    url=entry.fn, verbose=entry.verbose
-                )
+                f = fetches.Fetch(url=entry.fn, verbose=entry.verbose)
                 if f.fetch_file(entry._fn) == 0:
                     entry.fn = entry._fn
             else:
@@ -1217,61 +586,46 @@ class ElevationDataset:
 
                 
     def valid_p(self, fmts=['scratch']):
-        """check if self appears to be a valid dataset entry"""
+        """Check if self appears to be a valid dataset entry."""
 
-        if self.fn is None:
-            return(False)
-
-        if self.data_format is None:
-            return(False)
-
-        #check_path=True
-        # if self.fn.startswith('http') \
-        #    or self.fn.startswith('/vsicurl/') \
-        #    or self.fn.startswith('BAG'):
-        #     check_path = False
+        if self.fn is None: return False
+        if self.data_format is None: return False
 
         if self.fn is sys.stdin or self.fn == '-':
             self.fn = sys.stdin
-            return(True)
+            return True
         
-        #if check_path:
         if self.fn is not None:
-            if not isinstance(self.fn, list) and \
-               not isinstance(self.fn, np.ndarray) and \
-               not isinstance(self.fn, np.core.records.recarray):
+            if not isinstance(self.fn, (list, np.ndarray, np.core.records.recarray)):
                 if self.fn not in fmts:
-                    if not self.fn.startswith('http') \
-                       and not self.fn.startswith('/vsicurl/') \
-                       and not self.fn.startswith('BAG') \
-                       and not ':' in self.fn:
+                    if not self.fn.startswith(('http', '/vsicurl/', 'BAG')) and ':' not in self.fn:
                         if not utils.fn_url_p(self.fn):
                             if self.data_format > -10:
                                 if not os.path.exists(self.fn):
                                     utils.echo_warning_msg(f'{self.fn} does not exist')
-                                    return (False)
+                                    return False
 
-                                if os.stat(self.fn).st_size == 0:
+                                if os.path.isfile(self.fn) and os.stat(self.fn).st_size == 0:
                                     utils.echo_warning_msg(f'{self.fn} is 0 bytes')
-                                    return(False)
+                                    return False
                         
-        return(True)
+        return True
 
     
     def echo_(self, sep=' ', **kwargs):
-        """print self as a datalist entry string"""
-
+        """Print self as a datalist entry string."""
+        
         out = []
         for key in self.metadata.keys():
             if key != 'name':
                 out.append(str(self.metadata[key]))
 
-        return(sep.join(['"{}"'.format(str(x)) for x in out]))
+        return sep.join([f'"{str(x)}"' for x in out])
 
     
     def echo(self, sep=' ', **kwargs):
-        """print self.data_entries as a datalist entries."""
-
+        """Print self.data_entries as a datalist entries."""
+        
         out = []
         for entry in self.parse():
             entry_path = os.path.abspath(entry.fn) if not self.remote else entry.fn
@@ -1279,64 +633,49 @@ class ElevationDataset:
             if entry.weight is not None:
                 l.append(entry.weight)
 
-            entry_string = '{}'.format(sep.join([str(x) for x in l]))
+            entry_string = f'{sep.join([str(x) for x in l])}'
             out.append(entry_string)
             print(entry_string)
 
-        return(out)
+        return out
 
-
+    
     def format_data(self, sep=' '):
         out = []        
         for entry in self.parse():
             out.append(entry.format_entry(sep=sep))
-
-        return(out)
+        return out
 
     
     def format_entry(self, sep=' '):
-        """format the dataset information as a `sep` separated string."""
-
+        """Format the dataset information as a `sep` separated string."""
+        
         dl_entry = sep.join(
             [str(x) for x in [
                 self.fn,
-                f'{self.data_format}:{factory.dict2args(self.params["mod_args"])}',
+                f'{self.data_format}:{factory.dict2args(self.params.get("mod_args", {}))}',
                 self.weight,
                 self.uncertainty
             ]]
         )
         metadata = self.echo_()
-        return(sep.join([dl_entry, metadata]))
+        return sep.join([dl_entry, metadata])
 
-            
+
     def format_metadata(self, **kwargs):
-        """format metadata from self, for use as a datalist entry."""
-
-        return(self.echo_())
+        """Format metadata from self, for use as a datalist entry."""
+        
+        return self.echo_()
 
     
     def set_yield(self, use_blocks=False):
-        """set the yield strategy, either default (all points) or mask or stacks
-
-        This sets both `self.array_yeild` and `self.xyz_yield`.
+        """Set the yield strategy, either default (all points), mask, or stacks."""
         
-        if region, x_inc and y_inc are set, data will yield through stacks,
-        otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
-        """
-
-        #self.array_yield = self.yield_array()
-        #self.xyz_yield = self.yield_xyz()    
         self.array_yield = self.mask_and_yield_array()
         self.xyz_yield = self.mask_and_yield_xyz()
-        #if self.want_archive: # archive only works when yielding xyz data.
-        #    self.xyz_yield = self.archive_xyz()
-        # if (self.region is None \
-        #     and self.transform['trans_region'] is None) \
-        #     and self.x_inc is not None:
+        
         if self.region is None and self.x_inc is not None:
-            utils.echo_warning_msg(
-                'must enter a region to output in increment blocks...'
-            )
+            utils.echo_warning_msg('must enter a region to output in increment blocks...')
 
         if self.region is not None and self.x_inc is not None:
             self.x_inc = utils.str2inc(self.x_inc)
@@ -1345,678 +684,517 @@ class ElevationDataset:
             else:
                 self.y_inc = utils.str2inc(self.y_inc)
 
-            #out_name = utils.make_temp_fn('dlimstacks', temp_dir=self.cache_dir)
-            # out_name = utils.make_temp_fn(
-            #     utils.append_fn(
-            #         'dlimstacks', self.region, self.x_inc
-            #     ), temp_dir=self.cache_dir
-            # )
-            
             out_name = os.path.join(self.cache_dir, utils.append_fn('globato', self.region, self.x_inc))
             if not use_blocks:
                 self.xyz_yield = self.stacks_yield_xyz(out_name=out_name)
             else:
                 self.xyz_yield = self.blocks_yield_xyz(out_name=out_name)
 
-            
-    ## initialize transfom
-    def parse_srs(self):
-        if self.src_srs is not None and self.dst_srs is not None:
-            want_vertical = True
-            src_geoid = None
-            dst_geoid = 'g2018' # dst_geoid is g2018 by default.
-            in_vertical_epsg = in_vertical_crs = None
-            out_vertical_epsg = out_vertical_crs = None
-            
-            ## parse out the source geoid, which is not standard in proj,
-            ## reset `self.src_srs` without it.
-            tmp_src_srs = self.src_srs.split('+geoid:')
-            src_srs = tmp_src_srs[0]
-            self.src_srs = src_srs
-            if len(tmp_src_srs) > 1:
-                src_geoid = tmp_src_srs[1]
-
-            ## parse out the destination geoid, which is not standard in proj
-            ## reset `self.dst_srs` without it.
-            tmp_dst_srs = self.dst_srs.split('+geoid:')
-            dst_srs = tmp_dst_srs[0]
-            self.dst_srs = dst_srs
-            if len(tmp_dst_srs) > 1:
-                dst_geoid = tmp_dst_srs[1]
-
-            ## check if this is an ESRI epsg code
-            is_esri = False
-            in_vertical_epsg_esri = None
-            if 'ESRI' in src_srs.upper():
-                is_esri = True
-                srs_split = src_srs.split('+')
-                src_srs = srs_split[0]
-                if len(srs_split) > 1:
-                    in_vertical_epsg_esri = srs_split[1]
-
-            ## check if the vertical epsg is tidal, fix the epsg code if so
-            if utils.int_or(src_srs.split('+')[-1]) in vdatums._tidal_frames.keys():
-                src_srs = '{}+{}'.format(
-                    src_srs.split('+')[0],
-                    vdatums._tidal_frames[utils.int_or(src_srs.split('+')[-1])]['epsg']
-                )
                 
-            ## set the proj crs from the src and dst srs input
-            try:
-                in_crs = pyproj.CRS.from_user_input(src_srs)
-                out_crs = pyproj.CRS.from_user_input(dst_srs)
-            except:
-                utils.echo_error_msg([src_srs, dst_srs])
+    def inf(self, check_hash=False, recursive_check=False, write_inf=True, 
+            make_grid=True, make_block_mean=False, block_inc=None, **kwargs):
+        """Read/Write an INF metadata file.
 
-            ## if the crs has vertical (compound), parse out the vertical crs
-            ## and set the horizontal and vertical crs
-            if in_crs.is_compound:
-                in_crs_list = in_crs.sub_crs_list
-                in_horizontal_crs = in_crs_list[0]
-                in_vertical_crs = in_crs_list[1]
-                in_vertical_name = in_vertical_crs.name
-                in_vertical_epsg = in_vertical_crs.to_epsg()
-                if in_vertical_epsg is None:
-                    in_vertical_epsg = in_vertical_name.split(' ')[0]
-            else:
-                in_horizontal_crs = in_crs
-                want_vertical=False
-
-            if out_crs.is_compound:            
-                out_crs_list = out_crs.sub_crs_list
-                out_horizontal_crs = out_crs_list[0]
-                out_vertical_crs = out_crs_list[1]
-                out_vertical_epsg = out_vertical_crs.to_epsg()
-            else:
-                out_horizontal_crs = out_crs
-                want_vertical=False
-                out_vertical_epsg=None
-
-            ## check if esri vertical
-            if (in_vertical_epsg_esri is not None and is_esri):
-                in_vertical_epsg = in_vertical_epsg_esri
-                if out_vertical_epsg is not None:
-                    want_vertical = True
-
-            ## make sure the input and output vertical epsg is different
-            if want_vertical:
-                if (in_vertical_epsg == out_vertical_epsg) and self.src_geoid is None:
-                    want_vertical = False
-
-            ## set `self.transform` with the parsed srs info
-            self.transform['src_horz_crs'] = in_horizontal_crs
-            self.transform['dst_horz_crs'] = out_horizontal_crs
-            self.transform['src_vert_crs'] = in_vertical_crs
-            self.transform['dst_vert_crs'] = out_vertical_crs
-            self.transform['src_vert_epsg'] = in_vertical_epsg
-            self.transform['dst_vert_epsg'] = out_vertical_epsg
-            self.transform['src_geoid'] = src_geoid
-            self.transform['dst_geoid'] = dst_geoid
-            self.transform['want_vertical'] = want_vertical        
-
-            
-    def set_vertical_transform(self):
-        ## set the region for the vdatum transformation grid.
-        ## this is either from the input `self.region` or from the input
-        ## data's bounding box. Transform it to WGS84.
-        if self.region is None:
-            vd_region = regions.Region().from_list(self.infos.minmax)
-            vd_region.src_srs = self.transform['src_horz_crs'].to_proj4()
-        else:
-            vd_region = self.region.copy()
-            vd_region.src_srs = self.transform['dst_horz_crs'].to_proj4()
-
-        vd_region.zmin = None
-        vd_region.zmax = None
-        vd_region.warp('epsg:4326')
-        vd_region.buffer(pct=10)
-        if not vd_region.valid_p():
-            utils.echo_warning_msg('failed to generate transformation')
-            return
-        # else:
-        #     utils.echo_msg('generating vertical transformation to region {}'.format(vd_region))
-
-        ## set `self.transform.trans_fn`, which is the transformation grid
-        self.transform['trans_fn'] = os.path.join(
-            self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
-                self.transform['src_vert_epsg'],
-                self.transform['dst_vert_epsg'],
-                vd_region.format('fn')
-            )
-        )
+        If the INF file is not found or is invalid, this will attempt to generate one.
+        Crucially, this method attempts to populate self.inf_region immediately upon 
+        loading an existing file so that sub-modules can access the region during 
+        subsequent processing (e.g., hash checks or grid generation).
+        """
         
-        ## if the transformation grid already exists, skip making a new one,
-        ## otherwise, make the new one here with `vdatums.VerticalTransform()`
-        if not os.path.exists(self.transform['trans_fn']):
-            with utils.ccp(
-                    desc='generating vertical transformation grid {} from {} to {}'.format(
-                        self.transform['trans_fn'], self.transform['src_vert_epsg'],
-                        self.transform['dst_vert_epsg']
-                    ),
-                    leave=self.verbose
-            ) as pbar:
-                ## set the vertical transformation grid to be 3 arc-seconds. This
-                ## is pretty arbitrary, maybe it's too small...
-                vd_x_inc = vd_y_inc = utils.str2inc('3s')
-                xcount, ycount, dst_gt = vd_region.geo_transform(
-                    x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
-                )
-
-                ## if the input region is so small it creates a tiny grid,
-                ## keep increasing the increments until we are at least to
-                ## a 10x10 grid.
-                while (xcount <=10 or ycount <=10):
-                    vd_x_inc /= 2
-                    vd_y_inc /= 2
-                    xcount, ycount, dst_gt = vd_region.geo_transform(
-                        x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
-                    )
-
-                ## run `vdatums.VerticalTransform()`, grid using `nearest`
-                self.transform['trans_fn'], self.transform['trans_fn_unc'] \
-                    = vdatums.VerticalTransform(
-                        'IDW',
-                        vd_region,
-                        vd_x_inc,
-                        vd_y_inc,
-                        self.transform['src_vert_epsg'],
-                        self.transform['dst_vert_epsg'],
-                        geoid_in=self.transform['src_geoid'],
-                        geoid_out=self.transform['dst_geoid'],
-                        cache_dir=self.cache_dir,
-                        verbose=False
-                    ).run(outfile=self.transform['trans_fn'])
-
-        ## set the pyproj.Transformer for both horz+vert and vert only
-        ## hack for navd88 datums in feet (6360 is us-feet, 8228 is international-feet
-        if utils.str_or(self.transform['src_vert_epsg']) == '6360':
-            # or 'us-ft' in utils.str_or(src_vert, ''):
-            #out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
-            uc = ' +step +proj=unitconvert +z_in=us-ft +z_out=m'
-        elif utils.str_or(self.transform['src_vert_epsg']) == '8228':
-            uc = ' +step +proj=unitconvert +z_in=ft +z_out=m'
-        else:
-            uc = ''
-            
-        if self.transform['trans_fn'] is not None \
-           and os.path.exists(self.transform['trans_fn']):
-            self.transform['pipeline'] \
-                = (f'+proj=pipeline{uc} +step '
-                   f'{self.transform["src_horz_crs"].to_proj4()} '
-                   '+inv +step +proj=vgridshift '
-                   f'+grids="{os.path.abspath(self.transform["trans_fn"])}" '
-                   f'+inv +step {self.transform["dst_horz_crs"].to_proj4()}')
-            self.transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
-                (f'+proj=pipeline{uc} +step +proj=vgridshift '
-                 f'+grids="{os.path.abspath(self.transform["trans_fn"])}" +inv')
-            )
-            utils.echo_debug_msg(self.transform['pipeline'])
-        else:
-            utils.echo_error_msg(
-                ('failed to generate vertical transformation grid between '
-                 f'{self.transform["src_vert_epsg"]} and '
-                 f'{os.path.abspath(self.transform["dst_vert_epsg"])} '
-                 'for this region!')
-            )
-
-            
-    def set_transform(self):
-        """Set the pyproj horizontal and vertical transformations 
-        for the dataset
-        """
-
-        self.parse_srs()
-        if self.transform['src_horz_crs'] is not None \
-           and self.transform['dst_horz_crs'] is not None:        
-            ## horizontal Transformation
-            self.transform['horz_pipeline'] \
-                = ('+proj=pipeline +step '
-                   f'{self.transform["src_horz_crs"].to_proj4()} '
-                   f'+inv +step {self.transform["dst_horz_crs"].to_proj4()}')
-            if self.region is not None:
-                self.transform['trans_region'] = self.region.copy()
-                self.transform['trans_region'].src_srs \
-                    = self.transform['dst_horz_crs'].to_proj4()
-                self.transform['trans_region'].warp(
-                    self.transform['src_horz_crs'].to_proj4()
-                )
-            else:
-                self.transform['trans_region'] \
-                    = regions.Region().from_list(self.infos.minmax)
-                self.transform['trans_region'].src_srs \
-                    = self.infos.src_srs
-                self.transform['trans_region'].warp(
-                    self.transform['dst_horz_crs'].to_proj4()
-                )
-
-            ## vertical Transformation
-            if self.transform['want_vertical']:
-                self.set_vertical_transform()
-            else:
-                self.transform['pipeline'] = self.transform['horz_pipeline']
-
-            try:
-                self.transform['transformer'] \
-                    = pyproj.Transformer.from_pipeline(
-                        self.transform['pipeline']
-                    )
-            except Exception as e:
-                utils.echo_warning_msg(
-                    ('could not set transformation in: '
-                     f'{self.transform["src_horz_crs"].name}, out: '
-                     f'{self.transform["dst_horz_crs"].name}, {e}')
-                    )
-
-                return
-
-        ## dataset region
-        ## mrl: moved out of if block 
-        if self.region is not None and self.region.valid_p():
-            self.data_region = self.region.copy() \
-                if self.transform['trans_region'] is None \
-                   else self.transform['trans_region'].copy()
-            #inf_region = regions.Region().from_list(self.infos.minmax)
-            self.data_region = regions.regions_reduce(
-                self.data_region, self.inf_region
-            )
-            self.data_region.src_srs = self.infos.src_srs
-
-            if not self.data_region.valid_p():
-                self.data_region = self.region.copy() \
-                    if self.transform['trans_region'] is None \
-                       else self.transform['trans_region'].copy()
-        else:
-            self.data_region = regions.Region().from_list(
-                self.infos.minmax
-            )
-            self.data_region.src_srs = self.infos.src_srs
-        #     self.region = self.data_region.copy()
-        # self.region.zmax=self.upper_limit
-        # self.region.zmin=self.lower_limit
-
-        
-    ## INF file reading/writing
-    def generate_inf(self):
-        """generate an inf file for the data source. this is generic and
-        will parse through all the data via yield_xyz to get point count
-        and region. if the datasource has a better way to do this, such as
-        with las/gdal files, re-define this function in its respective
-        dataset sub-class.
-
-        todo: hull for wkt
-        ## todo: put qhull in a yield and perform while scanning for min/max
-        # try:
-        #     out_hull = [pts[i] for i in ConvexHull(
-        #         pts, qhull_options='Qt'
-        #     ).vertices]
-        #     out_hull.append(out_hull[0])
-        #     self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
-        # except:
-        #     ...
-        """
-
-        _region = None
-        if self.region is not None:
-            _region = self.region.copy()
-            self.region = None
-
-        _x_inc = None
-        if self.x_inc is not None:
-            _x_inc = self.x_inc
-            self.x_inc = None
-            
-        this_region = regions.Region()
-        point_count = 0
-
-        for points in self.transform_and_yield_points():
-            if point_count == 0:
-                this_region.from_list(
-                    [
-                        points['x'].min(), points['x'].max(),
-                        points['y'].min(), points['y'].max(),
-                        points['z'].min(), points['z'].max()
-                    ]
-                )
-            else:
-                if points['x'].min() < this_region.xmin:
-                    this_region.xmin = points['x'].min()
-                elif points['x'].max() > this_region.xmax:
-                    this_region.xmax = points['x'].max()
-                    
-                if points['y'].min() < this_region.ymin:
-                    this_region.ymin = points['y'].min()
-                elif points['y'].max() > this_region.ymax:
-                    this_region.ymax = points['y'].max()
-                    
-                if points['z'].min() < this_region.zmin:
-                    this_region.zmin = points['z'].min()
-                elif points['z'].min() > this_region.zmax:
-                    this_region.zmax = points['z'].min()
-                
-            point_count += len(points)
-
-        self.infos.numpts = point_count
-        if point_count > 0:
-            self.infos.minmax = this_region.export_as_list(
-                include_z=True
-            )
-            self.infos.wkt = this_region.export_as_wkt()
-            
-        self.infos.src_srs = self.src_srs
-        if _region is not None:
-            self.region = _region.copy()
-
-        if _x_inc is not None:
-            self.x_inc = _x_inc
-            
-        return(self.infos)
-
-    
-    def inf(self, check_hash=False, recursive_check=False,
-            write_inf=True, **kwargs):
-        """read/write an inf file
-
-        If the inf file is not found, will attempt to generate one.
-        The function `generate_inf` should be defined for each specific
-        dataset sub-class.
-        """
-
-        inf_path = '{}.inf'.format(self.fn)
+        inf_path = f'{self.fn}.inf'
         generate_inf = False
 
-        ## try to parse the existing inf file as either a native
-        ## inf json file
+        ## Try to load existing INF
         if os.path.exists(inf_path):
             try:
                 self.infos.load_inf_file(inf_path)
-                
             except ValueError as e:
                 generate_inf = True
                 utils.remove_glob(inf_path)
                 if self.verbose:
-                    utils.echo_warning_msg(
-                        'failed to parse inf {}, {}'.format(inf_path, e)
-                    )
+                    utils.echo_warning_msg(f'failed to parse inf {inf_path}, {e}')
         else:
             generate_inf = True        
 
-        if self.fn is sys.stdin:
-            generate_inf = False
-        ## check hash from inf file vs generated hash,
-        ## if hashes are different, then generate a new
-        ## inf file...only do this if check_hash is set
-        ## to True, as this can be time consuming and not
-        ## always necessary...
-        if check_hash:
-            generate_inf = self.infos.generate_hash() != self.infos.file_hash
-
-        ## this being set can break some modules (bags esp)
-        # if self.remote:
-        #     generate_inf = False
-
+        ## Check hash if requested (triggers re-generation if mismatch)
+        if check_hash and not generate_inf:
+            if self.infos.generate_hash() != self.infos.file_hash:
+                generate_inf = True
+            
+        ## Update SRS info
         if self.src_srs is not None:
             self.infos.src_srs = self.src_srs
-        else:                            
+        else:                                    
             self.src_srs = self.infos.src_srs
-        
-        if generate_inf:
-            self.infos = self.generate_inf()
             
-            ## update this
+        try:
+            self.inf_region = regions.Region().from_string(self.infos.wkt)
+        except:
+            try:
+                self.inf_region = regions.Region().from_list(self.infos.minmax)
+            except:
+                # Fallback to user-specified region if INF data is missing/bad
+                self.inf_region = self.region.copy() if self.region else None
+
+        ## Streams/fetches modules cannot be scanned/hashed reliably
+        if self.fn is sys.stdin or self.data_format < 0:
+            generate_inf = False
+               
+        ## Generate new INF if needed
+        if generate_inf:
+            ## generate_inf will handle updating self.inf_region internally between passes
+            self.infos = self.generate_inf(
+                make_grid=make_grid, 
+                make_block_mean=make_block_mean, 
+                block_inc=block_inc
+            )
+            
+            # Write to disk
             if self.data_format >= -2 and write_inf:
                 self.infos.write_inf_file()
 
             if recursive_check and self.parent is not None:
                 self.parent.inf(check_hash=True)
 
-        try:
-            self.inf_region = regions.Region().from_string(self.infos.wkt)
-        except:
             try:
-                self.inf_region = regions.Region().from_list(
-                    self.infos.minmax
-                )
+                self.inf_region = regions.Region().from_string(self.infos.wkt)
             except:
-                if self.region is not None:
-                    self.inf_region = self.region.copy()
-                else:
-                    self.inf_region = None
+                self.inf_region = regions.Region().from_list(self.infos.minmax)
 
-        #self.transform['trans_region'] = self.inf_region.copy()
-        if self.transform['transformer'] is not None \
-           and self.transform['trans_region'] is None:
-            ## trans_region is the inf_region reprojected to dst_srs
-            ## self.region should be supplied in the same srs as dst_srs
-            self.transform['trans_region'] = self.inf_region.copy()
-            self.transform['trans_region'].src_srs = self.infos.src_srs
-            self.transform['trans_region'].warp(self.dst_srs)
+        ## Set Transform Region (if projecting)
+        if self.transform['transformer'] is not None and self.transform['trans_region'] is None:
+            if self.inf_region is not None:
+                self.transform['trans_region'] = self.inf_region.copy()
+                self.transform['trans_region'].src_srs = self.infos.src_srs
+                try:
+                    self.transform['trans_region'].warp(self.dst_srs)
+                except Exception as e:
+                    if self.verbose:
+                        utils.echo_warning_msg(f"Failed to warp transform region: {e}")
 
-        # if self.region is None:
-        #     if self.transform['trans_region'] is not None:
-        #         self.region = self.transform['trans_region'].copy()
-        #     else:
-        #         self.region = self.inf_region.copy()
-
-        return(self.infos)
+        return self.infos
 
     
-    ## Datalist/Dataset parsing, reset in sub-dataset if needed
-    def parse(self):
-        """parse the datasets from the dataset.
+    def _generate_mini_grid(self, region):
+        """Internal helper to generate a 10x10 preview grid.
         
-        Re-define this method when defining a dataset sub-class
-        that represents recursive data structures (datalists, zip, etc).
-
-        This will fill self.data_entries
-
-        -------
-        Yields:
-
-        dataset object
+        Args:
+            region (Region): The region bounding the data.
+            
+        Returns:
+            list: A 10x10 list of values (or None).
         """
+        # Setup Gridder
+        pp_grid = pointz.PointPixels(src_region=region, x_size=10, y_size=10, verbose=False)
+        grid_sum = np.zeros((10, 10))
+        grid_count = np.zeros((10, 10))
+        
+        try:
+            # Scan Data
+            for points in self.transform_and_yield_points():
+                res, srcwin, _ = pp_grid(points, mode='sums')
+                if res['z'] is not None and srcwin is not None:
+                    # Accumulate chunk into master grid
+                    x_off, y_off, x_s, y_s = srcwin
+                    y_slice = slice(y_off, y_off + y_s)
+                    x_slice = slice(x_off, x_off + x_s)
+                    
+                    if (y_off + y_s <= 10) and (x_off + x_s <= 10):
+                        grid_sum[y_slice, x_slice] += np.nan_to_num(res['z'])
+                        grid_count[y_slice, x_slice] += np.nan_to_num(res['count'])
 
-        if self.region is not None and self.inf_region is not None:
-            # try:
-            #     inf_region = regions.Region().from_string(self.infos.wkt)
-            # except:
-            #     try:
-            #         inf_region = regions.Region().from_list(self.infos.minmax)
-            #     except:
-            #         inf_region = self.region.copy()
+            # Finalize Mean
+            with np.errstate(divide='ignore', invalid='ignore'):
+                final_grid = grid_sum / grid_count
+            
+            # Return as list (None for NaNs)
+            return np.where(np.isnan(final_grid), None, final_grid).tolist()
 
-            if regions.regions_intersect_p(
-                    self.inf_region,
-                    self.region \
-                    if self.transform['trans_region'] is None \
-                    else self.transform['trans_region']
-            ):
-                self.data_entries.append(self)
-                yield(self)
+        except Exception as e:
+            utils.echo_warning_msg(f"Failed to generate mini-grid for {self.fn}: {e}")
+            return None
+
+        
+    def _generate_block_mean(self, region, block_inc=None):
+        """Internal helper to generate a block-mean XYZ file.
+        
+        Args:
+            region (Region): The region bounding the data.
+            block_inc (float): The resolution for the block mean.
+            
+        Returns:
+            str: Path to the generated file (or None).
+        """
+        # Determine filename
+        base = os.path.splitext(self.fn)[0]
+        block_out_name = f"{base}_blockmean.xyz"
+        
+        # Determine Increment (~500px wide if not set)
+        if block_inc is None:
+            width = region.xmax - region.xmin
+            block_inc = width / 500.0 if width > 0 else 0.001
+            
+        try:
+            bx, by, _ = region.geo_transform(x_inc=block_inc, y_inc=block_inc)
+            pp_block = pointz.PointPixels(src_region=region, x_size=bx, y_size=by, verbose=False)
+            
+            # Accumulators
+            b_arrs = {
+                'z_sum': np.zeros((by, bx)),
+                'count': np.zeros((by, bx)),
+                'x_sum': np.zeros((by, bx)),
+                'y_sum': np.zeros((by, bx)),
+            }
+            
+            # Scan Data
+            for points in self.transform_and_yield_points():
+                res, srcwin, _ = pp_block(points, mode='sums')
+                if res['z'] is not None and srcwin is not None:
+                    x_off, y_off, x_s, y_s = srcwin
+                    y_slice = slice(y_off, y_off + y_s)
+                    x_slice = slice(x_off, x_off + x_s)
+                    
+                    # Safety check for bounds
+                    if (y_off + y_s <= by) and (x_off + x_s <= bx):
+                        b_arrs['z_sum'][y_slice, x_slice] += np.nan_to_num(res['z'])
+                        b_arrs['x_sum'][y_slice, x_slice] += np.nan_to_num(res['x'])
+                        b_arrs['y_sum'][y_slice, x_slice] += np.nan_to_num(res['y'])
+                        b_arrs['count'][y_slice, x_slice] += np.nan_to_num(res['count'])
+
+            # Finalize & Write
+            with np.errstate(divide='ignore', invalid='ignore'):
+                fz = b_arrs['z_sum'] / b_arrs['count']
+                fx = b_arrs['x_sum'] / b_arrs['count']
+                fy = b_arrs['y_sum'] / b_arrs['count']
+            
+            valid = (b_arrs['count'] > 0) & np.isfinite(fz)
+            
+            with open(block_out_name, 'w') as f:
+                for x, y, z in zip(fx[valid], fy[valid], fz[valid]):
+                    f.write(f"{x:.6f} {y:.6f} {z:.6f}\n")
+                    
+            if self.verbose:
+                utils.echo_msg(f"Generated block-mean: {block_out_name}")
+            
+            return block_out_name
+
+        except Exception as e:
+            utils.echo_warning_msg(f"Failed to generate block-mean for {self.fn}: {e}")
+            return None
+
+        
+    def _wkt_from_mini_grid(self, region, mini_grid):
+        """Generate a WKT polygon footprint from the valid cells of the mini-grid.
+        
+        Args:
+            region (Region): The bounding region of the grid.
+            mini_grid (list): The 2D list of grid values (None indicates empty cell).
+            
+        Returns:
+            str: A WKT MultiPolygon or Polygon representing the valid data footprint.
+        """
+        if not mini_grid or not region:
+            return region.export_as_wkt()
+
+        try:
+            y_size = len(mini_grid)
+            x_size = len(mini_grid[0])
+            
+            # Calculate cell dimensions
+            # region width / cols
+            x_inc = (region.xmax - region.xmin) / x_size 
+            # region height / rows (absolute value for math)
+            y_inc = abs(region.ymax - region.ymin) / y_size 
+            
+            # Collect valid cell polygons
+            multipoly = ogr.Geometry(ogr.wkbMultiPolygon)
+            has_valid = False
+            
+            for y in range(y_size):
+                for x in range(x_size):
+                    if mini_grid[y][x] is not None:
+                        has_valid = True
+                        
+                        # Calculate cell bounds
+                        # Assuming Grid (0,0) is Top-Left (standard raster/PointPixels logic)
+                        cell_ymax = region.ymax - (y * y_inc)
+                        cell_ymin = region.ymax - ((y + 1) * y_inc)
+                        cell_xmin = region.xmin + (x * x_inc)
+                        cell_xmax = region.xmin + ((x + 1) * x_inc)
+                        
+                        # Create Ring (Closed Loop: TL -> TR -> BR -> BL -> TL)
+                        ring = ogr.Geometry(ogr.wkbLinearRing)
+                        ring.AddPoint(cell_xmin, cell_ymax)
+                        ring.AddPoint(cell_xmax, cell_ymax)
+                        ring.AddPoint(cell_xmax, cell_ymin)
+                        ring.AddPoint(cell_xmin, cell_ymin)
+                        ring.AddPoint(cell_xmin, cell_ymax)
+                        
+                        poly = ogr.Geometry(ogr.wkbPolygon)
+                        poly.AddGeometry(ring)
+                        multipoly.AddGeometry(poly)
+            
+            if not has_valid:
+                return region.export_as_wkt()
                 
+            # Merge adjacent cells into a clean footprint
+            # UnionCascaded creates a single geometry from the collection
+            union_poly = multipoly.UnionCascaded()
+            
+            return union_poly.ExportToWkt()
+
+        except Exception as e:
+            if self.verbose:
+                utils.echo_warning_msg(f"Failed to generate tight WKT from mini-grid: {e}")
+            return region.export_as_wkt()
+
+        
+    def generate_inf(self, make_grid=True, make_block_mean=False, block_inc=None):
+        """Generate metadata (INF) for the data source.
+        
+        Parses the data to calculate point count, min/max bounds (region), 
+        and WKT footprint. Optionally generates a mini-grid preview and 
+        a block-mean XYZ file.
+        
+        If a mini-grid is generated, the WKT footprint will be tightened to 
+        wrap only the valid grid cells, providing a more accurate spatial representation.
+        """
+        
+        ## Bounds Scan (Pass 1)
+        _region_backup = None
+        if self.region is not None:
+            _region_backup = self.region.copy()
+            self.region = None # Unset to scan full file
+
+        this_region = regions.Region()
+        point_count = 0
+
+        for points in self.transform_and_yield_points():
+            if point_count == 0:
+                this_region.from_list([
+                    np.min(points['x']), np.max(points['x']),
+                    np.min(points['y']), np.max(points['y']),
+                    np.min(points['z']), np.max(points['z'])
+                ])
+            else:
+                if np.min(points['x']) < this_region.xmin: this_region.xmin = np.min(points['x'])
+                if np.max(points['x']) > this_region.xmax: this_region.xmax = np.max(points['x'])
+                if np.min(points['y']) < this_region.ymin: this_region.ymin = np.min(points['y'])
+                if np.max(points['y']) > this_region.ymax: this_region.ymax = np.max(points['y'])
+                if np.min(points['z']) < this_region.zmin: this_region.zmin = np.min(points['z'])
+                if np.max(points['z']) > this_region.zmax: this_region.zmax = np.max(points['z'])
+            point_count += len(points)
+
+        ## Restore Region Constraint
+        if _region_backup is not None:
+            self.region = _region_backup
+
+        ## Populate INF Basic Stats
+        self.infos.numpts = point_count
+        if point_count > 0:
+            self.infos.minmax = this_region.export_as_list(include_z=True)
+            # Default WKT to bounding box (will update below if grid is made)
+            self.infos.wkt = this_region.export_as_wkt()
+        self.infos.src_srs = self.src_srs
+
+        ## Generate Grids (Pass 2)
+        if point_count > 0:
+            ## Mini Grid
+            if make_grid:
+                self.infos.mini_grid = self._generate_mini_grid(this_region)
+                
+                ## UPDATE WKT: Use the mini-grid to create a tighter footprint
+                if self.infos.mini_grid is not None:
+                    self.infos.wkt = self._wkt_from_mini_grid(this_region, self.infos.mini_grid)
+                
+            ## Block Mean
+            if make_block_mean:
+                self._generate_block_mean(this_region, block_inc=block_inc)
+
+        return self.infos
+    
+    def _generate_grids_from_children(self, children, region, make_grid, make_block_mean, block_inc):
+        """Internal helper to generate grids by iterating over children."""
+        
+        pp_grid = None
+        pp_block = None
+        grid_arrays = None
+        block_arrays = None
+        
+        if make_grid:
+            pp_grid = pointz.PointPixels(src_region=region, x_size=10, y_size=10, verbose=False)
+            grid_arrays = {'sum': np.zeros((10, 10)), 'count': np.zeros((10, 10))}
+
+        if make_block_mean:
+            if block_inc is None:
+                width = region.xmax - region.xmin
+                block_inc = width / 500.0 if width > 0 else 0.001
+            try:
+                bx, by, _ = region.geo_transform(x_inc=block_inc, y_inc=block_inc)
+                pp_block = pointz.PointPixels(src_region=region, x_size=bx, y_size=by, verbose=False)
+                block_arrays = {
+                    'z_sum': np.zeros((by, bx)), 'count': np.zeros((by, bx)),
+                    'x_sum': np.zeros((by, bx)), 'y_sum': np.zeros((by, bx))
+                }
+            except Exception: pass
+
+        def accumulate(master_dict, chunk_res, chunk_srcwin, keys):
+            x_off, y_off, x_s, y_s = chunk_srcwin
+            y_slice = slice(y_off, y_off + y_s)
+            x_slice = slice(x_off, x_off + x_s)
+            for k_m, k_r in keys.items():
+                if (y_off + y_s <= master_dict[k_m].shape[0]) and (x_off + x_s <= master_dict[k_m].shape[1]):
+                    master_dict[k_m][y_slice, x_slice] += np.nan_to_num(chunk_res[k_r])
+
+        for entry in children:
+            for points in entry.yield_points():
+                if pp_grid:
+                    res, srcwin, _ = pp_grid(points, mode='sums')
+                    if res['z'] is not None and srcwin is not None:
+                        accumulate(grid_arrays, res, srcwin, {'sum': 'z', 'count': 'count'})
+                if pp_block:
+                    res, srcwin, _ = pp_block(points, mode='sums')
+                    if res['z'] is not None and srcwin is not None:
+                        accumulate(block_arrays, res, srcwin, {'z_sum': 'z', 'x_sum': 'x', 'y_sum': 'y', 'count': 'count'})
+
+        if make_grid and grid_arrays is not None:
+            with np.errstate(divide='ignore', invalid='ignore'):
+                final_grid = grid_arrays['sum'] / grid_arrays['count']
+            self.infos.mini_grid = np.where(np.isnan(final_grid), None, final_grid).tolist()
+            if self.infos.mini_grid:
+                self.infos.wkt = self._wkt_from_mini_grid(region, self.infos.mini_grid)
+
+        if make_block_mean and block_arrays is not None:
+            try:
+                base = os.path.splitext(self.fn)[0]
+                block_out = f"{base}_blockmean.xyz"
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    fz = block_arrays['z_sum'] / block_arrays['count']
+                    fx = block_arrays['x_sum'] / block_arrays['count']
+                    fy = block_arrays['y_sum'] / block_arrays['count']
+                valid = (block_arrays['count'] > 0) & np.isfinite(fz)
+                with open(block_out, 'w') as f:
+                    for x, y, z in zip(fx[valid], fy[valid], fz[valid]):
+                        f.write(f"{x:.6f} {y:.6f} {z:.6f}\n")
+            except Exception: pass
+
+            
+    def parse(self):
+        """Parse the datasets from the dataset."""
+        
+        if self.region is not None and self.inf_region is not None:
+            check_region = self.region if self.transform['trans_region'] is None else self.transform['trans_region']
+            if regions.regions_intersect_p(self.inf_region, check_region):
+                self.data_entries.append(self)
+                yield self
         else:
             self.data_entries.append(self)
-            yield(self)
+            yield self
 
             
     def parse_data_lists(self, gather_data=True):
-        """parse the data into a datalist dictionary"""
+        """Parse the data into a datalist dictionary."""
         
         for e in self.parse():
             if e.parent is not None:
-                if e.parent.metadata['name'] in self.data_lists.keys():
-                    self.data_lists[e.parent.metadata['name']]['data'].append(e)
+                parent_name = e.parent.metadata.get('name')
+                if parent_name in self.data_lists:
+                    self.data_lists[parent_name]['data'].append(e)
                 else:
-                    self.data_lists[e.parent.metadata['name']] = {
-                        'data': [e], 'parent': e.parent
-                    }
-                    
+                    self.data_lists[parent_name] = {'data': [e], 'parent': e.parent}
             else:
-                self.data_lists[e.metadata['name']] \
-                    = {'data': [e], 'parent': e}
-                
-        return(self)
+                name = e.metadata.get('name')
+                self.data_lists[name] = {'data': [e], 'parent': e}
+        return self
+
     
-    
-    ## Data Yield
     def yield_xyz_from_entries(self):
-        """yield from self.data_entries, list of datasets"""
+        """Yield XYZ from self.data_entries."""
         
         for this_entry in self.data_entries:
             for xyz in this_entry.xyz_yield:
-                yield(xyz)
+                yield xyz
                 
             if this_entry.remote:
-                utils.remove_glob('{}*'.format(this_entry.fn))
+                utils.remove_glob(f'{this_entry.fn}*')
 
                 
     def yield_entries(self):
-        """yield from self.data_entries, list of datasets"""
+        """Yield from self.data_entries."""
         
         for this_entry in self.data_entries:
-            yield(this_entry)
+            yield this_entry
 
-    ## ==============================================            
-    ## yield points, where points are a numpy rec-array with 'xyzwu'
-    ## ==============================================            
+            
     def yield_points(self):
-        """yield the numpy xyz rec array points from the dataset.
-
-        reset in dataset if needed.
-        """
-
+        """Yield the numpy xyz rec array points from the dataset."""
+        
         for ds in self.parse():
             for points in ds.yield_points():
-                yield(points)
+                yield points
+
                 
-
     def transform_and_yield_points(self):
-        """points are an array of `points['x']`, `points['y']`, `points['z']`, 
-        <`points['w']`, `points['u']`>`
-
-        points will be transformed here, based on `self.transformer`, 
-        which is set in `set_transform` after the points are transformed, the data 
-        will pass through the region, if it exists and finally
-        yield the transformed and reduced points.
-        """            
-
+        """Yield transformed points."""
+        
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             for points in self.yield_points():
-                if self.transform['transformer'] is not None \
-                   or self.transform['vert_transformer'] is not None:
+                if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
                     if self.transform['transformer'] is not None:
-                        points['x'], points['y'] \
-                            = self.transform['transformer'].transform(
-                                points['x'], points['y']
-                            )
+                        points['x'], points['y'] = self.transform['transformer'].transform(points['x'], points['y'])
+                    
                     if self.transform['vert_transformer'] is not None:
-                        _, _, points['z'] \
-                            = self.transform['vert_transformer'].transform(
-                                points['x'], points['y'], points['z']
-                            )
+                        _, _, points['z'] = self.transform['vert_transformer'].transform(points['x'], points['y'], points['z'])
                         
                     points = points[~np.isinf(points['z'])]
 
                 if self.region is not None and self.region.valid_p():
                     xyz_region = self.region.copy()
-                    #if self.transform['trans_region'] is None \
-                        #else self.transform['trans_region'].copy()
                     if self.invert_region:
+                        ## Inverted Region
                         points = points[
-                            ((points['x'] >= xyz_region.xmax) \
-                             | (points['x'] <= xyz_region.xmin)) \
-                            | ((points['y'] >= xyz_region.ymax) \
-                               | (points['y'] <= xyz_region.ymin))
+                            ((points['x'] >= xyz_region.xmax) | (points['x'] <= xyz_region.xmin)) | 
+                            ((points['y'] >= xyz_region.ymax) | (points['y'] <= xyz_region.ymin))
                         ]
-                        if xyz_region.zmin is not None:
-                            points = points[(points['z'] <= xyz_region.zmin)]
-
-                        if xyz_region.zmax is not None:
-                            points = points[(points['z'] >= xyz_region.zmax)]
-
-                        if xyz_region.wmin is not None:
-                            points = points[(points['w'] <= xyz_region.wmin)]
-                            
-                        if xyz_region.wmax is not None:
-                            points = points[(points['w'] >= xyz_region.wmax)]
-                            
-                        if xyz_region.umin is not None:
-                            points = points[(points['u'] <= xyz_region.umin)]
-                            
-                        if xyz_region.umax is not None:
-                            points = points[(points['u'] >= xyz_region.umax)]
-                            
+                        if xyz_region.zmin is not None: points = points[(points['z'] <= xyz_region.zmin)]
+                        if xyz_region.zmax is not None: points = points[(points['z'] >= xyz_region.zmax)]
                     else:
+                        # Standard Region
                         points = points[
-                            ((points['x'] <= xyz_region.xmax) \
-                             & (points['x'] >= xyz_region.xmin)) & \
-                            ((points['y'] <= xyz_region.ymax) \
-                             & (points['y'] >= xyz_region.ymin))
+                            ((points['x'] <= xyz_region.xmax) & (points['x'] >= xyz_region.xmin)) & 
+                            ((points['y'] <= xyz_region.ymax) & (points['y'] >= xyz_region.ymin))
                         ]
-                        if xyz_region.zmin is not None:
-                            points = points[(points['z'] >= xyz_region.zmin)]
+                        if xyz_region.zmin is not None: points = points[(points['z'] >= xyz_region.zmin)]
+                        if xyz_region.zmax is not None: points = points[(points['z'] <= xyz_region.zmax)]
 
-                        if xyz_region.zmax is not None:
-                            points = points[(points['z'] <= xyz_region.zmax)]
-
-                        if xyz_region.wmin is not None:
-                            points = points[(points['w'] >= xyz_region.wmin)]
-                            
-                        if xyz_region.wmax is not None:
-                            points = points[(points['w'] <= xyz_region.wmax)]
-                            
-                        if xyz_region.umin is not None:
-                            points = points[(points['u'] >= xyz_region.umin)]
-                            
-                        if xyz_region.umax is not None:
-                            points = points[(points['u'] <= xyz_region.umax)]
-
-                if self.upper_limit is not None:
-                    points = points[(points['z'] <= self.upper_limit)]
-                    
-                if self.lower_limit is not None:
-                    points = points[(points['z'] >= self.lower_limit)]
+                if self.upper_limit is not None: points = points[(points['z'] <= self.upper_limit)]
+                if self.lower_limit is not None: points = points[(points['z'] >= self.lower_limit)]
 
                 if len(points) > 0:
-                    ## apply any dlim filters to the points
-                    #utils.echo_debug_msg(points)
                     if isinstance(self.pnt_fltrs, list):
-                        if self.pnt_fltrs is not None:
-                            for f in self.pnt_fltrs:
-                                point_filter = pointz.PointFilterFactory(
-                                    mod=f,
-                                    points=points,
-                                    region=self.region,
-                                    xyinc=[self.x_inc, self.y_inc],
-                                    cache_dir=self.cache_dir,
-                                )._acquire_module()
-                                if point_filter is not None:
-                                    points = point_filter()
+                        for f in self.pnt_fltrs:
+                            point_filter = pointz.PointFilterFactory(
+                                mod=f,
+                                points=points,
+                                region=self.region,
+                                xyinc=[self.x_inc, self.y_inc],
+                                cache_dir=self.cache_dir,
+                            )._acquire_module()
+                            if point_filter:
+                                points = point_filter()
 
                     if len(points) > 0:
-                        yield(points)
+                        yield points
 
         self.transform['transformer'] = self.transform['vert_transformer'] = None
 
-
-    ## ==============================================            
-    ## mask and yield, mask the incoming data to the masks specified in
-    ## self.mask, which is a list of factory formatted strings, such as:
-    ## ['masks/cudem_masks.shp:verbose=True:invert=False',
-    ##  'mask_fn=usgs/OzetteLake.gpkg:verbose=True:invert=False']
-    ## ==============================================            
-    def mask_and_yield_array(self):
-        """mask the incoming array from `self.yield_array` 
-        and yield the results.
         
-        the mask should be either an ogr supported vector or a 
-        gdal supported raster.
-        """
+    def mask_and_yield_array(self):
+        """Mask the incoming array from `self.yield_array` and yield the results."""
         
         mask_band = None
         mask_infos = None
-        data_mask = None
-        mask_count = 0
         data_masks = []
         if self.mask is not None:
             for mask in self.mask:
@@ -2025,9 +1203,9 @@ class ElevationDataset:
 
         for out_arrays, this_srcwin, this_gt in self.yield_array():
             for data_mask in data_masks:
-                if data_mask is None:
-                    continue
+                if data_mask is None: continue
                 
+                src_mask = None
                 if os.path.exists(data_mask['data_mask']):
                     utils.echo_debug_msg(f'using mask dataset: {data_mask} to array')                        
                     src_mask = gdal.Open(data_mask['data_mask'])
@@ -2039,6 +1217,8 @@ class ElevationDataset:
                 else:
                     utils.echo_warning_msg(f'could not load mask {data_mask["data_mask"]}')
 
+                ## Z-Mask
+                z_mask = np.full(out_arrays['z'].shape, True)
                 if data_mask['min_z'] is not None or data_mask['max_z'] is not None:
                     if data_mask['min_z'] is not None and data_mask['max_z'] is not None:
                         z_mask = ((out_arrays['z'] > data_mask['min_z']) & (out_arrays['z'] < data_mask['max_z']))
@@ -2046,68 +1226,37 @@ class ElevationDataset:
                         z_mask = out_arrays['z'] > data_mask['min_z']
                     else:
                         z_mask = out_arrays['z'] < data_mask['max_z']
-                else:
-                    z_mask = np.full(out_arrays['z'].shape, True)
 
                 if mask_band is not None:
-                    ycount, xcount = out_arrays['z'].shape
-                    this_region = regions.Region().from_geo_transform(
-                        this_gt, xcount, ycount
-                    )
                     mask_data = mask_band.ReadAsArray(*this_srcwin)
-                    if mask_data is None or len(mask_data) == 0:
-                        continue
+                    if mask_data is None or len(mask_data) == 0: continue
                         
                     if not np.isnan(mask_infos['ndv']):
-                        mask_data[mask_data==mask_infos['ndv']] = np.nan
+                        mask_data[mask_data == mask_infos['ndv']] = np.nan
                         
                     out_mask = ((~np.isnan(mask_data)) & (z_mask))                    
+                    
                     for arr in out_arrays.keys():
                         if out_arrays[arr] is not None:
+                            val = 0 if arr == 'count' else np.nan
                             if data_mask['invert']:
-                                if arr == 'count':
-                                    out_arrays[arr][~out_mask] = 0
-                                else:                            
-                                    out_arrays[arr][~out_mask] = np.nan
-
-                            else:
-                                if arr == 'count':
-                                    out_arrays[arr][out_mask] = 0
-                                else:
-                                    out_arrays[arr][out_mask] = np.nan
-
-                    mask_count += np.count_nonzero(~out_mask) \
-                        if data_mask['invert'] \
-                           else np.count_nonzero(out_mask)
+                                out_arrays[arr][~out_mask] = val
+                            else:                                    
+                                out_arrays[arr][out_mask] = val
 
                     mask_data = None
-                    
-                src_mask = mask_band = None
+                    src_mask = mask_band = None
                 
-            yield(out_arrays, this_srcwin, this_gt)
-                
-        #if data_mask is not None:
-        #utils.remove_glob('{}*'.format(data_mask))
-        if self.mask is not None and self.verbose and mask_count > 0:
-            utils.echo_msg_bold(
-                'masked {} data records from {}'.format(
-                    mask_count, self.fn,
-                )
-            )
+            yield out_arrays, this_srcwin, this_gt
 
-
+            
     def mask_and_yield_xyz(self):
-        """mask the incoming xyz data from `self.yield_xyz` and yield 
-        the results.
-        
-        the mask should be either an ogr supported vector or a gdal 
-        supported raster.
-        """
+        """Mask the incoming xyz data from `self.yield_xyz` and yield the results."""
         
         for this_entry in self.parse():
             if this_entry.mask is None:
                 for this_xyz in this_entry.yield_xyz():
-                    yield(this_xyz)
+                    yield this_xyz
             else:
                 data_masks = []
                 mask_count = 0
@@ -2115,58 +1264,51 @@ class ElevationDataset:
                     opts = self._init_mask(mask)
                     data_masks.append(opts)
 
-                utils.echo_debug_msg(
-                    f'using mask dataset: {data_masks} to xyz'
-                )                    
+                utils.echo_debug_msg(f'using mask dataset: {data_masks} to xyz')                    
                 for this_xyz in this_entry.yield_xyz():
                     masked = False
-                    for data_mask in data_masks:                
-                        if data_mask is None:
-                            continue
+                    for data_mask in data_masks:                                
+                        if data_mask is None: continue
 
                         z_masked = True
                         if data_mask['min_z'] is not None or data_mask['max_z'] is not None:
                             if data_mask['min_z'] is not None and data_mask['max_z'] is not None:
-                                z_masked = (this_xyz.z > data_mask['min_z'] \
-                                            & this_xyz.z < data_mask['mask_z'])
+                                z_masked = (this_xyz.z > data_mask['min_z']) & (this_xyz.z < data_mask['max_z'])
                             elif data_mask['min_z'] is not None:
                                 z_masked = this_xyz.z > data_mask['min_z']
                             else:
                                 z_masked = this_xyz.z < data_mask['max_z']
 
-                        if data_mask['ogr_or_gdal'] == 0:
+                        if data_mask['ogr_or_gdal'] == 0: # Raster Mask
                             src_ds = gdal.Open(data_mask['data_mask'])
                             if src_ds is not None:
                                 ds_config = gdalfun.gdal_infos(src_ds)
                                 ds_band = src_ds.GetRasterBand(1)
-                                ds_gt = ds_config['geoT']
-                                ds_nd = ds_config['ndv']
-
+                                
                                 xpos, ypos = utils._geo2pixel(
-                                    this_xyz.x, this_xyz.y, ds_gt, node='pixel'
+                                    this_xyz.x, this_xyz.y, ds_config['geoT'], node='pixel'
                                 )
-                                if xpos < ds_config['nx'] \
-                                   and ypos < ds_config['ny'] \
-                                   and xpos >=0 \
-                                   and ypos >=0:
+                                
+                                val_masked = False
+                                if 0 <= xpos < ds_config['nx'] and 0 <= ypos < ds_config['ny']:
                                     tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
                                     if tgrid is not None:
                                         if not np.isnan(ds_config['ndv']):
-                                            tgrid[tgrid==ds_config['ndv']] = np.nan
+                                            tgrid[tgrid == ds_config['ndv']] = np.nan
 
                                         if np.isnan(tgrid[0][0]):
-                                            if data_mask['invert']:
-                                                mask_count += 1
-                                                masked = (True & z_masked)
-                                            else:
-                                                masked = False
+                                            val_masked = False
                                         else:
-                                            if not data_mask['invert']:
-                                                mask_count += 1
-                                                masked = (True & z_masked)
-                                            else:
-                                                masked = False
-                        else:
+                                            val_masked = True
+                                
+                                if data_mask['invert']:
+                                    masked = (not val_masked) & z_masked
+                                else:
+                                    masked = val_masked & z_masked
+                                
+                                if masked: mask_count += 1
+
+                        else: # Vector Mask
                             src_ds = ogr.Open(data_mask['data_mask'])
                             if src_ds is not None:
                                 layer = src_ds.GetLayer()
@@ -2174,112 +1316,62 @@ class ElevationDataset:
                                 if not geomcol.IsValid():
                                     geomcol = geomcol.Buffer(0)
 
-                                this_wkt = this_xyz.export_as_wkt()
-                                this_point = ogr.CreateGeometryFromWkt(this_wkt)
-                                if this_point.Within(geomcol):
-                                    if not data_mask['invert']:
-                                        masked = (True & z_masked)
-                                        mask_count += 1
-                                    else:
-                                        masked = False
+                                this_point = ogr.CreateGeometryFromWkt(this_xyz.export_as_wkt())
+                                is_within = this_point.Within(geomcol)
+                                
+                                if data_mask['invert']:
+                                    masked = (not is_within) & z_masked
                                 else:
-                                    if not data_mask['invert']:
-                                        masked = False
-                                    else:
-                                        masked = (True & z_masked)
-                                        mask_count += 1
-
+                                    masked = is_within & z_masked
+                                
+                                if masked: mask_count += 1
                                 src_ds = layer = None
 
                     if not masked:
-                        yield(this_xyz)
+                        yield this_xyz
 
                     if mask_count > 0 and self.verbose:
-                        utils.echo_msg_bold(
-                            f'masked {mask_count} data records from {self.fn}'
-                        )       
-                    src_ds = ds_band = None
+                        utils.echo_msg_bold(f'masked {mask_count} data records from {self.fn}')        
 
-                    
-    ## ==============================================
-    ## yield the data either as xyz or as binned arrays, the latter of which
-    ## depends on self.region, self.x_inc and self.y_inc to be set.
-    ## ==============================================
+                        
     def yield_xyz(self):
-        """Yield the data as xyz points
-
-        incoming data are numpy rec-arrays of x,y,z<w,u> points.
-
-        if 'w' (weight) is not set by the dataset, they will be given the
-        default value from `self.weight`, otherwise the incoming weight 
-        values will be multiplied by `self.weight`
-
-        if 'u' (uncertainty) is not set by the dataset, they will be given 
-        the default value from `self.uncertainty`, otherwise the incoming 
-        uncertainty values will be caluculated by 
-        `np.sqrt(u**2 + self.uncertainty**2)`
-        """
+        """Yield the data as xyz points."""
         
         count = 0
         for points in self.transform_and_yield_points():
-            try:
+            if 'w' in points.dtype.names:
                 points_w = points['w']
-            except:
+            else:
                 points_w = np.ones(points['z'].shape).astype(float)
 
             points_w *= self.weight if self.weight is not None else 1.
             points_w[np.isnan(points_w)] = 1
                 
-            try:
+            if 'u' in points.dtype.names:
                 points_u = points['u']
-            except:
+            else:
                 points_u = np.zeros(points['z'].shape)
                 
             points_u = np.sqrt(
-                points_u**2 \
-                + (self.uncertainty if self.uncertainty is not None else 0)**2
+                points_u**2 + (self.uncertainty if self.uncertainty is not None else 0)**2
             )
             points_u[np.isnan(points_u)] = 0
-            dataset = np.vstack(
-                (points['x'], points['y'], points['z'], points_w, points_u)
-            ).transpose()
+            
+            dataset = np.vstack((points['x'], points['y'], points['z'], points_w, points_u)).transpose()
             count += len(dataset)
-            points = None
+            
             for point in dataset:
-                this_xyz = xyzfun.XYZPoint(
+                yield xyzfun.XYZPoint(
                     x=point[0], y=point[1], z=point[2], w=point[3], u=point[4]
                 )
-                yield(this_xyz)
 
         if self.verbose:
-            utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
-            )
+            utils.echo_msg_bold(f'parsed {count} data records from {self.fn} @ a weight of {self.weight}')
 
-        
+            
     def yield_array(self, want_sums=True):
-        """Yield the data as an array which coincides with the desired 
-        region, x_inc and y_inc
-
-        incoming data are numpy rec-arrays of x,y,z<w,u> points
-
-        if 'w' (weight) is not set by the dataset, they will be given the
-        default value from `self.weight`, otherwise the incoming weight 
-        values will be multiplied by `self.weight`
-
-        if 'u' (uncertainty) is not set by the dataset, they will be given 
-        the default value from `self.uncertainty`, otherwise the incoming 
-        uncertainty values will be caluculated by 
-        `np.sqrt(u**2 + self.uncertainty**2)`
-
-        output arrays are weighted sums; get the actual values with:
-        weight = weight / count
-        z = (z / weight) / count
-        x = (x / weight) / count
-        y = (y / weight) / count
-
-        """
-
+        """Yield the data as an array."""
+        
         count = 0
         for points in self.transform_and_yield_points():
             count += points.size
@@ -2293,23 +1385,18 @@ class ElevationDataset:
                 y_size=ycount,
                 verbose=self.verbose
             )
-            yield(
-                point_array(
-                    points,
-                    weight=self.weight,
-                    uncertainty=self.uncertainty,
-                    mode='sums' if want_sums else 'mean'
-                )
+            yield point_array(
+                points,
+                weight=self.weight,
+                uncertainty=self.uncertainty,
+                mode='sums' if want_sums else 'mean'
             )
 
         if self.verbose:
-            utils.echo_msg_bold(
-                f'parsed {count} data records from {self.fn} @ a weight of {self.weight}'
-            )    
+            utils.echo_msg_bold(f'parsed {count} data records from {self.fn} @ a weight of {self.weight}')    
 
+            
     def stacks(self, out_name=None):
-        from . import globato
-        
         gbt = globato.GdalRasterStacker(
             region=self.region,
             x_inc=self.x_inc,
@@ -2317,17 +1404,11 @@ class ElevationDataset:
             dst_srs=self.dst_srs,
             cache_dir=self.cache_dir
         )
+        return gbt.process_stack(self.parse(), out_name=out_name)
 
-        stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
-
-        return stacked_fn
-
-            
+    
     def stacks_yield_xyz(self, out_name=None, ndv=-9999, fmt='GTiff'):
-        """yield the result of `stacks` as an xyz object"""
-        
-        #stacked_fn = self.stacks(out_name=out_name, ndv=ndv)
-        from . import globato
+        """Yield the result of `stacks` as an xyz object."""
         
         gbt = globato.GdalRasterStacker(
             region=self.region,
@@ -2338,53 +1419,40 @@ class ElevationDataset:
         )
 
         stacked_fn = gbt.process_stack(self.parse())
-
-        #, fmt=fmt)#, mode=mode)
         sds = gdal.Open(stacked_fn)
         sds_gt = sds.GetGeoTransform()
-        sds_z_band = sds.GetRasterBand(1) # the z band from stacks
-        sds_w_band = sds.GetRasterBand(3) # the weight band from stacks
-        sds_u_band = sds.GetRasterBand(4) # the uncertainty band from stacks
-        sds_x_band = sds.GetRasterBand(6) # the x band from stacks
-        sds_y_band = sds.GetRasterBand(7) # the y band from stacks
+        
+        ## Bands: 1:Z, 3:W, 4:U, 6:X, 7:Y
+        sds_z_band = sds.GetRasterBand(1)
+        sds_w_band = sds.GetRasterBand(3)
+        sds_u_band = sds.GetRasterBand(4)
+        sds_x_band = sds.GetRasterBand(6)
+        sds_y_band = sds.GetRasterBand(7)
+        
         srcwin = (0, 0, sds.RasterXSize, sds.RasterYSize)
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            ## skip row if all values are ndv
-            if np.all(sz == ndv):
-                continue
+            if np.all(sz == ndv): continue
             
             sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             sx = sds_x_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             sy = sds_y_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            
             for x in range(0, sds.RasterXSize):
                 z = sz[0, x]
                 if z != ndv:
-                    if self.stack_node: # yield avg x/y data instead of center
-                        out_xyz = xyzfun.XYZPoint(
-                            x = sx[0, x], y = sy[0, x], z = z,
-                            w = sw[0, x], u = su[0, x]
-                        )
-                    else: # yield center of pixel as x/y
+                    if self.stack_node:
+                        yield xyzfun.XYZPoint(x=sx[0, x], y=sy[0, x], z=z, w=sw[0, x], u=su[0, x])
+                    else: 
                         geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
-                        out_xyz = xyzfun.XYZPoint(
-                            x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
-                        )
-                        
-                    yield(out_xyz)
+                        yield xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x])
                     
-            sw = su = sx = sy = None
-                    
-        sds = sds_z_band = sds_w_band = sds_u_band \
-            = sds_x_band = sds_y_band = None
+        sds = None
 
         
     def blocks_yield_xyz(self, out_name=None):
-        """yield the result of `stacks` as an xyz object"""
-
-        #stacked_fn = self._blocks(out_name=out_name)
-        from . import globato
+        """Yield the result of `blocks` as an xyz object."""
         
         gbt = globato.GlobatoStacker(
             region=self.region,
@@ -2397,42 +1465,36 @@ class ElevationDataset:
         stacked_fn = gbt.process_blocks(self.parse())        
         sds = h5.File(stacked_fn, 'r')
         sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
-        sds_stack = sds['block']
-        #sds_stack = sds['sums']
-        stack_shape = sds['block']['z'].shape
+        sds_stack = sds['stack'] # Assuming final stack is in 'stack' group
+        
+        stack_shape = sds_stack['z'].shape
         srcwin = (0, 0, stack_shape[1], stack_shape[0])
+        
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_stack['z'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
-            ## skip row if all values are ndv
-            if np.all(np.isnan(sz)):
-                continue
+            if np.all(np.isnan(sz)): continue
 
-            sw = sds_stack['weight'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            sw = sds_stack['weights'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
             su = sds_stack['uncertainty'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
-            sc = sds_stack['count'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
-
+            
+            ## Use X/Y arrays if available or calc from geo
             sx = sds_stack['x'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
             sy = sds_stack['y'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            
             for x in range(0, stack_shape[1]):
                 z = sz[0, x]
                 if not np.isnan(z):
-                    if self.stack_node: # yield avg x/y data instead of center
-                        out_xyz = xyzfun.XYZPoint(
-                            x=sx[0, x], y=sy[0, x], z=z, w=sw[0, x], u=su[0, x]
-                        )
-                    else: # yield center of pixel as x/y
+                    if self.stack_node:
+                        yield xyzfun.XYZPoint(x=sx[0, x], y=sy[0, x], z=z, w=sw[0, x], u=su[0, x])
+                    else:
                         geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
-                        out_xyz = xyzfun.XYZPoint(
-                            x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
-                        )
-                        
-                    yield(out_xyz)
+                        yield xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x])
         sds.close()
 
-
+        
     ## ==============================================
     ## Data Dump/Export/Archive
-    ## ==============================================
+    ## ==============================================    
     def _xyz_dump(self, this_xyz, dst_port=sys.stdout, encode=False):
         this_xyz.dump(
             include_w=True if self.weight is not None else False,
@@ -2444,385 +1506,389 @@ class ElevationDataset:
 
         
     def dump_xyz(self, dst_port=sys.stdout, encode=False):
-        """dump the XYZ data from the dataset.
-
-        data gets parsed through `self.xyz_yield`. 
-        See `set_yield` for more info.
-        """
-
+        """Dump the XYZ data from the dataset."""
+        
         for this_xyz in self.xyz_yield:
             self._xyz_dump(this_xyz, dst_port=dst_port, encode=encode)
 
             
     def dump_xyz_direct(self, dst_port=sys.stdout, encode=False):
-        """dump the XYZ data from the dataset
-
-        data get dumped directly from `self.yield_xyz`, 
-        by-passing `self.xyz_yield`.
-        """
+        """Dump the XYZ data directly bypassing filters."""
         
         for this_xyz in self.yield_xyz():
             self._xyz_dump(this_xyz, dst_port=dst_port, encode=encode)
 
-
-    def dump_positions(self, dst_port=sys.stdout, encode=False):
-        for arrs, srcwin, gt in this_entry.array_yield:            
-
-            #np.vstack(arrs['pixel_x'], arrs['pixel_y'], arrs['z'])
-            #l = f'{}'
-            l = 'non'
-            dst_port.write(l.encode('utf-8') if encode else l)
-            # this_xyz.dump(
-            #     include_w=True if self.weight is not None else False,
-            #     include_u=True if self.uncertainty is not None else False,
-            #     dst_port=dst_port,
-            #     encode=encode,
-            #     precision=self.dump_precision
-            # )
-
             
-    ## ==============================================            
-    ## Data export
-    ## ==============================================
-    def export_xyz_as_list(self, z_only = False):
-        """return the XYZ data from the dataset as python list
-
-        This may get very large, depending on the input data.
-        """
-
-        return([xyz.z if z_only else xyz.copy() for xyz in self.xyz_yield])
+    def export_xyz_as_list(self, z_only=False):
+        """Return the XYZ data as a python list."""
+        
+        return [xyz.z if z_only else xyz.copy() for xyz in self.xyz_yield]
 
     
     def export_xyz_as_ogr(self):
-        """Make a point vector OGR DataSet Object from src_xyz
-
-        for use in gdal gridding functions
-        """
-
-        dst_ogr = self.metadata['name']
-        ogr_ds = gdal.GetDriverByName('Memory').Create(
-            '', 0, 0, 0, gdal.GDT_Unknown
-        )
-        layer = ogr_ds.CreateLayer(
-            dst_ogr,
-            geom_type=ogr.wkbPoint25D
-        )
-        for x in ['long', 'lat', 'elev', 'weight']:
+        """Make a point vector OGR DataSet Object from src_xyz."""
+        
+        dst_ogr = self.metadata.get('name', 'dataset')
+        driver = gdal.GetDriverByName('Memory')
+        ogr_ds = driver.Create('', 0, 0, 0, gdal.GDT_Unknown)
+        layer = ogr_ds.CreateLayer(dst_ogr, geom_type=ogr.wkbPoint25D)
+        
+        for x in ['x', 'y', 'z', 'weight', 'uncertainty']:
             fd = ogr.FieldDefn(x, ogr.OFTReal)
             fd.SetWidth(12)
             fd.SetPrecision(8)
             layer.CreateField(fd)
             
-        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
+        f_defn = layer.GetLayerDefn()
         for this_xyz in self.xyz_yield:
+            f = ogr.Feature(f_defn)
             f.SetField(0, this_xyz.x)
             f.SetField(1, this_xyz.y)
             f.SetField(2, this_xyz.z)
             f.SetField(3, this_xyz.w)
+            f.SetField(3, this_xyz.u)
                 
             wkt = this_xyz.export_as_wkt(include_z=True)
             g = ogr.CreateGeometryFromWkt(wkt)
             f.SetGeometryDirectly(g)
             layer.CreateFeature(f)
             
-        return(ogr_ds)
+        return ogr_ds
 
     
     def export_xyz_as_pandas(self):
-        """export the point data as a pandas dataframe.
+        """Export the point data as a pandas dataframe."""
         
-        This may get very large, depending on the input data.
-        """
-
         import pandas as pd
         
-        dataset = pd.DataFrame(
-            {}, columns=['x', 'y', 'z', 'weight', 'uncertainty']
-        )
+        frames = []
         for points in self.transform_and_yield_points():
-            try:
-                points_w = points['w']
-            except:
-                points_w = np.ones(points['z'].shape)
-
+            points_w = points['w'] if 'w' in points.dtype.names else np.ones(points['z'].shape)
             points_w *= self.weight if self.weight is not None else 1
             points_w[np.isnan(points_w)] = 1
                 
-            try:
-                points_u = points['u']
-            except:
-                points_u = np.zeros(points['z'].shape)
-
-            points_u = np.sqrt(
-                points_u**2 \
-                + (self.uncertainty if self.uncertainty is not None else 0)**2
-            )
+            points_u = points['u'] if 'u' in points.dtype.names else np.zeros(points['z'].shape)
+            points_u = np.sqrt(points_u**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)
             points_u[np.isnan(points_u)] = 0
-            points_dataset = pd.DataFrame(
-                {'x': points['x'],
-                 'y': points['y'],
-                 'z': points['z'],
-                 'weight': points_w,
-                 'uncertainty': points_u,
-                },
-                columns=['x', 'y', 'z', 'weight', 'uncertainty']
-            )
-            dataset = pd.concat(
-                [dataset, points_dataset], ignore_index=True
-            )
-
-        return(dataset)
+            
+            frames.append(pd.DataFrame({
+                'x': points['x'], 'y': points['y'], 'z': points['z'],
+                'weight': points_w, 'uncertainty': points_u
+            }))
+            
+        if frames:
+            return pd.concat(frames, ignore_index=True)
+        return pd.DataFrame(columns=['x', 'y', 'z', 'weight', 'uncertainty'])
 
     
-    ## TODO: fix/write these functions
-    def export_stack_as_pandas(self):
-        pass
-
-    
-    def export_stack_as_gdal(self, fmt='GTiff'):
-        """export the stack h5 to gdal multi-band or separate file(s)
+    def export_xyz_as_numpy(self):
+        """Export the point data as a numpy structured array.
+        
+        Returns:
+            np.ndarray: A structured array with fields:
+                        ['x', 'y', 'z', 'weight', 'uncertainty']
         """
         
-        num_bands = len(stack_grp)
-        driver = gdal.GetDriverByName(fmt)
-        stack_dataset = driver.Create(
-            stack_fn, xcount, ycount, num_bands, gdal.GDT_Float32,
-            options=['COMPRESS=LZW',
-                     'PREDICTOR=2',
-                     'TILED=YES',
-                     'BIGTIFF=YES']
-        )
-        stack_dataset.SetGeoTransform(dst_gt)
-        if self.dst_srs is not None:
-            stack_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+        chunks = []
+        
+        ## Define the output data type
+        dt = [('x', 'f8'), ('y', 'f8'), ('z', 'f8'), 
+              ('weight', 'f8'), ('uncertainty', 'f8')]
 
-        with utils.ccp(
-                total=len(stack_grp.keys()),
-                desc='converting CSG stack to GeoTIFF',
-                leave=self.verbose
-        ) as pbar:
-            for i, key in enumerate(reversed(stack_grp.keys())):
-                pbar.update()
-                stack_grp[key][np.isnan(stack_grp[key])] = ndv
-                stack_band = stack_dataset.GetRasterBand(i + 1)
-                stack_band.WriteArray(stack_grp[key][...])
-                stack_band.SetDescription(key)
-                stack_band.SetNoDataValue(ndv)
-                stack_band.FlushCache()
+        for points in self.transform_and_yield_points():
+            ## Handle Weights
+            if 'w' in points.dtype.names:
+                points_w = points['w'].astype(np.float64)
+            else:
+                points_w = np.ones(points['z'].shape, dtype=np.float64)
 
-        stack_dataset = None
+            if self.weight is not None:
+                points_w *= self.weight
+            
+            points_w[np.isnan(points_w)] = 1.0
 
-        ## create the mask geotiff
-        num_bands, mask_keys = h5_get_datasets_from_grp(mask_grp)
-        driver = gdal.GetDriverByName(fmt)
-        mask_dataset = driver.Create(
-            mask_fn, xcount, ycount, num_bands, gdal.GDT_Byte,
-            options=['COMPRESS=LZW', 'BIGTIFF=YES'] \
-            if fmt == 'GTiff' \
-            else ['COMPRESS=LZW']
-        )
-        mask_dataset.SetGeoTransform(dst_gt)
-        if self.dst_srs is not None:
-            mask_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+            ## Handle Uncertainty
+            if 'u' in points.dtype.names:
+                points_u = points['u'].astype(np.float64)
+            else:
+                points_u = np.zeros(points['z'].shape, dtype=np.float64)
 
-        with utils.ccp(
-                total=len(mask_keys),
-                desc='converting CSG mask to GeoTiff',
-                leave=self.verbose
-        ) as pbar:
-            ii = 0
-            for i, key in enumerate(mask_keys):
-                pbar.update()
-                srcwin = (0, 0, xcount, ycount)
-                for y in range(
-                        srcwin[1], srcwin[1] + srcwin[3], 1
-                ):
-                    mask_grp[key][
-                        srcwin[1]:srcwin[1] + srcwin[3],
-                        srcwin[0]:srcwin[0] + srcwin[2]
-                    ][np.isnan(mask_grp[key][
-                        srcwin[1]:srcwin[1] + srcwin[3],
-                        srcwin[0]:srcwin[0] + srcwin[2]
-                    ])] = 0
-                    #if np.all(mask_grp[key][mask_grp[key] == 0]):
-                    #    continue
+            global_u = self.uncertainty if self.uncertainty is not None else 0
+            points_u = np.sqrt(points_u**2 + global_u**2)
+            points_u[np.isnan(points_u)] = 0.0
 
-                    #ii += 1
-                    mask_band = mask_dataset.GetRasterBand(i+1)
-                    mask_band.WriteArray(
-                        mask_grp[key][srcwin[1]:srcwin[1] + srcwin[3],
-                                      srcwin[0]:srcwin[0] + srcwin[2]]
-                    )
-                    md = {}
-                    for attrs_key in mask_grp[key].attrs.keys():
-                        md[attrs_key] = mask_grp[key].attrs[attrs_key]
+            ## Create Structured Array Chunk
+            count = len(points['z'])
+            chunk = np.zeros(count, dtype=dt)
+            chunk['x'] = points['x']
+            chunk['y'] = points['y']
+            chunk['z'] = points['z']
+            chunk['weight'] = points_w
+            chunk['uncertainty'] = points_u
+            
+            chunks.append(chunk)
 
-                    if 'name' in md.keys():
-                        mask_band.SetDescription(md['name'])
-                    else:
-                        mask_band.SetDescription(mask_grp[key].name)
-
-                    mask_band.SetNoDataValue(0)
-                    mask_band.SetMetadata(md)
-                    mask_band.FlushCache()
-
-        mask_dataset = None
-
+        ## Concatenate
+        if chunks:
+            return np.concatenate(chunks)
+        
+        return np.array([], dtype=dt)
+    
+    
     ## ==============================================
     ## Data archive
-    ## ==============================================
-    def _archive_xyz_test(self, **kwargs):
-        srs_all = []
-        a_name = None
-        if 'dirname' in kwargs.keys() and kwargs['dirname'] is not None:
-            a_name = kwargs['dirname']
-        #else:
-        aa_name = self.metadata['name'].split('/')[0]
-        if self.region is None:
-            aa_name = '{}_{}'.format(aa_name, utils.this_year())
-        else:
-            aa_name = '{}_{}_{}'.format(
-                aa_name, self.region.format('fn'), utils.this_year())
-
-        if a_name is None:
-            a_name = aa_name
-            self.archive_datalist = '{}.datalist'.format(a_name)
-        else:
-            self.archive_datalist = '{}.datalist'.format(a_name)
-            a_name = os.path.join(a_name, aa_name)
-
-        utils.echo_msg(self.archive_datalist)
-        if not os.path.exists(os.path.dirname(self.archive_datalist)):
-            try:
-                os.makedirs(os.path.dirname(self.archive_datalist))
-            except:
-                pass
-
-        archive_keys = []
-        for this_entry in self.parse():
-            #utils.echo_msg(this_entry)
-            datalist_dirname = os.path.join(
-                a_name, os.path.dirname(this_entry.metadata['name'])
-            )
-            this_key = datalist_dirname.split('/')[-1]
-            if this_key not in archive_keys:
-                archive_keys.append(this_key)
-                utils.echo_msg_bold(this_key)
-                metadata=this_entry.format_metadata()
-                utils.echo_msg_bold(metadata)
-            #if not os.path.exists(datalist_dirname):
-            #    os.makedirs(datalist_dirname)
-
-            
-    def archive_xyz(self, **kwargs):
-        """Archive data from the dataset to XYZ in the given dataset region.
+    ## ==============================================            
+    # def archive_xyz(self, **kwargs):
+    #     """Archive data from the dataset to XYZ in the given dataset region.
         
-        will convert all data to XYZ within the given region and will arrange
-        the data as a datalist based on inputs.
+    #     will convert all data to XYZ within the given region and will arrange
+    #     the data as a datalist based on inputs.
 
-        Data comes from `self.xyz_yield` set in `self.set_yield`. 
-        So will process data through `stacks` before archival if region, 
-        x_inc and y_inc are set.
+    #     Data comes from `self.xyz_yield` set in `self.set_yield`. 
+    #     So will process data through `stacks` before archival if region, 
+    #     x_inc and y_inc are set.
+    #     """
+        
+    #     srs_all = []
+    #     a_name = None
+    #     if 'dirname' in kwargs.keys() and kwargs['dirname'] is not None:
+    #         a_name = kwargs['dirname']
+    #     #else:
+    #     aa_name = self.metadata['name'].split('/')[0]
+    #     if self.region is None:
+    #         aa_name = '{}_{}'.format(aa_name, utils.this_year())
+    #     else:
+    #         aa_name = '{}_{}_{}'.format(
+    #             aa_name, self.region.format('fn'), utils.this_year())
+
+    #     if a_name is None:
+    #         a_name = aa_name
+    #         self.archive_datalist = '{}.datalist'.format(a_name)
+    #     else:
+    #         self.archive_datalist = '{}.datalist'.format(a_name)
+    #         a_name = os.path.join(a_name, aa_name)
+
+    #     utils.echo_msg(self.archive_datalist)
+    #     if not os.path.exists(os.path.dirname(self.archive_datalist)):
+    #         try:
+    #             os.makedirs(os.path.dirname(self.archive_datalist))
+    #         except:
+    #             pass
+
+    #     archive_keys = []
+    #     for this_entry in self.parse():
+    #         srs_all.append(this_entry.dst_srs \
+    #                        if this_entry.dst_srs is not None \
+    #                        else this_entry.src_srs)
+    #         datalist_dirname = os.path.join(
+    #             a_name, os.path.dirname(this_entry.metadata['name'])
+    #         )
+    #         this_key = datalist_dirname.split('/')[-1]
+    #         if not os.path.exists(datalist_dirname):
+    #             os.makedirs(datalist_dirname)
+
+    #         sub_datalist = os.path.join(datalist_dirname, f'{this_key}.datalist')
+    #         if utils.fn_basename2(os.path.basename(this_entry.fn)) == '':
+    #             sub_xyz_path = '.'.join(
+    #                 [utils.fn_basename2(os.path.basename(this_entry.metadata['name'])),
+    #                  'xyz']
+    #             )
+    #         else:
+    #             sub_xyz_path = '.'.join(
+    #                 [utils.fn_basename2(os.path.basename(this_entry.fn)),
+    #                  'xyz']
+    #             )
+
+    #         this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
+    #         if os.path.exists(this_xyz_path):
+    #             utils.echo_warning_msg(
+    #                 f'{this_xyz_path} already exists, skipping...'
+    #             )
+    #             continue
+
+    #         with open(sub_datalist, 'a') as sub_dlf:
+    #             with open(this_xyz_path, 'w') as xp:
+    #                 ## data will be processed independently of each other
+    #                 for this_xyz in this_entry.xyz_yield: 
+    #                     this_xyz.dump(
+    #                         include_w=True if self.weight is not None else False,
+    #                         include_u=True if self.uncertainty is not None else False,
+    #                         dst_port=xp, encode=False, precision=self.dump_precision
+    #                     )
+
+    #             if os.stat(this_xyz_path).st_size > 0:
+    #                 sub_dlf.write(f'{sub_xyz_path} 168 1 0\n')
+    #             else:
+    #                 utils.remove_glob(f'{this_xyz_path}*')
+
+    #         if os.stat(sub_datalist).st_size == 0:
+    #             utils.remove_glob(sub_datalist)
+    #         else:
+    #             with open(self.archive_datalist, 'a') as dlf:
+    #                 if not this_key in archive_keys:
+    #                     archive_keys.append(this_key)                    
+    #                     dlf.write(
+    #                         '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
+    #                             name=os.path.join(datalist_dirname, this_key),
+    #                             weight=utils.float_or(this_entry.weight, 1),
+    #                             uncertainty=utils.float_or(this_entry.uncertainty, 0),
+    #                             metadata=this_entry.format_metadata()
+    #                         )
+    #                     )
+
+    #         if not os.listdir(datalist_dirname):
+    #             os.rmdir(datalist_dirname)
+                    
+    #     ## generate datalist inf/json
+    #     srs_set = set(srs_all)
+    #     if len(srs_set) == 1:
+    #         arch_srs = srs_set.pop()
+    #     else:
+    #         arch_srs = None
+
+    #     utils.remove_glob(f'{self.archive_datalist}.*')
+    #     this_archive = DatasetFactory(
+    #         mod=self.archive_datalist,
+    #         data_format=-1,
+    #         parent=None,
+    #         weight=1,
+    #         uncertainty=0,
+    #         src_srs=arch_srs,
+    #         dst_srs=None,
+    #         cache_dir=self.cache_dir,
+    #     )._acquire_module().initialize()
+        
+    #     return this_archive.inf()
+
+
+    def archive_xyz(self, dirname: str = None, **kwargs):
+        """Archive data from the dataset to XYZ format within the given region.
+        
+        This method converts all data to XYZ, organizes it into a directory structure,
+        and generates a master datalist pointing to the archived files.
+        
+        Args:
+            dirname (str): The root directory for the archive. Defaults to the dataset name.
+            **kwargs: Additional arguments.
+            
+        Returns:
+            INF: The metadata info object for the generated archive datalist.
         """
         
-        srs_all = []
-        a_name = None
-        if 'dirname' in kwargs.keys() and kwargs['dirname'] is not None:
-            a_name = kwargs['dirname']
-        #else:
-        aa_name = self.metadata['name'].split('/')[0]
+        # 1. Determine Archive Root Directory
+        archive_root = dirname if dirname is not None else None
+        
+        # Default name based on metadata
+        dataset_name = self.metadata.get('name', 'dataset').split('/')[0]
+        
         if self.region is None:
-            aa_name = '{}_{}'.format(aa_name, utils.this_year())
+            archive_name = f"{dataset_name}_{utils.this_year()}"
         else:
-            aa_name = '{}_{}_{}'.format(
-                aa_name, self.region.format('fn'), utils.this_year())
+            archive_name = f"{dataset_name}_{self.region.format('fn')}_{utils.this_year()}"
 
-        if a_name is None:
-            a_name = aa_name
-            self.archive_datalist = '{}.datalist'.format(a_name)
+        if archive_root is None:
+            archive_root = archive_name
+            self.archive_datalist = f"{archive_root}.datalist"
         else:
-            self.archive_datalist = '{}.datalist'.format(a_name)
-            a_name = os.path.join(a_name, aa_name)
+            self.archive_datalist = f"{archive_root}.datalist"
+            archive_root = os.path.join(archive_root, archive_name)
 
-        utils.echo_msg(self.archive_datalist)
+        utils.echo_msg(f"Archiving to: {self.archive_datalist}")
+        
         if not os.path.exists(os.path.dirname(self.archive_datalist)):
             try:
                 os.makedirs(os.path.dirname(self.archive_datalist))
-            except:
+            except OSError:
                 pass
 
+        # 2. Process Entries
         archive_keys = []
+        srs_all = []
+
+        # Iterate through parsed sub-datasets
         for this_entry in self.parse():
-            srs_all.append(this_entry.dst_srs \
-                           if this_entry.dst_srs is not None \
-                           else this_entry.src_srs)
-            datalist_dirname = os.path.join(
-                a_name, os.path.dirname(this_entry.metadata['name'])
-            )
-            this_key = datalist_dirname.split('/')[-1]
+            # Track SRS for final metadata
+            srs = this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs
+            if srs: srs_all.append(srs)
+
+            # Determine sub-directory for this specific entry
+            entry_name = this_entry.metadata.get('name', 'unknown')
+            datalist_dirname = os.path.join(archive_root, os.path.dirname(entry_name))
+            this_key = os.path.basename(datalist_dirname)
+            
             if not os.path.exists(datalist_dirname):
                 os.makedirs(datalist_dirname)
 
-            sub_datalist = os.path.join(datalist_dirname, f'{this_key}.datalist')
-            if utils.fn_basename2(os.path.basename(this_entry.fn)) == '':
-                sub_xyz_path = '.'.join(
-                    [utils.fn_basename2(os.path.basename(this_entry.metadata['name'])),
-                     'xyz']
-                )
-            else:
-                sub_xyz_path = '.'.join(
-                    [utils.fn_basename2(os.path.basename(this_entry.fn)),
-                     'xyz']
-                )
+            # Define sub-datalist and xyz paths
+            sub_datalist_path = os.path.join(datalist_dirname, f"{this_key}.datalist")
+            
+            # Construct XYZ filename
+            base_fn = os.path.basename(this_entry.fn)
+            clean_name = utils.fn_basename2(base_fn)
+            if not clean_name:
+                clean_name = utils.fn_basename2(os.path.basename(entry_name))
+            
+            sub_xyz_filename = f"{clean_name}.xyz"
+            this_xyz_path = os.path.join(datalist_dirname, sub_xyz_filename)
 
-            this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
             if os.path.exists(this_xyz_path):
-                utils.echo_warning_msg(
-                    f'{this_xyz_path} already exists, skipping...'
-                )
+                utils.echo_warning_msg(f'{this_xyz_path} already exists, skipping...')
                 continue
 
-            with open(sub_datalist, 'a') as sub_dlf:
-                with open(this_xyz_path, 'w') as xp:
-                    # data will be processed independently of each other
-                    for this_xyz in this_entry.xyz_yield: 
-                        this_xyz.dump(
-                            include_w=True if self.weight is not None else False,
-                            include_u=True if self.uncertainty is not None else False,
-                            dst_port=xp, encode=False, precision=self.dump_precision
-                        )
+            # 3. Write Data
+            # Write XYZ data
+            with open(this_xyz_path, 'w') as xp:
+                for this_xyz in this_entry.xyz_yield: 
+                    this_xyz.dump(
+                        include_w=True if self.weight is not None else False,
+                        include_u=True if self.uncertainty is not None else False,
+                        dst_port=xp, 
+                        encode=False, 
+                        precision=self.dump_precision
+                    )
 
-                if os.stat(this_xyz_path).st_size > 0:
-                    sub_dlf.write(f'{sub_xyz_path} 168 1 0\n')
-                else:
-                    utils.remove_glob(f'{this_xyz_path}*')
-
-            if os.stat(sub_datalist).st_size == 0:
-                utils.remove_glob(sub_datalist)
+            # Update Sub-Datalist
+            # If data was written, append to sub-datalist. Else clean up.
+            if os.path.exists(this_xyz_path) and os.stat(this_xyz_path).st_size > 0:
+                with open(sub_datalist_path, 'a') as sub_dlf:
+                    # Format: path format weight uncertainty
+                    sub_dlf.write(f'{sub_xyz_filename} 168 1 0\n')
             else:
-                with open(self.archive_datalist, 'a') as dlf:
-                    if not this_key in archive_keys:
-                        archive_keys.append(this_key)                    
-                        dlf.write(
-                            '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
-                                name=os.path.join(datalist_dirname, this_key),
-                                weight=utils.float_or(this_entry.weight, 1),
-                                uncertainty=utils.float_or(this_entry.uncertainty, 0),
-                                metadata=this_entry.format_metadata()
-                            )
-                        )
+                utils.remove_glob(f'{this_xyz_path}*')
 
-            if not os.listdir(datalist_dirname):
+            # 4. Update Master Datalist
+            # If the sub-datalist has content, add it to the master archive list
+            if os.path.exists(sub_datalist_path) and os.stat(sub_datalist_path).st_size > 0:
+                if this_key not in archive_keys:
+                    archive_keys.append(this_key)
+                    with open(self.archive_datalist, 'a') as dlf:
+                        # Add entry pointing to the sub-datalist
+                        # Format: path -1 weight uncertainty metadata...
+                        rel_path = os.path.join(datalist_dirname, this_key)
+                        meta_str = this_entry.format_metadata()
+                        w = utils.float_or(this_entry.weight, 1)
+                        u = utils.float_or(this_entry.uncertainty, 0)
+                        
+                        dlf.write(f'{rel_path}.datalist -1 {w} {u} {meta_str}\n')
+            else:
+                utils.remove_glob(sub_datalist_path)
+
+            # Cleanup empty directories
+            if os.path.exists(datalist_dirname) and not os.listdir(datalist_dirname):
                 os.rmdir(datalist_dirname)
                     
-        ## generate datalist inf/json
+        # 5. Finalize Archive Metadata
+        # Determine common SRS
         srs_set = set(srs_all)
-        if len(srs_set) == 1:
-            arch_srs = srs_set.pop()
-        else:
-            arch_srs = None
+        arch_srs = srs_set.pop() if len(srs_set) == 1 else None
 
-        utils.remove_glob(f'{self.archive_datalist}.*')
+        # Generate INF for the master datalist
+        utils.remove_glob(f'{self.archive_datalist}.inf')
+        
+        # Use Factory to load the new archive and generate its INF
+        # We assume DatasetFactory is available in the module scope
+        #from . import factory as ds_factory # Local import to avoid circular dependency issues
+        
         this_archive = DatasetFactory(
             mod=self.archive_datalist,
             data_format=-1,
@@ -2834,8 +1900,9 @@ class ElevationDataset:
             cache_dir=self.cache_dir,
         )._acquire_module().initialize()
         
-        return(this_archive.inf())
-
+        return this_archive.inf()
+    
+    
     ## ==============================================
     ## Fetching
     ## ==============================================
@@ -2853,8 +1920,8 @@ class ElevationDataset:
         fr.start()
         fr.join()
 
-        return(fr)
-
+        return fr
+    
                 
 class CUDEMFile(ElevationDataset):
     """CUDEM netcdf raster
@@ -2938,15 +2005,14 @@ class CRMDatalist(FactoryDatalists):
         super().__init__(**kwargs)    
 
 
-## ==============================================
-## Datasets Factory - module parser
-## ==============================================
 class DatasetFactory(factory.CUDEMFactory):
-    """Dataset Factory Settings and Generator
+    """Dataset Factory Settings and Generator.
     
-    Parse a datalist entry and return the dataset object
+    Parses a datalist entry (string) and returns the appropriate 
+    dataset object based on the format ID or file extension.
     """
 
+    ## Import dataset modules here to avoid circular imports
     from . import xyzfile
     from . import lasfile
     from . import gdalfile
@@ -2954,290 +2020,161 @@ class DatasetFactory(factory.CUDEMFactory):
     from . import ogrfile
     from . import icesat2file
     from . import swotfile
-    from . import ziplists
+    from . import ziplistfile
     from . import fetchers
-    from . import datalists
+    from . import datalistfile
     
+    ## Registry of supported dataset modules
+    ## Negative IDs are containers/lists/fetchers
+    ## Positive IDs are specific data formats
     _modules = {
-        ## negative values are `datalists`, where they contain various other datasets.
-        -1: {'name': 'datalist',
-             'fmts': ['datalist', 'mb-1', 'dl'],
-             'description': ('An extended MB-System style datalist containting '
-                             'dlim-compatible datasets'),
-             'call': datalists.Datalist},
-        -2: {'name': 'zip',
-             'fmts': ['zip', 'ZIP'],
-             'description': 'A zipfile containing dlim-compatible datasets',
-             'call': ziplists.ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
-        -3: {'name': 'scratch',
-             'fmts': [''],
-             'description': ('A scratch dataset, including a python list '
-                             'of dlim-compatible datasets'),
-             'call': datalists.Scratch},
-        -4: {'name': 'points',
-             'fmts': [''],
-             'description': ('A points dataset, a numpy rec-array or a '
-                             'pandas dataframe, defining x, y and z data columns'),
-             'call': datalists.Points},
-        ## data files
-        167: {'name': 'yxz',
-              'fmts': ['yxz'],
-              'description': 'ascii DSV datafile formatted as y,x,z',
-              'call': xyzfile.YXZFile},
-        168: {'name': 'xyz',
-              'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt', 'XYZ'],
-              'description': 'An ascii DSV datafile formatted as x,y,z',
-              'call': xyzfile.XYZFile},
-        200: {'name': 'gdal',
-              'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'],
-              'description': 'A gdal-compatible raster dataset',
-              'call': gdalfile.GDALFile},
-        201: {'name': 'bag',
-              'fmts': ['bag'],
-              'description': 'A BAG bathymetry dataset',
-              'call': gdalfile.BAGFile},
-        202: {'name': 'swot_pixc',
-              'fmts': ['h5'],
-              'description': 'An HDF5 SWOT PIXC datafile',
-              'call': swotfile.SWOT_PIXC},
-        203: {'name': 'swot_hr_raster',
-              'fmts': ['nc'],
-              'description': 'An HDF5 SWOT HR Raster datafile',
-              'call': swotfile.SWOT_HR_Raster},
-        300: {'name': 'las',
-              'fmts': ['las', 'laz'],
-              'description': 'An las or laz lidar datafile',
-              'call': lasfile.LASFile},
-        301: {'name': 'mbs',
-              'fmts': ['fbt', 'mb'],
-              'description': 'An MB-System-compatible multibeam datafile',
-              'call': mbsfile.MBSParser},
-        302: {'name': 'ogr',
-              'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb/'],
-              'description': 'An ogr-compatible vector datafile',
-              'call': ogrfile.OGRFile},
-        303: {'name': 'icesat2_atl03',
-              'fmts': ['h5'],
-              'description': 'An HDF5 IceSat2 ATL03 datafile',
-              'call': icesat2file.IceSat2_ATL03},
-        304: {'name': 'icesat2_atl24',
-              'fmts': ['h5'],
-              'description': 'An HDF5 IceSat2 ATL24 datafile',
-              'call': icesat2file.IceSat2_ATL24},
-        310: {'name': 'cudem',
-              'fmts': ['csg', 'nc', 'h5'],
-              'description': 'A netCDF/h5 CUDEM file',
-              'call': CUDEMFile},
-        ## fetches modules
-        -100: {'name': 'https',
-               'fmts': ['https'],
-               'description': 'A URL pointing to a dlim-compatible datafile',
-               'call': fetchers.Fetcher},
-        -101: {'name': 'gmrt',
-               'fmts': ['gmrt'],
-               'description': 'The GMRT fetches module',
-               'call': fetchers.GMRTFetcher},
-        -102: {'name': 'gebco',
-               'fmts': ['gebco'],
-               'description': 'The GEBCO fetches module',
-               'call': fetchers.GEBCOFetcher},
-        -103: {'name': 'copernicus',
-               'fmts': ['copernicus'],
-               'description': 'The Copernicus fetches module',
-               'call': fetchers.CopernicusFetcher},
-        -104: {'name': 'fabdem',
-               'fmts': ['fabdem'],
-               'description': 'The FABDEM fetches module',
-               'call': fetchers.FABDEMFetcher},
-        -105: {'name': 'nasadem',
-               'fmts': ['nasadem'],
-               'description': 'The NASADEM fetches module',
-               'call': fetchers.Fetcher},
-        -106: {'name': 'mar_grav',
-               'fmts': ['mar_grav'],
-               'description': 'The mar_grav fetches module',
-               'call': fetchers.MarGravFetcher},
-        -107: {'name': 'srtm_plus',
-               'fmts': ['srtm_plus'],
-               'description': 'The srtm_plus fetches module',
-               'call': fetchers.Fetcher},
-        -108: {'name': 'synbath',
-               'fmts': ['synbath'],
-               'description': 'The SynBath fetches module',
-               'call': fetchers.Fetcher},
-        -109: {'name': 'gedtm30',
-               'fmts': ['gedtm30'],
-               'description': 'Global DTM fetches module',
-               'call': fetchers.GEDTM30Fetcher},
-        -110: {'name': "swot",
-               'fmts': ['swot'],
-               'description': '	The SWOT fetches module',
-               'call': fetchers.SWOTFetcher},
-        -111: {'name': "icesat2",
-               'fmts': ['icesat2'],
-               'description': 'The IceSat2 fetches module',
-               'call': fetchers.IceSat2Fetcher},
-        -200: {'name': 'charts',
-               'fmts': ['charts'],
-               'description': 'The charts fetches module',
-               'call': fetchers.ChartsFetcher},
-        -201: {'name': 'multibeam',
-               'fmts': ['multibeam'],
-               'description': 'The multibeam fetches module',
-               'call': fetchers.MBSFetcher},
-        -202: {'name': 'hydronos',
-               'fmts': ['hydronos'],
-               'description': 'The hydronos fetches module',
-               'call': fetchers.HydroNOSFetcher},
-        -203: {'name': 'ehydro',
-               'fmts': ['ehydro'],
-               'description': 'The ehydro fetches module',
-               'call': fetchers.eHydroFetcher},
-        -204: {'name': 'bluetopo',
-               'fmts': ['bluetopo'],
-               'description': 'The bluetopo fetches module',
-               'call': fetchers.BlueTopoFetcher},
-        -205: {'name': 'ngs',
-               'fmts': ['ngs'],
-               'description': 'The ngs fetches module',
-               'call': fetchers.NGSFetcher},
-        -206: {'name': 'tides',
-               'fmts': ['tides'],
-               'description': 'The tides fetches module',
-               'call': fetchers.TidesFetcher},
-        -207: {'name': 'digital_coast',
-               'fmts': ['digital_coast'],
-               'description': 'The digital_coast fetches module',
-               'call': fetchers.Fetcher},
-        -208: {'name': 'ncei_thredds',
-               'fmts': ['ncei_thredds'],
-               'description': 'The ncei_thredds fetches module',
-               'call': fetchers.Fetcher},
-        -209: {'name': 'tnm',
-               'fmts': ['tnm'],
-               'description': 'The TNM fetches module',
-               'call': fetchers.Fetcher},
-        -210: {'name': "CUDEM",
-               'fmts': ['CUDEM'],
-               'description': 'The CUDEM fetches module',
-               'call': fetchers.Fetcher},
-        -211: {'name': "CoNED",
-               'fmts': ['CoNED'],
-               'description': 'The CoNED fetches module',
-               'call': fetchers.DAVFetcher_CoNED},
-        -212: {'name': "SLR",
-               'fmts': ['SLR'],
-               'description': '	The SLR fetches module',
-               'call': fetchers.DAVFetcher_SLR},
-        -213: {'name': 'waterservies',
-               'fmts': ['waterservices'],
-               'description': 'The waterservices fetches module',
-               'call': fetchers.WaterServicesFetcher},
-        -214: {'name': 'ned',
-               'fmts': ['ned', 'ned1'],
-               'description': 'The NED fetches module',
-               'call': fetchers.NEDFetcher},        
-        -215: {'name': "csb",
-               'fmts': ['csb'],
-               'description': 'The CSB fetches module',
-               'call': fetchers.Fetcher},
-        -216: {'name': 'wa_dnr',
-               'fmts': ['wa_dnr'],
-               'description': 'The Washington DNR lidar portal',
-               'call': fetchers.DNRFetcher},
-        -217: {'name': 'r2r',
-               'fmts': ['r2r'],
-               'description': 'The r2r fetches module',
-               'call': fetchers.R2RFetcher},
-        -300: {'name': 'emodnet',
-               'fmts': ['emodnet'],
-               'description': 'The emodnet fetches module',
-               'call': fetchers.EMODNetFetcher},
-        -301: {'name': 'chs',
-               'fmts': ['chs'],
-               'description': 'The chs fetches module',
-               'call': fetchers.Fetcher}, 
-        -302: {'name': 'hrdem',
-               'fmts': ['hrdem'],
-               'description': '	The hrdem fetches module',
-               'call': fetchers.HRDEMFetcher},
-        -303: {'name': 'arcticdem',
-               'fmts': ['arcticdem'],
-               'description': 'The arcticdem fetches module',
-               'call': fetchers.Fetcher},
-        -304: {'name': 'mrdem',
-               'fmts': ['mrdem'],
-               'description': '	The mrdem fetches module',
-               'call': fetchers.Fetcher},
-        -500: {'name': 'vdatum',
-               'fmts': ['vdatum'],
-               'description': 'The vdatum fetches module',
-               'call': fetchers.VDatumFetcher},
-        -600: {'name': 'hydrolakes',
-               'fmts': ['hydrolakes'],
-               'description': 'The hydrolakes fetches module',
-               'call': fetchers.HydroLakesFetcher},        
+        ## --- Utility ---
+        0: {'name': 'auto', 'fmts': ['auto'], 'description': 'Automatic Format Detection', 'call': None},
+        
+        ## --- Lists and Containers ---
+        -1: {
+            'name': 'datalist',
+            'fmts': ['datalist', 'mb-1', 'dl'],
+            'description': 'An extended MB-System style datalist containing dlim-compatible datasets',
+            'call': datalistfile.Datalist
+        },
+        -2: {
+            'name': 'zip',
+            'fmts': ['zip', 'ZIP', 'tar', 'gz', '7z'],
+            'description': 'A compressed archive containing dlim-compatible datasets',
+            'call': ziplistfile.ZIPlist
+        },
+        -3: {
+            'name': 'scratch',
+            'fmts': [],
+            'description': 'A scratch dataset, including a python list of dlim-compatible datasets',
+            'call': datalistfile.Scratch
+        },
+        -4: {
+            'name': 'points',
+            'fmts': [],
+            'description': 'A points dataset (numpy rec-array or pandas dataframe)',
+            'call': datalistfile.Points
+        },
+        
+        ## --- Fetchers ---
+        -100: {'name': 'https', 'fmts': ['https'], 'description': 'URL to dataset', 'call': fetchers.Fetcher},
+        -101: {'name': 'gmrt', 'fmts': ['gmrt'], 'description': 'GMRT Fetcher', 'call': fetchers.GMRTFetcher},
+        -102: {'name': 'gebco', 'fmts': ['gebco'], 'description': 'GEBCO Fetcher', 'call': fetchers.GEBCOFetcher},
+        -103: {'name': 'copernicus', 'fmts': ['copernicus'], 'description': 'Copernicus Fetcher', 'call': fetchers.CopernicusFetcher},
+        -104: {'name': 'fabdem', 'fmts': ['fabdem'], 'description': 'FABDEM Fetcher', 'call': fetchers.FABDEMFetcher},
+        -105: {'name': 'nasadem', 'fmts': ['nasadem'], 'description': 'NASADEM Fetcher', 'call': fetchers.Fetcher},
+        -106: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'description': 'MarGrav Fetcher', 'call': fetchers.MarGravFetcher},
+        -107: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'description': 'SRTM+ Fetcher', 'call': fetchers.Fetcher},
+        -108: {'name': 'synbath', 'fmts': ['synbath'], 'description': 'SynBath Fetcher', 'call': fetchers.Fetcher},
+        -109: {'name': 'gedtm30', 'fmts': ['gedtm30'], 'description': 'Global DTM Fetcher', 'call': fetchers.GEDTM30Fetcher},
+        -110: {'name': 'swot', 'fmts': ['swot'], 'description': 'SWOT Fetcher', 'call': fetchers.SWOTFetcher},
+        -111: {'name': 'icesat2', 'fmts': ['icesat2'], 'description': 'IceSat2 Fetcher', 'call': fetchers.IceSat2Fetcher},
+        
+        -200: {'name': 'charts', 'fmts': ['charts'], 'description': 'Charts Fetcher', 'call': fetchers.ChartsFetcher},
+        -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'description': 'Multibeam Fetcher', 'call': fetchers.MBSFetcher},
+        -202: {'name': 'hydronos', 'fmts': ['hydronos'], 'description': 'HydroNOS Fetcher', 'call': fetchers.HydroNOSFetcher},
+        -203: {'name': 'ehydro', 'fmts': ['ehydro'], 'description': 'eHydro Fetcher', 'call': fetchers.eHydroFetcher},
+        -204: {'name': 'bluetopo', 'fmts': ['bluetopo'], 'description': 'BlueTopo Fetcher', 'call': fetchers.BlueTopoFetcher},
+        -205: {'name': 'ngs', 'fmts': ['ngs'], 'description': 'NGS Fetcher', 'call': fetchers.NGSFetcher},
+        -206: {'name': 'tides', 'fmts': ['tides'], 'description': 'Tides Fetcher', 'call': fetchers.TidesFetcher},
+        -207: {'name': 'digital_coast', 'fmts': ['digital_coast'], 'description': 'Digital Coast Fetcher', 'call': fetchers.Fetcher},
+        -208: {'name': 'ncei_thredds', 'fmts': ['ncei_thredds'], 'description': 'NCEI Thredds Fetcher', 'call': fetchers.Fetcher},
+        -209: {'name': 'tnm', 'fmts': ['tnm'], 'description': 'The National Map Fetcher', 'call': fetchers.Fetcher},
+        
+        -210: {'name': 'CUDEM', 'fmts': ['CUDEM'], 'description': 'CUDEM Fetcher', 'call': fetchers.Fetcher},
+        -211: {'name': 'CoNED', 'fmts': ['CoNED'], 'description': 'CoNED Fetcher', 'call': fetchers.DAVFetcher_CoNED},
+        -212: {'name': 'SLR', 'fmts': ['SLR'], 'description': 'SLR Fetcher', 'call': fetchers.DAVFetcher_SLR},
+        -213: {'name': 'waterservices', 'fmts': ['waterservices'], 'description': 'Water Services Fetcher', 'call': fetchers.WaterServicesFetcher},
+        -214: {'name': 'ned', 'fmts': ['ned', 'ned1'], 'description': 'NED Fetcher', 'call': fetchers.NEDFetcher},
+        -215: {'name': 'csb', 'fmts': ['csb'], 'description': 'CSB Fetcher', 'call': fetchers.Fetcher},
+        -216: {'name': 'wa_dnr', 'fmts': ['wa_dnr'], 'description': 'WA DNR Fetcher', 'call': fetchers.DNRFetcher},
+        -217: {'name': 'r2r', 'fmts': ['r2r'], 'description': 'R2R Fetcher', 'call': fetchers.R2RFetcher},
+        
+        -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'description': 'EMODNet Fetcher', 'call': fetchers.EMODNetFetcher},
+        -301: {'name': 'chs', 'fmts': ['chs'], 'description': 'CHS Fetcher', 'call': fetchers.Fetcher}, 
+        -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'description': 'HRDEM Fetcher', 'call': fetchers.HRDEMFetcher},
+        -303: {'name': 'arcticdem', 'fmts': ['arcticdem'], 'description': 'ArcticDEM Fetcher', 'call': fetchers.Fetcher},
+        -304: {'name': 'mrdem', 'fmts': ['mrdem'], 'description': 'MRDEM Fetcher', 'call': fetchers.Fetcher},
+        
+        -500: {'name': 'vdatum', 'fmts': ['vdatum'], 'description': 'VDatum Fetcher', 'call': fetchers.VDatumFetcher},
+        -600: {'name': 'hydrolakes', 'fmts': ['hydrolakes'], 'description': 'HydroLAKES Fetcher', 'call': fetchers.HydroLakesFetcher},
+
+        ## --- Data Files ---
+        167: {'name': 'yxz', 'fmts': ['yxz'], 'description': 'ASCII y,x,z', 'call': xyzfile.YXZFile},
+        168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt', 'XYZ'], 'description': 'ASCII x,y,z', 'call': xyzfile.XYZFile},
+        200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'description': 'GDAL Raster', 'call': gdalfile.GDALFile},
+        201: {'name': 'bag', 'fmts': ['bag'], 'description': 'BAG Bathymetry', 'call': gdalfile.BAGFile},
+        202: {'name': 'swot_pixc', 'fmts': ['h5'], 'description': 'SWOT PIXC HDF5', 'call': swotfile.SWOT_PIXC},
+        203: {'name': 'swot_hr_raster', 'fmts': ['nc'], 'description': 'SWOT HR Raster', 'call': swotfile.SWOT_HR_Raster},
+        300: {'name': 'las', 'fmts': ['las', 'laz'], 'description': 'LAS/LAZ Lidar', 'call': lasfile.LASFile},
+        301: {'name': 'mbs', 'fmts': ['fbt', 'mb'], 'description': 'MB-System', 'call': mbsfile.MBSParser},
+        302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb'], 'description': 'OGR Vector', 'call': ogrfile.OGRFile},
+        303: {'name': 'icesat2_atl03', 'fmts': ['h5'], 'description': 'IceSat2 ATL03', 'call': icesat2file.IceSat2_ATL03},
+        304: {'name': 'icesat2_atl24', 'fmts': ['h5'], 'description': 'IceSat2 ATL24', 'call': icesat2file.IceSat2_ATL24},
+        # 310: {'name': 'cudem', 'fmts': ['csg', 'nc', 'h5'], 'description': 'CUDEM NetCDF/H5', 'call': CUDEMFile},
     }
+
     _datalist_cols = ['path', 'format', 'weight', 'uncertainty', 'title', 'source',
-                      'date', 'type', 'resolution', 'horz', 'vert',
-                      'url']
+                      'date', 'type', 'resolution', 'horz', 'vert', 'url']
 
     _metadata_keys = ['name', 'title', 'source', 'date', 'data_type', 'resolution',
                       'hdatum', 'vdatum', 'url']
 
-    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    ## ==============================================
-    ## redefine the factory default _parse_mod function for datasets
-    ## the mod in this case is a datalist entry and the format key
-    ## becomes the module
-    ## TODO: use csv module to parse
-    ## ==============================================
     def _parse_mod(self, mod=None):
-        """parse the datalist entry line"""
+        """Parse the datalist entry line and configure the factory arguments."""
         
         self.kwargs['fn'] = mod
         if self.kwargs['fn'] is None:
-            return(self)
-
-        ## mod exists as a file, no other entry items should occur, so
-        ## guess the format and finish there...
-        ## the format number becomes the mod_name
-        ## check for specified data format as well
-        ## if fn is not a path, parse it as a datalist entry
-		## breaks on path with space, e.g. /meda/user/My\ Passport/etc
-        this_entry = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+            return self
         
-        if os.path.exists(self.kwargs['fn']):
-            if os.path.isfile(self.kwargs['fn']) \
-               or self.kwargs['fn'].split('.')[-1] in get_factory_exts():
-                this_entry = [self.kwargs['fn']]
-
+        ## Use shlex with posix=False to PRESERVE internal quotes (e.g. pnt_fltrs="rq:...")
         try:
-            entry = [utils.str_or(x) if n == 0 \
-                     else utils.str_or(x, replace_quote=False) if n < 2 \
-                     else utils.float_or(x) if n < 3 \
-                     else utils.float_or(x) if n < 4 \
-                     else utils.str_or(x) \
-                     for n, x in enumerate(this_entry)]
-
-            #entry = [None if x == '-' else x for x in entry]
+            if os.path.exists(self.kwargs['fn']):
+                ## If the entire string is a valid file, treat it as just a filename
+                ## check extension or isfile to distinguish from directory unless strictly file
+                if os.path.isfile(self.kwargs['fn']):
+                    this_entry = [self.kwargs['fn']]
+                else:
+                    ## It's a directory or strict path
+                    this_entry = [self.kwargs['fn']]
+            else:
+                ## posix=False preserves quotes, which is critical for nested factory strings
+                this_entry = shlex.split(self.kwargs['fn'], posix=False)
+        ## Fallback to regex if shlex fails
+        except Exception:
+            this_entry = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+        
+        ## Convert tokens to appropriate types
+        ## Index mapping: 0:fn, 1:fmt, 2:weight, 3:unc, 4+:metadata
+        try:
+            entry = []
+            for n, x in enumerate(this_entry):
+                if n == 0:
+                    ## Manually strip quotes from filename if they exist (since posix=False kept them)
+                    val = utils.str_or(x)
+                    if isinstance(val, str) and val.startswith('"') and val.endswith('"'):
+                        val = val[1:-1]
+                    entry.append(val)
+                    #entry.append(utils.str_or(x)) # Filename
+                elif n == 1:
+                    entry.append(utils.str_or(x, replace_quote=False)) # Format
+                elif n == 2:
+                    entry.append(utils.float_or(x)) # Weight
+                elif n == 3:
+                    entry.append(utils.float_or(x)) # Uncertainty
+                else:
+                    entry.append(utils.str_or(x)) # Metadata
+            
             utils.echo_debug_msg(f'initial parsed entry: {entry}')
-
         except Exception as e:
-            utils.echo_error_msg(
-                'could not parse entry {}, {}'.format(
-                    self.kwargs['fn'], this_entry
-                )
-            )
-            return(self)
+            utils.echo_error_msg(f'could not parse entry {self.kwargs["fn"]}: {e}')
+            return self
 
-        utils.echo_debug_msg(entry)        
-        ## data format - entry[1]
-        ## guess format based on fn if not specified otherwise
-        ## parse the format for dataset specific opts.
+        ## Determine Data Format
         if len(entry) < 2:
             if self.kwargs.get('data_format') is not None:
                 entry.append(self.kwargs.get('data_format'))
@@ -3245,82 +2182,95 @@ class DatasetFactory(factory.CUDEMFactory):
                 entry = self.guess_and_insert_fmt(entry)
 
             if len(entry) < 2:
-                utils.echo_error_msg(
-                    'could not parse entry {}'.format(self.kwargs['fn'])
-                )
-                return(self)
+                utils.echo_error_msg(f'could not determine format for entry {self.kwargs["fn"]}')
+                return self
 
         elif entry[1] is None or entry[1] == '-':
             if self.kwargs.get('data_format') is not None:
                 entry[1] = self.kwargs['data_format']
             else:
                 entry = self.guess_and_insert_fmt(entry)
-                        
-        ## parse the entry format options
+
+        ## Parse Format Options (e.g., 168:skip=1)
+        ## This handles strings like "auto:skip=1" or "-106:pnt_fltrs=..."
         opts = factory.fmod2dict(str(entry[1]), {})
         utils.echo_debug_msg(opts)
-        if '_module' in opts.keys():# and len(opts.keys()) > 1:
-            entry[1] = utils.int_or((opts['_module']))
-            self.mod_args = {i:opts[i] for i in opts if i!='_module'}
 
+        parsed_fmt_id = None
+        if '_module' in opts:
+            parsed_fmt_id = utils.int_or(opts['_module'])
+            self.mod_args = {i: opts[i] for i in opts if i != '_module'}
+            entry[1] = parsed_fmt_id
+
+        ## Handle "Auto" (ID 0)
+        ## If the format was "auto" (0), we now have the options in self.mod_args, 
+        ## but we still need the *real* format ID (e.g. 168 for xyz) to load the right class.
+        if parsed_fmt_id == 0:
+            guessed_id = self.guess_data_format(entry[0])
+            if guessed_id is not None:
+                entry[1] = guessed_id
+            else:
+                utils.echo_warning_msg(f"Could not auto-detect format for {entry[0]}, defaulting to 168 (XYZ)")
+                entry[1] = 168
+            
+        ## Validate Format ID
         try:
-            assert isinstance(utils.int_or(entry[1]), int)
-        except:
-            utils.echo_error_msg(
-                f'could not parse datalist entry {entry}'
-            )
-            return(self)
+            fmt_id = utils.int_or(entry[1])
+            assert isinstance(fmt_id, int)
+        except AssertionError:
+            utils.echo_error_msg(f'invalid data format ID in entry: {entry}')
+            return self
 
-        ## entry is a COG to be read with gdal, append vsicurl to the fn
-        if entry[0].startswith('http') and int(entry[1]) == 200:
-            entry[0] = '/vsicurl/{}'.format(entry[0])
+        ## Special Case: Cloud Optimized GeoTIFF via HTTP
+        if str(entry[0]).startswith('http') and fmt_id == 200:
+            if not str(entry[0]).startswith('/vsicurl/'):
+                entry[0] = f'/vsicurl/{entry[0]}'
         
-        self.kwargs['data_format'] = int(entry[1])
-        self.mod_name = int(entry[1])
+        self.kwargs['data_format'] = fmt_id
+        self.mod_name = fmt_id
         
-        ## file-name (or fetches module name) - entry[0]
-        ## set to relative path from parent
-        ## don't set relative path if 'fn' is a
-        ## fetches module (entry[1] < -3)
+        ## Resolve File Path (Relative vs Absolute)
         if 'parent' not in self.kwargs:
             self.kwargs['parent'] = None
 
         if self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
         else:
-            if self.mod_name >= -2 \
-               and os.path.dirname(self.kwargs['parent'].fn) \
-               != os.path.dirname(entry[0]) and \
-                   ':' not in entry[0] and \
-                   self.kwargs['parent'].data_format >= -2:
-                self.kwargs['fn'] = os.path.join(
-                    os.path.dirname(self.kwargs['parent'].fn), entry[0]
-                )
-                self.kwargs['fn'] = os.path.relpath(self.kwargs['fn'])
+            ## If parent exists, dataset is not a fetcher (<-2), 
+            ## and path is relative, join with parent dir.
+            parent_fmt = self.kwargs['parent'].data_format
+            is_fetcher = self.mod_name < -2
+            is_absolute = os.path.isabs(entry[0]) or ':' in entry[0] # ':' check for windows drive or url
+            
+            if not is_fetcher and not is_absolute and parent_fmt >= -2:
+                parent_dir = os.path.dirname(self.kwargs['parent'].fn)
+                ## Check if already in the same dir to avoid redundancy
+                if parent_dir != os.path.dirname(entry[0]): 
+                    self.kwargs['fn'] = os.path.join(parent_dir, entry[0])
+                    ## Clean up path
+                    ## self.kwargs['fn'] = os.path.relpath(self.kwargs['fn']) 
             else:
                 self.kwargs['fn'] = entry[0]
 
-        ## weight - entry[2]
-        ## inherit weight of parent
+        ## Set Weight (Inherit/Multiply from Parent)
         if len(entry) < 3:
             entry.append(self.set_default_weight())
         elif entry[2] is None:
             entry[2] = self.set_default_weight()
 
+        ## Initialize base weight
         if 'weight' not in self.kwargs:
             self.kwargs['weight'] = 1
 
-        ## multiply the weight by the weight in the parent
-        ## if it exists, otherwise weight is weight
         if self.kwargs['parent'] is not None:
+            ## Multiply parent weight by this entry's weight
             if self.kwargs['weight'] is not None:
                 self.kwargs['weight'] *= entry[2]
         else:
             if self.kwargs['weight'] is not None:
                 self.kwargs['weight'] = entry[2]
 
-        ## uncertainty - entry[3]
-        ## combine with partent using root sum of squares
+        ## Set Uncertainty (Inherit/RSS from Parent)
         if len(entry) < 4:
             entry.append(self.set_default_uncertainty())
         elif entry[3] is None:
@@ -3330,6 +2280,7 @@ class DatasetFactory(factory.CUDEMFactory):
             self.kwargs['uncertainty'] = 0
             
         if self.kwargs['parent'] is not None:
+            ## Root Sum of Squares for uncertainty propagation
             if self.kwargs['uncertainty'] is not None:
                 self.kwargs['uncertainty'] = math.sqrt(
                     self.kwargs['uncertainty']**2 + entry[3]**2
@@ -3338,131 +2289,155 @@ class DatasetFactory(factory.CUDEMFactory):
             if self.kwargs['uncertainty'] is not None:
                 self.kwargs['uncertainty'] = entry[3]
                     
-        ## Optional arguments follow, for metadata generation
+        ## Set Metadata
         if 'metadata' not in self.kwargs:
             self.kwargs['metadata'] = {}
 
+        ## Initialize keys
         for key in self._metadata_keys:
-            if key not in self.kwargs['metadata'].keys():
+            if key not in self.kwargs['metadata']:
                 self.kwargs['metadata'][key] = None
 
-        ## inherit metadata from parent, if available
+        ## Inherit metadata from parent
         if self.kwargs['parent'] is not None:
             for key in self._metadata_keys:
                 if key in self.kwargs['parent'].metadata:
                     if self.kwargs['metadata'][key] is None or key == 'name':
                         self.kwargs['metadata'][key] = self.kwargs['parent'].metadata[key]
 
-        ## set or append metadata from entry
+        ## Apply specific metadata from entry line
         for i, key in enumerate(self._metadata_keys):
             if key == 'name':
+                ## Name defaults to filename base if not present
                 if self.kwargs['metadata'][key] is None:
-                    self.kwargs['metadata'][key] \
-                        = utils.fn_basename2(
-                            os.path.basename(self.kwargs['fn'].split(':')[0])
-                        )
+                    ## Remove potential options like :skip=1 for basename
+                    clean_fn = self.kwargs['fn'].split(':')[0]
+                    self.kwargs['metadata'][key] = utils.fn_basename2(os.path.basename(clean_fn))
                 else:
+                    ## If name exists (from parent), append current filename
+                    clean_fn = self.kwargs['fn'].split(':')[0]
                     self.set_metadata_entry(
-                        utils.fn_basename2(
-                            os.path.basename(self.kwargs['fn'].split(':')[0])
-                        ),
+                        utils.fn_basename2(os.path.basename(clean_fn)),
                         key, '/'
                     )
-
             else:
-                if len(entry) < i+4:
+                ## Parsing extra columns in datalist as metadata
+                ## entry index offset: 0=fn, 1=fmt, 2=w, 3=unc, 4=start of metadata
+                ## since the above key 'name' is not part of the datalist entry,
+                ## we set the idx to i+3 since i will be one ahead.
+                entry_idx = i + 3
+                if len(entry) < entry_idx + 1:
                     entry.append(self.kwargs['metadata'][key])
 
-                self.set_metadata_entry(entry[i+3], key, ', ')
+                self.set_metadata_entry(entry[entry_idx], key, ', ')
 
                 if key == 'date':
-                    self.kwargs['metadata'][key] \
-                        = utils.num_strings_to_range(
-                            self.kwargs['metadata'][key], entry[i+3]
-                        )
+                    ## Normalize date ranges
+                    self.kwargs['metadata'][key] = utils.num_strings_to_range(
+                        self.kwargs['metadata'][key], entry[entry_idx]
+                    )
                 
-        return(self.mod_name, self.mod_args)
+        return self.mod_name, self.mod_args
 
     
-    def set_metadata_entry(self, entry, metadata_field, join_string = '/'):
-        if entry != '-' and str(entry).lower() != 'none':
-            if self.kwargs['metadata'][metadata_field] is not None:
-                if str(self.kwargs['metadata'][metadata_field]).lower() != str(entry).lower():
-                    self.kwargs['metadata'][metadata_field] \
-                        = join_string.join(
-                            [str(self.kwargs['metadata'][metadata_field]), str(entry)]
-                        )
+    def set_metadata_entry(self, entry, metadata_field, join_string='/'):
+        """Safely append or set a metadata field."""
+        if entry is not None and str(entry) != '-' and str(entry).lower() != 'none':
+            current_val = self.kwargs['metadata'].get(metadata_field)
+            
+            if current_val is not None:
+                ## Don't duplicate if identical
+                if str(current_val).lower() != str(entry).lower():
+                    self.kwargs['metadata'][metadata_field] = join_string.join(
+                        [str(current_val), str(entry)]
+                    )
             else:
                 self.kwargs['metadata'][metadata_field] = str(entry)
 
                 
     def set_default_weight(self):
-        return(1)
+        return 1
 
     
     def set_default_uncertainty(self):
-        return(0)
+        return 0
 
     
     def guess_data_format(self, fn):
-        """guess a data format based on the file-name"""
+        """Guess a data format ID based on the file extension."""
         
-        for key in self._modules.keys():
-            if fn.split('.')[-1] in self._modules[key]['fmts']:
-                return(key)
-            ## hack to accept .mb* mb-system files without having to record every one...
-            elif fn.split('.')[-1][:2] in self._modules[key]['fmts']:
-                return(key)
-
-
-    def guess_and_insert_fmt(self, entry):
-        if len(entry) >= 1:            
-            for key in self._modules.keys():
-                ## entry is stdin, set to 168 and break
-                if entry[0] is None or entry[0] == '-':
-                    if len(entry) > 1:
-                        entry[1] = 168
-                    else:
-                        entry.append(168)
-                        
-                    break
+        if not fn: return None
+        
+        # Check explicit extension mapping
+        ext = fn.split('.')[-1]
+        for key, info in self._modules.items():
+            if 'fmts' in info and ext in info['fmts']:
+                return key
                 
-                if entry[0].startswith('http') \
-                   or entry[0].startswith('/vsicurl/'):
-                    see = 'https'
-                    
-                else:
-                    se = entry[0].split('.')
-                    see = se[-1] \
-                        if len(se) > 1 \
-                           else entry[0].split(":")[0]
+        ## Hack for .mbXX files
+        if len(fn.split('.')) > 1:
+            mb_ext = fn.split('.')[-1][:2]
+            for key, info in self._modules.items():
+                if 'fmts' in info and mb_ext in info['fmts']:
+                    return key
+        return None
 
-                if 'fmts' in self._modules[key].keys():
-                    if see in self._modules[key]['fmts']:
-                        if len(entry) > 1:
-                            entry[1] = int(key)
-                        else:
-                            entry.append(int(key))
-                            
-                        break
+    
+    def guess_and_insert_fmt(self, entry):
+        """Analyze the filename in entry[0] and insert the guessed format ID into entry[1]."""
+        
+        if len(entry) < 1:
+            return entry
 
-        return(entry)
+        ## Check for stdin
+        if entry[0] is None or entry[0] == '-':
+            if len(entry) > 1:
+                entry[1] = 168 # XYZ
+            else:
+                entry.append(168)
+            return entry
 
-            
+        ## Analyze string
+        fname = entry[0]
+        ext = None
+        
+        if fname.startswith('http') or fname.startswith('/vsicurl/'):
+            ext = 'https'
+        else:
+            parts = fname.split('.')
+            if len(parts) > 1:
+                ext = parts[-1]
+                #elif ':' in fname:
+            else:
+                ext = fname.split(':')[0] # Probably a fetches module
+
+        ## Match extension to module
+        if ext:
+            for key, info in self._modules.items():
+                if 'fmts' in info and ext in info['fmts']:
+                    if len(entry) > 1:
+                        entry[1] = int(key)
+                    else:
+                        entry.append(int(key))
+                    break
+        
+        return entry
+
+    
     def write_parameter_file(self, param_file: str):
+        """Dump the factory configuration to a JSON file."""
+        
         try:
             with open(param_file, 'w') as outfile:
-                json.dump(self.__dict__, outfile)
-                utils.echo_msg(
-                    'New DatasetFactory file written to {}'.format(param_file)
-                )
+                ## We can't serialize the 'call' objects (classes), so filter them out or handle distinct dict
+                ## For now dumping __dict__ excluding unpicklable parts if necessary
+                ## This might need refinement based on what exactly needs to be saved
+                json.dump(self.__dict__, outfile, default=lambda o: str(o))
+                utils.echo_msg(f'New DatasetFactory file written to {param_file}')
                 
-        except:
-            raise ValueError(
-                ('DatasetFactory: Unable to write new parameter '
-                 f'file to {param_file}')
-            )
-
+        except Exception as e:
+            raise ValueError(f'DatasetFactory: Unable to write parameter file to {param_file}: {e}')
+        
 
 ## ==============================================
 ## Command-line Interface (CLI)
@@ -3470,402 +2445,323 @@ class DatasetFactory(factory.CUDEMFactory):
 ##
 ## datalists cli
 ## ==============================================
-datalists_usage = lambda: """{cmd} ({dl_version}): DataLists IMproved; 
-Process and generate datalists
+def datalists_cli():
+    """Run datalists from command-line using argparse."""
 
-dlim is the elevation data processing tool using various dataset modules. 
-dlim's native dataset format is a "datalist". 
-A datalist is similar to an MBSystem datalist; 
-it is a space-delineated file containing the following columns:
-
-`data-path data-format data-weight data-uncertainty data-name data-source data-date data-resolution data-type data-horz data-vert data-url`
-
-Minimally, `data-path` (column 1) is all that is needed.
-
-An associated inf and geojson file will be gerenated for each datalist 
-while only an associated inf file will be genereated for individual datasets
-
-Parse various dataset types by region/increments and yield data as xyz or array. 
-Recursive data-structures, which point to datasets (datalist, zip, fetches, etc), 
-are negative format numbers, e.g. -1 for datalist. Fetches modules are <= -100.
-
-usage: {cmd} [ -acdghijnquwEJPRT [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
-
-Options:
-  -R, --region\t\t\tRestrict processing to the desired REGION 
-\t\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
-\t\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
-\t\t\t\tOR an OGR-compatible vector file with regional polygons. 
-\t\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
-\t\t\t\tIf a vector file is supplied, will use each region found therein.
-\t\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
-  -E, --increment\t\tBlock data to INCREMENT in native units.
-\t\t\t\tWhere INCREMENT is x-inc[/y-inc]
-  -X, --extend\t\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
-\t\t\t\tpercentage to extend the processing REGION.
-\t\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
-\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by
-\t\t\t\t10 percent of the input REGION.
-  -J, --s_srs\t\t\tSet the SOURCE projection.
-  -P, --t_srs\t\t\tSet the TARGET projection. (REGION should be in target projection) 
-  -D, --cache-dir\t\tCACHE Directory for storing temp and output data.
-  -Z, --z-precision\t\tSet the target precision of dumped z values. (default is 4)
-  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max', 'mixed' or 'supercede' 
-\t\t\t\t(with -E and -R)
-  -T, --stack_filter\t\tFILTER the data stack using one or multiple filters. 
-\t\t\t\tWhere FILTER is filter-name[:opts] (see `grits --modules` for more information)
-\t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
-\t\t\t\tAvailable FILTERS: {grits_modules}
-  -F, --point_filter\t\tFILTER the POINT data using one or multiple filters. 
-\t\t\t\tWhere FILTER is filter-name[:opts] (See {cmd} --point-filters for more information)
-\t\t\t\tThe -F switch may be set multiple times to perform multiple filters.
-\t\t\t\tAvailable FILTERS: {point_filter_modules}
-  -V, --archive\t\t\tArchive the DATALIST to the given REGION[/INCREMENTs].
-\t\t\t\tSpecify the name of the archive, if not specified an auto-generated 
-\t\t\t\tname will be used.
-
-  -m, --mask\t\t\tMASK the datalist to the given REGION/INCREMENTs
-  -s, --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given 
-\t\t\t\tREGION/INCREMENTs
-  -g, --glob\t\t\tGLOB the datasets in the current directory to stdout
-  -i, --info\t\t\tGenerate and return an INFO dictionary of the dataset
-  -l, --list\t\t\tList the assocated datasets from the datalist
-  -w, --weights\t\t\tOutput WEIGHT values along with xyz
-  -u, --uncertainties\t\tOutput UNCERTAINTY values along with xyz
-  -n, --stack-node\t\tOutput stacked x/y data rather than pixel
-  -q, --quiet\t\t\tLower the verbosity to a quiet
-
-  --point-filters\t\tDisplay the POINT FILTER descriptions and usage
-  --modules\t\t\tDisplay the datatype descriptions and usage
-  --help\t\t\tPrint the usage text
-  --version\t\t\tPrint the version information
-
-Datalists and data formats:
-  A datalist is a file that contains a number of datalist entries, 
-  while an entry is a space-delineated line:
-  `path [format weight uncertainty [name source date type resolution hdatum vdatum url]]`
-
-  `path` can also be a supported fetches module (dataset IDs <= -100)
-
-Supported datalist formats (see {cmd} --modules <dataset-key> for more information): 
-  {dl_formats}
-
-Examples:
-
-  % {cmd} -R-90/-89/30/31/-100/100 *.tif -l -w > tifs_in_region.datalist
-  % {cmd} tifs_in_region.datalist -R -90/-89/30/31 -E 1s > tifs_1s.xyz
-  % {cmd} -R my_region.shp my_data.xyz -w -s_srs epsg:4326 -t_srs epsg:3565 > my_data_3565.xyz
-  % {cmd} -R my_region.shp -w multibeam --archive
-""".format(
-    cmd=os.path.basename(sys.argv[0]), 
-    dl_version=__version__,
-    dl_formats=factory.get_module_name_short_desc(
-        DatasetFactory._modules
-    ),
-    grits_modules=factory.get_module_short_desc(
-        grits.grits.GritsFactory._modules
-    ),
-    point_filter_modules=factory.get_module_short_desc(
-        pointz.PointFilterFactory._modules
+    parser = argparse.ArgumentParser(
+        description=f"DataLists IMproved %(prog)s v{__version__}: Process and generate datalists.",
+        epilog="Examples:\n"
+        "  dlim -R-90/-89/30/31/-100/100 *.tif -l -w > tifs_in_region.datalist\n"
+        "  dlim tifs_in_region.datalist -R -90/-89/30/31 -E 1s > tifs_1s.xyz\n"
+        "  dlim -R my_region.shp my_data.xyz -w -J epsg:4326 -P epsg:3565 > my_data_3565.xyz\n"
+        "  dlim -R my_region.shp -w multibeam --archive\n"
+        "\nSupported %(prog)s modules (see %(prog)s --modules <module-name> for more info):\n" 
+        f"{factory.get_module_name_short_desc(DatasetFactory._modules)}\n\n"
+        "CUDEM home page: <http://cudem.colorado.edu>",
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
-)
 
-def datalists_cli(argv=sys.argv):
-    """run datalists from command-line
+    ## --- Positional Arguments ---
+    parser.add_argument(
+        'data', 
+        nargs='*', 
+        default=[], 
+        help="Input datalist(s), file(s), or fetch module name(s)."
+    )
 
-See `datalists_usage` for full cli options.
-    """
+    ## --- Processing Options ---
+    proc_grp = parser.add_argument_group("Processing Options")
+    proc_grp.add_argument(
+        '-R', '--region', 
+        action='append', 
+        help="Restrict processing to the desired REGION (xmin/xmax/ymin/ymax[/zmin/zmax])."
+    )
+    proc_grp.add_argument(
+        '-E', '--increment', 
+        help="Block data to INCREMENT in native units (x-inc[/y-inc])."
+    )
+    proc_grp.add_argument(
+        '-X', '--extend', 
+        default='0',
+        help="Extend the output DEM region (cells) and processing region (pct)."
+    )
+    proc_grp.add_argument(
+        '-J', '--s_srs', '--src-srs', 
+        help="Set the SOURCE projection (EPSG:XXXX or WKT)."
+    )
+    proc_grp.add_argument(
+        '-P', '--t_srs', '--dst-srs', 
+        help="Set the TARGET projection (EPSG:XXXX or WKT)."
+    )
+    proc_grp.add_argument(
+        '-A', '--stack-mode', 
+        default='mean',
+        choices=['mean', 'min', 'max', 'mixed', 'supercede'],
+        help="Set the STACK MODE (with -E and -R). Default: mean."
+    )
+    proc_grp.add_argument(
+        '-n', '--stack-node', 
+        action='store_true', 
+        help="Output stacked x/y data as node (center) rather than pixel."
+    )
+    proc_grp.add_argument(
+        '-Z', '--z-precision', 
+        type=int, 
+        default=4, 
+        help="Set the target precision of dumped z values. Default: 4."
+    )
 
-    dls = []
-    src_srs = None
-    dst_srs = None
-    i_regions = []
-    these_regions = []
-    xy_inc = [None, None]
-    extend = 0
-    want_weights = False
-    want_uncertainties = False
-    want_mask = False
-    want_inf = False
-    want_list = False
-    want_glob = False
-    want_archive = False
-    archive_dirname = None
-    these_archives = []
-    want_verbose = True
-    want_region = False
-    want_separate = False
-    want_sm = False
-    invert_region = False
-    z_precision = 4
-    stack_fltrs = []
-    pnt_fltrs = []
-    stack_node = False
-    stack_mode = 'mean'
-    cache_dir = utils.cudem_cache()
+    ## --- Filtering Options ---
+    filter_grp = parser.add_argument_group("Filtering Options")
+    filter_grp.add_argument(
+        '-T', '--stack-filter', 
+        action='append', 
+        default=[],
+        help="FILTER the data stack (e.g. outlier:std=2). See `grits --modules`."
+    )
+    filter_grp.add_argument(
+        '-F', '--point-filter', 
+        action='append', 
+        default=[],
+        help="FILTER the POINT data (e.g. outlierz:std=2). See `--point-filters`."
+    )
+    filter_grp.add_argument(
+        '-m', '--mask', 
+        action='store_true', 
+        help="MASK the datalist to the given REGION/INCREMENTs."
+    )
+    filter_grp.add_argument(
+        '--invert-region', '-v', 
+        action='store_true', 
+        help="Invert the region mask logic."
+    )
+
+    ## --- Output Options (Mutually Exclusive) ---
+    out_grp = parser.add_mutually_exclusive_group()
+    out_grp.add_argument(
+        '-l', '--list', 
+        action='store_true', 
+        help="List the associated datasets from the datalist."
+    )
+    out_grp.add_argument(
+        '-i', '--info', 
+        action='store_true', 
+        help="Generate and return an INFO dictionary of the dataset."
+    )
+    out_grp.add_argument(
+        '-r', '--region-inf', 
+        action='store_true', 
+        help="Output the calculated region of the data."
+    )
+    out_grp.add_argument(
+        '-g', '--glob', 
+        action='store_true', 
+        help="GLOB the datasets in the current directory to stdout."
+    )
+    out_grp.add_argument(
+        '-V', '--archive', 
+        nargs='?', 
+        const='archive', 
+        metavar='DIR',
+        help="Archive the DATALIST to the given REGION. Optional dirname."
+    )
+    out_grp.add_argument(
+        '-s', '--separate', 
+        action='store_true', 
+        help="Process and dump each dataset entry independently."
+    )
+
+    ## --- Metadata Flags ---
+    meta_grp = parser.add_argument_group("Metadata Flags")
+    meta_grp.add_argument(
+        '-w', '--weights', 
+        action='store_true', 
+        help="Output WEIGHT values along with xyz."
+    )
+    meta_grp.add_argument(
+        '-u', '--uncertainties', 
+        action='store_true', 
+        help="Output UNCERTAINTY values along with xyz."
+    )
+    meta_grp.add_argument(
+        '-sm', '--spatial-metadata', 
+        action='store_true', 
+        help="Generate SPATIAL METADATA (footprints)."
+    )
+
+    ## --- System Options ---
+    sys_grp = parser.add_argument_group("System Options")
+    sys_grp.add_argument(
+        '-D', '--cache-dir', 
+        default=utils.cudem_cache(), 
+        help="CACHE Directory for storing temp and output data."
+    )
+    sys_grp.add_argument(
+        '-q', '--quiet', 
+        action='store_true', 
+        help="Lower the verbosity to quiet."
+    )
+    sys_grp.add_argument(
+        '--version', 
+        action='version', 
+        version=f'dlim {__version__}'
+    )
+
+    ## --- Info Helpers (Exit after printing) ---
+    sys_grp.add_argument(
+        '--modules', 
+        nargs='?', 
+        const='all', 
+        help="Display dataset descriptions. Optional ID for specific details."
+    )
+    sys_grp.add_argument(
+        '--point-filters', 
+        nargs='?', 
+        const='all', 
+        help="Display point filter descriptions."
+    )
+
+    ## Parse Arguments
+    args = parser.parse_args()
+
+    ## --- Handle Info Helpers ---
+    if args.modules:
+        mod_key = None if args.modules == 'all' else utils.int_or(args.modules, str(args.modules))
+        factory.echo_modules(DatasetFactory._modules, mod_key)
+        sys.exit(0)
     
-    ## parse command line arguments.
-    i = 1
-    while i < len(argv):
-        arg = argv[i]
-        if arg == '--region' or arg == '-R':
-            i_regions.append(str(argv[i + 1]))
-            i = i + 1
-        elif arg[:2] == '-R':
-            i_regions.append(str(arg[2:]))
-        elif arg == '--increment' or arg == '-E':
-            xy_inc = argv[i + 1].split('/')
-            i = i + 1
-        elif arg[:2] == '-E':
-            xy_inc = arg[2:].split('/')
-        elif arg == '--extend' or arg == '-X':
-            extend = utils.int_or(argv[i + 1], 0)
-            i += 1
-        elif arg[:2] == '-X':
-            extend = utils.int_or(argv[2:], 0)
-        elif arg == '-s_srs' or arg == '--s_srs' or arg == '-J':
-            src_srs = argv[i + 1]
-            i = i + 1
-        elif arg[:2] == '-J':
-            srs_srs = arg[2:]
-        elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
-            dst_srs = argv[i + 1]
-            i = i + 1
-        elif arg[:2] == '-P':
-            dst_srs = arg[2:]
-        elif arg == '-z_precision' \
-             or arg == '--z-precision' \
-             or arg == '-Z':
-            z_precision = utils.int_or(argv[i + 1], 4)
-            i = i + 1
-        elif arg[:2] == '-Z':
-            z_precision = utils.int_or(argv[2:], 4)
-
-        elif arg == '-stack-mode' or arg == '--stack-mode' or arg == '-A':
-            stack_mode = utils.str_or(argv[i + 1], 'mean')
-            i = i + 1
-        elif arg[:2] == '-A':
-            stack_mode = utils.str_or(arg[2:], 'mean')
-            
-        elif arg == '-stack-filter' or arg == '--stack-filter' or arg == '-T':
-            stack_fltrs.append(argv[i + 1])
-            i = i + 1
-        elif arg[:2] == '-T':
-            stack_fltrs.append(argv[2:])
-            
-        elif arg == '-point-filter' or arg == '--point-filter' or arg == '-F':
-            pnt_fltrs.append(argv[i + 1])
-            i = i + 1
-        elif arg[:2] == '-F':
-            pnt_fltrs.append(argv[2:])
-
-        elif arg == '--archive' or arg == '-V':
-            want_archive = True
-            dataexts = [
-                xs for y in [
-                    x['fmts'] for x in list(
-                        DatasetFactory._modules.values()
-                    )
-                ] for xs in y
-            ]
-            if i+1 < len(argv) and not argv[i + 1].startswith('-'):
-                archive_dirname = utils.str_or(argv[i + 1])
-                i = i + 1
-        elif arg[:2] == '-V':
-            want_archive = True
-            archive_dirname = utils.str_or(argv[2:])
-            
-        elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
-            cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache())
-            i = i + 1
-        elif arg[:2] == '-D': cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
-            
-        elif arg == '--mask' or arg == '-m' or arg == '--want-mask':
-            want_mask = True
-        elif arg == '--invert_region' or arg == '-v':
-            invert_region = True
-        # elif arg == '--archive' or arg == '-a':
-        #     want_archive = True
-        elif arg == '--weights' or arg == '-w':
-            want_weights = True
-        elif arg == '--uncertainties' or arg == '-u':
-            want_uncertainties = True
-        elif arg == '--info' or arg == '-i':
-            want_inf = True
-        elif arg == '--region_inf' or arg == '-r':
-            want_region = True
-        elif arg == '--list' or arg == '-l':
-            want_list = True
-        elif arg == '--glob' or arg == '-g':
-            want_glob = True
-        elif arg == '--spatial-metadata' or arg == '-sm':
-            want_sm = True
-            want_mask = True
-        elif arg == '--stack-node' or arg == '-n':
-            stack_node = True
-            
-        elif arg == '--separate' or arg == '-s':
-            want_separate = True
-
-        elif arg == '--modules':
-            factory.echo_modules(
-                DatasetFactory._modules,
-                None if i+1 >= len(argv) else utils.int_or(sys.argv[i+1], str(sys.argv[i+1]))
-            )
-            sys.exit(0)
-        elif arg == '--md_modules':
-            factory.echo_modules(
-                DatasetFactory._modules,
-                None if i+1 >= len(argv) else int(sys.argv[i+1]), True
-            )
-            sys.exit(0)
-        elif arg == '--point-filters':
-            factory.echo_modules(
-                PointFilterFactory._modules,
-                None if i+1 >= len(argv) else utils.int_or(sys.argv[i+1], str(sys.argv[i+1]))
-            )
-            sys.exit(0)            
-        elif arg == '--quiet' or arg == '-q':
-            want_verbose = False
-        elif arg == '--help' or arg == '-h':
-            print(datalists_usage())
-            sys.exit(1)
-        elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(
-                os.path.basename(sys.argv[0]), __version__)
-                  )
-            sys.exit(1)
-        # elif arg[0] == '-':
-        #     print(datalists_usage())
-        #     sys.exit(0)
-        else:
-            dls.append(f'{arg}')#'"{}"'.format(arg)) # FIX THIS!!!
-        
-        i = i + 1
-
-    if len(xy_inc) < 2:
-        xy_inc.append(xy_inc[0])
-    elif len(xy_inc) == 0:
-        xy_inc = [None, None]
-
-    if want_glob:
-        import glob
-        for key in DatasetFactory()._modules.keys():
-            if key != -1 and key != '_factory':
-                for f in DatasetFactory()._modules[key]['fmts']:
-                    globs = glob.glob('*.{}'.format(f))
-                    [sys.stdout.write(
-                        '{}\n'.format(
-                            ' '.join(
-                                [x, str(key), '1', '0']
-                            )
-                        )
-                    ) for x in globs]
-                    
+    if args.point_filters:
+        mod_key = None if args.point_filters == 'all' else utils.int_or(args.point_filters, str(args.point_filters))
+        factory.echo_modules(pointz.PointFilterFactory._modules, mod_key)
         sys.exit(0)
 
-    #stack_fltrs = [':'.join(f.split('/')) for f in stack_fltrs]
-    #pnt_fltrs = [':'.join(f.split('//')) for f in pnt_fltrs]
-    if not i_regions: i_regions = [None]
-    these_regions = regions.parse_cli_region(i_regions, want_verbose)
-    if not these_regions: these_regions = [None]
-    for rn, this_region in enumerate(these_regions):
-        ## buffer the region by `extend` if xy_inc is set
-        ## this effects the output naming of masks/stacks!
-        ## do we want this like in waffles where the output name
-        ## does not include the -X extend buffer?
-        if xy_inc[0] is not None \
-           and xy_inc[1] is not None \
-           and this_region is not None:
+    if args.glob:
+        import glob
+        # Flatten format list
+        for key, mod in DatasetFactory._modules.items():
+            if key != -1 and key != '_factory':
+                for fmt in mod.get('fmts', []):
+                    for g in glob.glob(f'*.{fmt}'):
+                        print(f"{g} {key} 1 0")
+        sys.exit(0)
+
+    ## --- Process Input Data ---
+    dls = args.data if args.data else [sys.stdin]
+    
+    ## Handle Increment
+    if args.increment:
+        xy_inc = args.increment.split('/')
+        if len(xy_inc) < 2: xy_inc.append(xy_inc[0])
+    else:
+        xy_inc = [None, None]
+
+    ## Handle Extend
+    ## Supports "-X6" or "-X6:10"
+    extend_cells = 0
+    extend_pct = 0
+    if args.extend:
+        parts = str(args.extend).split(':')
+        extend_cells = utils.int_or(parts[0], 0)
+        # Assuming percentage handling logic is inside regions or init_data if needed
+        # Original CLI just parsed it; passing 'extend' integer to buffer logic below
+
+    ## Handle Regions
+    these_regions = regions.parse_cli_region(args.region, not args.quiet) if args.region else [None]
+
+    ## --- Main Loop over Regions ---
+    for this_region in these_regions:
+        
+        ## Buffer Region if Increment is set
+        if xy_inc[0] is not None and this_region is not None and extend_cells != 0:
             this_region.buffer(
-                x_bv=(utils.str2inc(xy_inc[0])*extend),
-                y_bv=(utils.str2inc(xy_inc[1])*extend)
+                x_bv=(utils.str2inc(xy_inc[0]) * extend_cells),
+                y_bv=(utils.str2inc(xy_inc[1]) * extend_cells)
             )
 
+        if not dls:
+            utils.echo_error_msg('You must specify some type of data.')
+            sys.exit(1)
 
-        if len(dls) == 0:
-            dls = [sys.stdin]
-            
-        if len(dls) == 0:
-            sys.stderr.write(datalists_usage())
-            utils.echo_error_msg('you must specify some type of data')
-        else:
-            ## intiialze the input data. Treat data from CLI as a datalist.
+        ## Initialize Datalist
+        try:
             this_datalist = init_data(
                 dls,
                 src_region=this_region,
-                src_srs=src_srs,
-                dst_srs=dst_srs,
+                src_srs=args.s_srs,
+                dst_srs=args.t_srs,
                 x_inc=xy_inc[0],
                 y_inc=xy_inc[1],
                 sample_alg='auto',
-                want_weight=want_weights,
-                want_uncertainty=want_uncertainties,
-                want_verbose=want_verbose,
-                want_mask=want_mask,
-                want_sm=want_sm,
-                invert_region=invert_region,
-                cache_dir=cache_dir,
-                dump_precision=z_precision,
-                pnt_fltrs=pnt_fltrs,
-                stack_fltrs=stack_fltrs,
-                stack_node=stack_node,
-                stack_mode=stack_mode
+                want_weight=args.weights,
+                want_uncertainty=args.uncertainties,
+                want_verbose=not args.quiet,
+                want_mask=args.mask,
+                want_sm=args.spatial_metadata,
+                invert_region=args.invert_region,
+                cache_dir=args.cache_dir,
+                dump_precision=args.z_precision,
+                pnt_fltrs=args.point_filter,
+                stack_fltrs=args.stack_filter,
+                stack_node=args.stack_node,
+                stack_mode=args.stack_mode
             )
 
-            if this_datalist is not None and this_datalist.valid_p(
-                    fmts=DatasetFactory._modules[this_datalist.data_format]['fmts']
-            ):
-                this_datalist.initialize()                
-                if not want_weights:
-                    this_datalist.weight = None
-                    
-                if not want_uncertainties:
-                    this_datalist.uncertainty = None
-                    
-                if want_inf:
-                    # output the datalist inf blob
-                    print(this_datalist.inf()) 
-                elif want_list:
-                    # output each dataset from the datalist
+            ## Validate
+            if this_datalist is not None and this_datalist.valid_p():
+                this_datalist.initialize()
+                
+                ## --- Actions ---
+                if not args.weights: this_datalist.weight = None
+                if not args.uncertainties: this_datalist.uncertainty = None
+
+                if args.info:
+                    print(this_datalist.inf())
+                
+                elif args.list:
                     this_datalist.echo()
                 
-                elif want_region:
-                    # get the region and warp it if necessary
-                    this_inf = this_datalist.inf()
-                    this_region = regions.Region().from_list(this_inf.minmax)
-                    if dst_srs is not None:
-                        if src_srs is not None:
-                            this_region.src_srs = src_srs
-                            this_region.warp(dst_srs)
-                        elif this_inf.src_srs is not None:
-                            this_region.src_srs = this_inf.src_srs
-                            this_region.warp(dst_srs, include_z=False)
-                    print(this_region.format('gmt'))
-                elif want_archive:
-                    # archive the datalist as xyz
-                    this_archive = this_datalist.archive_xyz(dirname=archive_dirname) 
+                elif args.region_inf:
+                    inf = this_datalist.inf()
+                    r = regions.Region().from_list(inf.minmax)
+                    
+                    ## Warp if requested
+                    if args.t_srs:
+                        src = args.s_srs if args.s_srs else inf.src_srs
+                        if src:
+                            r.src_srs = src
+                            r.warp(args.t_srs)
+                            
+                    print(r.format('gmt'))
+
+                elif args.archive:
+                    arc_name = args.archive if args.archive != 'archive' else None
+                    this_archive = this_datalist.archive_xyz(dirname=arc_name)
                     if this_archive.numpts == 0:
-                        utils.remove_glob('{}*'.format(this_archive.name))
-                # elif want_tables:
-                #     this_datalist._archive_xyz_test()
+                        utils.remove_glob(f'{this_archive.name}*')
+
                 else:
-                    try:
-                        # process and dump each dataset independently
-                        if want_separate: 
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else:
-                            # process and dump the datalist as a whole
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                      utils.echo_error_msg('Killed by user')
-                      break
-                    except BrokenPipeError:
-                      utils.echo_error_msg('Pipe Broken')
-                      break
-                    except Exception as e:
-                      utils.echo_error_msg(e)
-                      print(traceback.format_exc())
+                    ## Default: Dump Data
+                    if args.separate:
+                        for entry in this_datalist.parse():
+                            entry.dump_xyz()
+                    else:
+                        this_datalist.dump_xyz()
+
+        except KeyboardInterrupt:
+            utils.echo_error_msg('Killed by user')
+            sys.exit(1)
+        except BrokenPipeError:
+            ## Standard unix behavior for SIGPIPE (e.g. piping to head)
+            sys.stderr.close()
+            sys.exit(0)
+        except Exception as e:
+            utils.echo_error_msg(f"Error: {e}")
+            if not args.quiet:
+                print(traceback.format_exc())
+            sys.exit(1)
+
+if __name__ == "__main__":
+    datalists_cli()
+
 
 ### End                      

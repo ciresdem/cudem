@@ -544,7 +544,7 @@ class CUDEMFactory:
             instance_keys = list(_get_all_keys(instance.__dict__))
             for mod_arg in self.mod_args:
                 if mod_arg not in instance_keys:
-                    utils.echo_warning_msg(f'{mod_arg} is not a valid parameter...')
+                    utils.echo_warning_msg(f'{mod_arg} is not a valid parameter for {self.mod_name}...')
 
             return instance
         else:

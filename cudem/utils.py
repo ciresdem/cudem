@@ -180,9 +180,13 @@ def fn_url_p(fn):
     """Check if fn is a URL."""
     
     url_sw = ['http://', 'https://', 'ftp://', 'ftps://', '/vsicurl']
-    for u in url_sw:
-        if fn.startswith(u):
-            return True
+    if str_or(fn):
+        try:
+            for u in url_sw:
+                if fn.startswith(u):
+                    return True
+        except:
+            return False
     return False
 
 
@@ -1474,7 +1478,7 @@ if USE_TQDM:
             orig_desc = kwargs.get("desc", "")
             desc_width = shutil.get_terminal_size().columns - 30
             shortened_desc = orig_desc[:desc_width]
-            desc = shortened_desc if len(orig_desc) > desc_width else orig_desc
+            desc = shortened_desc #if len(orig_desc) > desc_width else orig_desc
             kwargs['desc'] = f'[ \033[32m\033[1mPROC\033[m ] {mod_name}: {desc}'
             kwargs['file'] = DST_PORT
             super().__init__(**kwargs)

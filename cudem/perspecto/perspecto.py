@@ -229,7 +229,7 @@ class PrintModulesAction(argparse.Action):
         
 def perspecto_cli():
     parser = argparse.ArgumentParser(
-        description="%(prog)s ({__version__}): Generate iMAGEs from a DEM",
+        description=f"%(prog)s ({__version__}): Generate iMAGEs from a DEM",
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=f"""
 Supported %(prog)s modules (see %(prog)s --modules <module-name> for more info): 

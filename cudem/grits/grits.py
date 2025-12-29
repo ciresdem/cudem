@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ## filter grids using various methods
@@ -470,12 +469,12 @@ class GritsFactory(factory.CUDEMFactory):
         super().__init__(**kwargs)
 
 
-###############################################################################        
+## ==============================================
 ## Command-line Interface (CLI)
 ## $ grits
 ##
 ## grits cli
-###############################################################################
+## ==============================================
 grits_cli_usage = """{cmd} ({version}): grits; GRId filTerS
 
 usage: {cmd} [ -hvCMNUWX [ args ] ] DEM ...

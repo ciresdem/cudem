@@ -21,12 +21,9 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
-### Examples:
-##
-### TODO:
+## LAS/LAZ Lidar Data Parser
 ##
 ### Code:
 
@@ -39,101 +36,149 @@ from cudem import regions
 from cudem.datalists.dlim import ElevationDataset
 
 class LASFile(ElevationDataset):
-    """representing an LAS/LAZ dataset.
-
-    Process LAS/LAZ lidar files using pylas.
-    
-    get_epsg - attempt to parse the EPSG from the LAS file header
-    generate_inf - generate an inf file for the LAS data
-    yield_xyz - yield the LAS data as xyz
-    yield_array - yield the LAS data as an array must set the 
-                  x_inc/y_inc in the super class
-    
-    -----------
-    Parameters:
-    
-    classes (str): a list of classes to parse, being a string 
-    with `/` seperator 
+    """
+    Representing an LAS/LAZ dataset.
+    Process LAS/LAZ lidar files using laspy.
     """
 
     def __init__(self, classes='2/29/40', **kwargs):
         super().__init__(**kwargs)
-        # list of lidar classes to retain
-        self.classes = [int(x) for x in classes.split('/')] 
+        
+        ## List of lidar classes to retain (Default: Ground(2), LowNoise(29), BathymetricPoint(40))
+        try:
+            if isinstance(classes, str):
+                self.classes = [int(x) for x in classes.split('/')]
+            elif isinstance(classes, (list, tuple)):
+                self.classes = [int(x) for x in classes]
+            else:
+                self.classes = []
+        except Exception:
+            self.classes = []
+
+        ## Attempt to get SRS from header if not provided
         if self.src_srs is None:
             self.src_srs = self.get_epsg()
             if self.src_srs is None:
                 self.src_srs = self.infos.src_srs
 
                 
-    def valid_p(self, fmts=['scratch']):
-        """check if self appears to be a valid dataset entry"""
+    def valid_p(self, fmts=None):
+        """Check if self appears to be a valid dataset entry."""
+        
+        if self.fn is None: 
+            return False
+        
+        if not os.path.exists(self.fn) or os.stat(self.fn).st_size == 0:
+            return False
 
-        if self.fn is None: # and not self.fn.startswith('http'):
-            return(False)
-        else:
-            if os.path.exists(self.fn) :
-                if os.stat(self.fn).st_size == 0:
-                    return(False)
-            else:
-                return(False)
-
-            try:
-                lp.open(self.fn)
-            except:
-                utils.echo_warning_msg(
-                    f'{self.fn} could not be opened by the lasreader'
-                )
-                return(False)
+        try:
+            ## Quick check if laspy can read the header
+            with lp.open(self.fn) as lasf:
+                pass
+        except Exception as e:
+            utils.echo_warning_msg(f'{self.fn} could not be opened by lasreader: {e}')
+            return False
                         
-        return(True)
+        return True
 
     
     def get_epsg(self):
-        with lp.open(self.fn) as lasf:
-            lasf_vlrs = lasf.header.vlrs
-            for vlr in lasf_vlrs:
-                if vlr.record_id == 2112:
-                    src_srs = vlr.string
-                    return(src_srs)
+        """Attempt to parse EPSG/WKT from LAS VLRs."""
+        
+        try:
+            with lp.open(self.fn) as lasf:
+                for vlr in lasf.header.vlrs:
+                    ## Record ID 2112 is "OGC Coordinate System WKT"
+                    if vlr.record_id == 2112:
+                        try:
+                            ## Decode bytes if necessary
+                            srs = vlr.string
+                            if isinstance(srs, bytes):
+                                return srs.decode('utf-8').strip('\0')
+                            return srs
+                        except:
+                            pass
+                    ## Record ID 34735 is "GeoKeyDirectoryTag" (GeoTIFF keys) - harder to parse directly here
+                    ## without external libs, but laspy handles some of this internally in newer versions.
+        except Exception:
+            pass
+            
+        return None
+
+    
+    def generate_inf(self, make_grid=True, make_block_mean=False, block_inc=None):
+        """Generate metadata (INF) for the LAS data.
+        
+        Uses the LAS header for fast bounds extraction.
+        Falls back to full scan via parent class if grids/block-means are requested.
+        """
+        
+        ## Quick Metadata from Header (Fast)
+        try:
+            with lp.open(self.fn) as lasf:
+                self.infos.numpts = lasf.header.point_count
                 
-            return(None)
+                ## Check for empty header bounds
+                if lasf.header.x_min == 0 and lasf.header.x_max == 0:
+                    ## Header might be empty, force scan
+                    raise ValueError("Empty Header Bounds")
 
-        
-    def generate_inf(self):
-        """generate an inf file for a lidar dataset."""
-        
-        with lp.open(self.fn) as lasf:
-            self.infos.numpts = lasf.header.point_count
-            this_region = regions.Region(
-                xmin=lasf.header.x_min, xmax=lasf.header.x_max,
-                ymin=lasf.header.y_min, ymax=lasf.header.y_max,
-                zmin=lasf.header.z_min, zmax=lasf.header.z_max
+                this_region = regions.Region(
+                    xmin=lasf.header.x_min, xmax=lasf.header.x_max,
+                    ymin=lasf.header.y_min, ymax=lasf.header.y_max,
+                    zmin=lasf.header.z_min, zmax=lasf.header.z_max
+                )
+                self.infos.minmax = this_region.export_as_list(include_z=True)
+                self.infos.wkt = this_region.export_as_wkt()
+                
+                if self.infos.src_srs is None:
+                    self.infos.src_srs = self.src_srs if self.src_srs else self.get_epsg()
+
+        except Exception:
+            ## Fallback to full scan if header read fails or bounds are bad
+            pass
+
+        ## If Grids are requested, we must scan the data.
+        if make_grid or make_block_mean:
+            return super().generate_inf(
+                make_grid=make_grid, 
+                make_block_mean=make_block_mean, 
+                block_inc=block_inc
             )
-            self.infos.minmax = this_region.export_as_list(include_z=True)
-            self.infos.wkt = this_region.export_as_wkt()
-
-        #utils.echo_msg(self.get_epsg())
-        self.infos.src_srs = self.src_srs \
-            if self.src_srs is not None \
-               else self.get_epsg()
         
-        return(self.infos)
+        return self.infos
 
     
     def yield_points(self):
-        with lp.open(self.fn) as lasf:
-            try:
-                for points in lasf.chunk_iterator(2_000_000):
-                    points = points[(np.isin(points.classification, self.classes))]
-                    dataset = np.column_stack((points.x, points.y, points.z))
-                    points = np.rec.fromrecords(dataset, names='x, y, z')                    
-                    yield(points)
+        """Yield points from the LAS file using chunked reading.
+        Applies class filtering.
+        """
+        
+        try:
+            with lp.open(self.fn) as lasf:
+                ## Iterate in chunks to handle large files efficiently
+                for chunk in lasf.chunk_iterator(2_000_000):
+                    ## Filter by classification if classes are set
+                    if self.classes:
+                        mask = np.isin(chunk.classification, self.classes)
+                        points_x = chunk.x[mask]
+                        points_y = chunk.y[mask]
+                        points_z = chunk.z[mask]
+                    else:
+                        points_x = chunk.x
+                        points_y = chunk.y
+                        points_z = chunk.z
                     
-            except Exception as e:
-                utils.echo_warning_msg(
-                    f'could not read points from lasfile {self.fn}, {e}'
-                )
+                    if len(points_x) == 0:
+                        continue
 
+                    ## Create structured array
+                    dataset = np.column_stack((points_x, points_y, points_z))
+                    points = np.rec.fromrecords(dataset, names='x, y, z')
+                    
+                    yield points
+                    
+        except Exception as e:
+            utils.echo_warning_msg(f'Could not read points from lasfile {self.fn}: {e}')
 
 ### End

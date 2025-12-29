@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ## Generate DEMs from a variety of data sources.
@@ -60,15 +59,12 @@ import os
 import json
 import glob
 import traceback
-#from tqdm import tqdm
-#from tqdm import trange
 
 import numpy as np
 import multiprocessing as mp
-
 from osgeo import gdal
 
-from cudem import __version__
+from cudem import __version__ as __cudem_version__
 from cudem.datalists import dlim
 from cudem.datalists import gdalfile
 from cudem import pointz
@@ -77,6 +73,8 @@ from cudem import utils
 from cudem import gdalfun
 from cudem import factory
 from cudem.grits import grits
+from cudem.globato import spatial_metadata
+from . import __version__
 
 ## Data cache directory, hold temp data, fetch data, etc here.
 waffles_cache = utils.cudem_cache()
@@ -846,7 +844,7 @@ class Waffle:
                                 #         msk_ds, verbose=True, mask_level=0
                                 #     )
                                 # else:
-                                sm_layer, sm_fmt = dlim.polygonize_mask_multibands(
+                                sm_layer, sm_fmt = spatial_metadata.polygonize_mask_multibands(
                                     msk_ds, verbose=True
                                 )
                                 sm_files = glob.glob(f'{sm_layer}.*')

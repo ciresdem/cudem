@@ -125,10 +125,10 @@ class Region:
             if any(v is None for v in [self.xmin, self.xmax, self.ymin, self.ymax]):
                 return False
 
-        if self.xmin is not None and self.xmax is not None and self.xmin > self.xmax:
+        if self.xmin is not None and self.xmax is not None and self.xmin >= self.xmax:
             return False
             
-        if self.ymin is not None and self.ymax is not None and self.ymin > self.ymax:
+        if self.ymin is not None and self.ymax is not None and self.ymin >= self.ymax:
             return False
             
         if self.zmin is not None and self.zmax is not None and self.zmin > self.zmax:
@@ -491,10 +491,10 @@ class Region:
         return self
 
     
-    def buffer(self, x_bv=0, y_bv=0, pct=None, x_inc=None, y_inc=None):
+    def buffer(self, x_bv=0, y_bv=0, pct=None, x_inc=None, y_inc=None, check_if_valid=True):
         """Buffer the region by a value or percentage."""
         
-        if not self.is_valid():
+        if check_if_valid and not self.is_valid():
             return self
 
         if pct is not None:

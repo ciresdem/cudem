@@ -1,4 +1,4 @@
-### swotfile.py - DataLists IMproved
+### swotfile.py 
 ##
 ## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
@@ -21,33 +21,26 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
-### Examples:
-##
-### TODO:
+## NASA SWOT Data Parser (HDF5 / NetCDF)
 ##
 ### Code:
 
 import os
 import numpy as np
 import h5py as h5
-
 from osgeo import gdal
 
 from cudem import utils
 from cudem import regions
 from cudem import gdalfun
+from cudem import srsfun
 from cudem.datalists.dlim import ElevationDataset
 
-## NASA SWOT Data class (hdf5)
-## uses h5py
 class SWOTFile(ElevationDataset):
-    """NASA SWOT Data super class
-
-    Uses h5py to parse data. Make a subclass of this to 
-    process various types of SWOT data
+    """NASA SWOT Data super class (HDF5).
+    Uses h5py to parse data. Subclass to process specific SWOT products.
     """
     
     def __init__(self, **kwargs):
@@ -55,61 +48,52 @@ class SWOTFile(ElevationDataset):
 
         
     def _init_h5File(self, short_name='L2_HR_PIXC'):
+        """Open HDF5 file and validate short_name."""
+        
         src_h5 = None
         try:
             src_h5 = h5.File(self.fn, 'r')
-            if src_h5 is not None:
-                if 'short_name' in src_h5.attrs.keys():
-                    if src_h5.attrs['short_name'] != short_name.encode('utf-8'):
-                        utils.echo_error_msg(
-                            (f'{self.fn} does not appear to be a '
-                             f'SWOT {short_name} file')
-                        )
-                        self._close_h5File(src_h5)
-                else:
-                    utils.echo_error_msg(
-                        f'{self.fn} does not appear to be a SWOT file'
-                    )
-                    self._close_h5File(src_h5)
+            if 'short_name' in src_h5.attrs:
+                ## Handle bytes vs string for attribute
+                attr_name = src_h5.attrs['short_name']
+                if isinstance(attr_name, bytes):
+                    attr_name = attr_name.decode('utf-8')
                     
+                if attr_name != short_name:
+                    utils.echo_warning_msg(
+                        f'{self.fn} short_name ({attr_name}) does not match expected ({short_name})'
+                    )
+            else:
+                utils.echo_warning_msg(f'{self.fn} missing "short_name" attribute')
+                
         except Exception as e:
-            utils.echo_error_msg(e)
+            utils.echo_error_msg(f"Failed to open SWOT file {self.fn}: {e}")
+            if src_h5: 
+                src_h5.close()
+                src_h5 = None
 
-        return(src_h5)
+        return src_h5
 
     
     def _close_h5File(self, src_h5):
         if src_h5 is not None:
-            src_h5.close()
+            try:
+                src_h5.close()
+            except Exception:
+                pass
 
             
     def _get_var_arr(self, src_h5, var_path):
-        return(src_h5['/{}'.format(var_path)][...,])
+        """Safely retrieve variable array."""
+        
+        try:
+            return src_h5[f'/{var_path}'][...]
+        except KeyError:
+            return None
 
-    
+        
 class SWOT_PIXC(SWOTFile):
-    """NASA SWOT PIXC data file.
-
-    Extract data from a SWOT PIXC file.
-
-    classes: 1UB, 2UB, 3UB, 4UB, 5UB, 6UB, 7UB
-    "land, land_near_water, water_near_land, open_water, 
-    dark_water, low_coh_water_near_land, open_low_coh_water"
-
-    classes_qual: 1U, 2U, 4U, 8U, 16U, 2048U, 8192U, 16384U, 
-    32768U, 262144U, 524288U, 134217728U, 536870912U, 
-    1073741824U, 2147483648U
-
-    "no_coherent_gain power_close_to_noise_floor 
-    detected_water_but_no_prior_water detected_water_but_bright_land 
-    water_false_detection_rate_suspect coherent_power_suspect 
-    tvp_suspect sc_event_suspect small_karin_gap in_air_pixel_degraded 
-    specular_ringing_degraded coherent_power_bad tvp_bad sc_event_bad 
-    large_karin_gap"
-
-    anc_classes: 0UB, 1UB, 2UB, 3UB, 4UB, 5UB, 6UB 
-    "open_ocean land continental_water aquatic_vegetation 
-    continental_ice_snow floating_ice salted_basin"  		
+    """NASA SWOT Pixel Cloud (L2_HR_PIXC) data parser.
     """
     
     def __init__(self,
@@ -121,106 +105,110 @@ class SWOT_PIXC(SWOTFile):
                  anc_classes=None,
                  remove_class_flags=False,
                  **kwargs):
+        
         super().__init__(**kwargs)
+        
         self.group = group
         self.var = var
         self.apply_geoid = apply_geoid
-        self.classes = [int(x) for x in classes.split('/')] \
-            if classes is not None \
-               else []
-        self.classes_qual = [int(x) for x in classes_qual.split('/')] \
-            if classes_qual is not None \
-               else []
-        self.anc_classes = [int(x) for x in anc_classes.split('/')] \
-            if anc_classes is not None \
-               else []
         self.remove_class_flags = remove_class_flags
-        # if self.remove_class_flags:
-        #     self.classes_qual = [1, 2, 4, 8, 16, 2048, 8192, 16384, 32768,
-        #                          262144, 524288, 134217728, 536870912,
-        #                          1073741824, 2147483648]
+        
+        self.classes = self._parse_list(classes)
+        self.classes_qual = self._parse_list(classes_qual)
+        self.anc_classes = self._parse_list(anc_classes)
 
         
+    def _parse_list(self, input_str):
+        if input_str:
+            return [int(x) for x in input_str.split('/')]
+        return []
+
+    
     def yield_points(self):
+        """Yield filtered points from PIXC HDF5."""
+        
         src_h5 = self._init_h5File(short_name='L2_HR_PIXC')
-        src_h5_vec = None
-        
-        #if self.pixc_vec is not None:
-        #    src_h5_vec = self._init_h5File(short_name='L2_HR_PIXCVec')
-        
-        if src_h5 is not None:
-            latitude = self._get_var_arr(
-                src_h5, '{}/latitude'.format(self.group)
-            )
-            longitude = self._get_var_arr(
-                src_h5, '{}/longitude'.format(self.group)
-            )
-            var_data = self._get_var_arr(
-                src_h5, '{}/{}'.format(self.group, self.var)
-            )
+        if src_h5 is None: return
+
+        try:
+            ## Load Coordinates & Data
+            lat = self._get_var_arr(src_h5, f'{self.group}/latitude')
+            lon = self._get_var_arr(src_h5, f'{self.group}/longitude')
+            val = self._get_var_arr(src_h5, f'{self.group}/{self.var}')
+            
+            if lat is None or lon is None or val is None:
+                raise ValueError("Missing core variables (lat/lon/height)")
+
+            ## Apply Geoid Correction
             if self.apply_geoid:
-                geoid_data = self._get_var_arr(
-                    src_h5, '{}/geoid'.format(self.group)
-                )
-                out_data = var_data - geoid_data
-            else:
-                out_data = var_data
-                
-            dataset = np.column_stack(
-                (longitude, latitude, out_data)
-            )
-            points = np.rec.fromrecords(
-                dataset, names='x, y, z'
-            )
-            #points = points[points['z'] != 9.96921e+36]
+                geoid = self._get_var_arr(src_h5, f'{self.group}/geoid')
+                if geoid is not None:
+                    val = val - geoid
 
-            ## Classification Filter
-            if len(self.classes) > 0:
-                class_data = self._get_var_arr(
-                    src_h5, f'{self.group}/classification'
-                )
-                points = points[(np.isin(class_data, self.classes))]
+            ## Create Recarray
+            ## Filter NaNs / Fill Values immediately
+            valid_mask = val > -1e30 
+            
+            dataset = np.column_stack((lon[valid_mask], lat[valid_mask], val[valid_mask]))
+            points = np.rec.fromrecords(dataset, names='x, y, z')
+            
+            ## --- Classification Filtering ---
+            ## Indices must be aligned, so we apply the initial valid_mask to aux arrays too
+            
+            ## Classification
+            if self.classes:
+                cls_data = self._get_var_arr(src_h5, f'{self.group}/classification')
+                if cls_data is not None:
+                    cls_data = cls_data[valid_mask]
+                    points = points[np.isin(cls_data, self.classes)]
+                    
+                    # Update masks for subsequent filters to stay aligned with 'points'
+                    # Actually, better to accumulate a boolean mask on the subset?
+                    # For simplicity in this stream logic, we filter 'points' directly
+                    # but this assumes subsequent filter arrays are re-sliced. 
+                    # Optimization: slice qual arrays *after* initial filtering if possible, 
+                    # but here we might lose alignment.
+                    # Strategy: Re-slice aux arrays based on the same mask logic.
+                    
+                    # NOTE: Re-slicing aux arrays is expensive. 
+                    # Let's build a master boolean mask first.
+            
+            ## Optimization: Build composite mask first
+            final_mask = np.ones(len(points), dtype=bool) # All valid from valid_mask
+            
+            ## Load Aux Data if needed (already masked by valid_mask)
+            if self.classes or self.remove_class_flags or self.classes_qual:
+                cls_data = self._get_var_arr(src_h5, f'{self.group}/classification')
+                if cls_data is not None: cls_data = cls_data[valid_mask]
+                
+                qual_data = self._get_var_arr(src_h5, f'{self.group}/classification_qual')
+                if qual_data is not None: qual_data = qual_data[valid_mask]
 
-                ## Classification Quality Filter
-                if self.remove_class_flags:
-                    class_qual_data = self._get_var_arr(
-                        src_h5, f'{self.group}/classification_qual'
-                    )
-                    class_qual_data = class_qual_data[
-                        (np.isin(class_data, self.classes))
-                    ]
-                    points = points[class_qual_data == 0]
-                                   
-                elif len(self.classes_qual) > 0:
-                    class_qual_data = self._get_var_arr(
-                        src_h5, f'{self.group}/classification_qual'
-                    )
-                    class_qual_data = class_qual_data[
-                        (np.isin(class_data, self.classes))
-                    ]
-                    points = points[
-                        (~np.isin(class_qual_data, self.classes_qual))
-                    ]
+                if self.classes and cls_data is not None:
+                    final_mask &= np.isin(cls_data, self.classes)
                 
-            ## Ancilliary Classification Filter
-            if len(self.anc_classes) > 0:
-                anc_class_data = self._get_var_arr(
-                    src_h5, f'{self.group}/ancillary_surface_classification_flag'
-                )
-                points = points[(np.isin(anc_class_data, self.anc_classes))]
-                
-            points = points[points['z'] != -9.969209968386869e+36]
+                if self.remove_class_flags and qual_data is not None:
+                    final_mask &= (qual_data == 0)
+                elif self.classes_qual and qual_data is not None:
+                    final_mask &= (~np.isin(qual_data, self.classes_qual))
+
+            if self.anc_classes:
+                anc_data = self._get_var_arr(src_h5, f'{self.group}/ancillary_surface_classification_flag')
+                if anc_data is not None:
+                    anc_data = anc_data[valid_mask]
+                    final_mask &= np.isin(anc_data, self.anc_classes)
+
+            ## Apply Final Mask
+            yield points[final_mask]
+
+        except Exception as e:
+            utils.echo_error_msg(f"Error processing SWOT PIXC: {e}")
+        finally:
             self._close_h5File(src_h5)
-            self._close_h5File(src_h5_vec)
-
-            yield(points)
 
             
-## todo: update to h5
 class SWOT_HR_Raster(ElevationDataset):
-    """NASA SWOT HR_Raster data file.
-
-    Extract data from a SWOT HR_Raster file.
+    """NASA SWOT HR_Raster data parser (NetCDF/GeoTIFF via GDAL).
     """
         
     def __init__(self, data_set='wse', **kwargs):
@@ -229,39 +217,55 @@ class SWOT_HR_Raster(ElevationDataset):
 
         
     def parse(self):
-        from .dlim import DatasetFactory
+        """Parse subdatasets from the SWOT Raster."""
+
+        from cudem.datasets import DatasetFactory
         
         src_ds = gdal.Open(self.fn)
-        if src_ds is not None:
-            sub_datasets = src_ds.GetSubDatasets()
-            idx = 2
-            if utils.int_or(self.data_set) is not None:
-                idx = utils.int_or(self.data_set)
-            else:
-                for j, sd in enumerate(sub_datasets):
-                    _name = sd[0].split(':')[-1]
-                    if self.data_set == _name:
-                        idx = j
-                        break
+        if src_ds is None: return
 
-            src_ds = None
-            src_srs = gdalfun.gdal_get_srs(sub_datasets[idx][0])
+        sub_datasets = src_ds.GetSubDatasets()
+        target_sub = None
+        
+        ## Find requested subdataset
+        if utils.int_or(self.data_set) is not None:
+            idx = int(self.data_set)
+            if 0 <= idx < len(sub_datasets):
+                target_sub = sub_datasets[idx]
+        else:
+            for sd in sub_datasets:
+                ## Name format often "NETCDF:filename:varname"
+                if sd[0].endswith(f":{self.data_set}") or self.data_set in sd[0]:
+                    target_sub = sd
+                    break
+        
+        ## Default fallback
+        if target_sub is None and len(sub_datasets) > 2:
+            target_sub = sub_datasets[2] # Often WSE
+
+        if target_sub:
+            ## Determine SRS override for WSE (Water Surface Elevation)
+            ## SWOT WSE is usually relative to ellipsoid, often we want it processed
+            src_srs = gdalfun.gdal_get_srs(target_sub[0])
+            
             if self.data_set == 'wse':
-                src_srs = gdalfun.combine_epsgs(
+                src_srs = srsfun.combine_epsgs(
                     src_srs, '3855', name='SWOT Combined'
                 )
+
             sub_ds = DatasetFactory(
-                **self._set_params(
-                    mod=sub_datasets[idx][0],
-                    data_format=200,
-                    node='grid',
-                    check_path=False
-                )
+                mod=target_sub[0],
+                data_format=200, # Treat as GDAL Raster
+                node='grid',
+                check_path=False,
+                src_srs=src_srs
             )._acquire_module()
+            
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
+            
+            ## Delegate to GDALFile parser
             for gdal_ds in sub_ds.parse():
-                yield(gdal_ds)                                  
-
+                yield gdal_ds
 
 ### End

@@ -37,8 +37,6 @@ classifiers = [
 [project.scripts]
 regions = 'cudem.regions:regions_cli'
 dlim = 'cudem.datalists.dlim:datalists_cli'
-#dlim = 'cudem.dlim:datalists_cli'
-#waffles = 'cudem.waffles:waffles_cli'
 waffles = 'cudem.waffles.waffles:waffles_cli'
 fetches = 'cudem.fetches.fetches:fetches_cli'
 vdatums = 'cudem.vdatums:vdatums_cli'
@@ -46,6 +44,8 @@ perspecto = 'cudem.perspecto.perspecto:perspecto_cli'
 grits = 'cudem.grits.grits:grits_cli'
 bing_bfp = 'cudem.fetches.bingbfp:bing_bfp_cli'
 osm_coast = 'cudem.fetches.osm:osm_coast_cli'
+spatial_metadata = 'cudem.globato.spatial_metadata:spatial_metadata_cli'
+pointz = 'cudem.pointz:pointz_cli'
 
 #[tools.setuptools.packages.find]
 #where=['cudem']

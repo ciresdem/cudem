@@ -700,7 +700,24 @@ class FetchModule:
         else:
             self._outdir = os.path.join(self.outdir, self.name)
 
+        ## For dlim support, we can check these variables for
+        ## to do the proper processing. Set these to their correct
+        ## values in the sub-class
+        self.data_format = None
+        self.src_srs = None
+        self.title = None
+        self.source = None
+        self.date = None
+        self.data_type = None
+        self.resolution = None
+        self.hdatum = None
+        self.vdatum = None
+        self.url = None
+            
         ## Default to whole world if region is invalid/missing
+        ## Set a generic region of the entire world in WGS84 if no region
+        ## was specified or if its an invalid region...this will result in quite
+        ## a lot of downloading on global datasets, so be careful with this.
         if self.region is None or not self.region.valid_p():
             self.region = regions.Region().from_list([-180, 180, -90, 90])
 

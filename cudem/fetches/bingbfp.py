@@ -255,6 +255,9 @@ class BingBuildings:
         
         return out_fn, bldg_geoms        
 
+## Alias
+bingBuildings = BingBuildings
+    
 ## ==============================================
 ## Command-line Interface (CLI)
 ## ==============================================
