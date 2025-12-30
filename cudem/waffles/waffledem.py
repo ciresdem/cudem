@@ -74,20 +74,20 @@ class WaffleDEM:
             if self.fn.endswith('csg'):
                 dem_ds = h5.File(self.fn)
                 if dem_ds is not None:
-                    dst_gt = tuple(
-                        [float(x) for x in dem_ds['crs'].attrs['GeoTransform'].split()]
-                    )
+                    dst_gt = tuple([float(x) for x in dem_ds['crs'].attrs['GeoTransform'].split()])
+                    
                     self.ds_config = gdalfun.gdal_set_infos(
                         dem_ds['lon'].size, dem_ds['lat'].size,
                         dem_ds['lon'].size * dem_ds['lat'].size,
                         dst_gt, dem_ds['crs'].attrs['crs_wkt'],
                         'h5', np.nan, 'h5', None, None
                     )
+                    
                     self.dem_region = regions.Region().from_geo_transform(
                         dst_gt, self.ds_config['nx'], self.ds_config['ny']
                     )
-                    self.ds_config['zr'] \
-                        = [dem_ds['stack/z'][...].min(), dem_ds['stack/z'][...].max()]
+                    
+                    self.ds_config['zr'] = [dem_ds['stack/z'][...].min(), dem_ds['stack/z'][...].max()]
                     
                     dem_ds = None
                 else:
@@ -99,41 +99,33 @@ class WaffleDEM:
                     self.dem_region = regions.Region().from_geo_transform(
                         self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny']
                     )
-
                     dem_ds = None
                 else:
-                    utils.echo_warning_msg(f'could not open dem: {self.fn}')
-            
-        return(self)
+                    utils.echo_warning_msg(f'could not open dem: {self.fn}')            
+        return self
 
     
     def valid_p(self):
         """check if the WAFFLES DEM appears to be valid"""
 
         if self.fn is None or not os.path.exists(self.fn):
-            utils.echo_warning_msg(
-                f'{self.fn} does not exist'
-            )
-            return(False)
+            utils.echo_warning_msg(f'{self.fn} does not exist')
+            return False
         
         self.initialize()
         if self.ds_config is None:
-            utils.echo_warning_msg(
-                f'could not parse dem: {self.fn}'
-            )
-            return(False)
+            utils.echo_warning_msg(f'could not parse dem: {self.fn}')
+            return False
         
         if not 'zr' in self.ds_config:
-            utils.echo_msg(
-                f'dem {self.fn} has no z values?'
-            )
-            return(False)
+            utils.echo_msg(f'dem {self.fn} has no z values?')
+            return False
 
         if self.ds_config['raster_count'] == 0:
             utils.echo_warning_msg(
                 f'dem {self.fn} has no bands'
             )
-            return(False)
+            return False
         else:
             band_check = []
             for band_num in range(1, self.ds_config['raster_count']+1):
@@ -148,11 +140,11 @@ class WaffleDEM:
                 utils.echo_warning_msg(
                     f'dem {self.fn} is all nan'
                 )
-                return(False)
+                return False
                 
-        return(True)
+        return True
 
-
+    
     ## todo make these 'processes' grits modules?
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None,
                 region = None, node='pixel', clip_str = None, upper_limit = None,
@@ -167,9 +159,7 @@ class WaffleDEM:
         """
 
         if self.verbose:
-            utils.echo_msg(
-                f'post processing DEM {self.fn}...'
-            )
+            utils.echo_msg(f'Post processing DEM {self.fn}...')
             
         if self.ds_config is None:
             self.initialize()
@@ -242,9 +232,7 @@ class WaffleDEM:
         self.move(out_fn=dst_fn, out_dir=dst_dir)
 
         if self.verbose:
-            utils.echo_msg(
-                f'Processed DEM: {self.fn}'
-            )
+            utils.echo_msg(f'Processed DEM: {self.fn}')
 
             
     def set_nodata(self, ndv):
@@ -255,9 +243,7 @@ class WaffleDEM:
             self.ds_config['ndv'] = ndv
 
             if self.verbose:
-                utils.echo_msg(
-                    f'set nodata value to {ndv}.'
-                )
+                utils.echo_msg(f'set nodata value to {ndv}.')
 
                 
     def filter_(self, fltr=[]):
@@ -276,14 +262,7 @@ class WaffleDEM:
                     os.replace(grits_filter.dst_dem, self.fn)
 
                     
-    def resample(
-            self,
-            region=None,
-            xsample=None,
-            ysample=None,
-            ndv=-9999,
-            sample_alg='cubicspline'
-    ):
+    def resample(self, region=None, xsample=None, ysample=None, ndv=-9999, sample_alg='cubicspline'):
         if xsample is not None or ysample is not None:
             #warp_fn = os.path.join(self.cache_dir, '__tmp_sample.tif')
             warp_fn = utils.make_temp_fn('__tmp_sample.tif', temp_dir = self.cache_dir)
@@ -302,11 +281,7 @@ class WaffleDEM:
                 self.initialize()
 
             if self.verbose:
-                utils.echo_msg(
-                    'resampled data to {}/{} using {}.'.format(
-                        xsample, ysample, sample_alg
-                    )
-                )
+                utils.echo_msg('Resampled data to {xsample}/{ysample} using {sample_alg}')
 
                 
     def clip(self, clip_str=None):
@@ -356,28 +331,18 @@ class WaffleDEM:
                     if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
                         os.replace(tmp_clip, self.fn)
                         if self.verbose:
-                            utils.echo_msg(
-                                f'{tmp_clip} -> {self.fn}'
-                            )
+                            utils.echo_msg(f'{tmp_clip} -> {self.fn}')
                         self.initialize()
                         if self.verbose:
-                            utils.echo_msg(
-                                f'clipped data with {clip_str}.'
-                            )
+                            utils.echo_msg(f'clipped data with {clip_str}.')
                     else:
-                        utils.echo_error_msg(
-                            f'clip failed, {clip_str}'
-                        )
+                        utils.echo_error_msg(f'clip failed, {clip_str}')
                 else:
-                    utils.echo_error_msg(
-                        f'could not read {clip_args["src_ply"]}'
-                    )
+                    utils.echo_error_msg(f'could not read {clip_args["src_ply"]}')
                     
             else:
-                utils.echo_warning_msg(
-                    ('could not find clip ogr source/clip '
-                     f'keyword {clip_args["src_ply"]}')
-                )
+                utils.echo_warning_msg(('could not find clip ogr source/clip '
+                                        f'keyword {clip_args["src_ply"]}'))
 
                 
     def cut(self, region=None, node='grid'):
@@ -398,17 +363,12 @@ class WaffleDEM:
                 self.initialize()
 
                 if self.verbose:
-                    utils.echo_msg(
-                        f'cut data to {region}...'
-                    )
+                    utils.echo_msg(f'cut data to {region}...')
             else:
-                utils.echo_error_msg(
-                    f'failed to cut data to {region}...'
-                )
+                utils.echo_error_msg(f'failed to cut data to {region}...')
 
 
     def expand_for_mask(self, stack_fn=None, cells=10):
-
         ## expand/contract the stack to determine mask
         if stack_fn is not None:
             with gdalfun.gdal_datasource(stack_fn) as stack_ds:
@@ -471,9 +431,7 @@ class WaffleDEM:
                         )
                 else:
                     if self.verbose:
-                        utils.echo_warning_msg(
-                            'could not set proximity limit'
-                        )
+                        utils.echo_warning_msg('could not set proximity limit')
                         
             ## optionally mask nodata zones based on size_threshold
             if size_limit is not None:

@@ -593,7 +593,13 @@ class GritsFactory(factory.CUDEMFactory):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        
+
+## ==============================================
+## Command-line Interface (CLI)
+## $ grits
+##
+## grits cli
+## ==============================================        
 class PrintModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         factory.echo_modules(GritsFactory._modules, values)

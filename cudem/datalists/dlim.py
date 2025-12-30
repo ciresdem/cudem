@@ -138,9 +138,8 @@ def get_factory_exts():
         if key != '_factory' and int(key) > 0:
             for f in DatasetFactory()._modules[key]['fmts']:
                 if f not in fmts:
-                    fmts.append(f)
-                    
-    return(fmts)
+                    fmts.append(f)                    
+    return fmts
 
 
 def make_datalist(data_list, want_weight, want_uncertainty, region,
@@ -179,7 +178,7 @@ def make_datalist(data_list, want_weight, want_uncertainty, region,
         parent=xdl,
         cache_dir=self.cache_dir
     )._acquire_module() for dl in data_list]
-    return(xdl)
+    return xdl
 
 
 def write_datalist(data_list, outname=None):
@@ -194,7 +193,7 @@ def write_datalist(data_list, outname=None):
     with open('{}.datalist'.format(outname), 'w') as tmp_dl:
         [tmp_dl.write('{}\n'.format(x.format_entry())) for x in data_list]
 
-    return('{}.datalist'.format(outname))
+    return '{}.datalist'.format(outname)
 
 
 def h5_get_datasets_from_grp(grp, count = 0, out_keys = []):
@@ -213,12 +212,11 @@ def h5_get_datasets_from_grp(grp, count = 0, out_keys = []):
                         grp[key][sub_key], count, out_keys
                     )
 
-    return(count, out_keys)
+    return count, out_keys
 
 
 def init_data(data_list, **kwargs):
-    """
-    Initialize a datalist object from a list of supported dataset entries.
+    """Initialize a datalist object from a list of supported dataset entries.
     
     Args:
         data_list (list): A list containing file paths (str), dicts, or sys.stdin.
@@ -2636,7 +2634,7 @@ def datalists_cli():
     sys_grp.add_argument(
         '--version', 
         action='version', 
-        version=f'dlim {__version__}'
+        version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
 
     ## --- Info Helpers (Exit after printing) ---
