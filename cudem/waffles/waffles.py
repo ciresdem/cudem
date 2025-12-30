@@ -1073,18 +1073,24 @@ def waffles_cli():
         formatter_class=argparse.RawTextHelpFormatter
     )
 
-    # --- Data Input ---
+    ## --- Data Input ---
     parser.add_argument(
         'datalist', 
         nargs='+', 
         help="Input datalist(s) or data files."
     )
     
-    # --- Core Parameters ---
+    ## --- Core Parameters ---
+    ## TODO: -R fails with space in cli: -R -65.0/-63.0/44.85/45.85
     parser.add_argument(
         '-R', '--region', 
-        action='append', 
-        help="Desired Region (xmin/xmax/ymin/ymax). Can be specified multiple times."
+        action='append',
+        help=("Restrict processing to the desired REGION \n"
+              "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"
+              "OR an OGR-compatible vector file with regional polygons.\n"
+              "Note: When specifying negative coordinates, attach the value directly to the switch\n"
+              "(e.g., -R-90/...) or use an equals sign (-R=-90/...) to prevent the negative sign from\n"
+              "being misinterpreted as a new flag.")
     )
     parser.add_argument(
         '-E', '--increment',
@@ -1097,7 +1103,7 @@ def waffles_cli():
         help="Waffles Module and options (e.g. 'surface:tension=0.35'). Default: stacks."
     )
     
-    # --- Output Control ---
+    ## --- Output Control ---
     parser.add_argument(
         '-O', '--output-basename', 
         default='waffles_dem', 
@@ -1135,7 +1141,7 @@ def waffles_cli():
         help="Append prefix info to output name (res=X:year=XXXX:version=X)."
     )
 
-    # --- Processing Options ---
+    ## --- Processing Options ---
     parser.add_argument(
         '-X', '--extend', 
         help="Extend region (cells[:percent]). e.g. '6:10'."
@@ -1160,7 +1166,7 @@ def waffles_cli():
         help="Resampling algorithm (bilinear, cubic, nearest, etc.)."
     )
     
-    # --- Stack Control ---
+    ## --- Stack Control ---
     parser.add_argument(
         '-w', '--want-weight', 
         action='store_true', 
@@ -1188,7 +1194,7 @@ def waffles_cli():
         help="Set limits (u=upper, l=lower, p=prox, s=size, etc.). e.g. -Lu0."
     )
 
-    # --- System / Misc ---
+    ## --- System / Misc ---
     parser.add_argument(
         '-H', '--threads', 
         type=int, 
@@ -1252,15 +1258,15 @@ def waffles_cli():
         version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
 
-    # Parse
+    ## Parse
     args = parser.parse_args()
 
-    # Handle --modules early exit
+    ## Handle --modules early exit
     if args.modules:
         factory.echo_modules(WaffleFactory._modules)
         sys.exit(0)
         
-    # Initialize Config Dictionary
+    ## Initialize Config Dictionary
     wg = {
         'name': args.output_basename,
         'fmt': args.format,
@@ -1284,7 +1290,7 @@ def waffles_cli():
         'data': args.datalist
     }
 
-    # --- Post-Process Special Arguments ---
+    ## --- Post-Process Special Arguments ---
     
     ## Increments (-E)
     if args.increment:

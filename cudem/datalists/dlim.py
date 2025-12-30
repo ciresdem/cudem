@@ -2509,8 +2509,13 @@ def datalists_cli():
     proc_grp = parser.add_argument_group("Processing Options")
     proc_grp.add_argument(
         '-R', '--region', 
-        action='append', 
-        help="Restrict processing to the desired REGION (xmin/xmax/ymin/ymax[/zmin/zmax])."
+        action='append',
+        help=("Restrict processing to the desired REGION \n"
+              "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"
+              "OR an OGR-compatible vector file with regional polygons.\n"
+              "Note: When specifying negative coordinates, attach the value directly to the switch\n"
+              "(e.g., -R-90/...) or use an equals sign (-R=-90/...) to prevent the negative sign from\n"
+              "being misinterpreted as a new flag.")
     )
     proc_grp.add_argument(
         '-E', '--increment', 

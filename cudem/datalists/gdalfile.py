@@ -90,6 +90,17 @@ class GDALFile(ElevationDataset):
         ## Network paths check skip
         if self.fn.startswith(('http', '/vsicurl/', 'BAG')):
             self.check_path = False
+            
+            ## Set GDAL Config options for network performance
+            ## Enable caching for seek operations (crucial for TIFFs)
+            gdal.SetConfigOption('VSI_CACHE', 'TRUE')
+            gdal.SetConfigOption('VSI_CACHE_SIZE', '50000000') # 50MB cache
+            
+            ## Prevent GDAL from scanning the parent directory of the URL
+            gdal.SetConfigOption('GDAL_DISABLE_READDIR_ON_OPEN', 'EMPTY_DIR')
+            
+            ## Increase chunk size to reduce HTTP requests (128KB is default, 16MB is better for broadband)
+            gdal.SetConfigOption('CPL_VSIL_CURL_CHUNK_SIZE', '16384000')
 
         if self.valid_p() and self.src_srs is None:
             if self.infos.src_srs is None:
@@ -127,6 +138,8 @@ class GDALFile(ElevationDataset):
                 else:
                     self.infos.src_srs = self.src_srs
 
+                is_remote = self.fn.startswith('/vsicurl/')
+                    
                 ds_infos = gdalfun.gdal_infos(src_ds)
                 
                 ## Get bounds from header
@@ -137,9 +150,15 @@ class GDALFile(ElevationDataset):
                 )
                 
                 ## Try to get Min/Max from statistics if available (Fast)
+                force_scan = 0 if is_remote else 1
+                
                 band = src_ds.GetRasterBand(utils.int_or(self.band_no, 1))
-                stats = band.GetStatistics(0, 1)
-                this_region.zmin, this_region.zmax = stats[0], stats[1]
+                stats = band.GetStatistics(1, force_scan)
+                if stats[0] != stats[1]:
+                    this_region.zmin, this_region.zmax = stats[0], stats[1]
+                else:
+                    if self.verbose:
+                         utils.echo_warning_msg(f"Skipping stats scan for remote file: {self.fn}")
 
                 self.infos.minmax = this_region.export_as_list(include_z=True)
                 self.infos.wkt = this_region.export_as_wkt()

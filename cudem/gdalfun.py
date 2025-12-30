@@ -886,7 +886,99 @@ def gdal_set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt, md, rc) -> Dict:
     }
 
 
-def gdal_infos(src_gdal, region=None, scan=False, band=1) -> Dict:
+def gdal_infos(src_ds, scan=False, band=1):
+    """Gather information from a GDAL dataset.
+    Optimized for /vsicurl/ to avoid full-file reads.
+    
+    Returns dictionary with:
+        nx, ny, nb (dims), geoT, proj, ndv, zr (min/max), fmt
+    """
+    
+    ## Handle Input (Path vs Object) & Config Options
+    ds = None
+    close_ds = False
+    is_remote = False
+    
+    if isinstance(src_ds, str):
+        is_remote = src_ds.startswith(('/vsicurl/', 'http', 'https', 'ftp'))
+        
+        if is_remote:
+            gdal.SetConfigOption('GDAL_DISABLE_READDIR_ON_OPEN', 'EMPTY_DIR')
+            
+        try:
+            ds = gdal.Open(src_ds, gdal.GA_ReadOnly)
+            close_ds = True
+        except Exception:
+            pass
+    else:
+        ds = src_ds
+        if hasattr(ds, 'GetDescription'):
+             desc = ds.GetDescription()
+             is_remote = desc.startswith(('/vsicurl/', 'http', 'https', 'ftp'))
+
+    if ds is None:
+        return None
+
+    ## Basic Metadata (Fast)
+    #try:
+    nx = ds.RasterXSize
+    ny = ds.RasterYSize
+    nb = nx * ny
+    geoT = ds.GetGeoTransform()
+    proj = ds.GetProjection()
+    driver = ds.GetDriver()
+    fmt = driver.ShortName if driver else 'Unknown'
+    raster_count = ds.RasterCount
+    metadata = ds.GetMetadata()
+    #except Exception:
+    #    return None
+
+    ## Band Specifics (NDV & Min/Max)
+    ndv = None
+    zr = [None, None]
+    dtn = None
+    dt = None
+    
+    if nb > 0:
+        try:
+            target_band = ds.GetRasterBand(band)
+            ndv = target_band.GetNoDataValue()
+            dtn = gdal.GetDataTypeName(target_band.DataType)
+            dt = target_band.DataType
+            force_scan = 1 if (scan and not is_remote) else 0
+            
+            stats = target_band.GetStatistics(1, force_scan)
+            
+            if stats[0] != stats[1]: 
+                zr = [stats[0], stats[1]]
+            else:
+                if scan and not is_remote:
+                    zr = target_band.ComputeRasterMinMax(1)
+                    
+        except Exception as e:
+            if scan: utils.echo_warning_msg(f"Could not retrieve stats: {e}")
+
+    ## Cleanup
+    if close_ds:
+        ds = None
+
+    return {
+        'nx': nx, 
+        'ny': ny, 
+        'nb': nb, 
+        'geoT': geoT, 
+        'proj': proj, 
+        'ndv': ndv,
+        'dt': dt,
+        'dtn': dtn,
+        'zr': zr, 
+        'fmt': fmt,
+        'metadata': metadata,
+        'raster_count': raster_count
+    }
+
+
+def gdal_infos_(src_gdal, region=None, scan=False, band=1) -> Dict:
     """Gather and return info about a src_gdal file."""
     
     ds_config = {}
@@ -896,6 +988,7 @@ def gdal_infos(src_gdal, region=None, scan=False, band=1) -> Dict:
             utils.echo_warning_msg(f'Could not load raster {src_gdal}')
             return ds_config
 
+        is_remote = src_ds.startswith('/vsicurl/')
         gt = src_ds.GetGeoTransform()
         
         ## Calculate Source Window (srcwin)

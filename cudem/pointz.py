@@ -964,10 +964,15 @@ class RQOutlierZ(OutlierZ):
             try:
                 ## Either use the size=True along with xcount/ycount or
                 ## use x_res/y_res with the warp_region instead of self.region
+                # warped = gdalfun.sample_warp(
+                #     self.raster, tmp_raster_fn, None, None,
+                #     xcount=None, ycount=None, size=True,
+                #     sample_alg='bilinear', src_region=self.region, 
+                #     verbose=self.verbose
+                # )
                 warped = gdalfun.sample_warp(
-                    self.raster, tmp_raster_fn, None, None,
-                    xcount=None, ycount=None, size=True,
-                    sample_alg='bilinear', src_region=self.region, 
+                    self.raster, tmp_raster_fn, x_res, y_res,
+                    sample_alg='bilinear', src_region=warp_region, 
                     verbose=self.verbose
                 )
                 if warped:

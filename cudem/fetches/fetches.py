@@ -931,7 +931,10 @@ CUDEM home page: <http://cudem.colorado.edu>
         action='append',
         help=("Restrict processing to the desired REGION \n"
               "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"
-              "OR an OGR-compatible vector file with regional polygons.")
+              "OR an OGR-compatible vector file with regional polygons.\n"
+              "Note: When specifying negative coordinates, attach the value directly to the switch\n"
+              "(e.g., -R-90/...) or use an equals sign (-R=-90/...) to prevent the negative sign from\n"
+              "being misinterpreted as a new flag.")
     )
     parser.add_argument(
         '-H', '--threads',
@@ -970,11 +973,11 @@ CUDEM home page: <http://cudem.colorado.edu>
     parser.add_argument(
         '-v', '--version',
         action='version',
-        version=f'fetches, version {__version__}'
+        version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
     parser.add_argument(
         'modules_to_run',
-        nargs='*',
+        nargs='+',
         help="The modules to run (e.g., srtm_plus, gmrt, etc.)"
     )
 
