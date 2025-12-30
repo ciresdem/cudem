@@ -1,3 +1,8 @@
+Here is the updated `README.md`, edited to reflect the new modules (`grits`), the updated installation requirements, and the modernized capabilities of the CUDEM framework.
+
+### Updated `README.md`
+
+```markdown
 Matthew Love[^1][^2], Christopher Amante[^1][^2], Kelly Carignan[^1][^2], Elliot Lim[^1][^2], Michael MacFerrin[^1][^2]
 
 [^1]: Cooperative Institute for Research in Environmental Sciences (CIRES)
@@ -64,3 +69,174 @@ Download and install git (If you have not already): [git installation](https://g
 
 ```bash
 pip install git+[https://github.com/ciresdem/cudem.git#egg=cudem](https://github.com/ciresdem/cudem.git#egg=cudem)
+
+```
+
+## Install via Conda
+
+It is recommended to use a conda environment to manage GDAL and other geospatial dependencies.
+
+```bash
+conda create -n cudem -c conda-forge gdal gmt pygmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile git netCDF4 h5netcdf libgdal-hdf5 libgdal-netcdf pyhdf pip scikit-image
+conda activate cudem
+pip install laspy[laszip]
+pip install --upgrade --no-deps git+[https://github.com/ciresdem/cudem.git](https://github.com/ciresdem/cudem.git)
+
+```
+
+## Extras
+
+* **Windows**: Install `windows-curses` via pip: `pip install windows-curses`
+* **MB-System**: [Installation Instructions](https://www.mbari.org/technology/mb-system/installation/)
+* **HTDP / VDatum**: See [NOAA Geodesy Tools](https://geodesy.noaa.gov/TOOLS/Htdp/Htdp.shtml).
+
+# Modules
+
+The CUDEM suite is composed of several key modules, each accessible via command-line tools or Python API:
+
+### Core Modules
+
+| Module | Description | CLI Command |
+| --- | --- | --- |
+| **[fetches](https://www.google.com/search?q=/docs/fetches.md)** | **Data Acquisition**: Fetch elevation data from a wide variety of public online sources (NOAA, USGS, USACE, etc.). | `fetches` |
+| **[dlim](https://www.google.com/search?q=/docs/dlim.md)** | **Data Lists & Processing**: Process, clean, and standardize diverse data types (XYZ, Raster, LAS, COPC, etc.) into unified formats. | `dlim` |
+| **[waffles](https://www.google.com/search?q=/docs/waffles.md)** | **Gridding & interpolation**: Generate Digital Elevation Models (DEMs) from scattered data using various algorithms (IDW, Spline, GMT Surface, etc.). | `waffles` |
+| **[grits](https://www.google.com/search?q=/docs/grits.md)** | **Grid Filtering & Post-Processing**: A powerful filtering engine to smooth, clean, blend, and analyze raster DEMs. | `grits` |
+
+### Utility Modules
+
+| Module | Description | CLI Command |
+| --- | --- | --- |
+| **[regions](https://www.google.com/search?q=/docs/regions.md)** | **Spatial Management**: Process and manipulate bounding box regions and vector polygons. | `regions` |
+| **[vdatums](https://www.google.com/search?q=/docs/vdatums.md)** | **Vertical Transformation**: Generate vertical transformation grids and manage datums. | `vdatums` |
+| **[perspecto](https://www.google.com/search?q=/docs/perspecto.md)** | **Visualization**: Generate perspective images, hillshades, and color-relief maps of DEMs. | `perspecto` |
+
+---
+
+## Detailed Capabilities: Grits (Grid Filters)
+
+The **[grits](https://www.google.com/search?q=/docs/grits.md)** module provides a standardized framework for raster manipulation. It supports chunked processing for large files and can chain multiple filters together.
+
+**Available Filters:**
+
+* **Smoothing**: `blur` (Gaussian), `denoise` (Median/Bilateral), `gmtfilter` (GMT wrapper).
+* **Cleaning**: `outliers` (Statistical outlier removal), `zscore` (Local anomaly detection), `flats` (Remove artifacts).
+* **Restoration**: `fill` (Void filling/inpainting via IDW or Spline), `morphology` (Erosion/Dilation).
+* **Integration**: `blend` (Seamless blending of datasets), `weights` (Quality-based buffering), `diff` (Change detection).
+* **Hydrology**: `hydro` (Sink filling).
+* **Geometry**: `cut` (Mask to region), `clip` (Clip to vector), `slope` (Slope-based filtering).
+
+# Usage Examples
+
+### General Workflows
+
+* [Generate a CRM of Point Mugu in California](https://www.google.com/search?q=/docs/example_crm_malibu.md)
+* [Generate a set of Tiled CRMs of Northern California](https://www.google.com/search?q=/docs/example_crm_norcal.md)
+* [Generate a set of Tiled CUDEMs of North-West Washington State](https://www.google.com/search?q=/docs/dem_examples/northern_wa/northern_wa.md)
+
+### Specific Tasks
+
+* **Fetching Data**: `fetches -R -90/-89/29/30 -E 10m`
+* **Processing Data**: `dlim input.datalist -R -90/-89/29/30 -E 1/3s`
+* **Generating DEM**: `waffles -M surface:tension=.35 -R -90/-89/29/30 -E 1/9s -O my_dem.tif input.xyz`
+* **Filtering DEM**: `grits my_dem.tif -M outliers:k=2.5 -M fill:method=spline -M clip:src_ply=coast.shp -O clean_dem.tif`
+* **Estimating Uncertainty**: [Docs](https://www.google.com/search?q=/docs/uncertainty.md)
+
+# Additional Information
+
+The CUDEM code repository is frequently updated, and code syntax is
+subject to change. Please see the code help function (`--help`) for the latest code
+syntax and examples. See Eakins and Grothe (2014) for more information
+on the challenges of building integrated DEMs and Eakins et al. (2015)
+for the initial specifications of the comprehensive DEM development
+framework. See Hare et al. (2011), Amante and Eakins (2016), and Amante
+(2018) for additional information on the DEM uncertainty.
+
+For additional questions, please contact:
+
+[Matthew.Love@colorado.edu](mailto:matthew.love@colorado.edu)
+
+[Christopher.Amante@colorado.edu](mailto:christopher.amante@colorado.edu)
+
+## License
+
+---
+
+```
+     MIT License
+
+```
+
+---
+
+```
+     Copyright (c) 2010 - 2025 Regents of the University of Colorado
+     
+     Permission is hereby granted, free of charge, to any person
+     obtaining a copy
+     of this software and associated documentation files (the
+     \"Software\"), to deal
+     in the Software without restriction, including without
+     limitation the rights
+     to use, copy, modify, merge, publish, distribute, sublicense,
+     and/or sell
+     copies of the Software, and to permit persons to whom the
+     Software is
+     furnished to do so, subject to the following conditions:
+  
+     The above copyright notice and this permission notice shall be
+     included in all
+     copies or substantial portions of the Software.
+     
+     THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY
+     KIND, EXPRESS OR
+     IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+     MERCHANTABILITY,
+     FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+     EVENT SHALL THE
+     AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+     OTHER
+     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+     ARISING FROM,
+     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+     DEALINGS IN THE
+     SOFTWARE.
+
+```
+
+---
+
+## Code Citation
+
+Love, M., Amante, C., Carignan, K., MacFerrin, M., & Lim, E. (2025).
+CUDEM (Version 2.0.0) 
+
+.
+[[https://github.com/ciresdem/cudem]{.ul}](https://github.com/ciresdem/cudem)
+
+# References
+
+Amante CJ, Love M, Carignan K, Sutherland MG, MacFerrin M, Lim E. Continuously Updated Digital Elevation Models (CUDEMs) to Support Coastal Inundation Modeling. Remote Sensing. 2023; 15(6):1702. https://doi.org/10.3390/rs15061702
+
+Amante, C. J. (2018). Estimating coastal digital elevation model
+uncertainty. Journal of Coastal Research, 34(6), 1382-1397. https://doi.org/10.2112/JCOASTRES-D-17-00211.1
+
+Amante, C. J., & Eakins, B. W. (2016). Accuracy of interpolated
+bathymetry in digital elevation models. Journal of Coastal Research, (76
+(10076)), 123-133. https://doi.org/10.2112/SI76-011
+
+Eakins, B. W., & Grothe, P. R. (2014). Challenges in building coastal
+digital elevation models. Journal of Coastal Research, 30(5), 942-953.
+
+Eakins, B. W., Danielson, J. J., Sutherland, M. G., & Mclean, S. J.
+(2015). A framework for a seamless depiction of merged bathymetry and
+topography along US coasts. In Proc. US Hydro. Conf (pp. 16-19).
+
+Hare, R., Eakins, B., & Amante, C. J. (2011). Modelling bathymetric
+uncertainty. The International Hydrographic Review.
+
+### [Project Board](https://github.com/ciresdem/cudem/discussions).
+
+```
+
+```
