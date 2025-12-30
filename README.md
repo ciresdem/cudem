@@ -1,8 +1,3 @@
-Here is the updated `README.md`, edited to reflect the new modules (`grits`), the updated installation requirements, and the modernized capabilities of the CUDEM framework.
-
-### Updated `README.md`
-
-```markdown
 Matthew Love[^1][^2], Christopher Amante[^1][^2], Kelly Carignan[^1][^2], Elliot Lim[^1][^2], Michael MacFerrin[^1][^2]
 
 [^1]: Cooperative Institute for Research in Environmental Sciences (CIRES)
