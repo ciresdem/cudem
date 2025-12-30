@@ -1029,6 +1029,7 @@ class BlockThin(PointZ):
         super().__init__(**kwargs)
         self.res = utils.float_or(res, 10)
         self.mode = mode if mode in ['min', 'max', 'mean', 'median'] else 'min'
+
         
     def run(self):
         if self.points is None: return None
@@ -1037,8 +1038,6 @@ class BlockThin(PointZ):
         y_idx = np.floor((self.points['y'] - np.min(self.points['y'])) / self.res).astype(np.int64)
         
         ## Hash/Encode X,Y into a single unique ID for grouping
-        ## (Assuming reasonably sized grid, integer packing works)
-        ## simplistic: id = y * width + x
         width = np.max(x_idx) + 1
         grid_ids = y_idx * width + x_idx
         
@@ -1052,7 +1051,7 @@ class BlockThin(PointZ):
         ## Indices of the points we want to KEEP
         keep_indices = []
         
-        ## Iterate over blocks (this can be vectorized further but loop is clear)
+        ## Iterate over blocks
         ## unique_indices points to the start of each block in the sorted array
         for i in range(len(unique_ids)):
             start = unique_indices[i]
@@ -1085,7 +1084,7 @@ class BlockThin(PointZ):
     
 
 ## Dlim does this automatically with the -R region set with z-values,
-## but this may be useful if using poitz outside of dlim/waffles
+## but this may be useful if using pointz outside of dlim/waffles
 class RangeZ(PointZ):
     """Filter points based on vertical Z-range.
     
@@ -1100,6 +1099,7 @@ class RangeZ(PointZ):
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
         self.invert = invert
+
         
     def run(self):
         """Generate a mask of outliers."""
@@ -1122,9 +1122,6 @@ class RangeZ(PointZ):
         ## "Remove Inside" (Invert)
         ## Outliers are those INSIDE the range
         else:
-            ## For invert, we need valid conditions for both bounds if provided
-            ## If only min_z is given with invert=True, we remove everything >= min_z
-            
             inside_mask = np.ones(len(z_vals), dtype=bool)
             
             if self.min_z is not None:
@@ -1169,7 +1166,6 @@ class CoplanarZ(PointZ):
         tree = cKDTree(coords)
         
         ## Query neighbors within radius
-        ## Returns list of indices for each point
         if self.verbose:
             utils.echo_msg(f"Querying neighbors (radius={self.radius})...")
         indices_list = tree.query_ball_point(coords, self.radius)
@@ -1178,7 +1174,6 @@ class CoplanarZ(PointZ):
         z_vals = self.points['z']
         
         ## Iterate points and fit planes
-        ## We loop through points because plane fitting is local and variable-size.
         with utils.ccp(total=len(self.points), desc='Plane Fitting', leave=False) as pbar:
             for i, neighbors in enumerate(indices_list):
                 pbar.update()
@@ -1190,8 +1185,6 @@ class CoplanarZ(PointZ):
                     continue
                 
                 ## Get neighbor coordinates
-                ## Center data around the query point to avoid floating point issues
-                ## and simplify the intercept calculation.
                 nb_coords = coords[neighbors]
                 nb_z = z_vals[neighbors]
                 
@@ -1212,7 +1205,7 @@ class CoplanarZ(PointZ):
                     
                     fitted_z = coeffs[2] # Intercept at relative (0,0)
                     
-                    ## Calculate deviation of THE POINT ITSELF from the fitted plane
+                    ## Calculate deviation of the point from the fitted plane
                     deviation = abs(z_vals[i] - fitted_z)
                     
                     if deviation > self.threshold:
@@ -1246,19 +1239,13 @@ class BlockMinMax(PointZ):
             return None
             
         ## Calculate Block Indices
-        ## We use floor division to bin points into grid cells
         x_idx = np.floor(self.points['x'] / self.res).astype(np.int64)
         y_idx = np.floor(self.points['y'] / self.res).astype(np.int64)
         z_vals = self.points['z']
         
         ## Sort Data
-        ## np.lexsort sorts by the last key first (Primary -> Secondary -> Tertiary)
-        ## We want to group by Block (X, Y), then sort by Z within the block.
-        ## Order: X (Primary), Y (Secondary), Z (Tertiary)
-        
         if self.mode == 'max':
             ## For Max, we want Z descending, so we sort by -Z
-            ## (assuming Z is numeric; if using recarray field directly, negation works)
             sort_order = np.lexsort((-z_vals, y_idx, x_idx))
         else:
             # For Min, we want Z ascending
@@ -1269,15 +1256,6 @@ class BlockMinMax(PointZ):
         sorted_y = y_idx[sort_order]
         
         ## Find Unique Blocks
-        ## Since data is sorted by Block ID (X, Y), unique_indices will return 
-        ## the index of the FIRST occurrence of each block.
-        ## Because of our tertiary sort on Z, the first occurrence is the Min (or Max) Z.
-        
-        ## Construct a complex key or struct for uniqueness 1D check (faster than 2D unique)
-        ## Or simply use the sorted X,Y arrays.
-        ## Note: np.unique on axis 0 of stacked array can be slow. 
-        ## Fast trick: identifying changes in X or Y.
-        
         ## Identify where the block index changes (flag=True at start of new block)
         ## Prepend True for the first element
         change_mask = np.concatenate(
@@ -1379,26 +1357,23 @@ class DensityZ(PointZ):
         x_idx = np.floor(self.points['x'] / self.res).astype(np.int64)
         y_idx = np.floor(self.points['y'] / self.res).astype(np.int64)
         
-        ## Sort Logic based on Mode
+        ## Sort based on Mode
         if self.mode == 'median':
             ## Sort by Block, then Z. The median index is roughly the middle.
             sort_keys = (self.points['z'], y_idx, x_idx)
         elif self.mode == 'mean':
             ## We need to calculate means first, which is expensive. 
             ## Approximate 'mean' by sorting by Z and picking middle (median) is usually sufficient.
-            ## Sticking to median logic for 'mean' string to avoid complex groupby.
             sort_keys = (self.points['z'], y_idx, x_idx)
         elif self.mode == 'center':
-            ## Sort by distance from cell center? 
             ## Calculate distance to cell center:
-            ## center_x = (x_idx * res) + (res/2)
+            #center_x = (x_idx * res) + (res/2)
             dist = np.sqrt(
                 (self.points['x'] - ((x_idx * self.res) + (self.res/2)))**2 + 
                 (self.points['y'] - ((y_idx * self.res) + (self.res/2)))**2
             )
             sort_keys = (dist, y_idx, x_idx)
         else: # Random (or default)
-            ## No specific sort needed for secondary key, just group blocks.
             sort_keys = (y_idx, x_idx)
 
         ## Apply Sort

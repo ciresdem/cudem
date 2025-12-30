@@ -424,7 +424,7 @@ class ElevationDataset:
         opts, self.stack_mode_name, self.stack_mode_args = factory.parse_fmod(self.stack_mode)
 
         if self.stack_mode_name not in self.stack_modes:
-            utils.echo_warning_msg(f'{self.stack_mode_name} is not a valid stack mode')
+            utils.echo_warning_msg(f'Mode: {self.stack_mode_name} is not a valid stack mode')
             self.stack_mode_name = 'mean'
         
         if 'mask_level' not in self.stack_mode_args:
@@ -437,7 +437,7 @@ class ElevationDataset:
             if '_module' in opts:
                 opts['mask_fn'] = opts['_module']
             else:
-                utils.echo_error_msg(f'could not parse mask {self.mask}')
+                utils.echo_error_msg(f'Could not parse mask {self.mask}')
                 return None
 
         opts.setdefault('invert', False)
@@ -523,7 +523,7 @@ class ElevationDataset:
         
         if self.sample_alg not in self.gdal_sample_methods: 
             utils.echo_warning_msg(
-                f'{self.sample_alg} is not a valid gdal warp resample algorithm, falling back to `auto`'
+                f'Alg: {self.sample_alg} is not a valid gdal warp resample algorithm, falling back to `auto`'
             )
             self.sample_alg = 'auto'
 
@@ -557,7 +557,7 @@ class ElevationDataset:
                         cache_dir=self.cache_dir
                     )
                 except Exception as e:
-                    utils.echo_error_msg(f'could not set transformation on {self.fn}, {e}')
+                    utils.echo_error_msg(f'Could not set transformation on {self.fn}, {e}')
 
             self.set_yield(use_blocks=False)
 
@@ -582,7 +582,7 @@ class ElevationDataset:
                 if f.fetch_file(entry._fn) == 0:
                     entry.fn = entry._fn
             else:
-                utils.echo_warning_msg('nothing to fetch')
+                utils.echo_warning_msg('Nothing to fetch')
 
                 
     def valid_p(self, fmts=['scratch']):
@@ -602,11 +602,11 @@ class ElevationDataset:
                         if not utils.fn_url_p(self.fn):
                             if self.data_format > -10:
                                 if not os.path.exists(self.fn):
-                                    utils.echo_warning_msg(f'{self.fn} does not exist')
+                                    utils.echo_warning_msg(f'Fn: {self.fn} does not exist')
                                     return False
 
                                 if os.path.isfile(self.fn) and os.stat(self.fn).st_size == 0:
-                                    utils.echo_warning_msg(f'{self.fn} is 0 bytes')
+                                    utils.echo_warning_msg(f'Fn: {self.fn} is 0 bytes')
                                     return False
                         
         return True
@@ -675,7 +675,7 @@ class ElevationDataset:
         self.xyz_yield = self.mask_and_yield_xyz()
         
         if self.region is None and self.x_inc is not None:
-            utils.echo_warning_msg('must enter a region to output in increment blocks...')
+            utils.echo_warning_msg('Must enter a region to output in increment blocks...')
 
         if self.region is not None and self.x_inc is not None:
             self.x_inc = utils.str2inc(self.x_inc)
@@ -712,7 +712,7 @@ class ElevationDataset:
                 generate_inf = True
                 utils.remove_glob(inf_path)
                 if self.verbose:
-                    utils.echo_warning_msg(f'failed to parse inf {inf_path}, {e}')
+                    utils.echo_warning_msg(f'Failed to parse inf {inf_path}, {e}')
         else:
             generate_inf = True        
 
@@ -1207,7 +1207,7 @@ class ElevationDataset:
                 
                 src_mask = None
                 if os.path.exists(data_mask['data_mask']):
-                    utils.echo_debug_msg(f'using mask dataset: {data_mask} to array')                        
+                    utils.echo_debug_msg(f'Using mask dataset: {data_mask} to array')                        
                     src_mask = gdal.Open(data_mask['data_mask'])
                     if src_mask is not None:
                         mask_band = src_mask.GetRasterBand(1)
@@ -1215,7 +1215,7 @@ class ElevationDataset:
                     else:
                         mask_band = None
                 else:
-                    utils.echo_warning_msg(f'could not load mask {data_mask["data_mask"]}')
+                    utils.echo_warning_msg(f'Could not load mask {data_mask["data_mask"]}')
 
                 ## Z-Mask
                 z_mask = np.full(out_arrays['z'].shape, True)
@@ -1264,7 +1264,7 @@ class ElevationDataset:
                     opts = self._init_mask(mask)
                     data_masks.append(opts)
 
-                utils.echo_debug_msg(f'using mask dataset: {data_masks} to xyz')                    
+                utils.echo_debug_msg(f'Using mask dataset: {data_masks} to xyz')                    
                 for this_xyz in this_entry.yield_xyz():
                     masked = False
                     for data_mask in data_masks:                                
@@ -1331,7 +1331,7 @@ class ElevationDataset:
                         yield this_xyz
 
                     if mask_count > 0 and self.verbose:
-                        utils.echo_msg_bold(f'masked {mask_count} data records from {self.fn}')        
+                        utils.echo_msg_bold(f'Masked {mask_count} data records from {self.fn}')        
 
                         
     def yield_xyz(self):
@@ -1366,7 +1366,7 @@ class ElevationDataset:
                 )
 
         if self.verbose:
-            utils.echo_msg_bold(f'parsed {count} data records from {self.fn} @ a weight of {self.weight}')
+            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn} @ a weight of {self.weight}')
 
             
     def yield_array(self, want_sums=True):
@@ -1393,7 +1393,7 @@ class ElevationDataset:
             )
 
         if self.verbose:
-            utils.echo_msg_bold(f'parsed {count} data records from {self.fn} @ a weight of {self.weight}')    
+            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn} @ a weight of {self.weight}')    
 
             
     def stacks(self, out_name=None):
@@ -1849,7 +1849,7 @@ class ElevationDataset:
             this_xyz_path = os.path.join(datalist_dirname, sub_xyz_filename)
 
             if os.path.exists(this_xyz_path):
-                utils.echo_warning_msg(f'{this_xyz_path} already exists, skipping...')
+                utils.echo_warning_msg(f'Path: {this_xyz_path} already exists, skipping...')
                 continue
 
             ## Write Data
@@ -2199,9 +2199,9 @@ class DatasetFactory(factory.CUDEMFactory):
                 else:
                     entry.append(utils.str_or(x)) # Metadata
             
-            utils.echo_debug_msg(f'initial parsed entry: {entry}')
+            utils.echo_debug_msg(f'Initial parsed entry: {entry}')
         except Exception as e:
-            utils.echo_error_msg(f'could not parse entry {self.kwargs["fn"]}: {e}')
+            utils.echo_error_msg(f'Could not parse entry {self.kwargs["fn"]}: {e}')
             return self
 
         ## Determine Data Format
@@ -2212,7 +2212,7 @@ class DatasetFactory(factory.CUDEMFactory):
                 entry = self.guess_and_insert_fmt(entry)
 
             if len(entry) < 2:
-                utils.echo_error_msg(f'could not determine format for entry {self.kwargs["fn"]}')
+                utils.echo_error_msg(f'Could not determine format for entry {self.kwargs["fn"]}')
                 return self
 
         elif entry[1] is None or entry[1] == '-':
@@ -2248,7 +2248,7 @@ class DatasetFactory(factory.CUDEMFactory):
             fmt_id = utils.int_or(entry[1])
             assert isinstance(fmt_id, int)
         except AssertionError:
-            utils.echo_error_msg(f'invalid data format ID in entry: {entry}')
+            utils.echo_error_msg(f'Invalid data format ID in entry: {entry}')
             return self
 
         ## Special Case: Cloud Optimized GeoTIFF via HTTP

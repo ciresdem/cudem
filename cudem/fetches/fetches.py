@@ -132,7 +132,7 @@ def get_userpass(authenticator_url: str) -> Tuple[Optional[str], Optional[str]]:
         username, _, password = info.authenticators(urllib.parse.urlparse(authenticator_url).hostname)
     except Exception as e:
         if 'No such file' not in str(e):
-            utils.echo_error_msg(f'failed to parse netrc: {e}')
+            utils.echo_error_msg(f'Failed to parse netrc: {e}')
         username = None
         password = None
 
@@ -359,7 +359,7 @@ class Fetch:
                 
                 else:
                     if self.verbose:
-                        utils.echo_error_msg(f'request from {req.url} returned {req.status_code}')
+                        utils.echo_error_msg(f'Request from {req.url} returned {req.status_code}')
                     ## Return it anyway to let caller handle it, or continue? 
                     return req
 
@@ -369,7 +369,7 @@ class Fetch:
                 if current_read_timeout: current_read_timeout *= 2
                 time.sleep(1)
 
-        utils.echo_error_msg(f'max-tries exhausted {self.url}')
+        utils.echo_error_msg(f'Max-tries exhausted {self.url}')
         raise ConnectionError('Maximum attempts at connecting have failed.')
 
     
@@ -532,7 +532,7 @@ class Fetch:
         status = 0
         
         if self.verbose:
-            utils.echo_msg(f'fetching remote ftp file: {self.url[:20]}...')
+            utils.echo_msg(f'Fetching remote ftp file: {self.url[:20]}...')
             
         if not os.path.exists(os.path.dirname(dst_fn)):
             try:
@@ -546,7 +546,7 @@ class Fetch:
                      local_file.write(f.read())
             
             if self.verbose:
-                utils.echo_msg(f'fetched remote ftp file: {os.path.basename(self.url)}.')
+                utils.echo_msg(f'Fetched remote ftp file: {os.path.basename(self.url)}.')
         except Exception as e:
             utils.echo_error_msg(e)
             status = -1
@@ -617,7 +617,7 @@ def fetch_queue(q: queue.Queue, stop_event: threading.Event, c: bool = True):
                 utils.remove_glob(local_path)
                 q.put(fetch_args) # Put back in queue
             else:
-                utils.echo_error_msg(f'fetch of {url} failed...')
+                utils.echo_error_msg(f'Fetch of {url} failed...')
                 module.status = -1
                 fetch_results_entry = [url, local_path, data_type, str(e)]
                 results_list.append(fetch_results_entry)
@@ -1032,7 +1032,7 @@ CUDEM home page: <http://cudem.colorado.edu>
                 continue
             
             if want_verbose:
-                utils.echo_msg(f'running fetch module {x_f.name} on region {this_region.format("str")}...')
+                utils.echo_msg(f'Running fetch module {x_f.name} on region {this_region.format("str")}...')
 
             try:
                 x_f.run()
@@ -1041,7 +1041,7 @@ CUDEM home page: <http://cudem.colorado.edu>
                 sys.exit(-1)
                 
             if want_verbose:
-                utils.echo_msg(f'found {len(x_f.results)} data files.')
+                utils.echo_msg(f'Found {len(x_f.results)} data files.')
                 
             if not x_f.results:
                 continue

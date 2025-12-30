@@ -244,7 +244,7 @@ class Waffle:
         )
         if self.verbose:
             utils.echo_msg(
-                f'output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}'
+                f'Output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}'
             )
         
         self.status = self._init()
@@ -260,7 +260,7 @@ class Waffle:
         if self.status == 0:
             return self.generate()
         else:
-            utils.echo_warning_msg('failed to initialize from sub-module')
+            utils.echo_warning_msg('Failed to initialize from sub-module')
 
             
     def _init_regions(self):
@@ -515,7 +515,7 @@ class Waffle:
                     
                 mask_name = f'{this_waffle_module.name}_msk'
                 utils.echo_msg(
-                    f'output increments: '
+                    f'Output increments: '
                     f'{self.xsample if self.xsample is not None else self.xinc}/'
                     f'{self.ysample if self.ysample is not None else self.yinc}'
                 )
@@ -629,7 +629,7 @@ class Waffle:
                             cache_dir=self.cache_dir,
                             verbose=self.verbose
                     ).initialize().valid_p():
-                        utils.echo_warning_msg('existing stack file {self.stack_fn) is invalid, re-generating')
+                        utils.echo_warning_msg('Existing stack file {self.stack_fn) is invalid, re-generating')
                         self.stack = self.data.stacks(out_name=stack_bn)
                         #, mode=self.stack_mode)#supercede=self.supercede)
                 else:
@@ -824,7 +824,7 @@ class Waffle:
                                 self.output_files['spatial-metadata'].append(out_sm)
                 else:
                     utils.echo_warning_msg(
-                        'mask DEM is invalid...'
+                        'Mask DEM is invalid...'
                     )
                     
             ## post-process any auxiliary rasters
@@ -874,7 +874,7 @@ class Waffle:
 
         if self.verbose:
             utils.echo_msg(
-                f'output files: {self.output_files}'
+                f'Output files: {self.output_files}'
             )
             
         return self                
@@ -935,7 +935,7 @@ class WafflesStacks(Waffle):
             
         z_ds = None
         if self.verbose:
-            utils.echo_msg(f'stacked data to {self.fn}')            
+            utils.echo_msg(f'Stacked data to {self.fn}')            
         return self
 
     
@@ -1036,7 +1036,7 @@ def waffle_queue(q):
                 waffle_module[0]()
             except Exception as e:
                 utils.echo_error_msg(
-                    f'failed to generate {waffle_module}, {e}'
+                    f'Failed to generate {waffle_module}, {e}'
                 )
                 print(traceback.format_exc())
                 pass
