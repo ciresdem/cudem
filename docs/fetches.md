@@ -140,8 +140,7 @@ https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W0
 
 ### Generate a Datalist: Instead of downloading immediately, generate a datalist of URLs for later processing:
 
-```
-bash
+```bash
 
 fetches -R -90/-89/28/29 -l nos:datatype=bag > my_survey_data.datalist
 
