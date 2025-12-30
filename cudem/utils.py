@@ -65,8 +65,10 @@ except ImportError:
 THIS_DIR, THIS_FILENAME = os.path.split(__file__)
 CUDEM_DATA = os.path.join(THIS_DIR, 'data')
 
-def cudem_cache() -> str:
-    return os.path.abspath('./cudem_cache')
+cudem_cache = lambda: os.path.abspath('./cudem_cache')
+
+# def cudem_cache() -> str:
+#     return os.path.abspath('./cudem_cache')
 
 
 def set_cache(cache_dir: str):

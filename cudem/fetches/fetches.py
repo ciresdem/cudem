@@ -557,7 +557,7 @@ class Fetch:
 ## ==============================================
 ## Threading & Queues
 ## ==============================================
-def fetch_queue(q: queue.Queue, c: bool = True):
+def fetch_queue(q: queue.Queue, stop_event: threading.Event, c: bool = True):
     """Worker for the fetch queue.
     q items: [remote_data_url, local_data_path, data-type, fetches-module, attempts, results-list]    
     """
@@ -565,7 +565,7 @@ def fetch_queue(q: queue.Queue, c: bool = True):
     ## Modules that bypass SSL verification
     no_verify = ['mar_grav', 'srtm_plus']
 
-    while True:
+    while not stop_event.is_set():
         fetch_args = q.get()
         url = fetch_args[0]
         local_path = fetch_args[1]
@@ -574,6 +574,10 @@ def fetch_queue(q: queue.Queue, c: bool = True):
         retries = fetch_args[4]
         results_list = fetch_args[5]
 
+        if stop_event.is_set():
+            q.task_done()
+            continue
+        
         ## Ensure dir exists
         if not os.path.exists(os.path.dirname(local_path)):
             try:
@@ -630,6 +634,7 @@ class fetch_results(threading.Thread):
     def __init__(self, mod, check_size=True, n_threads=3, attempts=5):
         threading.Thread.__init__(self)
         self.fetch_q = queue.Queue()
+        self.stop_event = threading.Event()
         self.mod = mod
         self.check_size = check_size
         self.n_threads = n_threads
@@ -646,7 +651,7 @@ class fetch_results(threading.Thread):
         for _ in range(self.n_threads):
             t = threading.Thread(
                 target=fetch_queue,
-                args=(self.fetch_q, self.check_size)
+                args=(self.fetch_q, self.stop_event, self.check_size)
             )
             t.daemon = True
             t.start()
@@ -664,8 +669,19 @@ class fetch_results(threading.Thread):
             ])
 
         ## Wait
-        self.fetch_q.join()
+        while not self.fetch_q.empty() and not self.stop_event.is_set():
+             time.sleep(0.1)
+        
+        if not self.stop_event.is_set():
+            self.fetch_q.join()
+            
+        #self.fetch_q.join()
 
+    def stop(self):
+        """Stop all threads"""
+        
+        self.stop_event.set()
+        
 ## ==============================================
 ## Fetch Modules (Base & Implementations)
 ## ==============================================

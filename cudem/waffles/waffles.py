@@ -84,7 +84,6 @@ gdal.SetConfigOption(
     'CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null'
 )
 
-
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
     Specific Gridding modules are sub-classes of this class.
@@ -211,7 +210,7 @@ class Waffle:
     
     def initialize(self):
         if self.verbose:
-            utils.echo_msg(f'initializing waffles module < \033[1m{self.params["mod"]}\033[m >')
+            utils.echo_msg(f'Initializing waffles module < \033[1m{self.params["mod"]}\033[m >')
 
         ## Output dem filename
         self.fn = f'{self.name}.{gdalfun.gdal_fext(self.fmt)}'
@@ -296,9 +295,10 @@ class Waffle:
         )
 
         if self.verbose:
-            utils.echo_msg(f'input region: {self.region}')
-            utils.echo_msg(f'distribution region: {self.d_region}')
-            utils.echo_msg(f'processing region: {self.p_region}')
+            utils.echo_msg(f'Input region: {self.region}')
+            utils.echo_msg(f'Distribution region: {self.d_region}')
+            utils.echo_msg(f'Processing region: {self.p_region}')
+            utils.echo_msg(f'Cache directory is: {self.cache_dir}')
 
             
     def _init_data(self, set_incs=False):
@@ -370,15 +370,15 @@ class Waffle:
         self.ysample = utils.str2inc(self.ysample)
 
         if self.verbose:
-            utils.echo_msg(f'gridding increments: {self.xinc}/{self.yinc}')
+            utils.echo_msg(f'Gridding increments: {self.xinc}/{self.yinc}')
             utils.echo_msg(
-                f'output increments: '
+                f'Output increments: '
                 f'{self.xsample if self.xsample is not None else self.xinc}/'
                 f'{self.ysample if self.ysample is not None else self.yinc}'
             )
 
     def _coast_region(self):
-        """coastline region 
+        """Coastline region 
         (extended by percentage self.extend_proc)
         """
 
@@ -387,7 +387,7 @@ class Waffle:
 
     
     def _proc_region(self):
-        """processing region 
+        """Processing region 
         (extended by percentage self.extend_proc)
         """
 
@@ -396,7 +396,7 @@ class Waffle:
 
     
     def _dist_region(self):
-        """distribution region 
+        """Distribution region 
         (extended by self.extend).
         """
         
@@ -408,7 +408,7 @@ class Waffle:
 
         
     def dump_xyz(self, dst_port=sys.stdout, encode=False):
-        """dump the stacked xyz data to dst_port
+        """Dump the stacked xyz data to dst_port
 
         use this to dump data into a foreign cli program, 
         such as GMT.
@@ -424,7 +424,7 @@ class Waffle:
 
             
     def generate(self):
-        """run and process the WAFFLES module.
+        """Run and process the WAFFLES module.
 
         Generate the data 'stack' and use that to run the 
         waffles module and generate the DEM.
@@ -1338,7 +1338,7 @@ def waffles_cli():
     if args.cache_dir:
         wg['cache_dir'] = args.cache_dir
     else:
-        wg['cache_dir'] = os.path.join(os.path.expanduser('~'), 'cudem_cache')        
+        wg['cache_dir'] = waffles_cache#os.path.join(os.path.expanduser('~'), 'cudem_cache')        
         
     ## --- Execution ---
     
@@ -1422,7 +1422,7 @@ def waffles_cli():
             t.join()
 
     except KeyboardInterrupt:
-        utils.echo_error_msg("Killed by user, Terminating processes...")
+        utils.echo_error_msg("Killed by user, Terminating processes...\n")
         for t in processes:
             if t.is_alive():
                 t.terminate() 
