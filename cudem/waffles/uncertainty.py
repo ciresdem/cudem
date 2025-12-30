@@ -21,13 +21,12 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ### Code:
 
 import os
-
+import math
 import numpy as np
 from osgeo import gdal
 

@@ -137,3 +137,19 @@ https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W0
 https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W00432_MB_8m_MLLW_1of5.bag
 
 ```
+
+### Generate a Datalist: Instead of downloading immediately, generate a datalist of URLs for later processing:
+
+```
+bash
+
+fetches -R -90/-89/28/29 -l nos:datatype=bag > my_survey_data.datalist
+
+```
+
+### Fetch Multiple Sources:
+```bash
+
+fetches -R -90/-89/28/29 'noaa_lidar' 'usace' '3dep'
+
+```

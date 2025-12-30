@@ -111,6 +111,37 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 
 ## Detailed Capabilities:
 
+### Fetches (Data Acquisition)
+
+The **[fetches](/docs/fetches.md)** module automates the discovery and retrieval of geospatial data. It interfaces with over forty public APIs and repositories to download topographic and bathymetric data.
+
+**Key Capabilities:**
+
+* **Sources**: Access data from federal agencies including NOAA (NOS, NCEI, OCM), USGS (3DEP, CoNED), USACE, and more.
+* **Spatial Querying**: Download data specific to a bounding box or vector polygon.
+* **Integration**: Seamlessly pipes downloaded data into processing workflows.
+
+### Dlim (Data Lists & Processing)
+
+The **[dlim](/docs/dlim.md)** module serves as the primary data ingestion engine. It utilizes "datalists"—text-based configuration files—to manage, process, and standardize diverse datasets into a unified stream for gridding.
+
+**Key Capabilities:**
+
+* **Abstraction**: Handles mixed formats (Raster, XYZ, LAS/LAZ, COPC) seamlessly, abstracting file-specific parsing.
+* **Manipulation**: Supports on-the-fly vertical datum transformation, spatial clipping, and masking.
+* **Hierarchy**: Supports nested datalists for organized, multi-scale data management.
+
+### Pointz (Point Cloud Filtering)
+
+The **[pointz](/docs/pointz.md)** module provides specialized tools for filtering and manipulating raw point cloud data (XYZ, LAS/LAZ) prior to gridding.
+
+**Key Capabilities:**
+
+* **Outlier Removal**: Statistical filters (`outlierz`) to remove noise spikes and gross errors.
+* **Quality Control**: Reference-based checks (`rq`) to validate data against known baselines.
+* **Masking**: Filter points using vector polygons (`vector_mask`) or raster masks.
+* **Thinning**: Reduce data density (`block_minmax`, `density`) for efficient processing.
+
 ### Grits (Grid Filters)
 
 The **[grits](/docs/grits.md)** module provides a standardized framework for raster manipulation. It supports chunked processing for large files and can chain multiple filters together.

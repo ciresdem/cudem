@@ -2175,7 +2175,7 @@ def gdal_query(src_xyz, src_gdal, out_form, band=1):
 
 def sample_warp(
         src_dem, dst_dem, x_sample_inc, y_sample_inc,
-        xcount = None, ycount = None, size = False,
+        xcount=None, ycount=None, size=False,
         src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
         ndv=-9999, tap=False, co=None, ot=gdal.GDT_Float32,
         coordinateOperation=None, verbose=False
@@ -2187,10 +2187,8 @@ def sample_warp(
 
     out_region = None
     
+    ## --- Region ---
     if src_region is not None:
-        out_region = [src_region.xmin, src_region.ymin,
-                      src_region.xmax, src_region.ymax]        
-        
         ## Transform region if SRS differs
         if src_srs is not None and dst_srs is not None:
             trans_region = src_region.copy()
@@ -2199,10 +2197,10 @@ def sample_warp(
         else:
             trans_region = src_region
 
+        ## Calculate dimensions if requested
         if size:
             if (xcount is None and ycount is None) and (x_sample_inc is None and y_sample_inc is None):
                 if isinstance(src_dem, list):
-                    #vrt_path, ds = create_temp_vrt(src_dem)
                     tmp_vrt = gdal_build_vrt(src_dem)
                     src_infos = gdal_infos(tmp_vrt)
                     tmp_vrt = None
@@ -2219,47 +2217,82 @@ def sample_warp(
                     x_inc=x_sample_inc, y_inc=y_sample_inc, node='grid'
                 )
 
+            ## If we calculated counts, ensure we don't pass conflicting resolutions
             if xcount and ycount:
                 x_sample_inc = y_sample_inc = None
+
+        ## Define Output Bounds [minx, miny, maxx, maxy]
+        out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
         
+        ## Validation: Ensure bounds are not None
+        if any(v is None for v in out_region):
+            out_region = None
+
+    ## --- Create Directory ---
     if dst_dem is not None:
         dirname = os.path.dirname(dst_dem)
         if dirname and not os.path.exists(dirname):
             os.makedirs(dirname)
 
+    ## --- Progress Bar ---
     pbar_update = None
     if verbose:
-        desc = f'Warping {src_dem}'
+        desc = f'Warping {src_dem}' if not isinstance(src_dem, list) else 'Warping list...'
         pbar = utils.ccp(desc=desc, total=100, leave=verbose)
-        ## Callback wrapper for GDAL
-        pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)
+        pbar_update = lambda a, b, c: pbar.update((a * 100) - pbar.n)
 
+    ## --- Build Warp Options Dynamically ---
+    ## This avoids passing 'None' to arguments that don't handle it gracefully
+    warp_kwargs = {
+        'format': 'MEM' if dst_dem is None else 'GTiff',
+        'dstNodata': ndv,
+        'resampleAlg': sample_alg,
+        'errorThreshold': 0,
+        'creationOptions': co,
+        'outputType': ot,
+        'callback': pbar_update,
+    }
+
+    ## Only add Resolution OR Width/Height (Mutual Exclusion)
+    if xcount is not None and ycount is not None:
+        warp_kwargs['width'] = utils.int_or(xcount)
+        warp_kwargs['height'] = utils.int_or(ycount)
+    elif x_sample_inc is not None and y_sample_inc is not None:
+        warp_kwargs['xRes'] = utils.float_or(x_sample_inc)
+        warp_kwargs['yRes'] = utils.float_or(y_sample_inc)
+
+    ## Add Optional Args only if they exist
+    if out_region is not None:
+        warp_kwargs['outputBounds'] = out_region
+        if dst_srs is not None:
+            warp_kwargs['outputBoundsSRS'] = dst_srs
+
+    if src_srs is not None:
+        warp_kwargs['srcSRS'] = src_srs
+    if dst_srs is not None:
+        warp_kwargs['dstSRS'] = dst_srs
+    
+    if coordinateOperation is not None:
+        warp_kwargs['coordinateOperation'] = coordinateOperation
+    
+    if tap:
+        warp_kwargs['targetAlignedPixels'] = True
+
+    ## --- Run Warp ---
     try:
+        if verbose:
+            utils.echo_msg(f"Warp Options: {warp_kwargs}")
+            
         dst_ds = gdal.Warp(
             '' if dst_dem is None else dst_dem,
             src_dem,
-            format='MEM' if dst_dem is None else 'GTiff',
-            xRes=x_sample_inc,
-            yRes=y_sample_inc,
-            targetAlignedPixels=tap,
-            width=int(xcount),
-            height=int(ycount),
-            dstNodata=ndv,
-            outputBounds=out_region,
-            outputBoundsSRS=dst_srs if out_region is not None else None,
-            resampleAlg=sample_alg,
-            errorThreshold=0,
-            creationOptions=co,
-            srcSRS=src_srs,
-            dstSRS=dst_srs,
-            coordinateOperation=coordinateOperation,
-            outputType=ot,
-            callback=pbar_update
+            **warp_kwargs
         )
-    except:
-        utils.echo_error_msg(f'could not warp raster {src_dem}')
+    except Exception as e:
+        utils.echo_error_msg(f'could not warp raster {src_dem}: {e}')
+        dst_ds = None
     finally:
-        if verbose:
+        if verbose and pbar:
             pbar.close()
 
     if dst_dem is None:
@@ -2268,4 +2301,5 @@ def sample_warp(
         dst_ds = None
         return dst_dem, 0
 
+    
 ### End

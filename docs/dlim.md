@@ -57,6 +57,8 @@ https://fetch_noaa_survey_123.laz 10 1
 
 The `dlim` CLI can then process this list to inspect, filter, or export the data:
 
+### Archive Data: Gather all referenced data in a datalist into a portable archive:
+
 ```bash
 dlim my_project.datalist -R -90/-89/29/30 --archive my_project_data.tar.gz
 

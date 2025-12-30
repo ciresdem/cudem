@@ -39,12 +39,41 @@ The module provides tools for statistical outlier removal, reference-based quali
 
 * **`PointPixels` Class:** A helper utility that bins scattered points into a regular grid structure, calculating aggregated statistics (mean, min, max, sum, uncertainty) for each cell. This is the foundational logic used by the outlier filters to establish local statistics.
 
-## Usage
+## Usage and Examples
 
 The `pointz` module is accessible via a CLI tool that takes an input point file, applies a chain of filters, and outputs the cleaned data.
 
+### Remove outliers and mask out water
+
 ```bash
 pointz input.xyz output.xyz -M outlierz:percentile=98:res=50 -M vector_mask:mask_fn=land_poly.shp:invert=True
+
+```
+
+### Basic Cleaning: Remove statistical outliers from a noisy dataset.
+
+```bash
+
+pointz raw.xyz clean.xyz -M outlierz:percentile=95:res=50
+
+```
+
+### Hydrographic Thinning: Shoal-bias thin a dataset to 10m resolution.
+
+```bash
+
+pointz dense.laz thinned.xyz -M block_minmax:res=10:mode=min
+
+```
+
+### Complex Workflow: Clip to a range, mask out land, and remove outliers.
+
+```bash
+
+pointz input.xyz output.xyz \
+  -M range:max_z=0 \
+  -M vector_mask:mask_fn=land.shp:invert=True \
+  -M outlierz:percentile=98
 
 ```
 

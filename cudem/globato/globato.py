@@ -1221,6 +1221,7 @@ class GdalRasterStacker:
 
         ## =====================================================================
         ## PROCESS ENTRY DATA
+        ## array_yield is data yielded from pointz.PointPixel()
         ## =====================================================================
         for this_entry in data_generator:
             for arrs, srcwin, gt in this_entry.array_yield:
