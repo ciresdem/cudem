@@ -95,7 +95,7 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 | --- | --- | --- |
 | **[fetches](/docs/fetches.md)** | **Data Acquisition**: Fetch elevation data from a wide variety of public online sources (NOAA, USGS, USACE, etc.). | `fetches` |
 | **[dlim](/docs/dlim.md)** | **Data Lists & Processing**: Process, clean, and standardize diverse data types (XYZ, Raster, LAS, COPC, etc.) into unified formats. | `dlim` |
-| **[waffles]/docs/waffles.md)** | **Gridding & interpolation**: Generate Digital Elevation Models (DEMs) from scattered data using various algorithms (IDW, Spline, GMT Surface, etc.). | `waffles` |
+| **[waffles](/docs/waffles.md)** | **Gridding & interpolation**: Generate Digital Elevation Models (DEMs) from scattered data using various algorithms (IDW, Spline, GMT Surface, etc.). | `waffles` |
 | **[grits](/docs/grits.md)** | **Grid Filtering & Post-Processing**: A powerful filtering engine to smooth, clean, blend, and analyze raster DEMs. | `grits` |
 
 ### Utility Modules
