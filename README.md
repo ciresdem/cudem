@@ -111,7 +111,7 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 
 ## Detailed Capabilities:
 
-###Grits (Grid Filters)
+### Grits (Grid Filters)
 
 The **[grits](/docs/grits.md)** module provides a standardized framework for raster manipulation. It supports chunked processing for large files and can chain multiple filters together.
 
