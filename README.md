@@ -131,9 +131,9 @@ The **[grits](/docs/grits.md)** module provides a standardized framework for ras
 
 ### Specific Tasks
 
-* **Fetching Data**: `fetches -R -90/-89/29/30 -E 10m`
-* **Processing Data**: `dlim input.datalist -R -90/-89/29/30 -E 1/3s`
-* **Generating DEM**: `waffles -M surface:tension=.35 -R -90/-89/29/30 -E 1/9s -O my_dem.tif input.xyz`
+* **Fetching Data**: `fetches -R -90/-89/29/30 CUDEM`
+* **Processing Data**: `dlim input.datalist -R -90/-89/29/30 -E .3s`
+* **Generating DEM**: `waffles -M surface:tension=.35 -R -90/-89/29/30 -E .1s -O my_dem.tif input.xyz`
 * **Filtering DEM**: `grits my_dem.tif -M outliers:k=2.5 -M fill:method=spline -M clip:src_ply=coast.shp -O clean_dem.tif`
 * **Estimating Uncertainty**: [Docs](/docs/uncertainty.md)
 
@@ -231,7 +231,3 @@ Hare, R., Eakins, B., & Amante, C. J. (2011). Modelling bathymetric
 uncertainty. The International Hydrographic Review.
 
 ### [Project Board](https://github.com/ciresdem/cudem/discussions).
-
-```
-
-```
