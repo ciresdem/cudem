@@ -2,6 +2,8 @@
 ##
 ## Copyright (c) 2024 - 2025 Regents of the University of Colorado
 ##
+## flats.py is part of cudem
+##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
 ## in the Software without restriction, including without limitation the rights 
@@ -19,25 +21,31 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
+## Removes flat areas from a DEM by identifying contiguous areas of identical values 
+## that exceed a specified size threshold.
 ##
 ### Code:
 
 import numpy as np
+from osgeo import gdal
 
 from cudem import utils
 from cudem import gdalfun
 from cudem.grits import grits
 
 class Flats(grits.Grits):
-    """Remove flat areas from the input DEM
+    """Remove flat areas from the input DEM.
+    Identified flat areas are set to NoData.
 
     Parameters:
-
-    size_threshold(int) - the minimum flat area in pixels to remove
-    n_chunk(int) - the moving window size in pixels
+    -----------
+    size_threshold : int, optional
+        The minimum number of pixels required to define a "flat" area to be removed.
+        If None, it is auto-calculated using outlier detection on value counts.
+    n_chunk : int, optional
+        The processing chunk size in pixels. Defaults to full file if None.
     """
     
     def __init__(self, size_threshold=None, n_chunk=None, **kwargs):
@@ -47,37 +55,72 @@ class Flats(grits.Grits):
 
         
     def run(self):
-        """Discover and remove flat zones"""
+        """Execute the flat removal filter."""
         
-        count = 0
+        ## Setup Output
         dst_ds = self.copy_src_dem()
+        if dst_ds is None: return
+
+        count_removed = 0
+        
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
-            if src_ds is not None:
-                self.init_ds(src_ds)
-                if self.n_chunk is None:
-                    self.n_chunk = self.ds_config['nb']
+            if src_ds is None: return
+            
+            self.init_ds(src_ds)
+            
+            ## Default to processing the whole file at once if no chunk size given
+            ## (Flats detection works best on larger areas to see full extent of flat)
+            if self.n_chunk is None:
+                self.n_chunk = self.ds_config['ny'] # scanline processing often safest
+                #self.n_chunk = self.ds_config['nb'] # total pixels
 
-                for srcwin in gdalfun.gdal_yield_srcwin(
-                        src_ds, n_chunk=self.n_chunk,
-                        step=self.n_chunk, verbose=self.verbose
-                ):
-                    src_arr = self.ds_band.ReadAsArray(*srcwin).astype(float)
-                    uv, uv_counts = np.unique(src_arr, return_counts=True)
-                    if self.size_threshold is None:
-                        _size_threshold = self.get_outliers(uv_counts, 99)[0]
-                    else:
-                        _size_threshold = self.size_threshold
-
-                    uv_ = uv[uv_counts > _size_threshold]
-                    mask = np.isin(src_arr, uv_)
-                    count += np.count_nonzero(mask)
-                    src_arr[mask] = self.ds_config['ndv']
-                    dst_band = dst_ds.GetRasterBand(self.band)
-                    dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
+            ## Iterate chunks
+            for srcwin in gdalfun.gdal_yield_srcwin(
+                    src_ds, n_chunk=self.n_chunk, step=self.n_chunk, verbose=self.verbose
+            ):
+                ## Read Data
+                src_arr = self.ds_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3]).astype(float)
                 
+                ## Identify Unique Values and their Counts
+                uv, uv_counts = np.unique(src_arr, return_counts=True)
+                
+                ## Determine Threshold
+                threshold = self.size_threshold
+                if threshold is None:
+                    ## Auto-detect: Assume flats are statistical outliers in terms of frequency
+                    ## (e.g. background noise is random, flats are highly frequent identical values)
+                    outlier_val, _ = self.get_outliers(uv_counts, percentile=99)
+                    threshold = outlier_val if not np.isnan(outlier_val) else 100
+
+                ## Identify values that appear too frequently (Flats)
+                ## Filter out NoData from being "removed" (it's already removed)
+                ndv = self.ds_config['ndv']
+                
+                flat_values = uv[uv_counts > threshold]
+                
+                ## Create Mask
+                ## (Exclude NDV from mask calculation to avoid re-masking it)
+                if ndv is not None:
+                    flat_values = flat_values[flat_values != ndv]
+                
+                if flat_values.size > 0:
+                    mask = np.isin(src_arr, flat_values)
+                    
+                    ## Count and Apply
+                    n_removed = np.count_nonzero(mask)
+                    if n_removed > 0:
+                        count_removed += n_removed
+                        src_arr[mask] = ndv
+                        
+                        ## Write back to Destination
+                        dst_band = dst_ds.GetRasterBand(self.band)
+                        dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
+
         dst_ds = None
-        if self.verbose:
-            utils.echo_msg(f'removed {count} flats.')            
+        
+        # if self.verbose:
+        #     utils.echo_msg(f'Removed {count_removed} flat pixels.')
+            
         return self.dst_dem, 0
 
 ### End

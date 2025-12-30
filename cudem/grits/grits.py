@@ -23,20 +23,22 @@
 ##
 ### Commentary:
 ##
-## filter grids using various methods
+## Filter grids using various methods (Outliers, Blur, Flats, etc.)
 ##
-## Grits modules are sub-classes of the Grits class.
-## Define a new sub-class to create a new DEM filter.
+## Grits (GRId filTerS) is the elevation grid processing and filtering engine within the CUDEM
+## software suite. It provides a standardized framework for manipulating raster datasets,
+## allowing users to clean artifacts, smooth noise, blend overlapping datasets, and enforce
+## hydrological or morphological constraints.
 ##
-## TODO:
-##
-## grits to be input/output grids; including input a datalist and output a globato
-## move to waffles? just add a waffles option for a pre-made waffle/stack?
+## Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (tiling),
+## ensuring that operations on multi-gigabyte DEMs do not exceed system memory.
 ##
 ### Code:
 
-import os, sys
+import os
+import sys
 import traceback
+import argparse
 import numpy as np
 from osgeo import gdal
 
@@ -44,14 +46,13 @@ from cudem import utils
 from cudem import regions
 from cudem import gdalfun
 from cudem import factory
+from cudem.datalists.dlim import DatasetFactory
+from cudem import __version__ as __cudem_version__
 from . import __version__
 
 class Grits:
-    """DEM Filtering.
-
-    Filter DEMs using various filtering methods. 
-
-    Define a sub-class to make a new grits filter.
+    """DEM Filtering Base Class.
+    Define a sub-class to create a new filter.
     """
     
     def __init__(
@@ -64,655 +65,1157 @@ class Grits:
             max_z: float = None,
             min_weight: float = None,
             max_weight: float = None,
+            min_uncertainty: float = None,
+            max_uncertainty: float = None,
             count_mask: any = None,
             weight_mask: any = None,
             uncertainty_mask: any = None,
+            aux_data: list = None,
             cache_dir: str = './',
             verbose: bool = True,
-            params: dict = {},
+            params: dict = None,
             **kwargs: any
     ):
         self.src_dem = src_dem
         self.dst_dem = dst_dem
         self.src_region = src_region
         self.band = utils.int_or(band, 1)
+        self.ds_config = None
+        
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
         self.min_weight = utils.float_or(min_weight)
         self.max_weight = utils.float_or(max_weight)
+        self.min_uncertainty = utils.float_or(min_uncertainty)
+        self.max_uncertainty = utils.float_or(max_uncertainty)
+        
         self.count_mask = count_mask
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
+        self.aux_data = aux_data if aux_data else []
+        
         self.cache_dir = cache_dir
         self.verbose = verbose
-        self.params = params
+        self.params = params if params else {}
         self.kwargs = kwargs
 
+        ## Output Filename
         if self.dst_dem is None:
-            if self.src_dem is not None:
-                self.dst_dem = utils.make_temp_fn('{}_filtered.{}'.format(
-                    utils.fn_basename2(self.src_dem),
-                    utils.fn_ext(self.src_dem)
-                ), temp_dir=self.cache_dir)
+            if self.src_dem:
+                base = utils.fn_basename2(self.src_dem)
+                ext = utils.fn_ext(self.src_dem)
+                self.dst_dem = utils.make_temp_fn(f'{base}_filtered.{ext}', temp_dir=self.cache_dir)
             else:
                 self.dst_dem = 'grits_filtered.tif'
 
-        #self.init_ds(src_ds = self.src_dem)
-        # if self.src_region is None:
-        #     self.src_region, _ = self._init_region(src_ds = self.src_dem)
-
-        #utils.set_cache(self.cache_dir)
+        ## Auto-detect Globato HDF5 features
+        if self.src_dem and self.src_dem.endswith('.h5'):
+            self._init_globato()
             
-    def __call__(self):
-        return(self.generate())
-
-
-    def init_region(self, src_ds: any = None):
-        ds_config = gdalfun.gdal_infos(src_ds)
-        self.src_region = regions.Region().from_geo_transform(
-            ds_config['geoT'], ds_config['nx'], ds_config['ny']
-        )
-
-        return(self.src_region, ds_config)
-
-    
-    def init_ds(self, src_ds: any = None):
-        self.ds_config = gdalfun.gdal_infos(src_ds)
-        self.ds_band = src_ds.GetRasterBand(self.band)
-        self.gt = self.ds_config['geoT']
-
-        if self.ds_band.GetNoDataValue() is None:
-            self.ds_band.SetNoDataValue(self.ds_config['ndv'])
-        
-        ## setup the associted mask data (uncertainty, weights, counts)
+        ## Initialize flags
         self.weight_is_fn = False
         self.weight_is_band = False
         self.uncertainty_is_fn = False
         self.uncertainty_is_band = False
         self.count_is_fn = False
         self.count_is_band = False
-        if self.weight_mask is not None:
-            self.weight_is_band = False
-            self.weight_is_fn = False
-            if utils.int_or(self.weight_mask) is not None:
-                self.weight_is_band = True
-                self.weight_mask = utils.int_or(self.weight_mask)
-            elif os.path.exists(self.weight_mask):
-                self.weight_is_fn = True
-            else:
-                self.weight_mask = None        
+        
+        ## Analyze masks
+        self._analyze_mask('weight_mask', 'weight_is_fn', 'weight_is_band')
+        self._analyze_mask('uncertainty_mask', 'uncertainty_is_fn', 'uncertainty_is_band')
+        self._analyze_mask('count_mask', 'count_is_fn', 'count_is_band')
 
-        if self.uncertainty_mask is not None:
-            self.unc_is_band = False
-            self.unc_is_fn = False
-            if utils.int_or(self.uncertainty_mask) is not None:
-                self.unc_is_band = True
-                self.uncertainty_mask = utils.int_or(self.uncertainty_mask)
-            elif os.path.exists(self.uncertainty_mask):
-                self.unc_is_fn = True
-            else:
-                self.uncertainty_mask = None
-                
-        if self.count_mask is not None:
-            self.cnt_is_band = False
-            self.cnt_is_fn = False
-            if utils.int_or(self.count_mask) is not None:
-                self.cnt_is_band = True
-                self.count_mask = utils.int_or(self.count_mask)
-            elif os.path.exists(self.count_mask):
-                self.cnt_is_fn = True
-            else:
-                self.count_mask = None
+        ## initialize the souce dataset info
+        #self.init_ds(self.src_dem)
+        
+    def _analyze_mask(self, attr_name, fn_flag, band_flag):
+        """Helper to determine if a mask is a file or a band index."""
+        
+        val = getattr(self, attr_name)
+        if val is not None:
+            if utils.int_or(val) is not None:
+                setattr(self, band_flag, True)
+                setattr(self, attr_name, int(val))
+            elif os.path.exists(str(val)):
+                setattr(self, fn_flag, True)
 
-                
-    def generate(self):
-        if self.verbose:
-            utils.echo_msg(
-                f'filtering {self.src_dem} using {self}'
+    def _init_globato(self):
+        """Attempt to auto-load weight/uncertainty from Globato HDF5."""
+        pass 
+
+    
+    def __call__(self):
+        return self.generate()
+
+    
+    def init_region(self, src_ds=None):
+        """Initialize region from dataset."""
+        
+        if src_ds is None and self.src_dem:
+            src_ds = gdal.Open(self.src_dem)
+            
+        if src_ds:
+            self.ds_config = gdalfun.gdal_infos(src_ds)
+            self.src_region = regions.Region().from_geo_transform(
+                self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny']
             )
+            self.gt = self.ds_config['geoT']
+            return self.src_region, self.ds_config
+        return None, None
+
+    
+    def init_ds(self, src_ds=None):
+        """Initialize GDAL dataset properties."""
+        
+        if src_ds is None: return
+
+        self.ds_config = gdalfun.gdal_infos(src_ds)
+        self.ds_band = src_ds.GetRasterBand(self.band)
+        self.gt = self.ds_config['geoT']
+        
+        if self.ds_band.GetNoDataValue() is None:
+            self.ds_band.SetNoDataValue(self.ds_config['ndv'])
+
+            
+    def load_aux_data(self, aux_source_list=None, src_region=None, src_gt=None, x_count=None, y_count=None):
+        """Load auxiliary datasets into aligned array."""
+        
+        if aux_source_list is None: aux_source_list = self.aux_data
+        if not aux_source_list: return None
+
+        if src_region is None: src_region = self.src_region
+        if src_gt is None: src_gt = self.gt
+        
+        if x_count is None: x_count = self.ds_config['nx']
+        if y_count is None: y_count = self.ds_config['ny']
+        
+        x_inc = src_gt[1]
+        y_inc = src_gt[5]
+        dst_srs = self.ds_config.get('proj')
+
+        combined_arr = np.full((y_count, x_count), np.nan, dtype=np.float32)
+        
+        for aux_fn in aux_source_list:
+            try:
+                aux_ds = DatasetFactory(
+                    mod=aux_fn,
+                    src_region=src_region,
+                    x_inc=x_inc,
+                    y_inc=y_inc,
+                    dst_srs=dst_srs,
+                    verbose=self.verbose
+                )._acquire_module()
+                
+                if aux_ds is None: continue
+                aux_ds.initialize()
+
+                for arrs, srcwin, gt in aux_ds.yield_array(want_sums=False):
+                    if arrs['z'] is None: continue
+                    
+                    y_start, y_end = srcwin[1], srcwin[1] + srcwin[3]
+                    x_start, x_end = srcwin[0], srcwin[0] + srcwin[2]
+                    
+                    if y_end > combined_arr.shape[0] or x_end > combined_arr.shape[1]:
+                        pass 
+
+                    chunk_data = arrs['z']
+                    valid_mask = ~np.isnan(chunk_data)
+                    
+                    target_slice = combined_arr[y_start:y_end, x_start:x_end]
+                    
+                    if target_slice.shape == chunk_data.shape:
+                        target_slice[valid_mask] = chunk_data[valid_mask]
+
+            except Exception as e:
+                if self.verbose:
+                    utils.echo_warning_msg(f"Failed to load aux data {aux_fn}: {e}")
+                    
+        return combined_arr
+
+    
+    def generate(self):
+        """Execute the filter."""
+        
+        if self.verbose:
+            utils.echo_msg(f'Filtering {self.src_dem} using {self.__class__.__name__}')
             
         self.run()
         self.split_by_z()
         self.split_by_weight()
-        return(self)        
+        self.split_by_uncertainty()
+
+        ## Calculate final statistics
+        self.calculate_difference()
+        return self        
 
     
     def run(self):
-        raise(NotImplementedError)
+        raise NotImplementedError("Subclasses must implement run()")
 
+
+    def calculate_difference(self):
+        """Calculate statistics on modification:
+        - Removed Cells: Valid -> NoData
+        - Changed Cells: Valid -> Valid (New Value)
+        """
+        
+        if not self.src_dem or not os.path.exists(self.src_dem): return {}
+        if not self.dst_dem or not os.path.exists(self.dst_dem): return {}
+
+        stats = {}
+        try:
+            src_ds = gdal.Open(self.src_dem)
+            dst_ds = gdal.Open(self.dst_dem)
+            
+            if not src_ds or not dst_ds: return {}
+            
+            src_band = src_ds.GetRasterBand(self.band)
+            dst_band = dst_ds.GetRasterBand(1)
+            
+            ## Read Arrays (Warning: Large files read fully into RAM)
+            src_arr = src_band.ReadAsArray().astype(np.float32)
+            dst_arr = dst_band.ReadAsArray().astype(np.float32)
+            
+            src_ndv = src_band.GetNoDataValue()
+            dst_ndv = dst_band.GetNoDataValue()
+            
+            ## Normalize to NaN
+            if src_ndv is not None: src_arr[src_arr == src_ndv] = np.nan
+            if dst_ndv is not None: dst_arr[dst_arr == dst_ndv] = np.nan
+            
+            ## Identify Valid Sets
+            src_valid = ~np.isnan(src_arr)
+            dst_valid = ~np.isnan(dst_arr)
+            
+            total_src_valid = np.count_nonzero(src_valid)
+            
+            ## Removed Cells (Source Valid -> Dest Invalid)
+            removed_mask = src_valid & ~dst_valid
+            removed_count = np.count_nonzero(removed_mask)
+            
+            ## Changed Cells (Source Valid -> Dest Valid AND Value Changed)
+            ## Intersection of valid pixels
+            intersection = src_valid & dst_valid
+            
+            changed_count = 0
+            if np.count_nonzero(intersection) > 0:
+                diff = np.abs(dst_arr[intersection] - src_arr[intersection])
+                
+                ## Check for significant difference
+                changed_mask = diff > 1e-5
+                changed_count = np.count_nonzero(changed_mask)
+                
+                ## Calc stats on CHANGED values only
+                if changed_count > 0:
+                    real_diffs = dst_arr[intersection][changed_mask] - src_arr[intersection][changed_mask]
+                    stats['mean_diff'] = np.mean(real_diffs)
+                    stats['min_diff'] = np.min(real_diffs)
+                    stats['max_diff'] = np.max(real_diffs)
+                    stats['std_diff'] = np.std(real_diffs)
+
+            ## Populate Stats
+            total_modified = removed_count + changed_count
+            stats['total_valid_source'] = total_src_valid
+            stats['removed_cells'] = removed_count
+            stats['changed_cells'] = changed_count
+            stats['modified_cells'] = total_modified
+            stats['percent_modified'] = (total_modified / total_src_valid) * 100 if total_src_valid > 0 else 0
+            
+            if self.verbose:
+                utils.echo_msg("Filter Statistics:")
+                utils.echo_msg(f"  Total Valid Source: {total_src_valid}")
+                utils.echo_msg(f"  Removed Cells: {removed_count} ({(removed_count/total_src_valid)*100:.2f}%)" if total_src_valid else "  Removed Cells: 0")
+                utils.echo_msg(f"  Changed Cells: {changed_count} ({(changed_count/total_src_valid)*100:.2f}%)" if total_src_valid else "  Changed Cells: 0")
+                if changed_count > 0:
+                    utils.echo_msg(f"  Difference (Mean +/- Std): {stats.get('mean_diff',0):.4f} +/- {stats.get('std_diff', 0):.4f}")
+
+        except Exception as e:
+            if self.verbose:
+                utils.echo_warning_msg(f"Failed to calculate stats: {e}")
+            
+        return stats
+    
     
     def copy_src_dem(self):
-        with gdalfun.gdal_datasource(
-                self.src_dem, update=False
-        ) as src_ds:
-            if src_ds is not None:
-                src_infos = gdalfun.gdal_infos(src_ds)
-                driver = gdal.GetDriverByName(src_infos['fmt'])
-                copy_ds = driver.CreateCopy(
-                    self.dst_dem, src_ds, 1, options=['COMPRESS=DEFLATE']
-                )
-            else:
-                copy_ds = None
-                
-        return(copy_ds)
+        with gdalfun.gdal_datasource(self.src_dem, update=False) as src_ds:
+            if src_ds:
+                info = gdalfun.gdal_infos(src_ds)
+                driver = gdal.GetDriverByName(info['fmt'])
+                return driver.CreateCopy(self.dst_dem, src_ds, 0, options=['COMPRESS=DEFLATE'])
+        return None
 
-    
-    def extract_src_array(self, buffer_cells=0):
-        """return the array from self.src_dem within the given region"""
-        
-        src_region = self.src_region.copy()
+
+    def extract_src_array(self, band=1, buffer_cells=0):
+        """load the src dem as an array"""
+
+        if not self.src_region or not self.ds_config:
+            self.init_region()
+
         x_inc = self.ds_config['geoT'][1]
         y_inc = self.ds_config['geoT'][5] * -1
-        
-        src_region.buffer(
-            x_bv=(x_inc * buffer_cells),
-            y_bv=(y_inc * buffer_cells)
+
+        self.src_region.buffer(
+            x_bv=(x_inc * self.buffer_cells),
+            y_bv=(y_inc * self.buffer_cells)
         )
 
-        xcount, ycount, dst_gt = src_region.geo_transform(
+        xcount, ycount, dst_gt = self.src_region.geo_transform(
             x_inc=self.ds_config['geoT'][1],
             y_inc=self.ds_config['geoT'][5],
             node='grid'
         )
         
-        src_arr = np.full((ycount, xcount), np.nan)        
+        src_arr = np.full((ycount, xcount), np.nan)
+
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
             if src_ds is not None:
-                srcwin = src_region.srcwin(self.gt, xcount, ycount, node='grid')
-                
+                #self.init_ds(src_ds)
+                ds_band = src_ds.GetRasterBand(band)
+                if ds_band.GetNoDataValue() is None:
+                    ds_band.SetNoDataValue(self.ds_config['ndv'])
+                    
+                srcwin = (self.buffer_cells, self.buffer_cells,
+                          src_ds.RasterXSize, src_ds.RasterYSize)
+
                 src_arr[
-                    srcwin[1]:srcwin[1]+srcwin[3],
-                    srcwin[0]:srcwin[0]+srcwin[2]
-                ] = self.ds_band.ReadAsArray()
+                    srcwin[1]:srcwin[1] + srcwin[3],
+                    srcwin[0]:srcwin[0] + srcwin[2]
+                ] = ds_band.ReadAsArray()
 
                 src_arr[src_arr == self.ds_config['ndv']] = np.nan
-                if src_region.zmin is not None:
-                    src_arr[src_arr < src_region.zmin] = np.nan
-                    
-                if src_region.zmax is not None:
-                    src_arr[src_arr > src_region.zmax] = np.nan
-
-                # if src_region.wmin is not None:
-                #     src_arr[src_arr > src_region.wmin] = np.nan
-
-                # if src_region.wmax is not None:
-                #     src_arr[src_arr > src_region.wmax] = np.nan
-
-                # if src_region.umin is not None:
-                #     src_arr[src_arr > src_region.umin] = np.nan
-
-                # if src_region.umax is not None:
-                #     src_arr[src_arr > src_region.umax] = np.nan
-                    
-        return(src_arr)
-
-    
-    def _density(self, src_arr):
-        nonzero = np.count_nonzero(~np.isnan(src_arr))
-        dd = nonzero / src_arr.size
+                return src_arr
+        return None
         
-        return(dd)
-
-
-    def _combine_for_output(self):
-        with gdalfun.gdal_datasource(self.src_dem) as src_ds:
-            if src_ds is not None:
-                pass
-            
-    def split_by_region(self):
-        pass
     
-    
-    def split_by_z(self):
-        """Split the filtered DEM by z-value"""
+    def _get_mask_array(self, mask_attr, is_fn_attr, is_band_attr):
+        """Helper to load a mask array based on config."""
+        
+        mask_val = getattr(self, mask_attr)
+        if mask_val is None: return None
+        
+        if getattr(self, is_fn_attr):
+            ## Load from external file using aux loader
+            return self.load_aux_data(aux_source_list=[mask_val])
+        elif getattr(self, is_band_attr):
+            ## Load from internal band
+            with gdalfun.gdal_datasource(self.src_dem) as ds:
+                if ds:
+                    return ds.GetRasterBand(mask_val).ReadAsArray()
+        return None
 
-        if self.max_z is not None or self.min_z is not None:
-            utils.echo_msg(
-                f'split by z:{self.min_z} {self.max_z}'
-            )
-            with gdalfun.gdal_datasource(self.src_dem) as src_ds:
-                if src_ds is not None:
-                    self.init_ds(src_ds)
-                    elev_array = self.ds_band.ReadAsArray()
-                    mask_array = np.zeros(
-                        (self.ds_config['ny'], self.ds_config['nx'])
-                    )
-                    mask_array[elev_array == self.ds_config['ndv']] = np.nan
-                    if self.min_z is not None:
-                        mask_array[elev_array > self.min_z] = 1
-                        if self.max_z is not None:
-                            mask_array[elev_array > self.max_z] = 0
-                        
-                    elif self.max_z is not None:
-                        mask_array[elev_array < self.max_z] = 1
-                        if self.min_z is not None:
-                            mask_array[elev_array < self.min_z] = 0
-                        
-                    elev_array[mask_array == 1] = 0
 
-                    ## todo: all bands
-                    with gdalfun.gdal_datasource(self.dst_dem, update=True) as s_ds:
-                        if s_ds is not None:
-                            #for b in range(1, s_ds.RasterCount+1):
-                            s_band = s_ds.GetRasterBand(1)
-                            s_array = s_band.ReadAsArray()
-                            s_array = s_array * mask_array
-                            smoothed_array = s_array + elev_array
-                            elev_array = None
-                            s_band.WriteArray(smoothed_array)
-                            
-        return(self)
-
-    
-    def split_by_weight(self):
-        """Split the filtered DEM by z-value"""
-
-        if self.max_weight is not None \
-           or self.min_weight is not None:
-            if self.weight_mask is not None:
-                utils.echo_msg(
-                    f'split by weight: {self.min_weight} {self.max_weight}'
-                )
-                with gdalfun.gdal_datasource(self.src_dem) as src_ds:
-                    if src_ds is not None:
-                        self.init_ds(src_ds)
-                        elev_array = self.ds_band.ReadAsArray()
-
-                        # uncertainty ds
-                        weight_band = None
-                        if self.weight_is_fn:
-                            weight_ds = gdal.Open(self.weight_mask)
-                            weight_band = weight_ds.GetRasterBand(1)
-                        elif self.weight_is_band:
-                            weight_band = src_ds.GetRasterBand(self.weight_mask)
-
-                        if weight_band is not None:
-                            weight_array = weight_band.ReadAsArray()
-                            weight_array[(weight_array == self.ds_config['ndv'])] = 0
-
-                        mask_array = np.zeros(
-                            (self.ds_config['ny'], self.ds_config['nx'])
-                        )
-                        mask_array[elev_array == self.ds_config['ndv']] = np.nan
-                        mask_array[weight_array == self.ds_config['ndv']] = np.nan
-
-                        if self.min_weight is not None:
-                            mask_array[weight_array > self.min_weight] = 1
-                            if self.max_weight is not None:
-                                mask_array[weight_array > self.max_weight] = 0
-
-                        elif self.max_weight is not None:
-                            mask_array[weight_array < self.max_weight] = 1
-                            if self.min_weight is not None:
-                                mask_array[weight_array < self.min_weight] = 0
-
-                        elev_array[mask_array == 1] = 0
-
-                        ## todo: all bands
-                        with gdalfun.gdal_datasource(
-                                self.dst_dem, update=True
-                        ) as s_ds:
-                            if s_ds is not None:
-                                s_band = s_ds.GetRasterBand(1)
-                                s_array = s_band.ReadAsArray()
-                                s_array = s_array * mask_array
-                                smoothed_array = s_array + elev_array
-                                elev_array = None
-                                s_band.WriteArray(smoothed_array)
-        return(self)
-
-    
-    def get_outliers(self, in_array: any, percentile: float = 75,
-                     k: float = 1.5, verbose: bool = False):
-        """get the outliers from in_array based on the percentile
-
-        https://en.wikipedia.org/wiki/Interquartile_range
+    def _apply_split_mask(self, mask_array, min_val, max_val, label="Value"):
+        """Apply a masking operation to the destination DEM.
+        
+        If pixels fall OUTSIDE the valid range (min_val, max_val),
+        they are reverted to the ORIGINAL source data values 
         """
+        
+        if mask_array is None: return
 
-        if verbose:
-            utils.echo_msg(
-                f'input percentile: {percentile}'
-            )
+        ## Open Destination (Filtered Result)
+        ds = gdal.Open(self.dst_dem, gdal.GA_Update)
+        if not ds: return
 
-        # if np.isnan(percentile):
-        #     percentile = 75
+        band = ds.GetRasterBand(1)
+        arr = band.ReadAsArray()
+        
+        ## Treat NDV in mask as 0
+        mask_array[np.isnan(mask_array)] = 0 
+        
+        ## Determine Pixels to Revert
+        filter_mask = np.zeros(arr.shape, dtype=bool)
+        
+        if min_val is not None:
+            filter_mask |= (mask_array < min_val)
+        if max_val is not None:
+            filter_mask |= (mask_array > max_val)
             
-        if percentile < 0:
-            percentile = 0
+        if np.any(filter_mask):
+            if self.verbose:
+                count = np.count_nonzero(filter_mask)
+                utils.echo_msg(f'Reverting {count} pixels based on {label} thresholds.')
+                
+            ## Load Original Source Data
+            with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+                if src_ds:
+                    src_band = src_ds.GetRasterBand(self.band)
+                    src_arr = src_band.ReadAsArray()
+                    
+                    ## Apply Reversion
+                    ## Only where the filter mask is True, replace filtered data with source data
+                    arr[filter_mask] = src_arr[filter_mask]
             
-        if percentile > 100:
-            percentile = 100
+            band.WriteArray(arr)
+            
+        ds = None
+        
+        
+    def split_by_z(self):
+        """Filter dst_dem by Z thresholds."""
+        
+        if self.max_z is None and self.min_z is None: return
+        if self.verbose: utils.echo_msg(f'Splitting by Z: {self.min_z} to {self.max_z}')
+        
+        ds = gdal.Open(self.dst_dem, gdal.GA_Update)
+        if not ds: return
 
-        max_percentile = percentile
-        #min_percentile = 100 - percentile
-        min_percentile = percentile-50
+        band = ds.GetRasterBand(1)
+        arr = band.ReadAsArray()
+        ndv = band.GetNoDataValue()
+        
+        ## Self-masking (mask array IS the data array)
+        self._apply_split_mask(arr, self.min_z, self.max_z, label="Z")
 
-        if min_percentile < 0:
-            min_percentile = 0
+        
+    def split_by_weight(self):
+        """Filter dst_dem by Weight thresholds."""
+        
+        if self.max_weight is None and self.min_weight is None: return
+        if self.verbose: utils.echo_msg(f'Splitting by Weight: {self.min_weight} to {self.max_weight}')
+        
+        weight_arr = self._get_mask_array('weight_mask', 'weight_is_fn', 'weight_is_band')
+        self._apply_split_mask(weight_arr, self.min_weight, self.max_weight, label="Weight")
 
-        if verbose:
-            utils.echo_msg(
-                f'percentiles: {min_percentile}>>{max_percentile}'
-            )
+        
+    def split_by_uncertainty(self):
+        """Filter dst_dem by Uncertainty thresholds."""
+        
+        if self.max_uncertainty is None and self.min_uncertainty is None: return
+        if self.verbose: utils.echo_msg(f'Splitting by Uncertainty: {self.min_uncertainty} to {self.max_uncertainty}')
+        
+        unc_arr = self._get_mask_array('uncertainty_mask', 'uncertainty_is_fn', 'uncertainty_is_band')
+        self._apply_split_mask(unc_arr, self.min_uncertainty, self.max_uncertainty, label="Uncertainty")
+        
 
-        if np.all(np.isnan(in_array)):
-            upper_limit = np.nan
-            lower_limit = np.nan
-        else:
-            perc_max = np.nanpercentile(in_array, max_percentile)
-            perc_min = np.nanpercentile(in_array, min_percentile)
-            iqr_p = (perc_max - perc_min) * k
-            upper_limit = perc_max + iqr_p
-            lower_limit = perc_min - iqr_p
-
-        return(upper_limit, lower_limit)
+    def get_outliers(self, in_array, percentile=75, k=1.5, verbose=False):
+        if np.all(np.isnan(in_array)): return np.nan, np.nan
+        p_max = np.nanpercentile(in_array, percentile)
+        p_min = np.nanpercentile(in_array, 100 - percentile)
+        iqr = (p_max - p_min) * k
+        return p_max + iqr, p_min - iqr
 
 
-class GritsFactory(factory.CUDEMFactory):
-    """Grits Factory Settings and Generator
+    def _density(self, src_arr):
+        """Calculate the density of valid data cells.
+        
+        If a 'count_mask' is configured, density is calculated as:
+        (Cells with Count > 0) / (Total Cells).
+        
+        Otherwise, it falls back to:
+        (Non-NaN Cells in src_arr) / (Total Cells).
+        
+        Args:
+            src_arr (np.array): The source data array (elevation) for fallback dimensions.
+            
+        Returns:
+            float: Density value (0.0 to 1.0).
+        """
+        
+        count_arr = None
+
+        ## Try to load Count Mask
+        if self.count_mask is not None:
+            
+            ## External File
+            if hasattr(self, 'count_is_fn') and self.count_is_fn:
+                ## Use load_aux_data to get aligned array
+                count_arr = self.load_aux_data(
+                    aux_source_list=[self.count_mask],
+                    x_count=src_arr.shape[1],
+                    y_count=src_arr.shape[0]
+                )
+                
+            ## Band in Source DEM
+            elif hasattr(self, 'count_is_band') and self.count_is_band:
+                with gdalfun.gdal_datasource(self.src_dem) as ds:
+                    if ds:
+                        if not self.src_region: self.init_region(ds)
+                        x_count = src_arr.shape[1]
+                        y_count = src_arr.shape[0]
+                        srcwin = self.src_region.srcwin(self.gt, x_count, y_count, node='grid')
+                        
+                        if srcwin[2] > 0 and srcwin[3] > 0:
+                            band = ds.GetRasterBand(self.count_mask)
+                            count_arr = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+
+        ## Calculate Density
+        if count_arr is not None:
+            if count_arr.shape == src_arr.shape:
+                # Density of populated cells (count > 0)
+                populated = np.count_nonzero(count_arr > 0)
+                total = count_arr.size
+                return populated / total if total > 0 else 0.0
+
+        ## Fallback: Density of valid pixels in source array
+        if src_arr is not None and src_arr.size > 0:
+            populated = np.count_nonzero(~np.isnan(src_arr))
+            return populated / src_arr.size
+            
+        return 0.0
+
     
-    Parse a grits module and return the filtering object
-    """
-
+class GritsFactory(factory.CUDEMFactory):
     from . import blur
     from . import gmtfilter
     from . import lspoutliers
     from . import weights
     from . import flats
     from . import blend
+    from . import morphology
+    from . import denoise
+    from . import fill
+    from . import slope_filter
+    from . import diff
+    from . import zscore
+    from . import hydro
+    from . import cut
+    from . import clip
     
     _modules = {
-        'blur': {
-            'name': 'blur',
-            'description': 'Filter with a Gaussian Blur',
-            'call': blur.Blur
-        },
-        'grdfilter': {
-            'name': 'grdfilter',
-            'description': 'Filter using GMTs `grdfilter` command',
-            'call': gmtfilter.GMTgrdfilter
-        },
-        'outliers': {
-            'name': 'outliers',
-            'description': 'Remove outliers from the DEM',
-            'call': lspoutliers.LSPOutliers
-        },
-        'lsp': {
-            'name': 'lsp-outliers',
-            'description': 'Remove outliers from the DEM',
-            'call': lspoutliers.LSPOutliers
-        },
-        'flats': {
-            'name': 'flats',
-            'description': 'Remove flat areas from the DEM',
-            'call': flats.Flats
-        },
-        'weights': {
-            'name': 'weights',
-            'description': 'Make a NDV buffer around the weight threshold',
-            'call': weights.Weights
-        },
-        'weight_zones': {
-            'name': 'weight_zones',
-            'description': 'Make a NDV buffer around the weight threshold',
-            'call': weights.WeightZones
-        },
-        'blend': {
-            'name': 'blend',
-            'description': 'blend aux data into dem',
-            'call': blend.Blend
-        },
+        'blur': {'name': 'blur', 'desc': 'Gaussian Blur', 'call': blur.Blur},
+        'grdfilter': {'name': 'grdfilter', 'desc': 'GMT grdfilter', 'call': gmtfilter.GMTgrdfilter},
+        'outliers': {'name': 'outliers', 'desc': 'Remove outliers (IQR)', 'call': lspoutliers.LSPOutliers},
+        'flats': {'name': 'flats', 'desc': 'Remove flat areas', 'call': flats.Flats},
+        'weights': {'name': 'weights', 'desc': 'Weight buffering', 'call': weights.Weights},
+        'blend': {'name': 'blend', 'desc': 'Blend aux data', 'call': blend.Blend},
+        'morphology': {'name': 'morphology', 'desc': 'Morphological filtering', 'call': morphology.Morphology},
+        'denoise': {'name': 'denoise', 'desc': 'Denoising filtering', 'call': denoise.Denoise},
+        'fill': {'name': 'fill', 'desc': 'Fill nodata values', 'call': fill.Fill},
+        'slope': {'name': 'slope', 'desc': 'Filter by Slope/LSP', 'call': slope_filter.SlopeFilter},
+        'diff': {'name': 'diff', 'desc': 'Difference Filter', 'call': diff.Diff},
+        'zscore': {'name': 'zscore', 'desc': 'Z-Score Anomaly Filter', 'call': zscore.ZScore},
+        'hydro': {'name': 'hydro', 'desc': 'Hydro Enforcement', 'call': hydro.Hydro},
+        'cut': {'name': 'cut', 'desc': 'Cut/Mask to region', 'call': cut.Cut},
+        'clip': {'name': 'cut', 'desc': 'Clip to vector', 'call': clip.Clip},
     }
 
-    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-
-## ==============================================
-## Command-line Interface (CLI)
-## $ grits
-##
-## grits cli
-## ==============================================
-grits_cli_usage = """{cmd} ({version}): grits; GRId filTerS
-
-usage: {cmd} [ -hvCMNUWX [ args ] ] DEM ...
-
-Options:
-
-  -M, --module\t\t\tDesired grits MODULE and options. (see available Modules below)
-\t\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
-\t\t\t\tThis can be set multiple times to perform multiple filters.
-
-  -R, --region\t\t\tRestrict processing to the desired REGION 
-\t\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
-\t\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
-\t\t\t\tOR an OGR-compatible vector file with regional polygons. 
-\t\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
-\t\t\t\tIf a vector file is supplied, will use each region found therein.
-\t\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
-  -N, --min_z\t\t\tMinimum z value (filter data above this value)
-  -X, --max_z\t\t\tMaximum z value (filter data below this value)
-  -Wn, --min_weight\t\tMinimum weight value (filter data above this value)
-  -Wx, --max_weight\t\tMaximum weight value (filter data below this value)
-  -U, --uncertainty_mask\tAn associated uncertainty raster or band number
-  -W, --weight_mask\t\tAn associated weight raster or band number
-  -C, --count_mask\t\tAn associated count raster or band number
-
-  --help\t\t\tPrint the usage text
-  --modules\t\t\tDisplay the module descriptions and usage
-  --version\t\t\tPrint the version information
-
-Supported GRITS modules (see grits --modules <module-name> for more info): 
-  {d_formats}
-
-Examples:
-  % {cmd} input_dem.tif -M blur
-  % {cmd} input_dem.tif --uncertainty_mask input_dem_u.tif --max_z 0 -M outliers:percentile=65
-""".format(cmd=os.path.basename(sys.argv[0]),
-           version=__version__,
-           d_formats=factory.get_module_short_desc(GritsFactory._modules))
         
-#if __name__ == '__main__':
-def grits_cli(argv = sys.argv):
-    i = 1
-    src_dem = None
-    dst_dem = None
-    wg_user = None
-    min_z = None
-    max_z = None
-    min_weight = None
-    max_weight = None
-    uncertainty_mask = None
-    weight_mask = None
-    count_mask = None
-    filters = []
-    i_regions = []
+class PrintModulesAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        factory.echo_modules(GritsFactory._modules, values)
+        sys.exit(0)
+
+        
+def grits_cli():
+    parser = argparse.ArgumentParser(
+        description=f'Grits ({__version__}): GRId filTerS - DEM Filtering Tool',
+        epilog="Supported %(prog)s modules (see %(prog)s --modules <module-name> for more info):\n" 
+        f"{factory.get_module_short_desc(GritsFactory._modules)}\n\n"
+        "CUDEM home page: <http://cudem.colorado.edu>",
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+
+    ## --- Processing Options ---
+    proc_grp = parser.add_argument_group("Processing Options")
+    proc_grp.add_argument('dems', nargs='+', help='Input DEM files or Waffles JSON configs')
+    proc_grp.add_argument('-M', '--module', action='append', required=True, help='Grits module')
+    proc_grp.add_argument('-O', '--outfile', help='Output filename')
+    proc_grp.add_argument('-R', '--region', action='append', help='Restrict processing region')
     
-    while i < len(argv):
-        arg = argv[i]
-        if arg == '--module' or arg == '-M':
-            module = str(argv[i + 1])
-            if module.split(':')[0] not in GritsFactory()._modules.keys():
-                utils.echo_warning_msg(
-                    '''{} is not a valid grits module, available modules are: {}'''.format(
-                        module.split(':')[0],
-                        factory._cudem_module_short_desc(GritsFactory._modules)
-                    )
-                )
+    # --- Threshold Options ---
+    thresh_grp = parser.add_argument_group("Threshold Options")
+    thresh_grp.add_argument('-N', '--min-z', type=float, help='Minimum Z value')
+    thresh_grp.add_argument('-X', '--max-z', type=float, help='Maximum Z value')
+    thresh_grp.add_argument('-Wn', '--min-weight', type=float, help='Minimum Weight')
+    thresh_grp.add_argument('-Wx', '--max-weight', type=float, help='Maximum Weight')
+    thresh_grp.add_argument('-Un', '--min-uncertainty', type=float, help='Minimum Uncertainty')
+    thresh_grp.add_argument('-Ux', '--max-uncertainty', type=float, help='Maximum Uncertainty')
+    
+    # --- Mask Otions ---
+    mask_grp = parser.add_argument_group("Mask Options")
+    mask_grp.add_argument('-U', '--uncertainty-mask', help='Uncertainty raster/band')
+    mask_grp.add_argument('-W', '--weight-mask', help='Weight raster/band')
+    mask_grp.add_argument('-C', '--count-mask', help='Count raster/band')
+    mask_grp.add_argument('-A', '--aux-data', action='append', help='Auxiliary data files')
+
+    ## --- System Options ---
+    sys_grp = parser.add_argument_group("System Options")
+    sys_grp.add_argument('--version', action='version', version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}')
+    sys_grp.add_argument('-q', '--quiet', action='store_true', help='Quiet mode')
+
+    ## --- Info Helpers (Exit after printing) ---
+    sys_grp.add_argument('-m', '--modules', nargs='?', action=PrintModulesAction, help='List available modules')
+    
+    args = parser.parse_args()
+
+    for src_dem in args.dems:
+        current_dem = src_dem
+        for mod_str in args.module:
+            if args.outfile:
+                dst_dem = args.outfile
             else:
-                filters.append(module)
-                
-            i += 1
-        elif arg[:2] == '-M':
-            module = str(arg[2:])
-            if module.split(':')[0] not in GritsFactory()._modules.keys():
-                utils.echo_warning_msg(
-                    '''{} is not a valid grits module, available modules are: {}'''.format(
-                        module.split(':')[0],
-                        factory._cudem_module_short_desc(GritsFactory._modules)
-                    )
-                )
-            else:
-                filters.append(module)
+                base = os.path.basename(current_dem)
+                dst_dem = f"{os.path.splitext(base)[0]}_{mod_str.split(':')[0]}.tif"
 
-        elif arg == '--region' or arg == '-R':
-            i_regions.append(str(argv[i + 1]))
-            i = i + 1
-        elif arg[:2] == '-R':
-            i_regions.append(str(arg[2:]))
-                
-        elif arg == '--min_z' or arg == '-N':
-            min_z = utils.float_or(argv[i + 1])
-            i += 1
-        elif arg[:2] == '-N':
-            min_z = utils.float_or(arg[2:])
-        elif arg == '--max_z' or arg == '-X':
-            max_z = utils.float_or(argv[i + 1])
-            i += 1
-        elif arg == '--min_weight' or arg == '-Wn':
-            min_weight = utils.float_or(argv[i + 1])
-            i += 1
-        elif arg[:3] == '-Wn':
-            min_weight = utils.float_or(arg[3:])
-        elif arg == '--max_weight' or arg == '-Wx':
-            max_weight = utils.float_or(argv[i + 1])
-            i += 1
-        elif arg[:3] == 'Wx':
-            max_weight = utils.float_or(arg[3:])            
-        elif arg == '--uncertainty_mask' or arg == '-U':
-            uncertainty_mask = argv[i + 1]
-            i += 1
-        elif arg[:2] == '-U':
-            uncertainty_mask = arg[2:]
-        elif arg == '--weight_mask' or arg == '-W':
-            weight_mask = argv[i + 1]
-            i += 1
-        elif arg[:2] == '-W':
-            weight_mask = arg[2:]
-        elif arg == '--count_mask' or arg == '-C':
-            count_mask = argv[i + 1]
-            i += 1
-        elif arg[:2] == '-C':
-            count_mask = arg[2:]
-        elif arg == '--outfile' or arg == '-O':
-            dst_dem = argv[i + 1]
-            i += 1
-        elif arg[:2] == '-O':
-            dst_dem = arg[2:]
-        
-        elif arg == '--modules' or arg == '-m':
-            factory.echo_modules(
-                GritsFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1]
+            fac = GritsFactory(
+                mod=mod_str,
+                src_dem=current_dem,
+                dst_dem=dst_dem,
+                min_z=args.min_z,
+                max_z=args.max_z,
+                min_weight=args.min_weight,
+                max_weight=args.max_weight,
+                min_uncertainty=args.min_uncertainty,
+                max_uncertainty=args.max_uncertainty,
+                uncertainty_mask=args.uncertainty_mask,
+                weight_mask=args.weight_mask,
+                count_mask=args.count_mask,
+                aux_data=args.aux_data,
+                verbose=not args.quiet
             )
-            sys.exit(0)            
-        elif arg == '--help' or arg == '-h':
-            sys.stderr.write(grits_cli_usage)
-            sys.exit(0)
-        elif arg == '--version' or arg == '-v':
-            sys.stdout.write('{}\n'.format(__version__))
-            sys.exit(0)
-        elif arg[0] == '-':
-            sys.stdout.write(grits_cli_usage)
-            utils.echo_error_msg(
-                f'{arg} is not a valid grits cli switch'
-            )
-            sys.exit(0)
-        else:
-            wg_user = arg
-        i += 1
-
-    #if module is None:
-    if len(filters) == 0:
-        sys.stderr.write(grits_cli_usage)
-        utils.echo_error_msg(
-            '''must specify a grits -M module.'''
-        )
-        sys.exit(-1)
-
-    if not i_regions: i_regions = [None]
-    these_regions = regions.parse_cli_region(i_regions, True)
-        
-    ## load the user wg json and run grits with that.
-    if wg_user is not None:
-        if os.path.exists(wg_user):
-            try:
-                with open(wg_user, 'r') as wgj:
-                    wg = json.load(wgj)
-                    if wg['src_region'] is not None:
-                        wg['src_region'] = regions.Region().from_list(
-                            wg['src_region']
-                        )
-
-                    this_waffle = waffles.WaffleFactory(**wg).acquire()
-                    this_waffle.mask = True
-                    this_waffle.clobber = False
-
-                    if not this_waffle.valid_p():
-                        this_waffle.generate()
-
-                    src_dem = this_waffle.fn
-            except:
-                src_dem = wg_user
-        else:
-            sys.stderr.write(grits_cli_usage)
-            utils.echo_error_msg(
-                f'specified waffles config file/DEM does not exist, {wg_user}'
-            )
-            sys.exit(-1)
-    else:
-        sys.stderr.write(grits_cli_usage)
-        utils.echo_error_msg(
-            ('you must supply a waffles config file or an existing DEM; '
-             'see waffles --help for more information.')
-        )
-        sys.exit(-1)
-
-    if dst_dem is None:
-        dst_dem = utils.make_temp_fn('{}_filtered.{}'.format(
-            utils.fn_basename2(src_dem), utils.fn_ext(src_dem)
-        ))
-        
-    # src_dem = dst_dem        
-    for module in filters:
-        if module.split(':')[0] not in GritsFactory()._modules.keys():
-            utils.echo_error_msg(
-                '''{} is not a valid grits module, available modules are: {}'''.format(
-                    module.split(':')[0], factory._cudem_module_short_desc(GritsFactory._modules)
-                )
-            )
-            continue
-        
-        this_grits = GritsFactory(
-            mod=module,
-            src_dem=src_dem,
-            min_z=min_z,
-            max_z=max_z,
-            min_weight=min_weight,
-            max_weight=max_weight,
-            uncertainty_mask=uncertainty_mask,
-            weight_mask=weight_mask,
-            count_mask=count_mask,
-            dst_dem=dst_dem
-        )
-        try:
-            this_grits_module = this_grits._acquire_module()
-            if this_grits_module is not None:
-                out_dem = this_grits_module()
-                utils.echo_msg(f'filtered DEM to {out_dem.dst_dem}')
-                #os.replace(out_dem.dst_dem, src_dem)
-            else:
-                utils.echo_error_msg(
-                    f'could not acquire grits module {module}'
-                )
-                
-        except KeyboardInterrupt:
-            utils.echo_error_msg('Killed by user')
             
-        except Exception as e:
-            utils.echo_error_msg(e)
-            print(traceback.format_exc())
+            try:
+                filter_obj = fac._acquire_module()
+                if filter_obj:
+                    res = filter_obj()
+                    if res: current_dem = res.dst_dem
+                else:
+                    utils.echo_error_msg(f"Could not load module: {mod_str}")
+            except Exception as e:
+                utils.echo_error_msg(f"Error executing {mod_str}: {e}")
+                if not args.quiet: traceback.print_exc()
+
+if __name__ == '__main__':
+    grits_cli()
+
+### End
+
+# ### grits.py - GRId filTerS
+# ##
+# ## Copyright (c) 2024 - 2025 Regents of the University of Colorado
+# ##
+# ## grits.py is part of cudem
+# ##
+# ## Permission is hereby granted, free of charge, to any person obtaining a copy 
+# ## of this software and associated documentation files (the "Software"), to deal 
+# ## in the Software without restriction, including without limitation the rights 
+# ## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
+# ## of the Software, and to permit persons to whom the Software is furnished to do so, 
+# ## subject to the following conditions:
+# ##
+# ## The above copyright notice and this permission notice shall be included in all copies or
+# ## substantial portions of the Software.
+# ##
+# ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+# ## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+# ## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
+# ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+# ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# ## SOFTWARE.
+# ##
+# ### Commentary:
+# ##
+# ## Filter grids using various methods (Outliers, Blur, Flats, etc.)
+# ##
+# ### Code:
+
+# import os
+# import sys
+# import traceback
+# import argparse
+# import numpy as np
+# from osgeo import gdal
+
+# from cudem import utils
+# from cudem import regions
+# from cudem import gdalfun
+# from cudem import factory
+# from cudem.datalists.dlim import DatasetFactory
+# from cudem import __version__ as __cudem_version__
+# from . import __version__
+
+# class Grits:
+#     """DEM Filtering Base Class.
+#     Define a sub-class to create a new filter.
+#     """
+    
+#     def __init__(
+#             self,
+#             src_dem: str = None,
+#             dst_dem: str = None,
+#             src_region: any = None,
+#             band: int = 1,
+#             min_z: float = None,
+#             max_z: float = None,
+#             min_weight: float = None,
+#             max_weight: float = None,
+#             count_mask: any = None,
+#             weight_mask: any = None,
+#             uncertainty_mask: any = None,
+#             aux_data: list = None,
+#             cache_dir: str = './',
+#             verbose: bool = True,
+#             params: dict = None,
+#             **kwargs: any
+#     ):
+#         self.src_dem = src_dem
+#         self.dst_dem = dst_dem
+#         self.src_region = src_region
+#         self.band = utils.int_or(band, 1)
+        
+#         self.min_z = utils.float_or(min_z)
+#         self.max_z = utils.float_or(max_z)
+#         self.min_weight = utils.float_or(min_weight)
+#         self.max_weight = utils.float_or(max_weight)
+        
+#         self.count_mask = count_mask
+#         self.weight_mask = weight_mask
+#         self.uncertainty_mask = uncertainty_mask
+#         self.aux_data = aux_data if aux_data else []
+        
+#         self.cache_dir = cache_dir
+#         self.verbose = verbose
+#         self.params = params if params else {}
+#         self.kwargs = kwargs
+
+#         ## Output Filename
+#         if self.dst_dem is None:
+#             if self.src_dem:
+#                 base = utils.fn_basename2(self.src_dem)
+#                 ext = utils.fn_ext(self.src_dem)
+#                 self.dst_dem = utils.make_temp_fn(f'{base}_filtered.{ext}', temp_dir=self.cache_dir)
+#             else:
+#                 self.dst_dem = 'grits_filtered.tif'
+
+#         ## Auto-detect Globato HDF5 features
+#         if self.src_dem and self.src_dem.endswith('.h5'):
+#             self._init_globato()
+
+            
+#     def _init_globato(self):
+#         """Attempt to auto-load weight/uncertainty from Globato HDF5."""
+        
+#         ## Assuming GlobatoFile parser
+#         ## If masks aren't set, try to use internal layers
+#         if self.weight_mask is None:
+#             # Check if 'weights' layer exists (logic handled by GlobatoFile usually, 
+#             # here we just set the hint for sub-classes that might open it)
+#             pass 
+
+        
+#     def __call__(self):
+#         return self.generate()
 
     
-### End
+#     def init_region(self, src_ds=None):
+#         """Initialize region from dataset."""
+        
+#         if src_ds is None and self.src_dem:
+#             src_ds = gdal.Open(self.src_dem)
+            
+#         if src_ds:
+#             ds_config = gdalfun.gdal_infos(src_ds)
+#             self.src_region = regions.Region().from_geo_transform(
+#                 ds_config['geoT'], ds_config['nx'], ds_config['ny']
+#             )
+#             return self.src_region, ds_config
+#         return None, None
+
+    
+#     def init_ds(self, src_ds=None):
+#         """Initialize GDAL dataset properties."""
+        
+#         if src_ds is None: return
+
+#         self.ds_config = gdalfun.gdal_infos(src_ds)
+#         self.ds_band = src_ds.GetRasterBand(self.band)
+#         self.gt = self.ds_config['geoT']
+
+#         if self.ds_band.GetNoDataValue() is None:
+#             self.ds_band.SetNoDataValue(self.ds_config['ndv'])
+        
+#         ## --- Mask Type Detection (File vs Band Index) ---
+#         self.weight_is_fn = False
+#         self.weight_is_band = False
+#         if self.weight_mask:
+#             if utils.int_or(self.weight_mask):
+#                 self.weight_is_band = True
+#                 self.weight_mask = int(self.weight_mask)
+#             elif os.path.exists(self.weight_mask):
+#                 self.weight_is_fn = True
+
+#         self.uncertainty_is_fn = False
+#         self.uncertainty_is_band = False
+#         if self.uncertainty_mask is not None:
+#             self.unc_is_band = False
+#             self.unc_is_fn = False
+#             if utils.int_or(self.uncertainty_mask) is not None:
+#                 self.unc_is_band = True
+#                 self.uncertainty_mask = utils.int_or(self.uncertainty_mask)
+#             elif os.path.exists(self.uncertainty_mask):
+#                 self.unc_is_fn = True
+#             else:
+#                 self.uncertainty_mask = None
+
+#         self.count_is_fn = False
+#         self.count_is_band = False
+#         if self.count_mask is not None:
+#             self.cnt_is_band = False
+#             self.cnt_is_fn = False
+#             if utils.int_or(self.count_mask) is not None:
+#                 self.cnt_is_band = True
+#                 self.count_mask = utils.int_or(self.count_mask)
+#             elif os.path.exists(self.count_mask):
+#                 self.cnt_is_fn = True
+#             else:
+#                 self.count_mask = None
+
+
+#     def load_aux_data(self, aux_source_list=None, src_region=None, src_gt=None, x_count=None, y_count=None):
+#         """Load auxiliary datasets into a single numpy array matching the source DEM's alignment.
+        
+#         Uses DatasetFactory to support various input formats (Rasters, Point Clouds, etc.) 
+#         and align them (reproject/resample) to the source grid.
+        
+#         Parameters:
+#             aux_source_list (list): List of filenames/configs to load. Uses self.aux_data if None.
+#             src_region (Region): Target region. Uses self.src_region if None.
+#             src_gt (list): Target GeoTransform. Uses self.gt if None.
+#             x_count, y_count (int): Grid dimensions.
+            
+#         Returns:
+#             np.array: Combined array of auxiliary data (Supercede mode), or None if empty.
+#         """
+        
+#         ## Setup Defaults from Instance
+#         if aux_source_list is None:
+#             aux_source_list = self.aux_data
+            
+#         if not aux_source_list:
+#             return None
+
+#         if src_region is None: src_region = self.src_region
+#         if src_gt is None: src_gt = self.gt
+        
+#         if x_count is None: x_count = self.ds_config['nx']
+#         if y_count is None: y_count = self.ds_config['ny']
+        
+#         x_inc = src_gt[1]
+#         y_inc = src_gt[5]
+#         dst_srs = self.ds_config.get('proj')
+
+#         ## Initialize Output Array
+#         combined_arr = np.full((y_count, x_count), np.nan, dtype=np.float32)
+        
+#         ## Iterate Sources
+#         for aux_fn in aux_source_list:
+#             try:
+#                 ## Initialize Dataset
+#                 aux_ds = DatasetFactory(
+#                     mod=aux_fn,
+#                     src_region=src_region,
+#                     x_inc=x_inc,
+#                     y_inc=y_inc,
+#                     dst_srs=dst_srs,
+#                     verbose=self.verbose
+#                 )._acquire_module()
+                
+#                 if aux_ds is None: continue
+#                 aux_ds.initialize()
+
+#                 ## Iterate Chunks from Source
+#                 for arrs, srcwin, gt in aux_ds.yield_array(want_sums=False):
+#                     if arrs['z'] is None: continue
+                    
+#                     ## Supercede (Burn into master array)
+#                     ## srcwin is (x_off, y_off, x_size, y_size)
+#                     y_start = srcwin[1]
+#                     y_end = srcwin[1] + srcwin[3]
+#                     x_start = srcwin[0]
+#                     x_end = srcwin[0] + srcwin[2]
+                    
+#                     ## Safety Bounds Check
+#                     if y_end > combined_arr.shape[0] or x_end > combined_arr.shape[1]:
+#                         ## Clip if needed (yield_array usually handles this, but safe is better)
+#                         ## For now assume yield_array respects requested region dims
+#                         pass
+
+#                     ## Overwrite existing data (Supercede)
+#                     ## We only overwrite where the new data is valid (not nan/ndv)
+#                     chunk_data = arrs['z']
+#                     valid_mask = ~np.isnan(chunk_data)
+                    
+#                     ## Create slice view
+#                     target_slice = combined_arr[y_start:y_end, x_start:x_end]
+                    
+#                     ## Apply
+#                     if target_slice.shape == chunk_data.shape:
+#                         target_slice[valid_mask] = chunk_data[valid_mask]
+#                     else:
+#                         if self.verbose:
+#                             utils.echo_warning_msg(f"Shape mismatch in aux load: {target_slice.shape} vs {chunk_data.shape}")
+
+#             except Exception as e:
+#                 if self.verbose:
+#                     utils.echo_warning_msg(f"Failed to load aux data {aux_fn}: {e}")
+                    
+#         return combined_arr
+
+        
+#     def generate(self):
+#         """Execute the filter."""
+        
+#         if self.verbose:
+#             utils.echo_msg(f'Filtering {self.src_dem} using {self.__class__.__name__}')
+            
+#         self.run()
+#         self.split_by_z()
+#         self.split_by_weight()
+#         return self        
+
+    
+#     def run(self):
+#         """Main filter to be implemented by subclasses."""
+        
+#         raise NotImplementedError("Subclasses must implement run()")
+
+    
+#     def copy_src_dem(self):
+#         """Create a copy of source DEM for editing."""
+        
+#         with gdalfun.gdal_datasource(self.src_dem, update=False) as src_ds:
+#             if src_ds:
+#                 info = gdalfun.gdal_infos(src_ds)
+#                 driver = gdal.GetDriverByName(info['fmt'])
+#                 return driver.CreateCopy(self.dst_dem, src_ds, 0, options=['COMPRESS=DEFLATE'])
+#         return None
+
+    
+#     def extract_src_array(self, buffer_cells=0):
+#         """Extract array from source DEM within valid region."""
+        
+#         if not self.src_region: self.init_region()
+        
+#         x_inc = self.ds_config['geoT'][1]
+#         y_inc = self.ds_config['geoT'][5] * -1
+        
+#         src_region.buffer(
+#             x_bv=(x_inc * buffer_cells),
+#             y_bv=(y_inc * buffer_cells)
+#         )
+
+#         xcount, ycount, dst_gt = src_region.geo_transform(
+#             x_inc=self.ds_config['geoT'][1],
+#             y_inc=self.ds_config['geoT'][5],
+#             node='grid'
+#         )
+        
+#         src_arr = np.full((ycount, xcount), np.nan)        
+#         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+#             if src_ds is not None:
+#                 srcwin = src_region.srcwin(self.gt, xcount, ycount, node='grid')
+                
+#                 src_arr[
+#                     srcwin[1]:srcwin[1]+srcwin[3],
+#                     srcwin[0]:srcwin[0]+srcwin[2]
+#                 ] = self.ds_band.ReadAsArray()
+
+#                 src_arr[src_arr == self.ds_config['ndv']] = np.nan
+#                 if src_region.zmin is not None:
+#                     src_arr[src_arr < src_region.zmin] = np.nan
+                    
+#                 if src_region.zmax is not None:
+#                     src_arr[src_arr > src_region.zmax] = np.nan
+#         return src_arr
+
+    
+#     def split_by_z(self):
+#         """Apply Z min/max filtering."""
+        
+#         if self.max_z is None and self.min_z is None: return
+
+#         if self.verbose: utils.echo_msg(f'Splitting by Z: {self.min_z} to {self.max_z}')
+        
+#         ## Open DST DEM (Results of run())
+#         ds = gdal.Open(self.dst_dem, gdal.GA_Update)
+#         if not ds: return
+
+#         band = ds.GetRasterBand(1)
+#         arr = band.ReadAsArray()
+#         ndv = band.GetNoDataValue()
+        
+#         mask = np.zeros(arr.shape, dtype=bool)
+        
+#         if self.min_z is not None:
+#             mask |= (arr < self.min_z) & (arr != ndv)
+#         if self.max_z is not None:
+#             mask |= (arr > self.max_z) & (arr != ndv)
+            
+#         if np.any(mask):
+#             arr[mask] = ndv
+#             band.WriteArray(arr)
+            
+#         ds = None
+
+        
+#     def split_by_weight(self):
+#         """Apply Weight min/max filtering."""
+        
+#         if self.max_weight is None and self.min_weight is None: return
+#         if not self.weight_mask: return
+
+#         if self.verbose: utils.echo_msg(f'Splitting by Weight: {self.min_weight} to {self.max_weight}')
+        
+#         ## Open DST DEM (Results of run())
+#         ds = gdal.Open(self.dst_dem, gdal.GA_Update)
+#         if not ds: return
+
+#         band = ds.GetRasterBand(1)
+#         arr = band.ReadAsArray()
+#         ndv = band.GetNoDataValue()
+        
+#         mask = np.zeros(arr.shape, dtype=bool)
+        
+#         if self.min_weight is not None:
+#             mask |= (arr < self.min_weight) & (arr != ndv)
+#         if self.max_weight is not None:
+#             mask |= (arr > self.max_weight) & (arr != ndv)
+            
+#         if np.any(mask):
+#             arr[mask] = ndv
+#             band.WriteArray(arr)
+            
+#         ds = None
+
+    
+#     def get_outliers(self, in_array, percentile=75, k=1.5, verbose=False):
+#         """Calculate IQR-based outliers."""
+        
+#         if np.all(np.isnan(in_array)): return np.nan, np.nan
+        
+#         p_max = np.nanpercentile(in_array, percentile)
+#         p_min = np.nanpercentile(in_array, 100 - percentile) 
+        
+#         # max_p = percentile
+#         # min_p = percentile - 50 (if percentile > 50)
+        
+#         iqr = (p_max - p_min) * k
+#         return p_max + iqr, p_min - iqr
+
+    
+
+    
+# class GritsFactory(factory.CUDEMFactory):
+#     """Factory for Grits Modules."""
+    
+#     from . import blur
+#     from . import gmtfilter
+#     from . import lspoutliers
+#     from . import weights
+#     from . import flats
+#     from . import blend
+    
+#     _modules = {
+#         'blur': {'name': 'blur', 'desc': 'Gaussian Blur', 'call': blur.Blur},
+#         'grdfilter': {'name': 'grdfilter', 'desc': 'GMT grdfilter', 'call': gmtfilter.GMTgrdfilter},
+#         'outliers': {'name': 'outliers', 'desc': 'Remove outliers (IQR)', 'call': lspoutliers.LSPOutliers},
+#         'flats': {'name': 'flats', 'desc': 'Remove flat areas', 'call': flats.Flats},
+#         'weights': {'name': 'weights', 'desc': 'Weight buffering', 'call': weights.Weights},
+#         'blend': {'name': 'blend', 'desc': 'Blend aux data', 'call': blend.Blend},
+#     }
+
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+
+        
+# def grits_cli(argv=sys.argv):
+#     """Grits CLI using Argparse."""
+    
+#     parser = argparse.ArgumentParser(
+#         prog='grits',
+#         description=f'Grits ({__version__}): GRId filTerS - DEM Filtering Tool',
+#         epilog='Example: grits input.tif -M blur:sigma=2'
+#     )
+    
+#     parser.add_argument('dems', nargs='+', help='Input DEM files or Waffles JSON configs')
+    
+#     ## Filter Modules
+#     parser.add_argument('-M', '--module', action='append', required=True,
+#                         help='Grits module to apply (e.g., blur, outliers). Can be used multiple times.')
+    
+#     ## Output
+#     parser.add_argument('-O', '--outfile', help='Output filename (optional)')
+    
+#     ## Filters
+#     parser.add_argument('-R', '--region', action='append', help='Restrict processing region')
+#     parser.add_argument('-N', '--min-z', type=float, help='Minimum Z value')
+#     parser.add_argument('-X', '--max-z', type=float, help='Maximum Z value')
+#     parser.add_argument('-Wn', '--min-weight', type=float, help='Minimum Weight')
+#     parser.add_argument('-Wx', '--max-weight', type=float, help='Maximum Weight')
+    
+#     ## Masks
+#     parser.add_argument('-U', '--uncertainty-mask', help='Uncertainty raster/band')
+#     parser.add_argument('-W', '--weight-mask', help='Weight raster/band')
+#     parser.add_argument('-C', '--count-mask', help='Count raster/band')
+#     parser.add_argument('-A', '--aux-data', action='append', help='Auxiliary data files')
+    
+#     # Info
+#     parser.add_argument('--modules', action='store_true', help='List available modules')
+#     parser.add_argument('--version', action='version', version=f'grits {__version__}')
+#     parser.add_argument('-q', '--quiet', action='store_true', help='Quiet mode')
+
+#     args = parser.parse_args(argv[1:])
+
+#     ## List Modules
+#     if args.modules:
+#         factory.echo_modules(GritsFactory._modules)
+#         sys.exit(0)
+
+#     ## Process Inputs
+#     for src_dem in args.dems:
+#         ## Handle Waffles JSON input logic (if needed)
+#         ## ...
+        
+#         ## Apply Filters
+#         current_dem = src_dem
+#         for mod_str in args.module:
+#             ## Parse module string (name:key=val)
+#             ## Use Factory to get instance
+            
+#             ## Setup output name for this step
+#             if args.outfile:
+#                 dst_dem = args.outfile
+#             else:
+#                 base = os.path.basename(current_dem)
+#                 dst_dem = f"{os.path.splitext(base)[0]}_{mod_str.split(':')[0]}.tif"
+
+#             # Init Factory
+#             fac = GritsFactory(
+#                 mod=mod_str,
+#                 src_dem=current_dem,
+#                 dst_dem=dst_dem,
+#                 min_z=args.min_z,
+#                 max_z=args.max_z,
+#                 min_weight=args.min_weight,
+#                 max_weight=args.max_weight,
+#                 uncertainty_mask=args.uncertainty_mask,
+#                 weight_mask=args.weight_mask,
+#                 count_mask=args.count_mask,
+#                 aux_data=args.aux_data,
+#                 verbose=not args.quiet
+#             )
+            
+#             try:
+#                 ## Run Filter
+#                 filter_obj = fac._acquire_module()
+#                 if filter_obj:
+#                     res = filter_obj()
+#                     if res:
+#                         current_dem = res.dst_dem # Chain output to next input
+#                 else:
+#                     utils.echo_error_msg(f"Could not load module: {mod_str}")
+#             except Exception as e:
+#                 utils.echo_error_msg(f"Error executing {mod_str}: {e}")
+#                 if not args.quiet:
+#                     traceback.print_exc()
+
+                    
+# if __name__ == '__main__':
+#     grits_cli()
+
+
+# ### End

@@ -1776,10 +1776,10 @@ class ElevationDataset:
             INF: The metadata info object for the generated archive datalist.
         """
         
-        # 1. Determine Archive Root Directory
+        ## Determine Archive Root Directory
         archive_root = dirname if dirname is not None else None
         
-        # Default name based on metadata
+        ## Default name based on metadata
         dataset_name = self.metadata.get('name', 'dataset').split('/')[0]
         
         if self.region is None:
@@ -1802,17 +1802,17 @@ class ElevationDataset:
             except OSError:
                 pass
 
-        # 2. Process Entries
+        ## Process Entries
         archive_keys = []
         srs_all = []
 
-        # Iterate through parsed sub-datasets
+        ## Iterate through parsed sub-datasets
         for this_entry in self.parse():
-            # Track SRS for final metadata
+            ## Track SRS for final metadata
             srs = this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs
             if srs: srs_all.append(srs)
 
-            # Determine sub-directory for this specific entry
+            ## Determine sub-directory for this specific entry
             entry_name = this_entry.metadata.get('name', 'unknown')
             datalist_dirname = os.path.join(archive_root, os.path.dirname(entry_name))
             this_key = os.path.basename(datalist_dirname)
@@ -1820,10 +1820,10 @@ class ElevationDataset:
             if not os.path.exists(datalist_dirname):
                 os.makedirs(datalist_dirname)
 
-            # Define sub-datalist and xyz paths
+            ## Define sub-datalist and xyz paths
             sub_datalist_path = os.path.join(datalist_dirname, f"{this_key}.datalist")
             
-            # Construct XYZ filename
+            ## Construct XYZ filename
             base_fn = os.path.basename(this_entry.fn)
             clean_name = utils.fn_basename2(base_fn)
             if not clean_name:
@@ -1836,8 +1836,8 @@ class ElevationDataset:
                 utils.echo_warning_msg(f'{this_xyz_path} already exists, skipping...')
                 continue
 
-            # 3. Write Data
-            # Write XYZ data
+            ## Write Data
+            ## Write XYZ data
             with open(this_xyz_path, 'w') as xp:
                 for this_xyz in this_entry.xyz_yield: 
                     this_xyz.dump(
@@ -1848,8 +1848,8 @@ class ElevationDataset:
                         precision=self.dump_precision
                     )
 
-            # Update Sub-Datalist
-            # If data was written, append to sub-datalist. Else clean up.
+            ## Update Sub-Datalist
+            ## If data was written, append to sub-datalist. Else clean up.
             if os.path.exists(this_xyz_path) and os.stat(this_xyz_path).st_size > 0:
                 with open(sub_datalist_path, 'a') as sub_dlf:
                     # Format: path format weight uncertainty
@@ -1857,14 +1857,14 @@ class ElevationDataset:
             else:
                 utils.remove_glob(f'{this_xyz_path}*')
 
-            # 4. Update Master Datalist
-            # If the sub-datalist has content, add it to the master archive list
+            ## Update Master Datalist
+            ## If the sub-datalist has content, add it to the master archive list
             if os.path.exists(sub_datalist_path) and os.stat(sub_datalist_path).st_size > 0:
                 if this_key not in archive_keys:
                     archive_keys.append(this_key)
                     with open(self.archive_datalist, 'a') as dlf:
-                        # Add entry pointing to the sub-datalist
-                        # Format: path -1 weight uncertainty metadata...
+                        ## Add entry pointing to the sub-datalist
+                        ## Format: path -1 weight uncertainty metadata...
                         rel_path = os.path.join(datalist_dirname, this_key)
                         meta_str = this_entry.format_metadata()
                         w = utils.float_or(this_entry.weight, 1)
@@ -1874,22 +1874,19 @@ class ElevationDataset:
             else:
                 utils.remove_glob(sub_datalist_path)
 
-            # Cleanup empty directories
+            ## Cleanup empty directories
             if os.path.exists(datalist_dirname) and not os.listdir(datalist_dirname):
                 os.rmdir(datalist_dirname)
                     
-        # 5. Finalize Archive Metadata
-        # Determine common SRS
+        ## Finalize Archive Metadata
+        ## Determine common SRS
         srs_set = set(srs_all)
         arch_srs = srs_set.pop() if len(srs_set) == 1 else None
 
-        # Generate INF for the master datalist
-        utils.remove_glob(f'{self.archive_datalist}.inf')
+        ## Generate INF for the master datalist
+        #utils.remove_glob(f'{self.archive_datalist}.inf')
         
-        # Use Factory to load the new archive and generate its INF
-        # We assume DatasetFactory is available in the module scope
-        #from . import factory as ds_factory # Local import to avoid circular dependency issues
-        
+        ## Use Factory to load the new archive and generate its INF
         this_archive = DatasetFactory(
             mod=self.archive_datalist,
             data_format=-1,

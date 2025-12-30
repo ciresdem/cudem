@@ -20,7 +20,7 @@
 ###############################################################################
 ### Code:
 
-__version__ = "0.1.1"
+__version__ = "0.3.1"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
@@ -31,5 +31,7 @@ from . import weights
 from . import flats
 from . import gmtfilter
 from . import blend
+from . import cut
+from . import clip
 
 ### End
