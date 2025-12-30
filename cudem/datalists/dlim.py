@@ -1871,9 +1871,12 @@ class ElevationDataset:
             ## Update Master Datalist
             ## If the sub-datalist has content, add it to the master archive list
             if os.path.exists(sub_datalist_path) and os.stat(sub_datalist_path).st_size > 0:
+                utils.echo_msg('1')
                 if this_key not in archive_keys:
+                    utils.echo_msg('2')
                     archive_keys.append(this_key)
                     with open(self.archive_datalist, 'a') as dlf:
+                        utils.echo_msg('3')
                         ## Add entry pointing to the sub-datalist
                         ## Format: path -1 weight uncertainty metadata...
                         rel_path = os.path.join(datalist_dirname, this_key)

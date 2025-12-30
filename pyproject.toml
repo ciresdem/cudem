@@ -1,55 +1,72 @@
-[project]
-name = 'cudem'
-version = '3.0.0'
-dependencies = [
-	     'numpy', # all
-             'scipy', # waffles/convex hulls
-             'requests[security]', # fetches/nsidc
-             'lxml', # fetches xml parsing
-             'matplotlib', # uncertainty plots
-             'laspy[lazrs,laszip]', # dlim/lasfile support
-	     'pyproj', # all
-             'h5py', # nsidc
-             'boto3', # for amazon/bluetopo
-             'tqdm', # progress bar
-             'mercantile', # for MS building footprints
-             'utm', # for cshelph
-             'pandas', # for cshelph
-             'netCDF4', # for netcdf outputs
-]
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
-requires-python = '>=3.0'
+[project]
+name = "cudem"
+version = "3.0.0"
+description = "Modules and scripts for processing Digital Elevation Models"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
 authors = [
-	{name = 'Matthew Love', email = 'matthew.love@colorado.edu'},
+    {name = "Matthew Love", email = "matthew.love@colorado.edu"},
 ]
 maintainers = [
-	{name = 'Matthew Love', email = 'matthew.love@colorado.edu'},
+    {name = "Matthew Love", email = "matthew.love@colorado.edu"},
 ]
-description = 'Modules and scripts for utilizing geographic data Digital Elevation Models'
-readme = 'README.md'
-license = 'MIT'
 classifiers = [
-            'Programming Language :: Python :: 3',
-            'Operating System :: OS Independent',
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: GIS",
 ]
 
-#[project.entry-points."cudem"]
-[project.scripts]
-regions = 'cudem.regions:regions_cli'
-dlim = 'cudem.datalists.dlim:datalists_cli'
-waffles = 'cudem.waffles.waffles:waffles_cli'
-fetches = 'cudem.fetches.fetches:fetches_cli'
-vdatums = 'cudem.vdatums:vdatums_cli'
-perspecto = 'cudem.perspecto.perspecto:perspecto_cli'
-grits = 'cudem.grits.grits:grits_cli'
-bing_bfp = 'cudem.fetches.bingbfp:bing_bfp_cli'
-osm_coast = 'cudem.fetches.osm:osm_coast_cli'
-spatial_metadata = 'cudem.globato.spatial_metadata:spatial_metadata_cli'
-pointz = 'cudem.pointz:pointz_cli'
+dependencies = [
+    "numpy",
+    "scipy",
+    "pyproj",
+    "requests[security]",
+    "lxml",
+    "matplotlib",
+    "laspy[lazrs,laszip]",
+    "h5py",
+    "boto3",
+    "tqdm",
+    "mercantile",
+    "utm",
+    "pandas",
+    "netCDF4",
+    "scikit-image",  # For bilateral filtering in grits
+]
 
-#[tools.setuptools.packages.find]
-#where=['cudem']
+[project.optional-dependencies]
+gmt = ["pygmt"]  # Optional GMT bindings
+
+[project.scripts]
+# Core Modules
+fetches = "cudem.fetches.fetches:fetches_cli"
+dlim = "cudem.datalists.dlim:datalists_cli"
+waffles = "cudem.waffles.waffles:waffles_cli"
+grits = "cudem.grits.grits:grits_cli"
+pointz = "cudem.pointz:pointz_cli"
+
+# Utilities
+regions = "cudem.regions:regions_cli"
+vdatums = "cudem.vdatums:vdatums_cli"
+perspecto = "cudem.perspecto.perspecto:perspecto_cli"
+spatial_metadata = "cudem.globato.spatial_metadata:spatial_metadata_cli"
+
+# Specific Fetch Tools
+bing_bfp = "cudem.fetches.bingbfp:bing_bfp_cli"
+osm_coast = "cudem.fetches.osm:osm_coast_cli"
 
 [tool.setuptools.package-data]
-cudem = ['data/*_errs.dat.gz', 'data/*.geojson', 'fetches/data/*.geojson']
+cudem = [
+    "data/*_errs.dat.gz", 
+    "data/*.geojson", 
+    "fetches/data/*.geojson"
+]
 
+[project.urls]
+Homepage = "https://github.com/ciresdem/cudem"
+Issues = "https://github.com/ciresdem/cudem/issues"
