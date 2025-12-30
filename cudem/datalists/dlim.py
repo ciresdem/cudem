@@ -1798,7 +1798,7 @@ class ElevationDataset:
             self.archive_datalist = f"{archive_root}.datalist"
             archive_root = os.path.join(archive_root, archive_name)
 
-        # Check if we are creating a Tarball and set it as the dst_fn
+        ## Check if we are creating a Tarball and set it as the dst_fn
         is_tar = archive_root.endswith('.tar.gz') or archive_root.endswith('.tgz')
         dst_fn = archive_root
             
@@ -1909,6 +1909,7 @@ class ElevationDataset:
             cache_dir=self.cache_dir,
         )._acquire_module().initialize()
 
+        this_archive.generate_inf()
         ## Create the Tarball
         if is_tar:
             utils.echo_msg(f"Archiving to {dst_fn}...")

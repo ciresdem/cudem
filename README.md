@@ -102,7 +102,7 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 | Module | Description | CLI Command |
 | --- | --- | --- |
 | **[grits](/docs/grits.md)** | **Grid Filtering & Post-Processing**: A powerful filtering engine to smooth, clean, blend, and analyze raster DEMs. | `grits` |
-| **[pointz](/docs/pointz.md)** | **Point-Cloud Filtering**: A powerful filtering engine to filter Point Clouds. | `grits` |
+| **[pointz](/docs/pointz.md)** | **Point-Cloud Filtering**: A powerful filtering engine to filter Point Clouds. | `pointz` |
 | **[regions](/docs/regions.md)** | **Spatial Management**: Process and manipulate bounding box regions and vector polygons. | `regions` |
 | **[vdatums](docs/vdatums.md)** | **Vertical Transformation**: Generate vertical transformation grids and manage datums. | `vdatums` |
 | **[perspecto](/docs/perspecto.md)** | **Visualization**: Generate perspective images, hillshades, and color-relief maps of DEMs. | `perspecto` |
