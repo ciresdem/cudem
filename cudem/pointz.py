@@ -59,7 +59,7 @@ class PointPixels:
         self.x_size = utils.int_or(x_size, 10)
         self.y_size = utils.int_or(y_size, 10)
         self.verbose = verbose
-        self.ppm = ppm  # Pixel-Per-Metric flag? (Unused logic in original kept for legacy)
+        self.ppm = ppm 
         self.dst_gt = None
 
         
@@ -352,7 +352,7 @@ class PointZ:
         """
         
         try:
-            pa = PointPixels(x_size=x_size, y_size=y_size, ppm=True)
+            pa = PointPixels(x_size=x_size, y_size=y_size, ppm=False)
             point_arrays, _, _ = pa(points, mode='mean')
 
             ## Map pixels back to point indices
@@ -425,7 +425,7 @@ class PointZ:
 ## =============================================================================
 ## Vector Mask Filter
 ## =============================================================================
-class PointZVectorMask(PointZ):
+class VectorMask(PointZ):
     """Filter data using a vector mask (Shapefile, GeoJSON, etc).
 
     Config: <vector_mask:mask_fn=path:invert=False>
@@ -471,7 +471,7 @@ class PointZVectorMask(PointZ):
 ## =============================================================================
 ## Outlier Filters
 ## =============================================================================
-class PointZOutlier(PointZ):
+class OutlierZ(PointZ):
     """XYZ outlier filter based on local block statistics.
 
     Config: <outlierz:percentile=98:multipass=4:invert=False:res=50>
@@ -564,7 +564,7 @@ class PointZOutlier(PointZ):
         return ~total_outliers_mask if self.invert else total_outliers_mask
 
 
-class RQOutlierZ(PointZOutlier):
+class RQOutlierZ(OutlierZ):
     """XYZ outlier filter using a Reference Raster (RQ).
 
     Config: <rq:threshold=5:raster=None>
@@ -607,8 +607,83 @@ class RQOutlierZ(PointZOutlier):
                 return out_fn
         return None
 
-    
     def init_raster(self, raster):
+
+        if raster is not None and isinstance(raster, str):
+            if os.path.exists(raster) and os.path.isfile(raster):
+                return [raster]
+            
+        elif raster is None:
+            if (self.region is not None or self.xyinc is not None) and self.resample_raster:
+                _raster = utils.append_fn(
+                    f'rq_raster_{raster}', self.region,
+                    self.xyinc[0], res=1 if not all(self.xyinc) else None
+                )
+                _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
+                if not os.path.exists(os.path.dirname(_raster)):
+                    os.makedirs(os.path.dirname(_raster))
+
+                if os.path.exists(_raster) and os.path.isfile(_raster):
+                    return [_raster]
+                
+            raster = []
+            ## Try gmrt all
+            this_fetch = self.fetch_data(
+                'gmrt', self.region.copy().buffer(pct=1)
+            )
+            raster_ = [x[1] for x in this_fetch.results]
+            raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) \
+                           if x.split('.')[-1] == 'grd' else x for x in raster_])
+            
+            ## Try etopo
+            this_fetch = self.fetch_data(
+                'etopo:datatype=surface', self.region.copy().buffer(pct=1)
+            )
+            raster.extend([x[1] for x in this_fetch.results])
+            # raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) \
+            #                if x.split('.')[-1] == 'grd' else x for x in raster_])
+
+            ## Try gmrt swath
+            this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+            raster_ = [x[1] for x in this_fetch.results]
+            raster_ = [gdalfun.gmt_grd2gdal(x, verbose=False) \
+                       if x.split('.')[-1] == 'grd' else x for x in raster_]
+            gmrt_swath = self.mask_gmrt(raster_[0])
+            if gmrt_swath is not None:
+                raster.extend([gmrt_swath])
+
+            ## Try cudem 1/3
+            this_fetch = self.fetch_data(
+                'CUDEM:datatype=13:keep_footprints=True', self.region.copy().buffer(pct=1)
+            )
+            raster.extend([x[1] for x in this_fetch.results])        
+
+            ## Try cudem 1/9
+            this_fetch = self.fetch_data(
+                'CUDEM:datatype=19:keep_footprints=True', self.region.copy().buffer(pct=1)
+            )
+            raster.extend([x[1] for x in this_fetch.results])                    
+
+        elif any(raster in item for item in self.fetches_modules):
+            _raster = [item for item in self.fetches_modules if raster in item][0]
+            #elif raster.split(':')[0] in self.fetches_modules:
+            this_fetch = self.fetch_data(_raster, self.region)
+            raster = [x[1] for x in this_fetch.results]
+            raster = [gdalfun.gmt_grd2gdal(x, verbose=False) \
+                      if x.split('.')[-1] == 'grd' else x for x in raster]
+            if self.xyinc is not None and self.resample_raster:
+                raster = [gdalfun.sample_warp(
+                    raster, _raster, self.xyinc[0], self.xyinc[1],
+                    sample_alg='bilinear', src_region=self.region,
+                    verbose=self.verbose,
+                    co=["COMPRESS=DEFLATE", "TILED=YES"]
+                )[0]]
+        else:
+            utils.echo_warning_msg(f'could not parse rq raster {raster}')
+        return raster
+
+    
+    def init_raster_fallback(self, raster):
         """Initialize the reference raster list."""
         
         if raster and os.path.exists(raster) and os.path.isfile(raster):
@@ -626,13 +701,14 @@ class RQOutlierZ(PointZOutlier):
                 masked_fn = None
                 rasters.append(masked_fn if masked_fn else fn)
 
+        ## Fallback
         if not rasters:
             cudem_fetch = self.fetch_data('CUDEM:datatype=13')
             if cudem_fetch:
                 rasters.extend([r[1] for r in cudem_fetch.results])
 
         return rasters
-
+        
     
     def point_residuals(self, points, percentage=True, res=50):
         """Calculate residuals against the loaded raster(s)."""
@@ -647,13 +723,21 @@ class RQOutlierZ(PointZOutlier):
         if len(self.raster) > 1 or self.resample_raster:
             tmp_raster_fn = os.path.join(self.cache_dir, f'rq_merged_{utils.this_year()}.vrt')
             if self.region is None: self.region = self.init_region()
-            
+
+            ## Create a temporary region buffered by 5% to ensure points on the 
+            ## exact edges of the bounding box are covered by the new raster grid.
+            warp_region = self.region.copy()
+            warp_region.buffer(pct=5) 
+
             x_res = self.xyinc[0] if self.xyinc else 0.0000925
             y_res = self.xyinc[1] if self.xyinc else 0.0000925
 
             try:
+                ## Either use the size=True along with xcount/ycount or
+                ## use x_res/y_res with the warp_region instead of self.region
                 warped = gdalfun.sample_warp(
-                    self.raster, tmp_raster_fn, x_res, y_res, 
+                    self.raster, tmp_raster_fn, None, None,
+                    xcount=None, ycount=None, size=True,
                     sample_alg='bilinear', src_region=self.region, 
                     verbose=self.verbose
                 )
@@ -672,6 +756,20 @@ class RQOutlierZ(PointZOutlier):
                 try: os.remove(temp_merged)
                 except OSError: pass
 
+        ## Validation check to catch alignment errors early
+        if len(sampled_z) != len(points):
+            ## If lengths still mismatch, pad with NaNs to prevent crash (though buffer usually fixes this)
+            utils.echo_warning_msg(
+                f"Shape mismatch in RQ filter: Points {len(points)} vs Sampled {len(sampled_z)}. "
+                "Padding with NaNs."
+            )
+            new_sampled = np.full(len(points), np.nan)
+            ## Fallback to fill what we can
+            ## Ideally, this never gets reached.
+            limit = min(len(points), len(sampled_z))
+            new_sampled[:limit] = sampled_z[:limit]
+            sampled_z = new_sampled
+                
         diff = points['z'] - sampled_z
         
         if percentage:
@@ -685,14 +783,503 @@ class RQOutlierZ(PointZOutlier):
         else:
             return np.abs(diff)
 
+
+class BlockThin(PointZ):
+    """Thin point cloud by keeping one representative point per grid cell.
+    Useful for reducing data volume or shoal-biasing (hydrography).
+    
+    Config: <blockthin:res=10:mode=min>
+    """
+    
+    def __init__(self, res=10, mode='min', **kwargs):
+        super().__init__(**kwargs)
+        self.res = utils.float_or(res, 10)
+        self.mode = mode if mode in ['min', 'max', 'mean', 'median'] else 'min'
+        
+    def run(self):
+        if self.points is None: return None
+        ## Calculate grid indices
+        x_idx = np.floor((self.points['x'] - np.min(self.points['x'])) / self.res).astype(np.int64)
+        y_idx = np.floor((self.points['y'] - np.min(self.points['y'])) / self.res).astype(np.int64)
+        
+        ## Hash/Encode X,Y into a single unique ID for grouping
+        ## (Assuming reasonably sized grid, integer packing works)
+        ## simplistic: id = y * width + x
+        width = np.max(x_idx) + 1
+        grid_ids = y_idx * width + x_idx
+        
+        ## Sort points by Grid ID
+        sort_indices = np.argsort(grid_ids)
+        sorted_ids = grid_ids[sort_indices]
+        
+        ## Find unique block boundaries
+        unique_ids, unique_indices = np.unique(sorted_ids, return_index=True)
+        
+        ## Indices of the points we want to KEEP
+        keep_indices = []
+        
+        ## Iterate over blocks (this can be vectorized further but loop is clear)
+        ## unique_indices points to the start of each block in the sorted array
+        for i in range(len(unique_ids)):
+            start = unique_indices[i]
+            end = unique_indices[i+1] if i+1 < len(unique_ids) else len(sorted_ids)
+            
+            ## Get indices for points in this block
+            block_indices = sort_indices[start:end]
+            block_points = self.points[block_indices]
+            
+            ## Select winner based on mode
+            if self.mode == 'min':
+                ## Argmin of Z
+                local_idx = np.argmin(block_points['z'])
+                keep_indices.append(block_indices[local_idx])
+                
+            elif self.mode == 'max':
+                ## Argmax of Z
+                local_idx = np.argmax(block_points['z'])
+                keep_indices.append(block_indices[local_idx])
+                
+            elif self.mode == 'median':
+                med_z = np.median(block_points['z'])
+                local_idx = np.argmin(np.abs(block_points['z'] - med_z))
+                keep_indices.append(block_indices[local_idx])
+
+        mask = np.ones(len(self.points), dtype=bool) # All True (Remove all)
+        mask[keep_indices] = False # Set Keepers to False
+        
+        return mask # Returns True for points to DELETE
+    
+
+## Dlim does this automatically with the -R region set with z-values,
+## but this may be useful if using poitz outside of dlim/waffles
+class RangeZ(PointZ):
+    """Filter points based on vertical Z-range.
+    
+    By default, keeps points WITHIN the specified range [min_z, max_z].
+    Use invert=True to remove points within the range.
+    
+    Config: <rangez:min_z=-100:max_z=0:invert=False>
+    """
+    
+    def __init__(self, min_z=None, max_z=None, invert=False, **kwargs):
+        super().__init__(**kwargs)
+        self.min_z = utils.float_or(min_z)
+        self.max_z = utils.float_or(max_z)
+        self.invert = invert
+        
+    def run(self):
+        """Generate a mask of outliers."""
+        if self.points is None or len(self.points) == 0:
+            return None
+            
+        z_vals = self.points['z']
+        
+        ## Start with all False (Keep everything)
+        outliers = np.zeros(len(z_vals), dtype=bool)
+        
+        ## "Keep Inside" (Standard)
+        ## Outliers are those OUTSIDE the range
+        if not self.invert:
+            if self.min_z is not None:
+                outliers |= (z_vals < self.min_z)
+            if self.max_z is not None:
+                outliers |= (z_vals > self.max_z)
+                
+        ## "Remove Inside" (Invert)
+        ## Outliers are those INSIDE the range
+        else:
+            ## For invert, we need valid conditions for both bounds if provided
+            ## If only min_z is given with invert=True, we remove everything >= min_z
+            
+            inside_mask = np.ones(len(z_vals), dtype=bool)
+            
+            if self.min_z is not None:
+                inside_mask &= (z_vals >= self.min_z)
+            if self.max_z is not None:
+                inside_mask &= (z_vals <= self.max_z)
+                
+            outliers = inside_mask
+
+        return outliers
+
+
+class CoplanarZ(PointZ):
+    """Filter points that deviate from a locally fitted plane.
+    Useful for removing noise from generally flat features (roads, water, plains).
+
+    Config: <coplanar:radius=10:threshold=0.5:min_neighbors=3:invert=False>
+    """
+    
+    def __init__(self, radius=10, threshold=0.5, min_neighbors=3, invert=False, **kwargs):
+        super().__init__(**kwargs)
+        self.radius = utils.float_or(radius, 10)
+        self.threshold = utils.float_or(threshold, 0.5)
+        self.min_neighbors = utils.int_or(min_neighbors, 3)
+        self.invert = invert
+
+        
+    def run(self):
+        """Generate outlier mask based on plane fitting."""
+        
+        if self.points is None or len(self.points) == 0:
+            return None
+            
+        try:
+            from scipy.spatial import cKDTree
+        except ImportError:
+            utils.echo_error_msg("scipy.spatial.cKDTree required for coplanar filter.")
+            return None
+
+        ## Build KDTree for efficient neighbor search
+        coords = np.column_stack((self.points['x'], self.points['y']))
+        tree = cKDTree(coords)
+        
+        ## Query neighbors within radius
+        ## Returns list of indices for each point
+        if self.verbose:
+            utils.echo_msg(f"Querying neighbors (radius={self.radius})...")
+        indices_list = tree.query_ball_point(coords, self.radius)
+        
+        outliers = np.zeros(len(self.points), dtype=bool)
+        z_vals = self.points['z']
+        
+        ## Iterate points and fit planes
+        ## We loop through points because plane fitting is local and variable-size.
+        with utils.ccp(total=len(self.points), desc='Plane Fitting', leave=False) as pbar:
+            for i, neighbors in enumerate(indices_list):
+                pbar.update()
+                
+                ## Check neighbor count (including self)
+                if len(neighbors) < self.min_neighbors + 1:
+                    # Treat isolated points as outliers (noise)
+                    outliers[i] = True 
+                    continue
+                
+                ## Get neighbor coordinates
+                ## Center data around the query point to avoid floating point issues
+                ## and simplify the intercept calculation.
+                nb_coords = coords[neighbors]
+                nb_z = z_vals[neighbors]
+                
+                center_x, center_y = coords[i]
+                
+                ## Setup Least Squares: Z = a*X + b*Y + c
+                ## A matrix columns: [x_rel, y_rel, 1]
+                A = np.column_stack((
+                    nb_coords[:, 0] - center_x,
+                    nb_coords[:, 1] - center_y,
+                    np.ones(len(neighbors))
+                ))
+                
+                try:
+                    ## Fit plane
+                    ## c (coeffs[2]) is the fitted Z at (0,0) relative coordinates (the query point)
+                    coeffs, residuals, rank, s = np.linalg.lstsq(A, nb_z, rcond=None)
+                    
+                    fitted_z = coeffs[2] # Intercept at relative (0,0)
+                    
+                    ## Calculate deviation of THE POINT ITSELF from the fitted plane
+                    deviation = abs(z_vals[i] - fitted_z)
+                    
+                    if deviation > self.threshold:
+                        outliers[i] = True
+                        
+                except np.linalg.LinAlgError:
+                    ## Collinear points or singular matrix -> Outlier
+                    outliers[i] = True
+
+        return ~outliers if self.invert else outliers
+    
+
+class BlockMinMax(PointZ):
+    """Thin point cloud by keeping only the Min or Max Z point per grid block.
+    Commonly used in hydrography for "shoal-biased" thinning.
+    
+    Config: <block_minmax:res=10:mode=min:invert=False>
+    """
+    
+    def __init__(self, res=10, mode='min', invert=False, **kwargs):
+        super().__init__(**kwargs)
+        self.res = utils.float_or(res, 10)
+        self.mode = mode.lower() if mode else 'min'
+        self.invert = invert
+
+        
+    def run(self):
+        """Generate mask of points to remove (non-min/max points)."""
+        
+        if self.points is None or len(self.points) == 0:
+            return None
+            
+        ## Calculate Block Indices
+        ## We use floor division to bin points into grid cells
+        x_idx = np.floor(self.points['x'] / self.res).astype(np.int64)
+        y_idx = np.floor(self.points['y'] / self.res).astype(np.int64)
+        z_vals = self.points['z']
+        
+        ## Sort Data
+        ## np.lexsort sorts by the last key first (Primary -> Secondary -> Tertiary)
+        ## We want to group by Block (X, Y), then sort by Z within the block.
+        ## Order: X (Primary), Y (Secondary), Z (Tertiary)
+        
+        if self.mode == 'max':
+            ## For Max, we want Z descending, so we sort by -Z
+            ## (assuming Z is numeric; if using recarray field directly, negation works)
+            sort_order = np.lexsort((-z_vals, y_idx, x_idx))
+        else:
+            # For Min, we want Z ascending
+            sort_order = np.lexsort((z_vals, y_idx, x_idx))
+            
+        ## Apply sort to indices
+        sorted_x = x_idx[sort_order]
+        sorted_y = y_idx[sort_order]
+        
+        ## Find Unique Blocks
+        ## Since data is sorted by Block ID (X, Y), unique_indices will return 
+        ## the index of the FIRST occurrence of each block.
+        ## Because of our tertiary sort on Z, the first occurrence is the Min (or Max) Z.
+        
+        ## Construct a complex key or struct for uniqueness 1D check (faster than 2D unique)
+        ## Or simply use the sorted X,Y arrays.
+        ## Note: np.unique on axis 0 of stacked array can be slow. 
+        ## Fast trick: identifying changes in X or Y.
+        
+        ## Identify where the block index changes (flag=True at start of new block)
+        ## Prepend True for the first element
+        change_mask = np.concatenate(
+            ([True], (sorted_x[1:] != sorted_x[:-1]) | (sorted_y[1:] != sorted_y[:-1]))
+        )
+        
+        ## Indices in the SORTED array that are the "Keepers" (Min/Max points)
+        keeper_sorted_indices = np.nonzero(change_mask)[0]
+        
+        ## Map back to ORIGINAL array indices
+        keeper_original_indices = sort_order[keeper_sorted_indices]
+        
+        ## Create Outlier Mask
+        ## Initialize to True (Remove All)
+        outliers = np.ones(len(self.points), dtype=bool)
+        
+        ## Set Keepers to False (Don't Remove)
+        outliers[keeper_original_indices] = False
+        
+        ## If invert=True, we return the Keepers as "Points to Remove" (dropping the min/max).
+        return ~outliers if self.invert else outliers
+
+
+class RasterMask(PointZ):
+    """Filter points using a raster mask.
+    
+    By default, KEEPS points where the raster value is non-zero (Inside).
+    Use invert=True to REMOVE points where the raster value is non-zero.
+    
+    Config: <raster_mask:mask_fn=path/to/mask.tif:invert=False>
+    """
+    
+    def __init__(self, mask_fn=None, invert=False, **kwargs):
+        super().__init__(**kwargs)
+        self.mask_fn = mask_fn
+        self.invert = invert
+        if self.verbose:
+            utils.echo_msg(f'Raster masking with {mask_fn}')
+
+            
+    def run(self):
+        """Generate mask of outliers."""
+        if self.points is None or len(self.points) == 0:
+            return None
+            
+        if self.mask_fn is None or not os.path.exists(self.mask_fn):
+            utils.echo_error_msg(f"Mask file not found: {self.mask_fn}")
+            return None
+
+        ## Query the raster at point locations
+        sampled_values = gdalfun.gdal_query(self.points, self.mask_fn, 'g').flatten()
+
+        ## Determine "Inside" vs "Outside"
+        ## We assume Non-Zero = Inside (Valid Mask Area)
+        ## We assume Zero = Outside (Background/NoData)
+        is_inside = (sampled_values != 0)
+        
+        ## Determine Outliers (Points to Remove)
+        ## Default: Remove Outside (Keep Inside) -> outliers = ~is_inside
+        ## Invert: Remove Inside (Keep Outside) -> outliers = is_inside        
+        if self.invert:
+            ## Remove "Inside" points (e.g. masking OUT land)
+            outliers = is_inside
+        else:
+            ## Remove "Outside" points (e.g. cropping TO a region)
+            outliers = ~is_inside
+            
+        if self.verbose:
+            action = "Removed" if self.invert else "Kept"
+            count = np.count_nonzero(is_inside)
+            utils.echo_msg(f"Mask analysis: {count} points inside mask area. ({action} inside)")
+
+        return outliers
+    
+
+class DensityZ(PointZ):
+    """Thin point cloud to a specific resolution/density.
+    
+    Modes:
+    - random: Keep the first point found in the cell (fastest).
+    - median: Keep the point with the median Z value.
+    - mean: Keep the point with Z closest to the cell mean.
+    - center: Keep the point closest to the 2D center of the cell.
+    
+    Config: <density:res=10:mode=random>
+    """
+    
+    def __init__(self, res=10, mode='random', **kwargs):
+        super().__init__(**kwargs)
+        self.res = utils.float_or(res, 10)
+        self.mode = mode.lower() if mode else 'random'
+
+        
+    def run(self):
+        if self.points is None or len(self.points) == 0:
+            return None
+            
+        ## Bin points into grid cells
+        x_idx = np.floor(self.points['x'] / self.res).astype(np.int64)
+        y_idx = np.floor(self.points['y'] / self.res).astype(np.int64)
+        
+        ## Sort Logic based on Mode
+        if self.mode == 'median':
+            ## Sort by Block, then Z. The median index is roughly the middle.
+            sort_keys = (self.points['z'], y_idx, x_idx)
+        elif self.mode == 'mean':
+            ## We need to calculate means first, which is expensive. 
+            ## Approximate 'mean' by sorting by Z and picking middle (median) is usually sufficient.
+            ## Sticking to median logic for 'mean' string to avoid complex groupby.
+            sort_keys = (self.points['z'], y_idx, x_idx)
+        elif self.mode == 'center':
+            ## Sort by distance from cell center? 
+            ## Calculate distance to cell center:
+            ## center_x = (x_idx * res) + (res/2)
+            dist = np.sqrt(
+                (self.points['x'] - ((x_idx * self.res) + (self.res/2)))**2 + 
+                (self.points['y'] - ((y_idx * self.res) + (self.res/2)))**2
+            )
+            sort_keys = (dist, y_idx, x_idx)
+        else: # Random (or default)
+            ## No specific sort needed for secondary key, just group blocks.
+            sort_keys = (y_idx, x_idx)
+
+        ## Apply Sort
+        sort_order = np.lexsort(sort_keys)
+        sorted_x = x_idx[sort_order]
+        sorted_y = y_idx[sort_order]
+        
+        ## Identify Blocks
+        ## Find indices where the block ID changes
+        change_mask = np.concatenate(
+            ([True], (sorted_x[1:] != sorted_x[:-1]) | (sorted_y[1:] != sorted_y[:-1]))
+        )
+        
+        ## Select Representatives
+        block_start_indices = np.nonzero(change_mask)[0]
+        
+        ## If Random/Center, we just pick the first one (since we sorted by distance for center)
+        if self.mode in ['random', 'center']:
+            keeper_sorted_indices = block_start_indices
+            
+        ## If Median/Mean, we pick the middle index of the block
+        elif self.mode in ['median', 'mean']:
+            ## Calculate block sizes
+            ## Append total length to calc size of last block
+            block_ends = np.concatenate((block_start_indices[1:], [len(self.points)]))
+            block_sizes = block_ends - block_start_indices
+            
+            ## The "middle" index relative to the start
+            offsets = block_sizes // 2
+            keeper_sorted_indices = block_start_indices + offsets
+
+        ## Map back to original indices
+        keeper_original_indices = sort_order[keeper_sorted_indices]
+        
+        ## Create Outlier Mask (True = Remove)
+        outliers = np.ones(len(self.points), dtype=bool)
+        outliers[keeper_original_indices] = False
+        
+        return outliers
+    
+
+class DiffZ(PointZ):
+    """Filter points based on the signed difference from a reference raster.
+    Diff = Point_Z - Raster_Z
+    
+    Useful for:
+    - Bias filtering (e.g. remove points > 1m above reference)
+    - Change detection (keep points within a specific change band)
+    
+    Config: <diff:raster=path.tif:min_diff=-5:max_diff=5:invert=False>
+    """
+    
+    def __init__(self, raster=None, min_diff=None, max_diff=None, invert=False, **kwargs):
+        super().__init__(**kwargs)
+        self.raster = raster
+        self.min_diff = utils.float_or(min_diff)
+        self.max_diff = utils.float_or(max_diff)
+        self.invert = invert
+
+        
+    def run(self):
+        if self.points is None or len(self.points) == 0:
+            return None
+        
+        if not self.raster or not os.path.exists(self.raster):
+            utils.echo_error_msg(f"Reference raster not found: {self.raster}")
+            return None
+
+        ## Sample Raster
+        sampled_z = gdalfun.gdal_query(self.points, self.raster, 'g').flatten()
+        
+        ## Calculate Signed Difference
+        ## Positive diff = Point is ABOVE raster
+        ## Negative diff = Point is BELOW raster
+        diffs = self.points['z'] - sampled_z
+        
+        ## Determine "Inside Range" Mask
+        ## We define "valid" as being BETWEEN min and max.
+        keep_mask = np.ones(len(diffs), dtype=bool)
+        
+        if self.min_diff is not None:
+            keep_mask &= (diffs >= self.min_diff)
+            
+        if self.max_diff is not None:
+            keep_mask &= (diffs <= self.max_diff)
+            
+        ## Handle Outliers
+        ## If invert=False (default): We want to KEEP points inside the range.
+        ## So outliers are those NOT in the keep_mask.
+        if not self.invert:
+            outliers = ~keep_mask
+        else:
+            ## If invert=True: We want to REMOVE points inside the range.
+            outliers = keep_mask
+            
+        if self.verbose:
+            utils.echo_msg(f"Diff filter: {np.count_nonzero(outliers)} points flagged.")
+            
+        return outliers
+    
 ## =============================================================================
 ## Factory & CLI
 ## =============================================================================
 class PointFilterFactory(factory.CUDEMFactory):
     _modules = {
-        'outlierz': {'name': 'outlierz', 'call': PointZOutlier},
+        'outlierz': {'name': 'outlierz', 'call': OutlierZ},
         'rq': {'name': 'rq', 'call': RQOutlierZ},
-        'vector_mask': {'name': 'vector_mask', 'call': PointZVectorMask},
+        'vector_mask': {'name': 'vector_mask', 'call': VectorMask},
+        'raster_mask': {'name': 'raster_mask', 'call': RasterMask},
+        'block_thin': {'name': 'block_thin', 'call': BlockThin},
+        'rangez': {'name': 'rangez', 'call': RangeZ},
+        'coplanar': {'name': 'coplanar', 'call': CoplanarZ},
+        'block_minmax': {'name': 'block_minmax', 'call': BlockMinMax},
+        'density': {'name': 'density', 'call': DensityZ},
+        'diff': {'name': 'diff', 'call': DiffZ},
     }
 
     def __init__(self, **kwargs):

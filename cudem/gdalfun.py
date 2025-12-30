@@ -2092,7 +2092,76 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band=1):
                 
         tgrid = None
 
-                    
+        
+def create_temp_vrt(raster_list, temp_name='temp_stack.vrt'):
+    """Create a temporary VRT in memory from a list of rasters."""
+    # Use /vsimem/ to keep it in RAM (fast, auto-deleted on script exit)
+    vrt_path = f'/vsimem/{temp_name}'
+    
+    # options can include resolution='highest', separate=True, etc.
+    vrt_ds = gdal.BuildVRT(vrt_path, raster_list, resampleAlg='nearest')
+    
+    # Flush to "disk" (memory) to ensure other GDAL functions can read it by path
+    vrt_ds.FlushCache() 
+    
+    return vrt_path, vrt_ds
+
+
+def gdal_build_vrt(src_ds, dst_fn=None, **kwargs):
+    """Build a VRT from a list of datasets or a glob string.
+    
+    Args:
+        src_ds (list or str): List of source filenames or a glob pattern (e.g. "*.tif").
+        dst_fn (str): Output VRT filename. If None, creates a temporary file in /vsimem/.
+        **kwargs: Additional options passed to gdal.BuildVRT 
+                  (e.g., resampleAlg='cubicspline', outputBounds=[...], separate=True).
+        
+    Returns:
+        gdal.Dataset: The open VRT dataset. 
+                      Note: You must keep this object alive or close it properly if using /vsimem/.
+    """
+    import uuid
+    
+    ## Handle input types
+    if isinstance(src_ds, str):
+        ## If it looks like a glob pattern, expand it
+        if '*' in src_ds or '?' in src_ds:
+            import glob
+            src_ds = glob.glob(src_ds)
+        else:
+            # If it's a single file string, wrap in list
+            src_ds = [src_ds]
+            
+    if not src_ds:
+        utils.echo_error_msg("gdal_build_vrt: No source datasets provided.")
+        return None
+
+    ## Handle output filename
+    if dst_fn is None:
+        # Create a random name in memory
+        dst_fn = f'/vsimem/{uuid.uuid4().hex}.vrt'
+    
+    try:
+        ## Build options
+        ## We strip kwargs that might be None to let GDAL defaults take over
+        options = gdal.BuildVRTOptions(**{k: v for k, v in kwargs.items() if v is not None})
+        
+        vrt_ds = gdal.BuildVRT(dst_fn, src_ds, options=options)
+        
+        if vrt_ds is None:
+            utils.echo_error_msg(f"gdal_build_vrt failed to create {dst_fn}")
+            return None
+            
+        ## Flush to ensure the virtual file system registers the file existence
+        vrt_ds.FlushCache()
+        
+        return vrt_ds
+        
+    except Exception as e:
+        utils.echo_error_msg(f"gdal_build_vrt error: {e}")
+        return None
+
+    
 def gdal_query(src_xyz, src_gdal, out_form, band=1):
     """query a gdal-compatible grid file with xyz data.
     out_form dictates return values
@@ -2106,16 +2175,16 @@ def gdal_query(src_xyz, src_gdal, out_form, band=1):
 
 def sample_warp(
         src_dem, dst_dem, x_sample_inc, y_sample_inc,
+        xcount = None, ycount = None, size = False,
         src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
-        ndv=-9999, tap=False, size=False, co=None,
-        ot=gdal.GDT_Float32, coordinateOperation=None, verbose=False
+        ndv=-9999, tap=False, co=None, ot=gdal.GDT_Float32,
+        coordinateOperation=None, verbose=False
 ):
     """Wrapper around gdal.Warp."""
     
     if co is None:
         co = ["COMPRESS=DEFLATE", "TILED=YES"]
 
-    xcount = ycount = 0
     out_region = None
     
     if src_region is not None:
@@ -2131,17 +2200,26 @@ def sample_warp(
             trans_region = src_region
 
         if size:
-            if x_sample_inc is None and y_sample_inc is None:
-                src_infos = gdal_infos(src_dem)
+            if (xcount is None and ycount is None) and (x_sample_inc is None and y_sample_inc is None):
+                if isinstance(src_dem, list):
+                    #vrt_path, ds = create_temp_vrt(src_dem)
+                    tmp_vrt = gdal_build_vrt(src_dem)
+                    src_infos = gdal_infos(tmp_vrt)
+                    tmp_vrt = None
+                else:
+                    src_infos = gdal_infos(src_dem)
+                    
                 ## Invert y_inc for geo_transform math
                 xcount, ycount, _ = trans_region.geo_transform(
                     x_inc=src_infos['geoT'][1], y_inc=src_infos['geoT'][5] * -1, node='grid'
                 )
 
-            if xcount is None or ycount is None:
+            elif x_sample_inc and y_sample_inc:
                 xcount, ycount, _ = src_region.geo_transform(
                     x_inc=x_sample_inc, y_inc=y_sample_inc, node='grid'
                 )
+
+            if xcount and ycount:
                 x_sample_inc = y_sample_inc = None
         
     if dst_dem is not None:

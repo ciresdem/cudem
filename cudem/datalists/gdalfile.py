@@ -519,7 +519,7 @@ class GDALFile(ElevationDataset):
                 weight_data = np.ones(band_data.shape)
                 if weight_band:
                     w_d = weight_band.ReadAsArray(*srcwin)
-                    weight_data = w_d # Apply NDV logic here
+                    weight_data = w_d 
 
                 ## Uncertainty
                 uncertainty_data = np.zeros(band_data.shape)
@@ -776,7 +776,7 @@ class BAGFile(ElevationDataset):
             oo.append(f'MINY={self.data_region.ymin}')
             oo.append(f'MAXY={self.data_region.ymax}')
 
-        ## VR Processing Logic
+        ## VR Processing
         is_vr = ('HAS_SUPERGRIDS' in mt and mt['HAS_SUPERGRIDS'] == 'TRUE') or self.force_vr
         
         if is_vr:

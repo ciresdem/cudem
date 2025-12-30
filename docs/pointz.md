@@ -2,7 +2,7 @@
 
 **Pointz** is a specialized module within the CUDEM software suite for filtering and manipulating raw point cloud data (XYZ, LAS/LAZ, etc.) before it is gridded into a DEM. While `grits` operates on raster grids, `pointz` operates directly on vector point data, allowing for precise cleaning of source data at the individual sounding level.
 
-The module provides tools for statistical outlier removal, reference-based quality checking, and spatial masking using vector polygons. It serves as a pre-processing step to ensure that only valid, high-quality measurements enter the interpolation pipeline.
+The module provides tools for statistical outlier removal, reference-based quality checking, spatial masking using vector and raster data, and density-based thinning. It serves as a pre-processing step to ensure that only valid, high-quality measurements enter the interpolation pipeline.
 
 ## Core Capabilities
 
@@ -19,12 +19,23 @@ The module provides tools for statistical outlier removal, reference-based quali
 * **Difference Thresholding:** Points that deviate from the reference surface by more than a specified threshold (absolute difference or percentage) are flagged. This is useful for identifying gross vertical errors or datum shifts in new datasets.
 * **Dynamic Fetching:** Can automatically fetch and use standard reference datasets (GMRT, CUDEM) if a local reference raster is not provided.
 
-### 3. Spatial Masking (`vector_mask`)
+### 3. Spatial Masking
 
-* **Polygon Filtering:** The `PointZVectorMask` class filters points based on their inclusion within vector polygons (e.g., Shapefiles).
-* **Inversion Support:** Supports both "keep inside" (e.g., bounding box) and "remove inside" (e.g., land masking for bathymetry) operations via the `invert` parameter.
+* **Vector Masking (`vector_mask`):** The `PointZVectorMask` class filters points based on their inclusion within vector polygons (e.g., Shapefiles). It supports both "keep inside" and "remove inside" operations via the `invert` parameter.
+* **Raster Masking (`raster_mask`):** The `PointZRasterMask` class filters points based on the values of an underlying raster file (e.g., Land/Water mask). It keeps points on valid (non-zero) pixels by default.
 
-### 4. Point Gridding Utilities
+### 4. Thinning and Density Control
+
+* **Grid-Based Decimation (`block_minmax`):** A highly optimized filter that divides the domain into grid cells and retains only the minimum (shoalest) or maximum (deepest) point per cell. This is critical for hydrographic applications requiring shoal-biased thinning.
+* **Density Control (`density`):** Thins the point cloud to a specific resolution using various selection modes (`random`, `median`, `mean`, `center`).
+
+### 5. Advanced Geometric Filtering
+
+* **Range Filtering (`range`):** Strictly clips points to a specific vertical Z-range (e.g., removing all points above sea level).
+* **Plane Fitting (`coplanar`):** Identifies points that deviate from a locally fitted plane, useful for cleaning noise from generally flat surfaces like roads or the seafloor.
+* **Difference Filtering (`diff`):** Calculates the signed difference between points and a reference surface, useful for bias detection or removing points that are specifically "above" or "below" a reference.
+
+### 6. Point Gridding Utilities
 
 * **`PointPixels` Class:** A helper utility that bins scattered points into a regular grid structure, calculating aggregated statistics (mean, min, max, sum, uncertainty) for each cell. This is the foundational logic used by the outlier filters to establish local statistics.
 
@@ -43,3 +54,4 @@ pointz input.xyz output.xyz -M outlierz:percentile=98:res=50 -M vector_mask:mask
 * `outlierz` parameters: `percentile` (threshold), `res` (block resolution), `multipass` (number of iterations).
 * `rq` parameters: `threshold` (difference limit), `raster` (path to reference grid).
 * `vector_mask` parameters: `mask_fn` (path to vector file), `invert` (bool).
+* `block_minmax` parameters: `res` (cell size), `mode` (min/max).

@@ -117,6 +117,7 @@ from cudem.grits import grits
 from cudem.globato import globato
 from cudem.datalists import inf
 from cudem.fetches import fetches
+from cudem import __version__ as __cudem_version__
 from . import __version__
 from . import inf
 
@@ -1780,6 +1781,7 @@ class ElevationDataset:
                 
         ## Determine Archive Root Directory
         archive_root = dirname if dirname is not None else None
+        dst_fn = None
         
         ## Default name based on metadata
         dataset_name = self.metadata.get('name', 'dataset').split('/')[0]
@@ -1789,19 +1791,24 @@ class ElevationDataset:
         else:
             archive_name = f"{dataset_name}_{self.region.format('fn')}_{utils.this_year()}"
 
-        if archive_root is None:
+        if archive_root is None:            
             archive_root = archive_name
             self.archive_datalist = f"{archive_root}.datalist"
         else:
+            ## Check if we are creating a Tarball and set it as the dst_fn
+            is_tar = archive_root.endswith('.tar.gz') or archive_root.endswith('.tgz')
+            if is_tar:
+                dst_fn = archive_root
+                archive_root = archive_name
+
             self.archive_datalist = f"{archive_root}.datalist"
             archive_root = os.path.join(archive_root, archive_name)
 
-        ## Check if we are creating a Tarball and set it as the dst_fn
-        is_tar = archive_root.endswith('.tar.gz') or archive_root.endswith('.tgz')
-        dst_fn = archive_root
+        if is_tar:
+            utils.echo_msg(f"Archiving to: {dst_fn}")
+        else:
+            utils.echo_msg(f"Archiving to: {self.archive_datalist}")
             
-        utils.echo_msg(f"Archiving to: {self.archive_datalist}")
-        
         if not os.path.exists(os.path.dirname(self.archive_datalist)):
             try:
                 os.makedirs(os.path.dirname(self.archive_datalist))
@@ -1869,12 +1876,9 @@ class ElevationDataset:
             ## Update Master Datalist
             ## If the sub-datalist has content, add it to the master archive list
             if os.path.exists(sub_datalist_path) and os.stat(sub_datalist_path).st_size > 0:
-                utils.echo_msg('1')
                 if this_key not in archive_keys:
-                    utils.echo_msg('2')
                     archive_keys.append(this_key)
                     with open(self.archive_datalist, 'a') as dlf:
-                        utils.echo_msg('3')
                         ## Add entry pointing to the sub-datalist
                         ## Format: path -1 weight uncertainty metadata...
                         rel_path = os.path.join(datalist_dirname, this_key)
@@ -1920,7 +1924,7 @@ class ElevationDataset:
                     tar.add(self.archive_datalist, arcname=os.path.basename(self.archive_datalist))
                     
                 ## Add the Data directory
-                tar.add(data_dir, arcname='data')
+                tar.add(data_dir, arcname=archive_root)
                 
             utils.echo_msg(f"Archive created: {dst_fn}")
         
@@ -2047,6 +2051,7 @@ class DatasetFactory(factory.CUDEMFactory):
     from . import ziplistfile
     from . import fetchers
     from . import datalistfile
+    from . import globatofile
     
     ## Registry of supported dataset modules
     ## Negative IDs are containers/lists/fetchers
@@ -2136,6 +2141,7 @@ class DatasetFactory(factory.CUDEMFactory):
         302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb'], 'description': 'OGR Vector', 'call': ogrfile.OGRFile},
         303: {'name': 'icesat2_atl03', 'fmts': ['h5'], 'description': 'IceSat2 ATL03', 'call': icesat2file.IceSat2_ATL03},
         304: {'name': 'icesat2_atl24', 'fmts': ['h5'], 'description': 'IceSat2 ATL24', 'call': icesat2file.IceSat2_ATL24},
+        310: {'name': 'globato', 'fmts': ['csg', 'nc', 'h5'], 'description': 'CUDEM Globato Block/Stack file.', 'call': CUDEMFile},
         # 310: {'name': 'cudem', 'fmts': ['csg', 'nc', 'h5'], 'description': 'CUDEM NetCDF/H5', 'call': CUDEMFile},
     }
 

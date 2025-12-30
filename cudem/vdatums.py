@@ -388,7 +388,7 @@ class VerticalTransform:
         else:
             tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
 
-        utils.echo_msg(f'{epsg_in} {epsg_out}')
+        utils.echo_debug_msg(f'v-datum in: {epsg_in} v-datum_out: {epsg_out}')
         
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)

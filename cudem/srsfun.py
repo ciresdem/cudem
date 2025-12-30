@@ -420,22 +420,22 @@ def set_vertical_transform(transform: Dict[str, Any], region=None, infos=None,
                     x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
                 )
 
-            try:
-                transform['trans_fn'], transform['trans_fn_unc'] = vdatums.VerticalTransform(
-                    'IDW',
-                    vd_region,
-                    vd_x_inc,
-                    vd_y_inc,
-                    transform['src_vert_epsg'],
-                    transform['dst_vert_epsg'],
-                    geoid_in=transform['src_geoid'],
-                    geoid_out=transform['dst_geoid'],
-                    cache_dir=cache_dir,
-                    verbose=False
-                ).run(outfile=trans_fn)
-            except Exception as e:
-                utils.echo_error_msg(f"VerticalTransform Run failed: {e}")
-                return transform
+            #try:
+            transform['trans_fn'], transform['trans_fn_unc'] = vdatums.VerticalTransform(
+                'IDW',
+                vd_region,
+                vd_x_inc,
+                vd_y_inc,
+                transform['src_vert_epsg'],
+                transform['dst_vert_epsg'],
+                geoid_in=transform['src_geoid'],
+                geoid_out=transform['dst_geoid'],
+                cache_dir=cache_dir,
+                verbose=False
+            ).run(outfile=trans_fn)
+            # except Exception as e:
+            #     utils.echo_error_msg(f"VerticalTransform Run failed: {e}")
+            #     return transform
 
     ## Setup PyProj pipelines
     if transform['trans_fn'] is not None and os.path.exists(transform['trans_fn']):
