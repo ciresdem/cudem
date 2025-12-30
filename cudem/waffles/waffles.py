@@ -59,6 +59,7 @@ import json
 import glob
 import traceback
 import argparse
+import signal
 import numpy as np
 import multiprocessing as mp
 from osgeo import gdal
@@ -1023,6 +1024,8 @@ def waffle_queue(q):
 
     waffles_args is [waffle_module]
     """
+
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     
     while True:
         waffle_module = q.get()
@@ -1347,75 +1350,85 @@ def waffles_cli():
     ## Setup Multiprocessing
     waffle_q = mp.Queue()
     processes = []
-    
-    for _ in range(args.threads):
-        t = mp.Process(target=waffle_queue, args=([waffle_q]))
-        processes.append(t)
-        t.start()
 
-    ## Iterate Regions
-    for this_region in these_regions:
-        # Auto-detect region from data if missing
-        if this_region is None:
-            utils.echo_warning_msg('No input region specified, gathering region from input data...')
-            this_datalist = dlim.init_data(
-                dls,
-                region=this_region,
-                dst_srs=wg['dst_srs'],
-                want_verbose=wg['verbose']
-            )
-            if this_datalist is not None and this_datalist.valid_p(
-                    fmts=dlim.DatasetFactory._modules[this_datalist.data_format]['fmts']
-            ):
-                this_datalist.initialize()
-                this_inf = this_datalist.inf()
-                this_region = regions.Region().from_list(this_inf.minmax)
-                if wg['dst_srs'] is not None:
-                    if this_inf.src_srs is not None:
-                        this_region.src_srs = this_inf.src_srs
-                        this_region.warp(dst_srs)
+    try:
+        for _ in range(args.threads):
+            t = mp.Process(target=waffle_queue, args=([waffle_q]))
+            t.daemon = True
+            processes.append(t)
+            t.start()
 
-            utils.echo_msg(f'Region is {this_region}')
-            if this_region is None: # couldn't gather a region from the data
-                break
-            
-        wg['src_region'] = this_region
+        ## Iterate Regions
+        for this_region in these_regions:
+            # Auto-detect region from data if missing
+            if this_region is None:
+                utils.echo_warning_msg('No input region specified, gathering region from input data...')
+                this_datalist = dlim.init_data(
+                    dls,
+                    region=this_region,
+                    dst_srs=wg['dst_srs'],
+                    want_verbose=wg['verbose']
+                )
+                if this_datalist is not None and this_datalist.valid_p(
+                        fmts=dlim.DatasetFactory._modules[this_datalist.data_format]['fmts']
+                ):
+                    this_datalist.initialize()
+                    this_inf = this_datalist.inf()
+                    this_region = regions.Region().from_list(this_inf.minmax)
+                    if wg['dst_srs'] is not None:
+                        if this_inf.src_srs is not None:
+                            this_region.src_srs = this_inf.src_srs
+                            this_region.warp(dst_srs)
 
-        ## Prefix (-p)
-        if args.prefix or (args.region and len(args.region) > 1):
-            prefix_args = {}
-            x_sample = wg.get('xsample')
-            x_inc = wg.get('xinc')
-            
-            wg['name'] = utils.append_fn(
-                args.output_basename,
-                this_region,
-                x_sample if x_sample is not None else x_inc,
-                **prefix_args
-            )
+                utils.echo_msg(f'Region is {this_region}')
+                if this_region is None: # couldn't gather a region from the data
+                    break
+
+            wg['src_region'] = this_region
+
+            ## Prefix (-p)
+            if args.prefix or (args.region and len(args.region) > 1):
+                prefix_args = {}
+                x_sample = wg.get('xsample')
+                x_inc = wg.get('xinc')
+
+                wg['name'] = utils.append_fn(
+                    args.output_basename,
+                    this_region,
+                    x_sample if x_sample is not None else x_inc,
+                    **prefix_args
+                )
+
+            ## Module Init
+            mod_name = args.module.split(':')[0]
+            if mod_name not in WaffleFactory._modules:
+                utils.echo_error_msg(f"Invalid module: {mod_name}")
+                continue
+
+            ## Create Factory
+            ## We pass 'mod' string to factory which parses opts
+            this_waffle = WaffleFactory(mod=args.module, **wg)
+
+            ## Acquire and Queue
+            module_instance = this_waffle._acquire_module()
+            if module_instance:
+                waffle_q.put([module_instance])
+
+        ## Cleanup
+        for _ in range(args.threads):
+            waffle_q.put(None)
         
-        ## Module Init
-        mod_name = args.module.split(':')[0]
-        if mod_name not in WaffleFactory._modules:
-            utils.echo_error_msg(f"Invalid module: {mod_name}")
-            continue
-            
-        ## Create Factory
-        ## We pass 'mod' string to factory which parses opts
-        this_waffle = WaffleFactory(mod=args.module, **wg)
-        
-        ## Acquire and Queue
-        module_instance = this_waffle._acquire_module()
-        if module_instance:
-            waffle_q.put([module_instance])
+        for t in processes:
+            t.join()
 
-    ## Cleanup
-    for _ in range(args.threads):
-        waffle_q.put(None)
+    except KeyboardInterrupt:
+        utils.echo_error_msg("Killed by user, Terminating processes...")
+        for t in processes:
+            if t.is_alive():
+                t.terminate() 
+                t.join()
+        sys.exit(1)
         
-    for t in processes:
-        t.join()
-
     if not args.keep_cache:
         utils.remove_glob(wg['cache_dir'])
 

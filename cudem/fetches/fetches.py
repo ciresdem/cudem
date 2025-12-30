@@ -482,8 +482,8 @@ class Fetch:
                                         desc=self.url,
                                         total=content_length,
                                         leave=self.verbose,
-                                        #unit='iB',
-                                        #unit_scale=True,
+                                        unit='iB',
+                                        unit_scale=True,
                                 ) as pbar:
                                     for chunk in req.iter_content(chunk_size=8196):
                                         if chunk:

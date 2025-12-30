@@ -1244,7 +1244,7 @@ class CudemCommonProgress:
     """
 
     def __init__(self, desc=None, message=None, end_message=None, total=0,
-                 sleep=2, verbose=True, leave=True):
+                 sleep=2, verbose=True, leave=True, **kwargs):
         """Minimal progress indicator to use with CLI if tqdm isn't available or preferred."""
         
         self.thread = threading.Thread(target=self.updates)
