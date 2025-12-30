@@ -1,72 +1,63 @@
-# perspecto
+# Perspecto (Visualization)
 
-Generate images of DEMs
+**Perspecto** is the visualization module within the CUDEM software suite, designed to generate high-quality images and 2D/3D representations from Digital Elevation Models (DEMs). It serves as a unified interface for various rendering backends, including GDAL, POV-Ray, and GMT/PyGMT.
 
-## Synopsis
+Designed to work seamlessly with the `waffles` module, Perspecto can accept either an existing raster file or a Waffles JSON configuration file as input. If provided a JSON config, it can automatically generate the requested DEM before visualizing it.
+
+## Core Capabilities
+
+### 1. Visualization Modules
+
+Perspecto uses a modular factory architecture to support different rendering types:
+
+* **Hillshading:**
+* `hillshade`: Generates standard hillshade images to visualize terrain relief.
+* `hillshade2`: An alternative command-line driven hillshade implementation.
+
+
+* **3D Rendering:**
+* `perspective`: Creates 3D perspective views of the terrain, utilizing ray-tracing capabilities (likely POV-Ray based on module headers).
+* `sphere`: Generates spherical visualizations, useful for global or planetary datasets.
+
+
+* **PyGMT Integration:**
+* `figure1`: Generates GMT-based figures (requires PyGMT).
+* `colorbar`: Generates color bars for maps (requires PyGMT).
+
+
+
+### 2. Advanced Color Palette (CPT) Management
+
+Perspecto includes robust tools for managing color tables, essential for creating hypsometric tints (color relief maps):
+
+* **Auto-Generation:** Can automatically generate an "ETOPO" style color palette based on the min/max elevation of the input DEM.
+* **Fetching:** Can fetch named CPTs (e.g., "city" styles) from remote sources.
+* **Processing:** Supports re-scaling CPTs to specific Z-ranges and "splitting" CPTs (e.g., creating distinct color ramps above and below zero for land/sea distinctions).
+
+### 3. Data Export & Formatting
+
+The module includes utility functions for preparing data for external rendering:
+
+* **16-bit PNG Export:** Can convert floating-point DEMs into 16-bit unsigned integer PNGs, scaling the elevation data to the full 0-65535 range for high-precision heightmaps.
+* **RGB Color Relief:** Can render the DEM into a standard RGB PNG using a specified CPT file.
+
+## Usage
+
+The module is accessed via the command line, requiring a module selection and an input DEM (or Waffles config).
+
+```bash
+perspecto input_dem.tif -M hillshade
 
 ```
-perspecto [ -hvCM [ args ] ] DEM ...
 
-perspecto ... <mod>:key=val:key=val...
-```
+**Common Options:**
 
-## Description
+* `-M, --module`: Select the visualization type (e.g., `hillshade`, `perspective`).
+* `-C, --cpt`: Specify a custom Color Palette Table file.
+* `-Z, --split-cpt`: Split the color palette at a specific value (e.g., 0 for coastlines).
+* `--min_z / --max_z`: Force specific elevation ranges for color scaling.
 
-Generate images of DEMs, including perspectives, hillshades, etc. (Table 1)
-
-## Options
-`-C, --cpt`
-
-> Color Pallette file (if not specified will auto-generate ETOPO CPT)
-
-`-M, --module`
-
-> Desired perspecto MODULE and options. (see available Modules below)\
-> Where MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
-
-`--min_z`
-
-> Minimum z value to use in CPT
-
-`--max_z`
-
-> Maximum z value to use in CPT
-
-`--help`
-
-> Print the usage text
-
-`--modules`
-
-> Display the module descriptions and usage
-
-`--version`
-
-> Print the version information
-
-## Modules
-
-**Table 1.** Modules available in the CUDEM software tool "perspecto"
-
-|  ***Name***  |  ***Description*** | ***Module Options*** |
-|----------------------|----------------------------------|----------------------------------|
-| hillshade | generate a DEM hillshade (req. gdal/imagemagick) | :vertical_exaggeration=1 :projection=4326 :azimuth=315 :altitude=45 |
-| perspective | generate a DEM perspective (req. POVRay) | :cam_azimuth=-130 :cam_elevation=30 :cam_distance=265 :cam_view_angle=40 :light_elevation=20 :light_distance=10000 :vertical_exaggeration=2 |
-| sphere | generate a DEM on a sphere | :cam_azimuth=310 :cam_elevation=27 :cam_distance=8 :cam_view_angle=33 :center_lat=None :center_long=None |
-| figure1 | generate a DEM figure (req. GMT) | :perspective=False :vertical_exaggeration=1.5 :interval=100 :azimuth=-130 :elevation=30 | 
-| colorbar | generate a colorbar image based on the input DEM/CPT | :colorbar_text='Elevation' :width=10 :height=2 |
-
-## Python API
-
-```python
-from cudem import perspecto
-
-dem_path = '/my_dems/dem.tif'
-p = perspecto.PerspectoFactory(mod='hillshade', src_dem=dem_path, min_z=-1000, max_z=100)._acquire_module()
-p.run()
-```
-
-## Examples
+If `input_dem` is a JSON file (Waffles config), Perspecto will attempt to parse it and generate the DEM using the `waffles` module if the file does not already exist.
 
 ```bash
 perspecto my_dem.tif -M hillshade -C GMT_wysiwyg

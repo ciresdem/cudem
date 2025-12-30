@@ -1769,13 +1769,17 @@ class ElevationDataset:
         and generates a master datalist pointing to the archived files.
         
         Args:
-            dirname (str): The root directory for the archive. Defaults to the dataset name.
+            dirname/dst_fn (str): The root directory for the archive. Defaults to the dataset name.
+                                  If the dirname ends in .tar.gz or .tgz the archive will be tar.gz'd.
             **kwargs: Additional arguments.
             
         Returns:
             INF: The metadata info object for the generated archive datalist.
         """
-        
+
+        import tarfile
+        import shutil
+                
         ## Determine Archive Root Directory
         archive_root = dirname if dirname is not None else None
         
@@ -1794,6 +1798,10 @@ class ElevationDataset:
             self.archive_datalist = f"{archive_root}.datalist"
             archive_root = os.path.join(archive_root, archive_name)
 
+        # Check if we are creating a Tarball and set it as the dst_fn
+        is_tar = archive_root.endswith('.tar.gz') or archive_root.endswith('.tgz')
+        dst_fn = archive_root
+            
         utils.echo_msg(f"Archiving to: {self.archive_datalist}")
         
         if not os.path.exists(os.path.dirname(self.archive_datalist)):
@@ -1801,6 +1809,9 @@ class ElevationDataset:
                 os.makedirs(os.path.dirname(self.archive_datalist))
             except OSError:
                 pass
+
+        if not os.path.exists(self.archive_datalist):
+            utils.touch(self.archive_datalist)
 
         ## Process Entries
         archive_keys = []
@@ -1897,6 +1908,19 @@ class ElevationDataset:
             dst_srs=None,
             cache_dir=self.cache_dir,
         )._acquire_module().initialize()
+
+        ## Create the Tarball
+        if is_tar:
+            utils.echo_msg(f"Archiving to {dst_fn}...")
+            with tarfile.open(dst_fn, "w:gz") as tar:
+                ## Add the Master Datalist to the Root
+                if self.archive_datalist and os.path.exists(self.archive_datalist):
+                    tar.add(self.archive_datalist, arcname=os.path.basename(self.archive_datalist))
+                    
+                ## Add the Data directory
+                tar.add(data_dir, arcname='data')
+                
+            utils.echo_msg(f"Archive created: {dst_fn}")
         
         return this_archive.inf()
     
