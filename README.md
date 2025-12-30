@@ -93,24 +93,24 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 
 | Module | Description | CLI Command |
 | --- | --- | --- |
-| **[fetches](https://www.google.com/search?q=/docs/fetches.md)** | **Data Acquisition**: Fetch elevation data from a wide variety of public online sources (NOAA, USGS, USACE, etc.). | `fetches` |
-| **[dlim](https://www.google.com/search?q=/docs/dlim.md)** | **Data Lists & Processing**: Process, clean, and standardize diverse data types (XYZ, Raster, LAS, COPC, etc.) into unified formats. | `dlim` |
-| **[waffles](https://www.google.com/search?q=/docs/waffles.md)** | **Gridding & interpolation**: Generate Digital Elevation Models (DEMs) from scattered data using various algorithms (IDW, Spline, GMT Surface, etc.). | `waffles` |
-| **[grits](https://www.google.com/search?q=/docs/grits.md)** | **Grid Filtering & Post-Processing**: A powerful filtering engine to smooth, clean, blend, and analyze raster DEMs. | `grits` |
+| **[fetches](/docs/fetches.md)** | **Data Acquisition**: Fetch elevation data from a wide variety of public online sources (NOAA, USGS, USACE, etc.). | `fetches` |
+| **[dlim](/docs/dlim.md)** | **Data Lists & Processing**: Process, clean, and standardize diverse data types (XYZ, Raster, LAS, COPC, etc.) into unified formats. | `dlim` |
+| **[waffles]/docs/waffles.md)** | **Gridding & interpolation**: Generate Digital Elevation Models (DEMs) from scattered data using various algorithms (IDW, Spline, GMT Surface, etc.). | `waffles` |
+| **[grits](/docs/grits.md)** | **Grid Filtering & Post-Processing**: A powerful filtering engine to smooth, clean, blend, and analyze raster DEMs. | `grits` |
 
 ### Utility Modules
 
 | Module | Description | CLI Command |
 | --- | --- | --- |
-| **[regions](https://www.google.com/search?q=/docs/regions.md)** | **Spatial Management**: Process and manipulate bounding box regions and vector polygons. | `regions` |
-| **[vdatums](https://www.google.com/search?q=/docs/vdatums.md)** | **Vertical Transformation**: Generate vertical transformation grids and manage datums. | `vdatums` |
-| **[perspecto](https://www.google.com/search?q=/docs/perspecto.md)** | **Visualization**: Generate perspective images, hillshades, and color-relief maps of DEMs. | `perspecto` |
+| **[regions](/docs/regions.md)** | **Spatial Management**: Process and manipulate bounding box regions and vector polygons. | `regions` |
+| **[vdatums](docs/vdatums.md)** | **Vertical Transformation**: Generate vertical transformation grids and manage datums. | `vdatums` |
+| **[perspecto](/docs/perspecto.md)** | **Visualization**: Generate perspective images, hillshades, and color-relief maps of DEMs. | `perspecto` |
 
 ---
 
 ## Detailed Capabilities: Grits (Grid Filters)
 
-The **[grits](https://www.google.com/search?q=/docs/grits.md)** module provides a standardized framework for raster manipulation. It supports chunked processing for large files and can chain multiple filters together.
+The **[grits](/docs/grits.md)** module provides a standardized framework for raster manipulation. It supports chunked processing for large files and can chain multiple filters together.
 
 **Available Filters:**
 
@@ -123,11 +123,11 @@ The **[grits](https://www.google.com/search?q=/docs/grits.md)** module provides 
 
 # Usage Examples
 
-### General Workflows
+### General Wokflows
 
-* [Generate a CRM of Point Mugu in California](https://www.google.com/search?q=/docs/example_crm_malibu.md)
-* [Generate a set of Tiled CRMs of Northern California](https://www.google.com/search?q=/docs/example_crm_norcal.md)
-* [Generate a set of Tiled CUDEMs of North-West Washington State](https://www.google.com/search?q=/docs/dem_examples/northern_wa/northern_wa.md)
+* [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
+* [Generate a set of Tiled CRMs of Northern California](/docs/example_crm_norcal.md)
+* [Generate a set of Tiled CUDEMs of North-West Washington State](/docs/dem_examples/northern_wa/northern_wa.md)
 
 ### Specific Tasks
 
@@ -135,7 +135,7 @@ The **[grits](https://www.google.com/search?q=/docs/grits.md)** module provides 
 * **Processing Data**: `dlim input.datalist -R -90/-89/29/30 -E 1/3s`
 * **Generating DEM**: `waffles -M surface:tension=.35 -R -90/-89/29/30 -E 1/9s -O my_dem.tif input.xyz`
 * **Filtering DEM**: `grits my_dem.tif -M outliers:k=2.5 -M fill:method=spline -M clip:src_ply=coast.shp -O clean_dem.tif`
-* **Estimating Uncertainty**: [Docs](https://www.google.com/search?q=/docs/uncertainty.md)
+* **Estimating Uncertainty**: [Docs](/docs/uncertainty.md)
 
 # Additional Information
 
