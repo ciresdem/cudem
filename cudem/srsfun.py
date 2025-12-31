@@ -525,16 +525,16 @@ def set_transform(src_srs: str = None, dst_srs: str = None,
         
         if infos is not None:
             inf_region = regions.Region().from_list(infos.minmax)
-            # Reduce region to intersection of request and data bounds
+            ## Reduce region to intersection of request and data bounds
             data_region = regions.regions_reduce(base_region, inf_region)                
             data_region.src_srs = infos.src_srs
         else:
             data_region = base_region
 
         if not data_region.valid_p():
-             # Fallback to the passed region if the reduced region is invalid
-             data_region = region.copy() \
-                 if transform['trans_region'] is None else transform['trans_region'].copy()
+            ## Fallback to the passed region if the reduced region is invalid
+            data_region = region.copy() \
+                if transform['trans_region'] is None else transform['trans_region'].copy()
     elif infos is not None:
         data_region = regions.Region().from_list(infos.minmax)
         data_region.src_srs = infos.src_srs
