@@ -88,9 +88,9 @@ class GDALFile(ElevationDataset):
         self.src_ds = None
 
         ## Network paths check skip
-        if self.fn.startswith(('http', '/vsicurl/', 'BAG')):
+        if self.fn.startswith(('http', '/vsicurl/', 'BAG')) or self.fn.lower().endswith('.vrt'):
             self.check_path = False
-            
+
             ## Set GDAL Config options for network performance
             ## Enable caching for seek operations (crucial for TIFFs)
             gdal.SetConfigOption('VSI_CACHE', 'TRUE')
@@ -138,7 +138,8 @@ class GDALFile(ElevationDataset):
                 else:
                     self.infos.src_srs = self.src_srs
 
-                is_remote = self.fn.startswith('/vsicurl/')
+                #is_remote = self.fn.startswith('/vsicurl/')
+                is_remote = self.fn.startswith(('/vsicurl/', 'http')) or self.fn.lower().endswith('.vrt')
                     
                 ds_infos = gdalfun.gdal_infos(src_ds)
                 
@@ -154,7 +155,7 @@ class GDALFile(ElevationDataset):
                 
                 band = src_ds.GetRasterBand(utils.int_or(self.band_no, 1))
                 stats = band.GetStatistics(1, force_scan)
-                if stats[0] != stats[1]:
+                if stats and (stats[0] != stats[1]):
                     this_region.zmin, this_region.zmax = stats[0], stats[1]
                 else:
                     if self.verbose:
@@ -801,6 +802,7 @@ class BAGFile(ElevationDataset):
         if is_vr:
             if self.explode:
                 # Process Supergrids separately
+                utils.echo_debug_msg(f'Initializing BAG EXPLODE {self.fn}')
                 oo.append("MODE=LIST_SUPERGRIDS")
                 src_ds = gdal.OpenEx(self.fn, open_options=oo)
                 sub_datasets = src_ds.GetSubDatasets()
@@ -813,19 +815,23 @@ class BAGFile(ElevationDataset):
                         res_match = re.findall(r'\d+\.\d+|\d+', sub_dataset[-1].split(',')[-2])
                         res_val = float(res_match[0]) if res_match else x_res
                         s_w = max((3 * (10 if res_val <=3 else 1))/res_val, self.min_weight)
-                        
+
                         sub_ds = DatasetFactory(
-                            mod=sub_dataset[0],
-                            data_format=200,
-                            src_srs=self.src_srs,
-                            band_no=1,
-                            uncertainty_mask_to_meter=0.01,
-                            check_path=False,
-                            super_grid=True,
-                            weight=s_w * (self.weight if self.weight else 1),
-                            uncertainty_mask=2,
+                            **self._set_params(
+                                mod=sub_dataset[0],
+                                data_format=200,
+                                src_srs=self.src_srs,
+                                band_no=1,
+                                uncertainty_mask_to_meter=0.01,
+                                check_path=False,
+                                super_grid=True,
+                                #node='pixel',
+                                #weight_multiplier=sub_weight,
+                                weight=sub_weight*(self.weight if self.weight else 1),
+                                uncertainty_mask=2,
+                            )
                         )._acquire_module()
-                        
+                                                
                         self.data_entries.append(sub_ds)
                         sub_ds.initialize()
                         for gdal_ds in sub_ds.parse():
@@ -834,25 +840,29 @@ class BAGFile(ElevationDataset):
 
             elif self.vr_resampled_grid or self.vr_interpolate:
                 ## Use GDAL internal VR modes
+                utils.echo_debug_msg(f'Initializing BAG VR {self.fn}')
                 mode = "RESAMPLED_GRID" if self.vr_resampled_grid else "INTERPOLATED"
                 oo.append(f"MODE={mode}")
                 oo.append(f"RES_STRATEGY={self.vr_strategy}")
-                
+
                 sub_ds = DatasetFactory(
-                    mod=self.fn,
-                    data_format=200,
-                    band_no=1,
-                    open_options=oo,
-                    weight=sub_weight * (self.weight if self.weight else 1),
-                    uncertainty_mask=2,
-                    uncertainty_mask_to_meter=0.01,
+                    **self._set_params(
+                        mod=self.fn,
+                        data_format=200,
+                        band_no=1,
+                        open_options=oo,
+                        weight=sub_weight*(self.weight if self.weight else 1),
+                        uncertainty_mask=2,
+                        uncertainty_mask_to_meter=0.01,
+                    )
                 )._acquire_module()
-                
+                                
                 self.data_entries.append(sub_ds)
                 sub_ds.initialize()
                 for gdal_ds in sub_ds.parse():
                     yield gdal_ds
             else:
+                utils.echo_debug_msg(f'Initializing BAG VRBAG {self.fn}')
                 tmp_bag_as_tif = utils.make_temp_fn(
                     '{}_tmp.tif'.format(utils.fn_basename2(self.fn))
                 )
@@ -884,15 +894,18 @@ class BAGFile(ElevationDataset):
 
         else:
             ## Standard BAG
+            utils.echo_debug_msg(f'Initializing BAG STANDARD {self.fn}')
             sub_ds = DatasetFactory(
-                mod=self.fn,
-                data_format=200,
-                band_no=1,
-                uncertainty_mask=2,
-                uncertainty_mask_to_meter=0.01,
-                weight=sub_weight * (self.weight if self.weight else 1),
+                **self._set_params(
+                    mod=self.fn,
+                    data_format=200,
+                    band_no=1,
+                    uncertainty_mask=2,
+                    uncertainty_mask_to_meter=0.01,
+                    weight=sub_weight*(self.weight if self.weight is not None else 1),
+                )
             )._acquire_module()
-            
+
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
             yield sub_ds

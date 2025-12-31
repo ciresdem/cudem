@@ -212,18 +212,18 @@ class INF:
             return None
 
     def generate(self, make_grid: bool = True, make_block_mean: bool = False, block_inc: float = None):
-        """
-        Generate metadata using DatasetFactory.
+        """Generate metadata using DatasetFactory.
         
         Args:
             make_grid (bool): If True, generate the 10x10 mini-grid in the INF.
             make_block_mean (bool): If True, generate a companion block-mean XYZ file.
             block_inc (float): Resolution for block mean. If None, auto-calculates ~500px width.
         """
+        
         if self.name is None:
             return self
 
-        # Local import to avoid circular dependency
+        ## Local import to avoid circular dependency
         from cudem.datasets import DatasetFactory
         
         try:
@@ -257,6 +257,7 @@ class INF:
             
         return self
 
+    
     def load_inf_file(self, inf_path: Optional[str] = None):
         """Load metadata from an existing INF file (JSON or MBSystem)."""
         
@@ -268,7 +269,7 @@ class INF:
 
         data = {}
         
-        # Try JSON first
+        ## Try JSON first
         try:
             with open(inf_path, 'r') as f:
                 data = json.load(f)
@@ -280,7 +281,7 @@ class INF:
             except Exception as e:
                 raise ValueError(f'Unable to read data from {inf_path} as JSON or MBSystem INF: {e}')
 
-        # Apply Loaded Data
+        ## Apply Loaded Data
         for key, val in data.items():
             if hasattr(self, key):
                 setattr(self, key, val)

@@ -256,7 +256,13 @@ class MBSParser(ElevationDataset):
                         os.replace(grits_filter.dst_dem, tif_fn)
 
                 ## Use Factory to yield points from the resulting grid
-                mbs_ds = DatasetFactory(mod=tif_fn, data_format=200)._acquire_module()
+                #mbs_ds = DatasetFactory(mod=tif_fn, data_format=200)._acquire_module()
+                mbs_ds = DatasetFactory(
+                    **self._set_params(
+                        mod=tif_fn,
+                        data_format=200
+                    )
+                )._acquire_module()
                 mbs_ds.initialize()
                 for gdal_ds in mbs_ds.parse():
                     for pts in gdal_ds.transform_and_yield_points():

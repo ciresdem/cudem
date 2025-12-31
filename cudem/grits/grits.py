@@ -571,6 +571,7 @@ class GritsFactory(factory.CUDEMFactory):
     from . import hydro
     from . import cut
     from . import clip
+    from . import rivers
     
     _modules = {
         'blur': {'name': 'blur', 'desc': 'Gaussian Blur', 'call': blur.Blur},
@@ -588,6 +589,7 @@ class GritsFactory(factory.CUDEMFactory):
         'hydro': {'name': 'hydro', 'desc': 'Hydro Enforcement', 'call': hydro.Hydro},
         'cut': {'name': 'cut', 'desc': 'Cut/Mask to region', 'call': cut.Cut},
         'clip': {'name': 'cut', 'desc': 'Clip to vector', 'call': clip.Clip},
+        'rivers': {'name': 'rivers', 'desc': 'Discover rivers from ndv', 'call': rivers.Rivers}, 
     }
 
     def __init__(self, **kwargs):

@@ -35,6 +35,7 @@ from osgeo import ogr, gdal
 from cudem import utils
 from cudem import regions
 from cudem import gdalfun
+from cudem import srsfun
 from cudem import xyzfun
 from cudem import vdatums
 from cudem import fetches
@@ -147,6 +148,7 @@ class Fetcher(ElevationDataset):
             if masks:
                 self.fetches_params['mask'] = masks
 
+                
     def generate_inf(self, make_grid=True, make_block_mean=False, block_inc=None):
         """Generate metadata (INF) from the Fetcher results."""
         
@@ -189,6 +191,7 @@ class Fetcher(ElevationDataset):
                     ## Yield Child Datasets
                     for this_ds in self.yield_ds(result):
                         if this_ds is not None:
+                            utils.echo_debug_msg(f'{this_ds}: {self.fetches_params}')
                             ## Update Name/Metadata
                             f_name = os.path.basename(this_ds.fn)
                             mod_name = self.fetch_module.name
@@ -885,43 +888,120 @@ class eHydroFetcher(Fetcher):
     
     __doc__ = f"{__doc__}\nFetches Module: <ehydro> - {fetches.ehydro.eHydro.__doc__}"
 
-    def __init__(self, want_contours=True, **kwargs):
+    def __init__(self, want_soundings=True, want_contours=True, **kwargs):
         super().__init__(**kwargs)
+        self.want_soundings = want_soundings
         self.want_contours = want_contours
 
+        
+    def _get_projinfo_from_gdb(self, gdb_path):
+        try:
+            ds = ogr.Open(gdb_path)
+            lyr = ds.GetLayer('SurveyPoint')
+            src_srs = lyr.GetSpatialRef()
+            datum = lyr[1].GetField('elevationDatum')
+        except Exception as e:
+            utils.echo_error_msg(f'Could not obtain srs info for {gdb_path}')
+            #if not src_srs:
+            src_srs = None
+            #if not datum:
+            datum = None
+        finally:
+            ds = lyr = None
+            v_datum = vdatums.get_vdatum_by_name(datum)
+            return src_srs, v_datum
+        
+        
     def yield_ds(self, result):
         from cudem.datalists.dlim import DatasetFactory
         
         try:
             src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result['dst_fn']), 
                                       outdir=self.fetch_module._outdir, verbose=False)
-        except Exception: src_gdb = None
+        except Exception as e:
+            utils.echo_error_msg('Could not extract {result}')
+            src_gdb = None
+
+        # if src_gdb.endswith('/'):
+        #     src_gdb = src_gdb[:-1]
 
         if src_gdb:
-            ## Determine VDatum from GDB
-            v = self._get_vdatum_from_gdb(src_gdb)
-            
-            ## Soundings
+            h, v = self._get_projinfo_from_gdb(src_gdb)
+
+            #utils.debug_echo_msg(f'{src_gdb} projinfo: {h}, {v}')
+            # gdb_ds = ogr.Open(src_gdb)
+            # survey_point_layer = gdb_ds.GetLayer('SurveyPoint')
+            # src_srs = survey_point_layer.GetSpatialRef()
+            # elev_datum = survey_point_layer[1].GetField('elevationDatum')
+            # v = vdatums.get_vdatum_by_name(elev_datum)
+            # gdb_ds = survey_point_layer = None
+
+            src_epsg = gdalfun.osr_parse_srs(h)
+            utils.echo_debug_msg(f'{src_gdb} projinfo:\nhorz: {h}\nvert: {v}\nepsg: {src_epsg}')
             self.fetches_params['mod'] = src_gdb
-            self.fetches_params['src_srs'] = f'epsg:4326+{v or "5866"}'
-            self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048006096012192'
-            self.metadata['name'] = self.fn
-            yield DatasetFactory(**self.fetches_params)._acquire_module()            
+            self.fetches_params['src_srs'] = f'{src_epsg}+{v or "5866"}' if src_epsg else None
+            self.src_srs = f'{src_epsg}+{v or "5866"}' if src_epsg else None
+            
+            if self.want_soundings:
+                self.metadata['name'] = src_gdb
+                self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048006096012192'
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
-            ## Contours
             if self.want_contours:
-                self.metadata['name'] = f'{utils.fn_basename2(self.fn)}_contours'
-                self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048006096012192'
-                yield DatasetFactory(**self.fetches_params)._acquire_module() 
+                self.metadata['name'] = f'{utils.fn_basename2(src_gdb)}_contours'
+                self.fetches_params['data_format']  = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048006096012192'
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())   
+            
+        # if src_gdb:
+        #     ## Determine VDatum from GDB
+        #     v = self._get_vdatum_from_gdb(src_gdb)
+            
+        #     ## Soundings
+        #     ## Pass data to datalists.dlim.ogrfile
+        #     if self.want_soundings:
+        #         self.fetches_params['mod'] = src_gdb
+        #         self.fetches_params['src_srs'] = f'epsg:4326+{v or "5866"}'
+        #         self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048006096012192'
+        #         self.metadata['name'] = self.fn
+        #         yield DatasetFactory(**self.fetches_params)._acquire_module()            
 
-    def _get_vdatum_from_gdb(self, gdb_path):
-        try:
-            ds = ogr.Open(gdb_path)
-            lyr = ds.GetLayer('SurveyPoint')
-            datum = lyr[1].GetField('elevationDatum')
-            return vdatums.get_vdatum_by_name(datum)
-        except: return None
+        #     ## Contours
+        #     ## Pass data to datalists.dlim.ogrfile
+        #     if self.want_contours:
+        #         self.metadata['name'] = f'{utils.fn_basename2(self.fn)}_contours'
+        #         self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048006096012192'
+        #         yield DatasetFactory(**self.fetches_params)._acquire_module() 
 
+        
+    def yield_ds_XYZ(self, result):
+        from cudem.datalists.dlim import DatasetFactory
+        
+        src_gdb = utils.gdb_unzip(
+            os.path.join(self.fetch_module._outdir, result['dst_fn']),
+            outdir=self.fetch_module._outdir,
+            verbose=False
+        )
+        if src_gdb is not None:
+            tmp_gdb = ogr.Open(src_gdb)
+            tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
+            src_srs = tmp_layer.GetSpatialRef()
+            src_epsg = gdalfun.osr_parse_srs(src_srs)
+            tmp_gdb = None
+            src_usaces = utils.p_unzip(
+                os.path.join(self.fetch_module._outdir, result['dst_fn']),
+                ['XYZ', 'xyz', 'dat'],
+                outdir=self.fetch_module._outdir,
+                verbose=self.verbose
+            )
+            for src_usace in src_usaces:
+                self.fetches_params['mod'] = src_usace
+                self.fetches_params['data_format'] = '168:z_scale=.3048'
+                self.fetches_params['src_srs'] \
+                    = '{}+{}'.format(src_epsg, v if v is not None else '5866') \
+                    if src_epsg is not None \
+                       else None
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())   
+        
 
 class BlueTopoFetcher(Fetcher):
     """BlueTopo Fetcher."""

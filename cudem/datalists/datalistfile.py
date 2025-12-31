@@ -340,11 +340,9 @@ class Datalist(ElevationDataset):
             data_mod = f'"{feat.GetField("path")}" {feat.GetField("format")} {ds_args_str or ""} {feat.GetField("weight")} {feat.GetField("uncertainty")}'
             
             data_set = DatasetFactory(
-                mod=data_mod, 
-                metadata=md,
-                parent=self
+                **self._set_params(mod=data_mod, metadata=md)#, **data_set_args)
             )._acquire_module()
-
+            
             if data_set and data_set.valid_p():
                 data_set.initialize()
                 for ds in data_set.parse():

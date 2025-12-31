@@ -50,9 +50,9 @@ from cudem import xyzfun
 
 # Initialize Configuration
 gc = utils.config_check()
-gdal.DontUseExceptions()
-ogr.DontUseExceptions()
-osr.DontUseExceptions()
+gdal.UseExceptions()
+ogr.UseExceptions()
+osr.UseExceptions()
 
 # Suppress GDAL logging based on platform
 log_dev = 'NUL' if gc['platform'] == 'win32' else '/dev/null'

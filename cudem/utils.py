@@ -1482,6 +1482,9 @@ if USE_TQDM:
             shortened_desc = orig_desc[:desc_width]
             desc = shortened_desc #if len(orig_desc) > desc_width else orig_desc
             kwargs['desc'] = f'[ \033[32m\033[1mPROC\033[m ] {mod_name}: {desc}'
+            #kwargs['dynamic_ncols'] = True
+            kwargs['ncols'] = shutil.get_terminal_size().columns
+            kwargs['bar_format'] = '{l_bar}{bar}{r_bar}'
             kwargs['file'] = DST_PORT
             super().__init__(**kwargs)
 else:

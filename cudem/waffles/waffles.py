@@ -205,7 +205,7 @@ class Waffle:
 
     
     def __repr__(self):
-        return '<Waffles: {self.name}>'
+        return f'<Waffles: {self.name}>'
 
     
     def initialize(self):
@@ -1086,7 +1086,7 @@ def waffles_cli():
     ## --- Core Parameters ---
     ## TODO: -R fails with space in cli: -R -65.0/-63.0/44.85/45.85
     parser.add_argument(
-        '-R', '--region', 
+        '-R', '--region', '--aoi', 
         action='append',
         help=("Restrict processing to the desired REGION \n"
               "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"

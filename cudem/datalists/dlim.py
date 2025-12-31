@@ -123,8 +123,8 @@ from . import inf
 
 ## Config info and setup
 gc = utils.config_check()
-gdal.DontUseExceptions()
-ogr.DontUseExceptions()
+gdal.UseExceptions()
+ogr.UseExceptions()
 gdal.SetConfigOption(
     'CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null'
 ) 
@@ -510,6 +510,281 @@ class ElevationDataset:
         pass
 
     
+    # ## initialize transfom
+    # def parse_srs(self):
+    #     if self.src_srs is not None and self.dst_srs is not None:
+    #         want_vertical = True
+    #         src_geoid = None
+    #         dst_geoid = 'g2018' # dst_geoid is g2018 by default.
+    #         in_vertical_epsg = in_vertical_crs = None
+    #         out_vertical_epsg = out_vertical_crs = None
+            
+    #         ## parse out the source geoid, which is not standard in proj,
+    #         ## reset `self.src_srs` without it.
+    #         tmp_src_srs = self.src_srs.split('+geoid:')
+    #         src_srs = tmp_src_srs[0]
+    #         self.src_srs = src_srs
+    #         if len(tmp_src_srs) > 1:
+    #             src_geoid = tmp_src_srs[1]
+
+    #         ## parse out the destination geoid, which is not standard in proj
+    #         ## reset `self.dst_srs` without it.
+    #         tmp_dst_srs = self.dst_srs.split('+geoid:')
+    #         dst_srs = tmp_dst_srs[0]
+    #         self.dst_srs = dst_srs
+    #         if len(tmp_dst_srs) > 1:
+    #             dst_geoid = tmp_dst_srs[1]
+
+    #         ## check if this is an ESRI epsg code
+    #         is_esri = False
+    #         in_vertical_epsg_esri = None
+    #         if 'ESRI' in src_srs.upper():
+    #             is_esri = True
+    #             srs_split = src_srs.split('+')
+    #             src_srs = srs_split[0]
+    #             if len(srs_split) > 1:
+    #                 in_vertical_epsg_esri = srs_split[1]
+
+    #         ## check if the vertical epsg is tidal, fix the epsg code if so
+    #         if utils.int_or(src_srs.split('+')[-1]) in vdatums._tidal_frames.keys():
+    #             src_srs = '{}+{}'.format(
+    #                 src_srs.split('+')[0],
+    #                 vdatums._tidal_frames[utils.int_or(src_srs.split('+')[-1])]['epsg']
+    #             )
+                
+    #         ## set the proj crs from the src and dst srs input
+    #         try:
+    #             in_crs = pyproj.CRS.from_user_input(src_srs)
+    #             out_crs = pyproj.CRS.from_user_input(dst_srs)
+    #         except:
+    #             utils.echo_error_msg([src_srs, dst_srs])
+
+    #         ## if the crs has vertical (compound), parse out the vertical crs
+    #         ## and set the horizontal and vertical crs
+    #         if in_crs.is_compound:
+    #             in_crs_list = in_crs.sub_crs_list
+    #             in_horizontal_crs = in_crs_list[0]
+    #             in_vertical_crs = in_crs_list[1]
+    #             in_vertical_name = in_vertical_crs.name
+    #             in_vertical_epsg = in_vertical_crs.to_epsg()
+    #             if in_vertical_epsg is None:
+    #                 in_vertical_epsg = in_vertical_name.split(' ')[0]
+    #         else:
+    #             in_horizontal_crs = in_crs
+    #             want_vertical=False
+
+    #         if out_crs.is_compound:            
+    #             out_crs_list = out_crs.sub_crs_list
+    #             out_horizontal_crs = out_crs_list[0]
+    #             out_vertical_crs = out_crs_list[1]
+    #             out_vertical_epsg = out_vertical_crs.to_epsg()
+    #         else:
+    #             out_horizontal_crs = out_crs
+    #             want_vertical=False
+    #             out_vertical_epsg=None
+
+    #         ## check if esri vertical
+    #         if (in_vertical_epsg_esri is not None and is_esri):
+    #             in_vertical_epsg = in_vertical_epsg_esri
+    #             if out_vertical_epsg is not None:
+    #                 want_vertical = True
+
+    #         ## make sure the input and output vertical epsg is different
+    #         if want_vertical:
+    #             if (in_vertical_epsg == out_vertical_epsg) and self.src_geoid is None:
+    #                 want_vertical = False
+
+    #         ## set `self.transform` with the parsed srs info
+    #         self.transform['src_horz_crs'] = in_horizontal_crs
+    #         self.transform['dst_horz_crs'] = out_horizontal_crs
+    #         self.transform['src_vert_crs'] = in_vertical_crs
+    #         self.transform['dst_vert_crs'] = out_vertical_crs
+    #         self.transform['src_vert_epsg'] = in_vertical_epsg
+    #         self.transform['dst_vert_epsg'] = out_vertical_epsg
+    #         self.transform['src_geoid'] = src_geoid
+    #         self.transform['dst_geoid'] = dst_geoid
+    #         self.transform['want_vertical'] = want_vertical        
+
+            
+    # def set_vertical_transform(self):
+    #     ## set the region for the vdatum transformation grid.
+    #     ## this is either from the input `self.region` or from the input
+    #     ## data's bounding box. Transform it to WGS84.
+    #     if self.region is None:
+    #         vd_region = regions.Region().from_list(self.infos.minmax)
+    #         vd_region.src_srs = self.transform['src_horz_crs'].to_proj4()
+    #     else:
+    #         vd_region = self.region.copy()
+    #         vd_region.src_srs = self.transform['dst_horz_crs'].to_proj4()
+
+    #     vd_region.zmin = None
+    #     vd_region.zmax = None
+    #     vd_region.warp('epsg:4326')
+    #     vd_region.buffer(pct=10)
+    #     if not vd_region.valid_p():
+    #         utils.echo_warning_msg('failed to generate transformation')
+    #         return
+    #     # else:
+    #     #     utils.echo_msg('generating vertical transformation to region {}'.format(vd_region))
+
+    #     ## set `self.transform.trans_fn`, which is the transformation grid
+    #     self.transform['trans_fn'] = os.path.join(
+    #         self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
+    #             self.transform['src_vert_epsg'],
+    #             self.transform['dst_vert_epsg'],
+    #             vd_region.format('fn')
+    #         )
+    #     )
+        
+    #     ## if the transformation grid already exists, skip making a new one,
+    #     ## otherwise, make the new one here with `vdatums.VerticalTransform()`
+    #     if not os.path.exists(self.transform['trans_fn']):
+    #         with utils.ccp(
+    #                 desc='generating vertical transformation grid {} from {} to {}'.format(
+    #                     self.transform['trans_fn'], self.transform['src_vert_epsg'],
+    #                     self.transform['dst_vert_epsg']
+    #                 ),
+    #                 leave=self.verbose
+    #         ) as pbar:
+    #             ## set the vertical transformation grid to be 3 arc-seconds. This
+    #             ## is pretty arbitrary, maybe it's too small...
+    #             vd_x_inc = vd_y_inc = utils.str2inc('3s')
+    #             xcount, ycount, dst_gt = vd_region.geo_transform(
+    #                 x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
+    #             )
+
+    #             ## if the input region is so small it creates a tiny grid,
+    #             ## keep increasing the increments until we are at least to
+    #             ## a 10x10 grid.
+    #             while (xcount <=10 or ycount <=10):
+    #                 vd_x_inc /= 2
+    #                 vd_y_inc /= 2
+    #                 xcount, ycount, dst_gt = vd_region.geo_transform(
+    #                     x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
+    #                 )
+
+    #             ## run `vdatums.VerticalTransform()`, grid using `nearest`
+    #             self.transform['trans_fn'], self.transform['trans_fn_unc'] \
+    #                 = vdatums.VerticalTransform(
+    #                     'IDW',
+    #                     vd_region,
+    #                     vd_x_inc,
+    #                     vd_y_inc,
+    #                     self.transform['src_vert_epsg'],
+    #                     self.transform['dst_vert_epsg'],
+    #                     geoid_in=self.transform['src_geoid'],
+    #                     geoid_out=self.transform['dst_geoid'],
+    #                     cache_dir=self.cache_dir,
+    #                     verbose=False
+    #                 ).run(outfile=self.transform['trans_fn'])
+
+    #     ## set the pyproj.Transformer for both horz+vert and vert only
+    #     ## hack for navd88 datums in feet (6360 is us-feet, 8228 is international-feet
+    #     if utils.str_or(self.transform['src_vert_epsg']) == '6360':
+    #         # or 'us-ft' in utils.str_or(src_vert, ''):
+    #         #out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
+    #         uc = ' +step +proj=unitconvert +z_in=us-ft +z_out=m'
+    #     elif utils.str_or(self.transform['src_vert_epsg']) == '8228':
+    #         uc = ' +step +proj=unitconvert +z_in=ft +z_out=m'
+    #     else:
+    #         uc = ''
+            
+    #     if self.transform['trans_fn'] is not None \
+    #        and os.path.exists(self.transform['trans_fn']):
+    #         self.transform['pipeline'] \
+    #             = (f'+proj=pipeline{uc} +step '
+    #                f'{self.transform["src_horz_crs"].to_proj4()} '
+    #                '+inv +step +proj=vgridshift '
+    #                f'+grids="{os.path.abspath(self.transform["trans_fn"])}" '
+    #                f'+inv +step {self.transform["dst_horz_crs"].to_proj4()}')
+    #         self.transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
+    #             (f'+proj=pipeline{uc} +step +proj=vgridshift '
+    #              f'+grids="{os.path.abspath(self.transform["trans_fn"])}" +inv')
+    #         )
+    #         utils.echo_debug_msg(self.transform['pipeline'])
+    #     else:
+    #         utils.echo_error_msg(
+    #             ('failed to generate vertical transformation grid between '
+    #              f'{self.transform["src_vert_epsg"]} and '
+    #              f'{os.path.abspath(self.transform["dst_vert_epsg"])} '
+    #              'for this region!')
+    #         )
+
+            
+    # def set_transform(self):
+    #     """Set the pyproj horizontal and vertical transformations 
+    #     for the dataset
+    #     """
+
+    #     self.parse_srs()
+    #     if self.transform['src_horz_crs'] is not None \
+    #        and self.transform['dst_horz_crs'] is not None:        
+    #         ## horizontal Transformation
+    #         self.transform['horz_pipeline'] \
+    #             = ('+proj=pipeline +step '
+    #                f'{self.transform["src_horz_crs"].to_proj4()} '
+    #                f'+inv +step {self.transform["dst_horz_crs"].to_proj4()}')
+    #         if self.region is not None:
+    #             self.transform['trans_region'] = self.region.copy()
+    #             self.transform['trans_region'].src_srs \
+    #                 = self.transform['dst_horz_crs'].to_proj4()
+    #             self.transform['trans_region'].warp(
+    #                 self.transform['src_horz_crs'].to_proj4()
+    #             )
+    #         else:
+    #             self.transform['trans_region'] \
+    #                 = regions.Region().from_list(self.infos.minmax)
+    #             self.transform['trans_region'].src_srs \
+    #                 = self.infos.src_srs
+    #             self.transform['trans_region'].warp(
+    #                 self.transform['dst_horz_crs'].to_proj4()
+    #             )
+
+    #         ## vertical Transformation
+    #         if self.transform['want_vertical']:
+    #             self.set_vertical_transform()
+    #         else:
+    #             self.transform['pipeline'] = self.transform['horz_pipeline']
+
+    #         try:
+    #             self.transform['transformer'] \
+    #                 = pyproj.Transformer.from_pipeline(
+    #                     self.transform['pipeline']
+    #                 )
+    #         except Exception as e:
+    #             utils.echo_warning_msg(
+    #                 ('could not set transformation in: '
+    #                  f'{self.transform["src_horz_crs"].name}, out: '
+    #                  f'{self.transform["dst_horz_crs"].name}, {e}')
+    #                 )
+
+    #             return
+
+    #     ## dataset region
+    #     ## mrl: moved out of if block 
+    #     if self.region is not None and self.region.valid_p():
+    #         self.data_region = self.region.copy() \
+    #             if self.transform['trans_region'] is None \
+    #                else self.transform['trans_region'].copy()
+    #         #inf_region = regions.Region().from_list(self.infos.minmax)
+    #         self.data_region = regions.regions_reduce(
+    #             self.data_region, self.inf_region
+    #         )
+    #         self.data_region.src_srs = self.infos.src_srs
+
+    #         if not self.data_region.valid_p():
+    #             self.data_region = self.region.copy() \
+    #                 if self.transform['trans_region'] is None \
+    #                    else self.transform['trans_region'].copy()
+    #     else:
+    #         self.data_region = regions.Region().from_list(
+    #             self.infos.minmax
+    #         )
+    #         self.data_region.src_srs = self.infos.src_srs
+    #     #     self.region = self.data_region.copy()
+    #     # self.region.zmax=self.upper_limit
+    #     # self.region.zmin=self.lower_limit
+        
     def initialize(self):
         self._sub_init()
         self._fn = None # temp filename holder
@@ -545,10 +820,11 @@ class ElevationDataset:
             self.infos = self.inf(
                 check_hash=True if self.data_format == -1 else False, make_block_mean=False
             )
-             
+            utils.echo_debug_msg(f'Initialize infos: {self.infos}')
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
+                    utils.echo_debug_msg(f'Setting transform: {self}: {self.src_srs}')
                     srsfun.set_transform(
                         src_srs=self.src_srs,
                         dst_srs=self.dst_srs,
@@ -559,6 +835,7 @@ class ElevationDataset:
                 except Exception as e:
                     utils.echo_error_msg(f'Could not set transformation on {self.fn}, {e}')
 
+            utils.echo_debug_msg(f'Initialize (region): {self.region}')
             self.set_yield(use_blocks=False)
 
         if self.pnt_fltrs is not None and isinstance(self.pnt_fltrs, str):
@@ -673,11 +950,11 @@ class ElevationDataset:
         
         self.array_yield = self.mask_and_yield_array()
         self.xyz_yield = self.mask_and_yield_xyz()
-        
+
         if self.region is None and self.x_inc is not None:
             utils.echo_warning_msg('Must enter a region to output in increment blocks...')
 
-        if self.region is not None and self.x_inc is not None:
+        if self.region and self.x_inc:
             self.x_inc = utils.str2inc(self.x_inc)
             if self.y_inc is None:
                 self.y_inc = self.x_inc
@@ -689,7 +966,7 @@ class ElevationDataset:
                 self.xyz_yield = self.stacks_yield_xyz(out_name=out_name)
             else:
                 self.xyz_yield = self.blocks_yield_xyz(out_name=out_name)
-
+    
                 
     def inf(self, check_hash=False, recursive_check=False, write_inf=True, 
             make_grid=True, make_block_mean=False, block_inc=None, **kwargs):
@@ -966,6 +1243,11 @@ class ElevationDataset:
             _region_backup = self.region.copy()
             self.region = None # Unset to scan full file
 
+        _x_inc_backup = None
+        if self.x_inc:
+            _x_inc_backup = self.x_inc
+            self.x_inc = None
+            
         this_region = regions.Region()
         point_count = 0
 
@@ -984,10 +1266,6 @@ class ElevationDataset:
                 if np.min(points['z']) < this_region.zmin: this_region.zmin = np.min(points['z'])
                 if np.max(points['z']) > this_region.zmax: this_region.zmax = np.max(points['z'])
             point_count += len(points)
-
-        ## Restore Region Constraint
-        if _region_backup is not None:
-            self.region = _region_backup
 
         ## Populate INF Basic Stats
         self.infos.numpts = point_count
@@ -1011,7 +1289,15 @@ class ElevationDataset:
             if make_block_mean:
                 self._generate_block_mean(this_region, block_inc=block_inc)
 
+        ## Restore Region and inc Constraint
+        if _region_backup is not None:
+            self.region = _region_backup.copy()
+
+        if _x_inc_backup:
+            self.x_inc = _x_inc_backup
+                            
         return self.infos
+
     
     def _generate_grids_from_children(self, children, region, make_grid, make_block_mean, block_inc):
         """Internal helper to generate grids by iterating over children."""
@@ -1137,55 +1423,56 @@ class ElevationDataset:
     def transform_and_yield_points(self):
         """Yield transformed points."""
         
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            for points in self.yield_points():
-                if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
-                    if self.transform['transformer'] is not None:
-                        points['x'], points['y'] = self.transform['transformer'].transform(points['x'], points['y'])
-                    
-                    if self.transform['vert_transformer'] is not None:
-                        _, _, points['z'] = self.transform['vert_transformer'].transform(points['x'], points['y'], points['z'])
-                        
-                    points = points[~np.isinf(points['z'])]
+        #with warnings.catch_warnings():
+        #warnings.simplefilter('ignore')
+        for points in self.yield_points():
+            #utils.echo_debug_msg(f'transformer is: {self.transform}')
+            if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
+                if self.transform['transformer'] is not None:
+                    points['x'], points['y'] = self.transform['transformer'].transform(points['x'], points['y'])
 
-                if self.region is not None and self.region.valid_p():
-                    xyz_region = self.region.copy()
-                    if self.invert_region:
-                        ## Inverted Region
-                        points = points[
-                            ((points['x'] >= xyz_region.xmax) | (points['x'] <= xyz_region.xmin)) | 
-                            ((points['y'] >= xyz_region.ymax) | (points['y'] <= xyz_region.ymin))
-                        ]
-                        if xyz_region.zmin is not None: points = points[(points['z'] <= xyz_region.zmin)]
-                        if xyz_region.zmax is not None: points = points[(points['z'] >= xyz_region.zmax)]
-                    else:
-                        # Standard Region
-                        points = points[
-                            ((points['x'] <= xyz_region.xmax) & (points['x'] >= xyz_region.xmin)) & 
-                            ((points['y'] <= xyz_region.ymax) & (points['y'] >= xyz_region.ymin))
-                        ]
-                        if xyz_region.zmin is not None: points = points[(points['z'] >= xyz_region.zmin)]
-                        if xyz_region.zmax is not None: points = points[(points['z'] <= xyz_region.zmax)]
+                if self.transform['vert_transformer'] is not None:
+                    _, _, points['z'] = self.transform['vert_transformer'].transform(points['x'], points['y'], points['z'])
 
-                if self.upper_limit is not None: points = points[(points['z'] <= self.upper_limit)]
-                if self.lower_limit is not None: points = points[(points['z'] >= self.lower_limit)]
+                points = points[~np.isinf(points['z'])]
+
+            if self.region is not None and self.region.valid_p():
+                xyz_region = self.region.copy()
+                if self.invert_region:
+                    ## Inverted Region
+                    points = points[
+                        ((points['x'] >= xyz_region.xmax) | (points['x'] <= xyz_region.xmin)) | 
+                        ((points['y'] >= xyz_region.ymax) | (points['y'] <= xyz_region.ymin))
+                    ]
+                    if xyz_region.zmin is not None: points = points[(points['z'] <= xyz_region.zmin)]
+                    if xyz_region.zmax is not None: points = points[(points['z'] >= xyz_region.zmax)]
+                else:
+                    # Standard Region
+                    points = points[
+                        ((points['x'] <= xyz_region.xmax) & (points['x'] >= xyz_region.xmin)) & 
+                        ((points['y'] <= xyz_region.ymax) & (points['y'] >= xyz_region.ymin))
+                    ]
+                    if xyz_region.zmin is not None: points = points[(points['z'] >= xyz_region.zmin)]
+                    if xyz_region.zmax is not None: points = points[(points['z'] <= xyz_region.zmax)]
+
+            if self.upper_limit is not None: points = points[(points['z'] <= self.upper_limit)]
+            if self.lower_limit is not None: points = points[(points['z'] >= self.lower_limit)]
+
+            if len(points) > 0:
+                if isinstance(self.pnt_fltrs, list):
+                    for f in self.pnt_fltrs:
+                        point_filter = pointz.PointFilterFactory(
+                            mod=f,
+                            points=points,
+                            region=self.region,
+                            xyinc=[self.x_inc, self.y_inc],
+                            cache_dir=self.cache_dir,
+                        )._acquire_module()
+                        if point_filter:
+                            points = point_filter()
 
                 if len(points) > 0:
-                    if isinstance(self.pnt_fltrs, list):
-                        for f in self.pnt_fltrs:
-                            point_filter = pointz.PointFilterFactory(
-                                mod=f,
-                                points=points,
-                                region=self.region,
-                                xyinc=[self.x_inc, self.y_inc],
-                                cache_dir=self.cache_dir,
-                            )._acquire_module()
-                            if point_filter:
-                                points = point_filter()
-
-                    if len(points) > 0:
-                        yield points
+                    yield points
 
         self.transform['transformer'] = self.transform['vert_transformer'] = None
 
@@ -2508,7 +2795,7 @@ def datalists_cli():
     ## --- Processing Options ---
     proc_grp = parser.add_argument_group("Processing Options")
     proc_grp.add_argument(
-        '-R', '--region', 
+        '-R', '--region', '--aoi', 
         action='append',
         help=("Restrict processing to the desired REGION \n"
               "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"

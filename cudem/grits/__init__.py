@@ -20,7 +20,7 @@
 ###############################################################################
 ### Code:
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
@@ -33,5 +33,6 @@ from . import gmtfilter
 from . import blend
 from . import cut
 from . import clip
+from . import rivers
 
 ### End

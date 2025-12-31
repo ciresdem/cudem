@@ -252,14 +252,23 @@ class SWOT_HR_Raster(ElevationDataset):
                 src_srs = srsfun.combine_epsgs(
                     src_srs, '3855', name='SWOT Combined'
                 )
-
+                
             sub_ds = DatasetFactory(
-                mod=target_sub[0],
-                data_format=200, # Treat as GDAL Raster
-                node='grid',
-                check_path=False,
-                src_srs=src_srs
+                **self._set_params(
+                    mod=target_sub[0],
+                    data_format=200,
+                    node='grid',
+                    check_path=False
+                )
             )._acquire_module()
+            
+            # sub_ds = DatasetFactory(
+            #     mod=target_sub[0],
+            #     data_format=200, # Treat as GDAL Raster
+            #     node='grid',
+            #     check_path=False,
+            #     src_srs=src_srs
+            # )._acquire_module()
             
             self.data_entries.append(sub_ds)
             sub_ds.initialize()

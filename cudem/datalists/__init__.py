@@ -33,6 +33,9 @@ from . import ogrfile
 from . import mbsfile
 from . import swotfile
 from . import icesat2file
+from . import generichdf5file
+from . import copcfile
+from . import globatofile
 from . import fetchers
 from . import datalistfile
 

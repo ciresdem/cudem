@@ -35,12 +35,12 @@ from cudem import utils, vdatums, regions
 
 ## Initialize configuration and GDAL settings
 gc = utils.config_check()
-ogr.DontUseExceptions()
-osr.DontUseExceptions()
+ogr.UseExceptions()
+osr.UseExceptions()
 
-###############################################################################
+## ==============================================
 ## OSR/WKT/proj
-###############################################################################
+## ==============================================
 def split_srs(srs: str, as_epsg: bool = False) -> Tuple[Optional[Union[str, int]], Optional[Union[str, int]]]:
     """Split an SRS into horizontal and vertical elements.
 
@@ -59,7 +59,7 @@ def split_srs(srs: str, as_epsg: bool = False) -> Tuple[Optional[Union[str, int]
     if '+geoid' in srs:
         srs = '+'.join([x for x in srs.split('+') if 'geoid' not in x])
 
-    # Handle ESRI style strings
+    ## Handle ESRI style strings
     vert_epsg = None
     vert_wkt = None
     if srs.startswith('ESRI'):
@@ -95,7 +95,7 @@ def split_srs(srs: str, as_epsg: bool = False) -> Tuple[Optional[Union[str, int]
         horz = wkt_crs
         horz_epsg = horz.to_epsg()
         horz_wkt = horz.to_wkt()
-        # Vertical remains None/from ESRI parsing
+        ## Vertical remains None/from ESRI parsing
 
     if as_epsg:
         return (horz_epsg if horz_epsg is not None else horz_wkt,
@@ -305,26 +305,33 @@ def parse_srs(src_srs: str = None, dst_srs: str = None) -> Dict[str, Any]:
             in_vertical_epsg_esri = srs_split[1]
 
     ## Check for Tidal frames
-    last_param = src_srs.split('+')[-1]
-    last_int = utils.int_or(last_param)
-    if last_int in vdatums._tidal_frames.keys():
-        base_srs = src_srs.split('+')[0]
-        tidal_epsg = vdatums._tidal_frames[last_int]['epsg']
-        src_srs = f'{base_srs}+{tidal_epsg}'
+    try:
+        last_param = src_srs.split('+')[-1]
+        last_int = utils.int_or(last_param)
+        if last_int in vdatums._tidal_frames.keys():
+            base_srs = src_srs.split('+')[0]
+            tidal_epsg = vdatums._tidal_frames[last_int]['epsg']
+            src_srs = f'{base_srs}+{tidal_epsg}'
+    except Exception:
+        pass
 
     ## Create PyProj CRS objects
     try:
         in_crs = pyproj.CRS.from_user_input(src_srs)
         out_crs = pyproj.CRS.from_user_input(dst_srs)
     except Exception as e:
-        utils.echo_error_msg(f"Error parsing CRS: {e}")
+        utils.echo_error_msg(f"Error parsing CRS: {e} [{src_srs} to {dst_srs}]")
         return transform
 
     ## Handle Input CRS Component Splitting
     if in_crs.is_compound:
         in_horizontal_crs = in_crs.sub_crs_list[0]
         in_vertical_crs = in_crs.sub_crs_list[1]
-        in_vertical_epsg = in_vertical_crs.to_epsg() or in_vertical_crs.name
+        in_vertical_epsg = in_vertical_crs.to_epsg()
+        
+        # Check name if EPSG not found directly
+        if in_vertical_epsg is None and in_vertical_crs.name:
+            in_vertical_epsg = in_vertical_crs.name.split(' ')[0]
     else:
         in_horizontal_crs = in_crs
         in_vertical_crs = None
@@ -433,21 +440,30 @@ def set_vertical_transform(transform: Dict[str, Any], region=None, infos=None,
                 cache_dir=cache_dir,
                 verbose=False
             ).run(outfile=trans_fn)
-            # except Exception as e:
-            #     utils.echo_error_msg(f"VerticalTransform Run failed: {e}")
-            #     return transform
+
+    ## Setup Unit Conversion (Feet to Meters)
+    ## 6360 = NAVD88 (US Feet)
+    ## 8228 = NAVD88 (International Feet)
+    uc = ''
+    s_v_epsg = utils.str_or(transform['src_vert_epsg'])
+    if s_v_epsg == '6360':
+        uc = ' +step +proj=unitconvert +z_in=us-ft +z_out=m'
+    elif s_v_epsg == '8228':
+        uc = ' +step +proj=unitconvert +z_in=ft +z_out=m'
 
     ## Setup PyProj pipelines
     if transform['trans_fn'] is not None and os.path.exists(transform['trans_fn']):
+        # Pipeline construction with potential unit conversion
         transform['pipeline'] = (
-            f"+proj=pipeline +step {transform['src_horz_crs'].to_proj4()} +inv "
+            f"+proj=pipeline{uc} +step "
+            f"{transform['src_horz_crs'].to_proj4()} +inv "
             f"+step +proj=vgridshift +grids={os.path.abspath(transform['trans_fn'])} +inv "
             f"+step {transform['dst_horz_crs'].to_proj4()}"
         )
         
-        # Standalone vertical transformer
+        # Standalone vertical transformer for debugging or specific vertical-only ops
         transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
-            f"+proj=pipeline +step +proj=vgridshift +grids={os.path.abspath(transform['trans_fn'])} +inv"
+            f"+proj=pipeline{uc} +step +proj=vgridshift +grids={os.path.abspath(transform['trans_fn'])} +inv"
         )
     else:
         utils.echo_error_msg(
@@ -473,7 +489,7 @@ def set_transform(src_srs: str = None, dst_srs: str = None,
         f"+step {transform['dst_horz_crs'].to_proj4()}"
     )
 
-    ## Determine Transformation Region
+    ## Determine Transformation Region (trans_region)
     if region is not None:
         transform['trans_region'] = region.copy()
         transform['trans_region'].src_srs = transform['dst_horz_crs'].to_proj4()
@@ -485,32 +501,31 @@ def set_transform(src_srs: str = None, dst_srs: str = None,
     else:
         transform['trans_region'] = None
 
-    ## Vertical Transformation
+    ## Vertical Transformation Logic
     if transform['want_vertical']:
         transform = set_vertical_transform(transform, region=region, infos=infos, cache_dir=cache_dir)
     else:
         transform['pipeline'] = transform['horz_pipeline']
 
-    ## Create Main Transformer
+    ## Create Main Transformer from Pipeline
     try:
-        transform['transformer'] = pyproj.Transformer.from_crs(
-            transform['src_horz_crs'], 
-            transform['dst_horz_crs'], 
-            always_xy=True
+        transform['transformer'] = pyproj.Transformer.from_pipeline(
+            transform['pipeline']
         )
     except Exception as e:
         utils.echo_warning_msg(
-            f"Could not set transformation from {transform['src_horz_crs'].name} "
+            f"Could not set transformation pipeline from {transform['src_horz_crs'].name} "
             f"to {transform['dst_horz_crs'].name}: {e}"
         )
         return transform
 
-    ## Define Data Region (Final bounds check logic)
+    ## Define Data Region (Final bounds check logic from snippet)
     if region is not None and region.valid_p():
         base_region = transform['trans_region'].copy() if transform['trans_region'] else region.copy()
         
         if infos is not None:
             inf_region = regions.Region().from_list(infos.minmax)
+            # Reduce region to intersection of request and data bounds
             data_region = regions.regions_reduce(base_region, inf_region)                
             data_region.src_srs = infos.src_srs
         else:
@@ -518,11 +533,15 @@ def set_transform(src_srs: str = None, dst_srs: str = None,
 
         if not data_region.valid_p():
              # Fallback to the passed region if the reduced region is invalid
-             data_region = region.copy()
+             data_region = region.copy() \
+                 if transform['trans_region'] is None else transform['trans_region'].copy()
     elif infos is not None:
         data_region = regions.Region().from_list(infos.minmax)
         data_region.src_srs = infos.src_srs
+    else:
+        data_region = None
 
+    transform['data_region'] = data_region
     return transform
 
 

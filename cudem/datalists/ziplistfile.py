@@ -240,14 +240,23 @@ class ZIPlist(ElevationDataset):
                 
                 ## Instantiate Dataset via Factory
                 ds = DatasetFactory(
-                    mod=extracted_path,
-                    data_format=None, # Auto-detect
-                    src_srs=self.src_srs,
-                    parent=self,
-                    weight=self.weight,
-                    uncertainty=self.uncertainty,
-                    verbose=self.verbose
+                    **self._set_params(
+                        mod=extracted_path,
+                        data_format=None,
+                        src_srs=self.src_srs,
+                        parent=self
+                    )
                 )._acquire_module()
+                
+                # ds = DatasetFactory(
+                #     mod=extracted_path,
+                #     data_format=None, # Auto-detect
+                #     src_srs=self.src_srs,
+                #     parent=self,
+                #     weight=self.weight,
+                #     uncertainty=self.uncertainty,
+                #     verbose=self.verbose
+                # )._acquire_module()
 
                 if ds is not None and ds.valid_p():
                     ds.initialize()
