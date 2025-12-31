@@ -1,7 +1,7 @@
 import h5py
 import numpy as np
 from cudem import utils
-from cudem.datasets import ElevationDataset
+from cudem.datalists.dlim import ElevationDataset
 
 class GenericHDF5File(ElevationDataset):
     """

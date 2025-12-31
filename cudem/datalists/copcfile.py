@@ -1,8 +1,13 @@
 import json
-import pdal
 from cudem import utils
 from cudem import regions
-from cudem.datasets import ElevationDataset
+from cudem.datalists.dlim import ElevationDataset
+
+try:
+    import pdal
+    HAS_PDAL = True
+except ImportError:
+    HAS_PDAL = False
 
 class COPCFile(ElevationDataset):
     """

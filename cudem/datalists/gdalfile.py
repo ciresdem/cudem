@@ -91,6 +91,9 @@ class GDALFile(ElevationDataset):
         if self.fn.startswith(('http', '/vsicurl/', 'BAG')) or self.fn.lower().endswith('.vrt'):
             self.check_path = False
 
+            if self.fn.lower().endswith('.vrt'):
+                self.yield_chunk = False
+                
             ## Set GDAL Config options for network performance
             ## Enable caching for seek operations (crucial for TIFFs)
             gdal.SetConfigOption('VSI_CACHE', 'TRUE')
