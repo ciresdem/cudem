@@ -62,6 +62,7 @@ class GDALFile(ElevationDataset):
                  node=None,
                  resample_and_warp=True,
                  yield_chunk=True,
+                 chunk_step=None,
                  **kwargs):
         
         super().__init__(**kwargs)
@@ -81,6 +82,7 @@ class GDALFile(ElevationDataset):
         self.node = node 
         self.resample_and_warp = resample_and_warp
         self.yield_chunk = yield_chunk
+        self.chunk_step = utils.int_or(chunk_step)
         
         self.tmp_elev_band = None
         self.tmp_unc_band = None
@@ -92,7 +94,7 @@ class GDALFile(ElevationDataset):
             self.check_path = False
 
             if self.fn.lower().endswith('.vrt'):
-                self.yield_chunk = False
+                self.chunk_size = 4096
                 
             ## Set GDAL Config options for network performance
             ## Enable caching for seek operations (crucial for TIFFs)
@@ -104,6 +106,7 @@ class GDALFile(ElevationDataset):
             
             ## Increase chunk size to reduce HTTP requests (128KB is default, 16MB is better for broadband)
             gdal.SetConfigOption('CPL_VSIL_CURL_CHUNK_SIZE', '16384000')
+            gdal.SetConfigOption('GDAL_CACHEMAX', '1024')
 
         if self.valid_p() and self.src_srs is None:
             if self.infos.src_srs is None:
@@ -524,12 +527,35 @@ class GDALFile(ElevationDataset):
                 trans_uncertainty_band = None
             else:
                 uncertainty_band = trans_uncertainty.GetRasterBand(1)
-        
+
+        ## ==============================================
         ## --- Chunked Yield ---
+        ## ==============================================
         if self.yield_chunk:
+            
+            ## Determine Optimal Chunk Size
+            if self.chunk_step is not None:
+                ## User specified size
+                read_chunk_size = self.chunk_step
+            else:
+                ## Auto-detect best size based on internal tiling
+                try:
+                    block_size = self.src_ds.GetRasterBand(1).GetBlockSize()
+                    bx, by = block_size[0], block_size[1]
+                    
+                    if bx > 1 and by > 1:
+                        target_size = 4096
+                        read_chunk_size = (target_size // bx) * bx
+                        if read_chunk_size == 0: read_chunk_size = bx
+                    else:
+                        read_chunk_size = 4096
+                except:
+                    ## Fallback
+                    read_chunk_size = 4096
+
             for srcwin in utils.yield_srcwin(
                     n_size=(self.src_ds.RasterYSize, self.src_ds.RasterXSize),
-                    n_chunk=4000,
+                    n_chunk=read_chunk_size,
                     verbose=False
             ):                
                 band_data = band.ReadAsArray(*srcwin).astype(float)
@@ -594,108 +620,110 @@ class GDALFile(ElevationDataset):
                 gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize,
                 node=self.node
             )
-            for y in range(srcwin[1], (srcwin[1] + srcwin[3]), 1):
-                band_data = band.ReadAsArray(
-                    srcwin[0], y, srcwin[2], 1
-                ).astype(float)
-                if ndv is not None and not np.isnan(ndv):
-                    band_data[band_data == ndv] = np.nan
-
-                if np.all(np.isnan(band_data)):
-                    continue
-
-                ## weights
-                if weight_band is not None:
-                    weight_data = weight_band.ReadAsArray(
+            with utils.ccp(total=(srcwin[1] + srcwin[3]), desc='Parsing Scanlines') as pbar:
+                for y in range(srcwin[1], (srcwin[1] + srcwin[3]), 1):
+                    pbar.update()
+                    band_data = band.ReadAsArray(
                         srcwin[0], y, srcwin[2], 1
-                    )
-                    weight_ndv = float(weight_band.GetNoDataValue())
-                    if not np.isnan(weight_ndv):
-                        weight_data[weight_data==weight_ndv] = np.nan
-                else:
-                    weight_data = np.ones(band_data.shape)
+                    ).astype(float)
+                    if ndv is not None and not np.isnan(ndv):
+                        band_data[band_data == ndv] = np.nan
 
-                ## uncertainty
-                if uncertainty_band is not None:
-                    uncertainty_data = uncertainty_band.ReadAsArray(
-                        srcwin[0], y, srcwin[2], 1
-                    )
-                    uncertainty_ndv = float(uncertainty_band.GetNoDataValue())
-                    if not np.isnan(uncertainty_ndv):
-                        uncertainty_data[uncertainty_data==uncertainty_ndv] = np.nan
+                    if np.all(np.isnan(band_data)):
+                        continue
 
-                    if self.transform['trans_fn_unc'] is None:
-                        uncertainty_data *= self.uncertainty_mask_to_meter
-
-                else:
-                    uncertainty_data = np.zeros(band_data.shape)
-
-                ## convert grid array to points
-                if self.x_band is None and self.y_band is None:
-                    x_precision = 12#len(str(gt[0]).split('.')[-1])
-                    y_precision = 12#len(str(gt[3]).split('.')[-1])
-                    while True:
-                        ## 'self.node to 'pixel', this breaks if set to
-                        ## 'grid' even if 'grid-node'
-                        geo_x_origin, geo_y_origin = utils._pixel2geo(
-                            srcwin[0], y, gt,
-                            node='pixel',
-                            x_precision=x_precision,
-                            y_precision=y_precision
-                        ) 
-                        geo_x_end, geo_y_end = utils._pixel2geo(
-                            srcwin[0] + srcwin[2], y, gt,
-                            node='grid',
-                            x_precision=x_precision,
-                            y_precision=y_precision
+                    ## weights
+                    if weight_band is not None:
+                        weight_data = weight_band.ReadAsArray(
+                            srcwin[0], y, srcwin[2], 1
                         )
-                        lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
+                        weight_ndv = float(weight_band.GetNoDataValue())
+                        if not np.isnan(weight_ndv):
+                            weight_data[weight_data==weight_ndv] = np.nan
+                    else:
+                        weight_data = np.ones(band_data.shape)
 
-                        if lon_array.shape == band_data[0].shape:
-                            break
-                        else:
-                            if x_precision < 0 or y_precision < 0:
+                    ## uncertainty
+                    if uncertainty_band is not None:
+                        uncertainty_data = uncertainty_band.ReadAsArray(
+                            srcwin[0], y, srcwin[2], 1
+                        )
+                        uncertainty_ndv = float(uncertainty_band.GetNoDataValue())
+                        if not np.isnan(uncertainty_ndv):
+                            uncertainty_data[uncertainty_data==uncertainty_ndv] = np.nan
+
+                        if self.transform['trans_fn_unc'] is None:
+                            uncertainty_data *= self.uncertainty_mask_to_meter
+
+                    else:
+                        uncertainty_data = np.zeros(band_data.shape)
+
+                    ## convert grid array to points
+                    if self.x_band is None and self.y_band is None:
+                        x_precision = 12#len(str(gt[0]).split('.')[-1])
+                        y_precision = 12#len(str(gt[3]).split('.')[-1])
+                        while True:
+                            ## 'self.node to 'pixel', this breaks if set to
+                            ## 'grid' even if 'grid-node'
+                            geo_x_origin, geo_y_origin = utils._pixel2geo(
+                                srcwin[0], y, gt,
+                                node='pixel',
+                                x_precision=x_precision,
+                                y_precision=y_precision
+                            ) 
+                            geo_x_end, geo_y_end = utils._pixel2geo(
+                                srcwin[0] + srcwin[2], y, gt,
+                                node='grid',
+                                x_precision=x_precision,
+                                y_precision=y_precision
+                            )
+                            lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
+
+                            if lon_array.shape == band_data[0].shape:
                                 break
+                            else:
+                                if x_precision < 0 or y_precision < 0:
+                                    break
 
-                            x_precision -= 1
-                            y_precision -= 1
+                                x_precision -= 1
+                                y_precision -= 1
 
-                    lat_array = np.zeros((lon_array.shape))
-                    lat_array[:] = geo_y_origin
+                        lat_array = np.zeros((lon_array.shape))
+                        lat_array[:] = geo_y_origin
 
-                    try:
-                        assert lon_array.shape == lat_array.shape
-                        assert lon_array.shape == band_data[0].shape
+                        try:
+                            assert lon_array.shape == lat_array.shape
+                            assert lon_array.shape == band_data[0].shape
+                            dataset = np.column_stack(
+                                (lon_array, lat_array, band_data[0],
+                                 weight_data[0], uncertainty_data[0])
+                            )
+                        except Exception as e:
+                            utils.echo_error_msg(e)
+                            pass
+                    else:
+                        lon_band = self.src_ds.GetRasterBand(self.x_band)
+                        lon_array = lon_band.ReadAsArray(
+                            srcwin[0], y, srcwin[2], 1
+                        ).astype(float)
+                        lon_array[np.isnan(band_data)] = np.nan
+
+                        lat_band = self.src_ds.GetRasterBand(self.y_band)
+                        lat_array = lat_band.ReadAsArray(
+                            srcwin[0], y, srcwin[2], 1
+                        ).astype(float)
+                        lat_array[np.isnan(band_data)] = np.nan
                         dataset = np.column_stack(
-                            (lon_array, lat_array, band_data[0],
+                            (lon_array[0], lat_array[0], band_data[0],
                              weight_data[0], uncertainty_data[0])
                         )
-                    except Exception as e:
-                        utils.echo_error_msg(e)
-                        pass
-                else:
-                    lon_band = self.src_ds.GetRasterBand(self.x_band)
-                    lon_array = lon_band.ReadAsArray(
-                        srcwin[0], y, srcwin[2], 1
-                    ).astype(float)
-                    lon_array[np.isnan(band_data)] = np.nan
 
-                    lat_band = self.src_ds.GetRasterBand(self.y_band)
-                    lat_array = lat_band.ReadAsArray(
-                        srcwin[0], y, srcwin[2], 1
-                    ).astype(float)
-                    lat_array[np.isnan(band_data)] = np.nan
-                    dataset = np.column_stack(
-                        (lon_array[0], lat_array[0], band_data[0],
-                         weight_data[0], uncertainty_data[0])
-                    )
-
-                points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
-                points =  points[~np.isnan(points['z'])]
-                dataset = band_data = weight_data = None
-                uncertainty_data = lat_array = lon_array = None
-                utils.remove_glob(tmp_elev_fn, tmp_unc_fn, tmp_weight_fn)
-                yield points
+                    points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
+                    points =  points[~np.isnan(points['z'])]
+                    dataset = band_data = weight_data = None
+                    uncertainty_data = lat_array = lon_array = None
+                    utils.remove_glob(tmp_elev_fn, tmp_unc_fn, tmp_weight_fn)
+                    yield points
 
         self.src_ds = None
         if self.remove_flat and self.flat_removed:

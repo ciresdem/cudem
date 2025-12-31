@@ -920,6 +920,9 @@ class FetchesFactory(factory.CUDEMFactory):
 
 ## ==============================================
 ## Command-line Interface (CLI)
+## $ fetches
+##
+## fetches cli
 ## ==============================================
 class PrintModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
@@ -943,7 +946,7 @@ CUDEM home page: <http://cudem.colorado.edu>
     )
 
     parser.add_argument(
-        '-R', '--region',
+        '-R', '--region', '--aoi',
         action='append',
         help=("Restrict processing to the desired REGION \n"
               "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"

@@ -925,6 +925,9 @@ def quarter_tile_from_coordinates(x=None, y=None):
 
 ## ==============================================
 ## Command-line Interface (CLI)
+## $ regions
+##
+## regions cli
 ## ==============================================
 def regions_cli():
     """Run regions from command-line using argparse."""
@@ -936,7 +939,7 @@ def regions_cli():
     )
 
     parser.add_argument(
-        '-R', '--region',
+        '-R', '--region', '--aoi',
         required=True,
         action='append',
         help="The desired REGION \n"
