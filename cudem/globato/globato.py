@@ -1224,7 +1224,7 @@ class GdalRasterStacker:
         ## array_yield is data yielded from pointz.PointPixel()
         ## =====================================================================
         for this_entry in data_generator:
-            utils.echo_debug_msg(f'Parsing entry for globato: {this_entry}')
+            utils.echo_debug_msg(f'Parsing entry for globato: {this_entry}')            
             for arrs, srcwin, gt in this_entry.array_yield:
                 if arrs['count'] is None or np.all(arrs['count'] == 0):
                     continue

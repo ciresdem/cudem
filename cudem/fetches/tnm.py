@@ -213,6 +213,18 @@ class TheNationalMap(fetches.FetchModule):
                     features = req.json()
                     total = features.get('total', 0)
                     items = features.get('items', [])
+
+                    ## Double-Check the bounding-box in case TNM
+                    ## returned data outside of our region.
+                    if 'boundingBox' in feature:
+                        bb = feature['boundingBox']
+                        feature_region = regions.Region().from_list([
+                            bb.get('minX'), bb.get('maxX'), 
+                            bb.get('minY'), bb.get('maxY')
+                        ])
+                        
+                        if not regions.regions_intersect_p(self.region, feature_region):
+                            continue
                     
                     for feature in items:
                         self.add_entry_to_results(
@@ -231,6 +243,7 @@ class TheNationalMap(fetches.FetchModule):
         
         return self
 
+    
 ## ==============================================
 ## Shortcuts
 ## ==============================================
