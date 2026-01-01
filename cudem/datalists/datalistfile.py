@@ -355,46 +355,58 @@ class Datalist(ElevationDataset):
         from cudem.datalists.dlim import DatasetFactory
         
         if os.path.exists(self.fn):
+            ## Get the number of lines in the datalist
             with open(self.fn, 'r') as f:
-                for line in f:
-                    if line.strip() and not line.startswith('#'):
-                        md = copy.deepcopy(self.metadata)
-                        md['name'] = utils.fn_basename2(os.path.basename(self.fn))
+                count = sum(1 for _ in f)
+                
+            with open(self.fn, 'r') as f:
+                with utils.ccp(
+                        total=count,
+                        desc=f'Parsing datalist {self.fn}...',
+                        leave=False
+                ) as pbar:
+                    for line in f:
+                        pbar.update()
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            md = copy.deepcopy(self.metadata)
+                            md['name'] = utils.fn_basename2(os.path.basename(self.fn))
 
-                        ds_params = self._set_params(
-                            mod=line,
-                            metadata=md,
-                            src_srs=self.src_srs,
-                            parent=self,
-                            fn=None,
-                        )
-                        data_set = DatasetFactory(**ds_params)._acquire_module()
-                        
-                        # data_set = DatasetFactory(
-                        #     mod=line,
-                        #     metadata=md,
-                        #     src_srs=self.src_srs,
-                        #     parent=self
-                        # )._acquire_module()
+                            ds_params = self._set_params(
+                                mod=line,
+                                metadata=md,
+                                src_srs=self.src_srs,
+                                parent=self,
+                                fn=None,
+                            )
+                            data_set = DatasetFactory(**ds_params)._acquire_module()
+                            utils.echo_debug_msg(f'Parsed entry from line ({line}): {data_set}, {data_set.fn}')
+                            # data_set = DatasetFactory(
+                            #     mod=line,
+                            #     metadata=md,
+                            #     src_srs=self.src_srs,
+                            #     parent=self
+                            # )._acquire_module()
 
-                        if data_set and data_set.valid_p():
-                            data_set.initialize()
-                            
-                            ## Spatial Filter
-                            if self.region is not None and self.region.valid_p(check_xy=True):
-                                ## Load INF to check bounds
-                                data_set.inf(check_hash=False)
-                                
-                                check_region = data_set.transform['trans_region']
-                                if check_region is None and data_set.infos.minmax:
-                                    check_region = regions.Region().from_list(data_set.infos.minmax)
-                                    
-                                if check_region and not regions.regions_intersect_p(check_region, self.region):
-                                    continue
+                            if data_set and data_set.valid_p(fmts=DatasetFactory._modules[data_set.data_format]['fmts']):
+                                data_set.initialize()
 
-                            for ds in data_set.parse():
-                                self.data_entries.append(ds)
-                                yield ds
+                                ## Spatial Filter
+                                if self.region is not None and self.region.valid_p(check_xy=True):
+                                    ## Load INF to check bounds
+                                    data_set.inf(check_hash=False)
+
+                                    check_region = data_set.transform['trans_region']
+                                    if check_region is None and data_set.infos.minmax:
+                                        check_region = regions.Region().from_list(data_set.infos.minmax)
+
+                                    if check_region and not regions.regions_intersect_p(check_region, self.region):
+                                        continue
+
+                                for ds in data_set.parse():
+                                    self.data_entries.append(ds)
+                                    yield ds
+
         elif self.data_entries:
             for data_set in self.data_entries:
                 for ds in data_set.parse():

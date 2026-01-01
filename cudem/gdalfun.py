@@ -1332,22 +1332,23 @@ def gdal_nan(ds_config, outfile, nodata=None):
 
 def gdal_get_node(src_gdal, node='pixel'):
     with gdal_datasource(src_gdal) as src_ds:
-        ds_config = gdal_infos(src_ds)
-        if 'metadata' in ds_config.keys():
-            mt = ds_config['metadata']
-            if 'AREA_OR_POINT' in mt.keys():
-                node = mt['AREA_OR_POINT']
-            elif 'NC_GLOBAL#node_offset' in mt.keys():
-                node = mt['NC_GLOBAL#node_offset']
-            elif 'tos#node_offset' in mt.keys():
-                node = mt['tos#node_offset']
-            elif 'node_offset' in mt.keys():
-                node = mt['node_offset']
+        if src_ds:
+            ds_config = gdal_infos(src_ds)
+            if 'metadata' in ds_config.keys():
+                mt = ds_config['metadata']
+                if 'AREA_OR_POINT' in mt.keys():
+                    node = mt['AREA_OR_POINT']
+                elif 'NC_GLOBAL#node_offset' in mt.keys():
+                    node = mt['NC_GLOBAL#node_offset']
+                elif 'tos#node_offset' in mt.keys():
+                    node = mt['tos#node_offset']
+                elif 'node_offset' in mt.keys():
+                    node = mt['node_offset']
 
-            if node.upper() == 'AREA' or node == '1':
-                node = 'pixel'
-            elif node.upper() == 'POINT' or node == '0':
-                node = 'grid'
+                if node.upper() == 'AREA' or node == '1':
+                    node = 'pixel'
+                elif node.upper() == 'POINT' or node == '0':
+                    node = 'grid'
     return node
     
 

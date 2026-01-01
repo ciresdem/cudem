@@ -160,6 +160,7 @@ class Fetcher(ElevationDataset):
             self.infos.minmax = tmp_region.export_as_list()    
             self.infos.wkt = tmp_region.export_as_wkt()
             self.infos.src_srs = self.fetch_module.src_srs
+        utils.echo_msg(self.infos)
         return self.infos
 
     

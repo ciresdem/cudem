@@ -411,8 +411,7 @@ class GlobatoStacker:
 
     
     def process_blocks(self, data_generator, out_name=None, ndv=-9999):
-        """
-        Block and mask incoming arrays together.
+        """Block and mask incoming arrays together.
         
         Parameters:
         -----------
@@ -558,200 +557,201 @@ class GlobatoStacker:
                         sums_data[key][np.isnan(sums_data[key])] = 0
                     if key == 'count':
                         sums_data[key][np.isnan(sums_data[key])] = 0
-                    
-                ## Sanitize incoming arrays
-                arrs['count'][np.isnan(arrs['count'])] = 0
-                arrs['weight'][np.isnan(arrs['z'])] = 0
-                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
-                
-                if mode not in ['min', 'max']:
-                    arrs['x'][np.isnan(arrs['x'])] = 0
-                    arrs['y'][np.isnan(arrs['y'])] = 0
-                    arrs['z'][np.isnan(arrs['z'])] = 0
-                    for arr_key in arrs:
-                        if arrs[arr_key] is not None:
-                            arrs[arr_key][np.isnan(arrs[arr_key])] = 0
 
-                ## Accumulate count
-                if mode != 'mixed' and mode != 'supercede':
-                    sums_data['count'] += arrs['count']
-                    
-                tmp_arrs_weight = arrs['weight'] / arrs['count']
-                tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
-                
-                ## --- SUPERCEDE MODE ---
-                if mode == 'supercede':
-                    tmp_stacked_weight = sums_data['weights'] / sums_data['count']
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    ## Sanitize incoming arrays
+                    arrs['count'][np.isnan(arrs['count'])] = 0
+                    arrs['weight'][np.isnan(arrs['z'])] = 0
+                    arrs['uncertainty'][np.isnan(arrs['z'])] = 0
 
-                    sums_data['count'][sup_mask] = arrs['count'][sup_mask]
-                    sums_data['z'][sup_mask] = arrs['z'][sup_mask]
-                    sums_data['weights'][sup_mask] = arrs['weight'][sup_mask]
-                    sums_data['x'][sup_mask] = arrs['x'][sup_mask]
-                    sums_data['y'][sup_mask] = arrs['y'][sup_mask]
-                    sums_data['src_uncertainty'][sup_mask] = arrs['uncertainty'][sup_mask]
-                    sums_data['uncertainty'][sup_mask] = np.array(sums_data['src_uncertainty'])[sup_mask]
-                    
-                    ## Clean up superseded masks in the file
-                    k_list = []
-                    mask_grp.visit(lambda x: k_list.append(x) if not isinstance(mask_grp[x], h5.Group) else None)
+                    if mode not in ['min', 'max']:
+                        arrs['x'][np.isnan(arrs['x'])] = 0
+                        arrs['y'][np.isnan(arrs['y'])] = 0
+                        arrs['z'][np.isnan(arrs['z'])] = 0
+                        for arr_key in arrs:
+                            if arrs[arr_key] is not None:
+                                arrs[arr_key][np.isnan(arrs[arr_key])] = 0
 
-                    for key in k_list:
-                        if entry_name in key: continue
+                    ## Accumulate count
+                    if mode != 'mixed' and mode != 'supercede':
+                        sums_data['count'] += arrs['count']
 
-                        key_dset_arr = mask_grp[key][y_slice, x_slice]
-                        weight_above_sup = ~np.isnan(key_dset_arr) 
+                    tmp_arrs_weight = arrs['weight'] / arrs['count']
+                    tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
 
-                        key_dset_mask = key_dset_arr[weight_above_sup] == 1
-                        if np.any(key_dset_mask):
-                            key_dset_arr[key_dset_mask] = 0
-                            mask_grp[key][y_slice, x_slice] = key_dset_arr
-                                
-                ## --- MIN/MAX MODE ---
-                elif mode == 'min' or mode == 'max':
-                    mask = np.isnan(sums_data['z'])
-                    for k_map in ['x', 'y', 'src_uncertainty', 'uncertainty', 'weights', 'z']:
-                        sums_data[k_map][mask] = arrs['z' if k_map == 'z' else k_map][mask]
-
-                    if mode == 'min':
-                        mask = arrs['z'] <= sums_data['z']
-                    else:
-                        mask = arrs['z'] >= sums_data['z']
-                        
-                    sums_data['x'][mask] = arrs['x'][mask]
-                    sums_data['y'][mask] = arrs['y'][mask]
-                    sums_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
-                    sums_data['weights'][mask] += arrs['weight'][mask]
-                    sums_data['weights'][mask][sums_data['weights'][mask] == 0] = np.nan
-                    
-                    term = (arrs['z'][mask] - (sums_data['z'][mask] / sums_data['weights'][mask]))
-                    sums_data['uncertainty'][mask] += arrs['weight'][mask] * np.power(term, 2)
-                    sums_data['z'][mask] = arrs['z'][mask]
-                
-                ## --- MEAN MODE ---
-                elif mode == 'mean':
-                    sums_data['z'] += arrs['z']
-                    sums_data['x'] += arrs['x']
-                    sums_data['y'] += arrs['y']
-                    sums_data['src_uncertainty'] = np.sqrt(
-                        np.power(sums_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2)
-                    )
-                    sums_data['weights'] += arrs['weight']
-                    sums_data['weights'][sums_data['weights'] == 0] = np.nan
-                    
-                    term = (arrs['z'] - (sums_data['z'] / sums_data['weights']))
-                    sums_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
-
-                ## --- MIXED MODE ---
-                elif mode == 'mixed':
-                    wt_str = self.stack_mode_args.get('weight_threshold', '1')
-                    wts = [utils.float_or(x) for x in str(wt_str).split('/')]
-                    wts.sort()
-                    wt_pairs = utils.range_pairs(wts)
-                    wt_pairs.reverse()
-                    
-                    tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    
-                    ## Collect keys for mask cleaning
-                    k_list = []
-                    mask_grp.visit(lambda x: k_list.append(x) if not isinstance(mask_grp[x], h5.Group) else None)
-
-                    ## ABOVE THRESHOLD
-                    weight_above_sup = (tmp_arrs_weight >= max(wts)) & (tmp_stacked_weight < max(wts))
-                    
-                    ## Adjust mask for supercede
-                    for key in k_list:
-                        if entry_name in key: continue
-                        key_dset_arr = mask_grp[key][y_slice, x_slice]
-                        # simplified mask check
-                        wa_sup_local = weight_above_sup if weight_above_sup is not None else ~np.isnan(key_dset_arr)
-                        key_dset_mask = key_dset_arr[wa_sup_local] == 1
-                        if np.any(key_dset_mask):
-                            key_dset_arr[key_dset_mask] = 0
-                            mask_grp[key][y_slice, x_slice] = key_dset_arr
-
-                    sums_data = self._supercede(weight_above_sup, sums_data, arrs)
-
-                    ## Recalculate weights
-                    tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    
-                    weight_above = (tmp_arrs_weight >= max(wts)) & \
-                                   (tmp_arrs_weight >= tmp_stacked_weight) & \
-                                   (~weight_above_sup)
-
-                    ## Adjust mask for average
-                    for key in k_list:
-                        if entry_name in key: continue
-                        key_dset_arr = mask_grp[key][y_slice, x_slice]
-                        wa_local = weight_above if weight_above is not None else ~np.isnan(key_dset_arr)
-                        key_dset_mask = key_dset_arr[wa_local] == 1
-                        if np.any(key_dset_mask):
-                            key_dset_arr[key_dset_mask] = 0
-                            mask_grp[key][y_slice, x_slice] = key_dset_arr
-                    
-                    sums_data = self._average(weight_above, sums_data, arrs)
-
-                    ## BETWEEN THRESHOLDS
-                    for wt_pair in wt_pairs:
-                        tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                    ## --- SUPERCEDE MODE ---
+                    if mode == 'supercede':
+                        tmp_stacked_weight = sums_data['weights'] / sums_data['count']
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                        sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
 
-                        arrs_mask_sup = (tmp_arrs_weight >= min(wt_pair)) & (tmp_arrs_weight < max(wt_pair))
-                        tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
-                        weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
+                        sums_data['count'][sup_mask] = arrs['count'][sup_mask]
+                        sums_data['z'][sup_mask] = arrs['z'][sup_mask]
+                        sums_data['weights'][sup_mask] = arrs['weight'][sup_mask]
+                        sums_data['x'][sup_mask] = arrs['x'][sup_mask]
+                        sums_data['y'][sup_mask] = arrs['y'][sup_mask]
+                        sums_data['src_uncertainty'][sup_mask] = arrs['uncertainty'][sup_mask]
+                        sums_data['uncertainty'][sup_mask] = np.array(sums_data['src_uncertainty'])[sup_mask]
 
-                        ## Adjust mask
+                        ## Clean up superseded masks in the file
+                        k_list = []
+                        mask_grp.visit(lambda x: k_list.append(x) if not isinstance(mask_grp[x], h5.Group) else None)
+
                         for key in k_list:
                             if entry_name in key: continue
+
                             key_dset_arr = mask_grp[key][y_slice, x_slice]
-                            wb_sup_local = weight_between_sup if weight_between_sup is not None else ~np.isnan(key_dset_arr)
-                            key_dset_mask = key_dset_arr[wb_sup_local] == 1
+                            weight_above_sup = ~np.isnan(key_dset_arr) 
+
+                            key_dset_mask = key_dset_arr[weight_above_sup] == 1
                             if np.any(key_dset_mask):
                                 key_dset_arr[key_dset_mask] = 0
                                 mask_grp[key][y_slice, x_slice] = key_dset_arr
-                        
-                        sums_data = self._supercede(weight_between_sup, sums_data, arrs)
+
+                    ## --- MIN/MAX MODE ---
+                    elif mode == 'min' or mode == 'max':
+                        mask = np.isnan(sums_data['z'])
+                        for k_map in ['x', 'y', 'src_uncertainty', 'uncertainty', 'weights', 'z']:
+                            sums_data[k_map][mask] = arrs['z' if k_map == 'z' else k_map][mask]
+
+                        if mode == 'min':
+                            mask = arrs['z'] <= sums_data['z']
+                        else:
+                            mask = arrs['z'] >= sums_data['z']
+
+                        sums_data['x'][mask] = arrs['x'][mask]
+                        sums_data['y'][mask] = arrs['y'][mask]
+                        sums_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
+                        sums_data['weights'][mask] += arrs['weight'][mask]
+                        sums_data['weights'][mask][sums_data['weights'][mask] == 0] = np.nan
+
+                        term = (arrs['z'][mask] - (sums_data['z'][mask] / sums_data['weights'][mask]))
+                        sums_data['uncertainty'][mask] += arrs['weight'][mask] * np.power(term, 2)
+                        sums_data['z'][mask] = arrs['z'][mask]
+
+                    ## --- MEAN MODE ---
+                    elif mode == 'mean':
+                        sums_data['z'] += arrs['z']
+                        sums_data['x'] += arrs['x']
+                        sums_data['y'] += arrs['y']
+                        sums_data['src_uncertainty'] = np.sqrt(
+                            np.power(sums_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2)
+                        )
+                        sums_data['weights'] += arrs['weight']
+                        sums_data['weights'][sums_data['weights'] == 0] = np.nan
+
+                        term = (arrs['z'] - (sums_data['z'] / sums_data['weights']))
+                        sums_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
+
+                    ## --- MIXED MODE ---
+                    elif mode == 'mixed':
+                        wt_str = self.stack_mode_args.get('weight_threshold', '1')
+                        wts = [utils.float_or(x) for x in str(wt_str).split('/')]
+                        wts.sort()
+                        wt_pairs = utils.range_pairs(wts)
+                        wt_pairs.reverse()
 
                         tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
 
-                        arrs_weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
-                                              (tmp_arrs_weight < max(wt_pair)) & \
-                                              (tmp_arrs_weight >= tmp_stacked_weight)
-                        
-                        weight_between = (arrs_weight_between) & (~weight_between_sup)
+                        ## Collect keys for mask cleaning
+                        k_list = []
+                        mask_grp.visit(lambda x: k_list.append(x) if not isinstance(mask_grp[x], h5.Group) else None)
+
+                        ## ABOVE THRESHOLD
+                        weight_above_sup = (tmp_arrs_weight >= max(wts)) & (tmp_stacked_weight < max(wts))
+
+                        ## Adjust mask for supercede
+                        for key in k_list:
+                            if entry_name in key: continue
+                            key_dset_arr = mask_grp[key][y_slice, x_slice]
+                            # simplified mask check
+                            wa_sup_local = weight_above_sup if weight_above_sup is not None else ~np.isnan(key_dset_arr)
+                            key_dset_mask = key_dset_arr[wa_sup_local] == 1
+                            if np.any(key_dset_mask):
+                                key_dset_arr[key_dset_mask] = 0
+                                mask_grp[key][y_slice, x_slice] = key_dset_arr
+
+                        sums_data = self._supercede(weight_above_sup, sums_data, arrs)
+
+                        ## Recalculate weights
+                        tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        weight_above = (tmp_arrs_weight >= max(wts)) & \
+                                       (tmp_arrs_weight >= tmp_stacked_weight) & \
+                                       (~weight_above_sup)
+
+                        ## Adjust mask for average
+                        for key in k_list:
+                            if entry_name in key: continue
+                            key_dset_arr = mask_grp[key][y_slice, x_slice]
+                            wa_local = weight_above if weight_above is not None else ~np.isnan(key_dset_arr)
+                            key_dset_mask = key_dset_arr[wa_local] == 1
+                            if np.any(key_dset_mask):
+                                key_dset_arr[key_dset_mask] = 0
+                                mask_grp[key][y_slice, x_slice] = key_dset_arr
+
+                        sums_data = self._average(weight_above, sums_data, arrs)
+
+                        ## BETWEEN THRESHOLDS
+                        for wt_pair in wt_pairs:
+                            tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                            tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                            arrs_mask_sup = (tmp_arrs_weight >= min(wt_pair)) & (tmp_arrs_weight < max(wt_pair))
+                            tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
+                            weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
+
+                            ## Adjust mask
+                            for key in k_list:
+                                if entry_name in key: continue
+                                key_dset_arr = mask_grp[key][y_slice, x_slice]
+                                wb_sup_local = weight_between_sup if weight_between_sup is not None else ~np.isnan(key_dset_arr)
+                                key_dset_mask = key_dset_arr[wb_sup_local] == 1
+                                if np.any(key_dset_mask):
+                                    key_dset_arr[key_dset_mask] = 0
+                                    mask_grp[key][y_slice, x_slice] = key_dset_arr
+
+                            sums_data = self._supercede(weight_between_sup, sums_data, arrs)
+
+                            tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                            tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                            arrs_weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
+                                                  (tmp_arrs_weight < max(wt_pair)) & \
+                                                  (tmp_arrs_weight >= tmp_stacked_weight)
+
+                            weight_between = (arrs_weight_between) & (~weight_between_sup)
+
+                            ## Adjust mask
+                            for key in k_list:
+                                if entry_name in key: continue
+                                key_dset_arr = mask_grp[key][y_slice, x_slice]
+                                wb_local = weight_between if weight_between is not None else ~np.isnan(key_dset_arr)
+                                key_dset_mask = key_dset_arr[wb_local] == 1
+                                if np.any(key_dset_mask):
+                                    key_dset_arr[key_dset_mask] = 0
+                                    mask_grp[key][y_slice, x_slice] = key_dset_arr
+
+                            sums_data = self._average(weight_between, sums_data, arrs)
+
+                        ## BELOW THRESHOLD
+                        tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                        weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
 
                         ## Adjust mask
                         for key in k_list:
                             if entry_name in key: continue
                             key_dset_arr = mask_grp[key][y_slice, x_slice]
-                            wb_local = weight_between if weight_between is not None else ~np.isnan(key_dset_arr)
+                            wb_local = weight_below if weight_below is not None else ~np.isnan(key_dset_arr)
                             key_dset_mask = key_dset_arr[wb_local] == 1
                             if np.any(key_dset_mask):
                                 key_dset_arr[key_dset_mask] = 0
                                 mask_grp[key][y_slice, x_slice] = key_dset_arr
-                        
-                        sums_data = self._average(weight_between, sums_data, arrs)
 
-                    ## BELOW THRESHOLD
-                    tmp_stacked_weight = (sums_data['weights'] / sums_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
-
-                    ## Adjust mask
-                    for key in k_list:
-                        if entry_name in key: continue
-                        key_dset_arr = mask_grp[key][y_slice, x_slice]
-                        wb_local = weight_below if weight_below is not None else ~np.isnan(key_dset_arr)
-                        key_dset_mask = key_dset_arr[wb_local] == 1
-                        if np.any(key_dset_mask):
-                            key_dset_arr[key_dset_mask] = 0
-                            mask_grp[key][y_slice, x_slice] = key_dset_arr
-
-                    sums_data = self._average(weight_below, sums_data, arrs)
+                        sums_data = self._average(weight_below, sums_data, arrs)
 
                 ## Write out results to accumulated rasters
                 sums_data['count'][sums_data['count'] == 0] = np.nan
@@ -1248,177 +1248,178 @@ class GdalRasterStacker:
                     if key == 'count':
                         stacked_data[key][np.isnan(stacked_data[key])] = 0
 
-                ## --- Sanitize Inputs ---
-                arrs['count'][np.isnan(arrs['count'])] = 0
-                arrs['weight'][np.isnan(arrs['z'])] = 0
-                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
-                
-                if mode not in ['min', 'max']:
-                    for k in ['x', 'y', 'z']:
-                        arrs[k][np.isnan(arrs[k])] = 0
+                with np.errstate(divide='ignore', invalid='ignore'):
+                    ## --- Sanitize Inputs ---
+                    arrs['count'][np.isnan(arrs['count'])] = 0
+                    arrs['weight'][np.isnan(arrs['z'])] = 0
+                    arrs['uncertainty'][np.isnan(arrs['z'])] = 0
 
-                if mode not in ['mixed', 'supercede']:
-                    stacked_data['count'] += arrs['count']
+                    if mode not in ['min', 'max']:
+                        for k in ['x', 'y', 'z']:
+                            arrs[k][np.isnan(arrs[k])] = 0
 
-                tmp_arrs_weight = arrs['weight'] / arrs['count']
-                tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
+                    if mode not in ['mixed', 'supercede']:
+                        stacked_data['count'] += arrs['count']
 
-                ## =============================================================
-                ## STACKING
-                ## =============================================================
-                if mode == 'supercede':
-                    tmp_stacked_weight = stacked_data['weights'].copy()
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
+                    tmp_arrs_weight = arrs['weight'] / arrs['count']
+                    tmp_arrs_weight[np.isnan(tmp_arrs_weight)] = 0
 
-                    if self.want_mask:
-                        self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=sup_mask)
-                        valid_mask = (sup_mask) & (arrs['count'] != 0)
-                        m_array[valid_mask] = 1
-                        m_all_array[valid_mask] = 1
-
-                    for key in ['count', 'z', 'x', 'y']:
-                        stacked_data[key][sup_mask] = arrs[key][sup_mask]
-                    stacked_data['weights'][sup_mask] = tmp_arrs_weight[sup_mask]
-                    stacked_data['src_uncertainty'][sup_mask] = arrs['uncertainty'][sup_mask]
-                    stacked_data['uncertainty'][sup_mask] = np.array(stacked_data['src_uncertainty'][sup_mask])
-
-                elif mode == 'mixed':
-                    # Weight thresholds setup
-                    wt_str = self.stack_mode_args.get('weight_threshold', '1')
-                    wts = sorted([utils.float_or(x) for x in str(wt_str).split('/')])
-                    wt_pairs = utils.range_pairs(wts)[::-1] # Reverse
-
-                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-
-                    ## ABOVE THRESHOLD
-                    weight_above_sup = (tmp_arrs_weight >= max(wts)) & (tmp_stacked_weight < max(wts))
-                    
-                    if self.want_mask:
-                        self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_above_sup)
-                        valid_mask = (weight_above_sup) & (arrs['count'] != 0)
-                        m_array[valid_mask] = 1
-                        m_all_array[valid_mask] = 1
-
-                    stacked_data = self._supercede(weight_above_sup, stacked_data, arrs)
-                    
-                    # Refresh weights
-                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    
-                    weight_above = (tmp_arrs_weight >= max(wts)) & \
-                                   (tmp_arrs_weight >= tmp_stacked_weight) & \
-                                   (~weight_above_sup)
-
-                    if self.want_mask:
-                        valid_mask = (weight_above) & (arrs['count'] != 0)
-                        m_array[valid_mask] = 1
-                        m_all_array[valid_mask] = 1
-                    
-                    stacked_data = self._average(weight_above, stacked_data, arrs)
-
-                    ## BETWEEN THRESHOLDS
-                    for wt_pair in wt_pairs:
-                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                    ## =============================================================
+                    ## STACKING
+                    ## =============================================================
+                    if mode == 'supercede':
+                        tmp_stacked_weight = stacked_data['weights'].copy()
                         tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-
-                        arrs_mask_sup = (tmp_arrs_weight >= min(wt_pair)) & (tmp_arrs_weight < max(wt_pair))
-                        tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
-                        weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
+                        sup_mask = (tmp_arrs_weight > tmp_stacked_weight)
 
                         if self.want_mask:
-                             self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_between_sup)
-                             valid_mask = (weight_between_sup) & (arrs['count'] != 0)
-                             m_array[valid_mask] = 1
-                             m_all_array[valid_mask] = 1
-                        
-                        stacked_data = self._supercede(weight_between_sup, stacked_data, arrs)
-
-                        ## Refresh weights
-                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
-                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-
-                        weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
-                                         (tmp_arrs_weight < max(wt_pair)) & \
-                                         (tmp_arrs_weight >= tmp_stacked_weight) & \
-                                         (~weight_between_sup)
-                        
-                        if self.want_mask:
-                            valid_mask = (weight_between) & (arrs['count'] != 0)
+                            self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=sup_mask)
+                            valid_mask = (sup_mask) & (arrs['count'] != 0)
                             m_array[valid_mask] = 1
                             m_all_array[valid_mask] = 1
-                        
-                        stacked_data = self._average(weight_between, stacked_data, arrs)
 
-                    ## BELOW THRESHOLD
-                    tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
-                    tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
-                    weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
+                        for key in ['count', 'z', 'x', 'y']:
+                            stacked_data[key][sup_mask] = arrs[key][sup_mask]
+                        stacked_data['weights'][sup_mask] = tmp_arrs_weight[sup_mask]
+                        stacked_data['src_uncertainty'][sup_mask] = arrs['uncertainty'][sup_mask]
+                        stacked_data['uncertainty'][sup_mask] = np.array(stacked_data['src_uncertainty'][sup_mask])
 
+                    elif mode == 'mixed':
+                        # Weight thresholds setup
+                        wt_str = self.stack_mode_args.get('weight_threshold', '1')
+                        wts = sorted([utils.float_or(x) for x in str(wt_str).split('/')])
+                        wt_pairs = utils.range_pairs(wts)[::-1] # Reverse
+
+                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        ## ABOVE THRESHOLD
+                        weight_above_sup = (tmp_arrs_weight >= max(wts)) & (tmp_stacked_weight < max(wts))
+
+                        if self.want_mask:
+                            self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_above_sup)
+                            valid_mask = (weight_above_sup) & (arrs['count'] != 0)
+                            m_array[valid_mask] = 1
+                            m_all_array[valid_mask] = 1
+
+                        stacked_data = self._supercede(weight_above_sup, stacked_data, arrs)
+
+                        # Refresh weights
+                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                        weight_above = (tmp_arrs_weight >= max(wts)) & \
+                                       (tmp_arrs_weight >= tmp_stacked_weight) & \
+                                       (~weight_above_sup)
+
+                        if self.want_mask:
+                            valid_mask = (weight_above) & (arrs['count'] != 0)
+                            m_array[valid_mask] = 1
+                            m_all_array[valid_mask] = 1
+
+                        stacked_data = self._average(weight_above, stacked_data, arrs)
+
+                        ## BETWEEN THRESHOLDS
+                        for wt_pair in wt_pairs:
+                            tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                            tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                            arrs_mask_sup = (tmp_arrs_weight >= min(wt_pair)) & (tmp_arrs_weight < max(wt_pair))
+                            tsw_mask_sup = tmp_stacked_weight < min(wt_pair)
+                            weight_between_sup = (arrs_mask_sup) & (tsw_mask_sup)
+
+                            if self.want_mask:
+                                 self._reset_mask_bands(m_ds, srcwin, except_band_name=m_band.GetDescription(), mask=weight_between_sup)
+                                 valid_mask = (weight_between_sup) & (arrs['count'] != 0)
+                                 m_array[valid_mask] = 1
+                                 m_all_array[valid_mask] = 1
+
+                            stacked_data = self._supercede(weight_between_sup, stacked_data, arrs)
+
+                            ## Refresh weights
+                            tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                            tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+
+                            weight_between = (tmp_arrs_weight >= min(wt_pair)) & \
+                                             (tmp_arrs_weight < max(wt_pair)) & \
+                                             (tmp_arrs_weight >= tmp_stacked_weight) & \
+                                             (~weight_between_sup)
+
+                            if self.want_mask:
+                                valid_mask = (weight_between) & (arrs['count'] != 0)
+                                m_array[valid_mask] = 1
+                                m_all_array[valid_mask] = 1
+
+                            stacked_data = self._average(weight_between, stacked_data, arrs)
+
+                        ## BELOW THRESHOLD
+                        tmp_stacked_weight = (stacked_data['weights'] / stacked_data['count'])
+                        tmp_stacked_weight[np.isnan(tmp_stacked_weight)] = 0
+                        weight_below = (tmp_arrs_weight <= min(wts)) & (tmp_stacked_weight < min(wts))
+
+                        if self.want_mask:
+                            valid_mask = (weight_below) & (arrs['count'] != 0)
+                            m_array[valid_mask] = 1
+                            m_all_array[valid_mask] = 1
+
+                        stacked_data = self._average(weight_below, stacked_data, arrs)
+
+                    elif mode == 'min' or mode == 'max':
+                        if self.want_mask:
+                            m_array[arrs['count'] != 0] = 1
+                            m_all_array[arrs['count'] != 0] = 1
+
+                        mask = np.isnan(stacked_data['z'])
+                        ## Initialize empty cells
+                        for k in ['x', 'y', 'z', 'weights']:
+                            stacked_data[k][mask] = arrs[k if k != 'weights' else 'weight'][mask]
+                        stacked_data['src_uncertainty'][mask] = arrs['uncertainty'][mask]
+                        stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
+
+                        if mode == 'min':
+                            mask = arrs['z'] <= stacked_data['z']
+                        else:
+                            mask = arrs['z'] >= stacked_data['z']
+
+                        stacked_data['x'][mask] = arrs['x'][mask]
+                        stacked_data['y'][mask] = arrs['y'][mask]
+                        stacked_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
+                        stacked_data['weights'][mask] += arrs['weight'][mask]
+                        stacked_data['weights'][mask][stacked_data['weights'][mask] == 0] = np.nan
+
+                        term = (arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask]))
+                        stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power(term, 2)
+                        stacked_data['z'][mask] = arrs['z'][mask]
+
+                    elif mode == 'mean':
+                        if self.want_mask:
+                            m_array[arrs['count'] != 0] = 1
+                            m_all_array[arrs['count'] != 0] = 1
+
+                        stacked_data['z'] += arrs['z']
+                        stacked_data['x'] += arrs['x']
+                        stacked_data['y'] += arrs['y']
+                        stacked_data['src_uncertainty'] = np.sqrt(
+                            np.power(stacked_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2)
+                        )
+                        stacked_data['weights'] += arrs['weight']
+                        stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+
+                        # Weighted Variance
+                        term = ((arrs['z'] / arrs['weight'] / arrs['count']) - 
+                                (stacked_data['z'] / stacked_data['weights'] / stacked_data['count']))
+                        stacked_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
+
+                    ## --- Write Block Back to Disk ---
                     if self.want_mask:
-                        valid_mask = (weight_below) & (arrs['count'] != 0)
-                        m_array[valid_mask] = 1
-                        m_all_array[valid_mask] = 1
-                    
-                    stacked_data = self._average(weight_below, stacked_data, arrs)
+                        m_band.WriteArray(m_array, srcwin[0], srcwin[1])
+                        m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
+                        m_ds.FlushCache()
 
-                elif mode == 'min' or mode == 'max':
-                    if self.want_mask:
-                        m_array[arrs['count'] != 0] = 1
-                        m_all_array[arrs['count'] != 0] = 1
-
-                    mask = np.isnan(stacked_data['z'])
-                    ## Initialize empty cells
-                    for k in ['x', 'y', 'z', 'weights']:
-                        stacked_data[k][mask] = arrs[k if k != 'weights' else 'weight'][mask]
-                    stacked_data['src_uncertainty'][mask] = arrs['uncertainty'][mask]
-                    stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
-
-                    if mode == 'min':
-                        mask = arrs['z'] <= stacked_data['z']
-                    else:
-                        mask = arrs['z'] >= stacked_data['z']
-
-                    stacked_data['x'][mask] = arrs['x'][mask]
-                    stacked_data['y'][mask] = arrs['y'][mask]
-                    stacked_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
-                    stacked_data['weights'][mask] += arrs['weight'][mask]
-                    stacked_data['weights'][mask][stacked_data['weights'][mask] == 0] = np.nan
-                    
-                    term = (arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask]))
-                    stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power(term, 2)
-                    stacked_data['z'][mask] = arrs['z'][mask]
-
-                elif mode == 'mean':
-                    if self.want_mask:
-                        m_array[arrs['count'] != 0] = 1
-                        m_all_array[arrs['count'] != 0] = 1
-
-                    stacked_data['z'] += arrs['z']
-                    stacked_data['x'] += arrs['x']
-                    stacked_data['y'] += arrs['y']
-                    stacked_data['src_uncertainty'] = np.sqrt(
-                        np.power(stacked_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2)
-                    )
-                    stacked_data['weights'] += arrs['weight']
-                    stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
-                    
-                    # Weighted Variance
-                    term = ((arrs['z'] / arrs['weight'] / arrs['count']) - 
-                            (stacked_data['z'] / stacked_data['weights'] / stacked_data['count']))
-                    stacked_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
-
-                ## --- Write Block Back to Disk ---
-                if self.want_mask:
-                    m_band.WriteArray(m_array, srcwin[0], srcwin[1])
-                    m_band_all.WriteArray(m_all_array, srcwin[0], srcwin[1])
-                    m_ds.FlushCache()
-                
-                stacked_data['count'][stacked_data['count'] == 0] = np.nan
-                for key in stack_keys:
-                    stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
-                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
+                    stacked_data['count'][stacked_data['count'] == 0] = np.nan
+                    for key in stack_keys:
+                        stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
+                        stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
 
         ## =====================================================================
         ## FINALIZE

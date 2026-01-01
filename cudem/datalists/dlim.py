@@ -2448,6 +2448,84 @@ class DatasetFactory(factory.CUDEMFactory):
         self.kwargs['fn'] = mod
         if self.kwargs['fn'] is None:
             return self
+
+        # ## Use shlex to respect quotes, posix=False to keep quotes for now
+        # try:
+        #     tokens = shlex.split(self.kwargs['fn'], posix=False)
+        # except:
+        #     tokens = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+            
+        # if not tokens: return self
+
+        # ## Extract potential filename (first token)
+        # ## Remove quotes if present for the check
+        # first_token = tokens[0]
+        # if first_token.startswith('"') and first_token.endswith('"'):
+        #     check_path = first_token[1:-1]
+        # else:
+        #     check_path = first_token
+        # check_path = self.kwargs['fn']
+
+        # ## Resolve Parent Directory
+        # parent_dir = None
+        # if self.kwargs.get('parent') is not None:
+        #      if hasattr(self.kwargs['parent'], 'fn') and self.kwargs['parent'].fn:
+        #           parent_dir = os.path.dirname(self.kwargs['parent'].fn)
+
+        # ## Check Existence (Relative to Parent or CWD)
+        # ## We only update the first token if we find the file.
+        # final_fn = check_path
+        
+        # if os.path.exists(check_path):
+        #     final_fn = check_path
+        # elif parent_dir:
+        #      # Try joining with parent
+        #      if not os.path.isabs(check_path):
+        #           potential_path = os.path.join(parent_dir, check_path)
+        #           if os.path.exists(potential_path):
+        #                final_fn = potential_path
+
+        # ## Re-assemble Entry
+        # ## If the file exists (either locally or resolved), we treat tokens[0] as the filename
+        # ## Otherwise, we rely on the original split logic.
+        # if os.path.exists(final_fn):
+        #     this_entry = [final_fn] + [utils.str_or(x) for x in tokens[1:]]
+        # else:
+        #     # Fallback
+        #     this_entry = [utils.str_or(x) for x in tokens]
+                       
+        # ## Determine Parent Directory
+        # parent_dir = None
+        # if self.kwargs.get('parent') is not None:
+        #      if hasattr(self.kwargs['parent'], 'fn') and self.kwargs['parent'].fn:
+        #           parent_dir = os.path.dirname(self.kwargs['parent'].fn)
+
+        # ## Try resolving path relative to parent
+        # ## If the provided path doesn't exist in CWD, but DOES exist in parent dir,
+        # ## use the resolved path for the check.
+        # if not os.path.exists(check_path) and parent_dir:
+        #      if not os.path.isabs(check_path):
+        #           potential_path = os.path.join(parent_dir, check_path)
+        #           if os.path.exists(potential_path):
+        #                check_path = potential_path
+
+        # ## Use shlex with posix=False to PRESERVE internal quotes (e.g. pnt_fltrs="rq:...")
+        # try:
+        #     # Use the resolved 'check_path' for the existence test
+        #     if os.path.exists(check_path):
+        #         ## If the entire string is a valid file (resolved or local), 
+        #         ## treat it as just a filename to avoid splitting spaces.
+        #         if os.path.isfile(check_path):
+        #             this_entry = [check_path]
+        #         else:
+        #             ## It's a directory or strict path
+        #             this_entry = [check_path]
+        #     else:
+        #         ## posix=False preserves quotes, which is critical for nested factory strings
+        #         this_entry = shlex.split(self.kwargs['fn'], posix=False)
+        # ## Fallback to regex if shlex fails
+        # except Exception:
+        #     this_entry = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
         
         ## Use shlex with posix=False to PRESERVE internal quotes (e.g. pnt_fltrs="rq:...")
         try:
@@ -2465,7 +2543,8 @@ class DatasetFactory(factory.CUDEMFactory):
         ## Fallback to regex if shlex fails
         except Exception:
             this_entry = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
-        
+
+        utils.echo_debug_msg(f'Initial split entry: {this_entry}')
         ## Convert tokens to appropriate types
         ## Index mapping: 0:fn, 1:fmt, 2:weight, 3:unc, 4+:metadata
         try:
@@ -2512,7 +2591,7 @@ class DatasetFactory(factory.CUDEMFactory):
         ## Parse Format Options (e.g., 168:skip=1)
         ## This handles strings like "auto:skip=1" or "-106:pnt_fltrs=..."
         opts = factory.fmod2dict(str(entry[1]), {})
-        utils.echo_debug_msg(opts)
+        utils.echo_debug_msg(f'Initial factory opts: {opts}')
 
         parsed_fmt_id = None
         if '_module' in opts:
@@ -2556,6 +2635,7 @@ class DatasetFactory(factory.CUDEMFactory):
         else:
             ## If parent exists, dataset is not a fetcher (<-2), 
             ## and path is relative, join with parent dir.
+            utils.echo_debug_msg(f'Entry ({entry}) has has a parent, adjusting the filename {self.kwargs["fn"]}')
             parent_fmt = self.kwargs['parent'].data_format
             is_fetcher = self.mod_name < -2
             is_absolute = os.path.isabs(entry[0]) or ':' in entry[0] # ':' check for windows drive or url
@@ -2565,10 +2645,12 @@ class DatasetFactory(factory.CUDEMFactory):
                 ## Check if already in the same dir to avoid redundancy
                 if parent_dir != os.path.dirname(entry[0]): 
                     self.kwargs['fn'] = os.path.join(parent_dir, entry[0])
-                    ## Clean up path
-                    ## self.kwargs['fn'] = os.path.relpath(self.kwargs['fn']) 
+                else:
+                    self.kwargs['fn'] = os.path.relpath(entry[0]) 
             else:
                 self.kwargs['fn'] = entry[0]
+
+            utils.echo_debug_msg(f'Adjusted the filename to {self.kwargs["fn"]}')
 
         ## Set Weight (Inherit/Multiply from Parent)
         if len(entry) < 3:
@@ -2657,6 +2739,176 @@ class DatasetFactory(factory.CUDEMFactory):
                 
         return self.mod_name, self.mod_args
 
+    # def _parse_mod(self, mod=None):
+    #     """Parse the datalist entry line and configure the factory arguments."""
+        
+    #     self.kwargs['fn'] = mod
+    #     if self.kwargs['fn'] is None:
+    #         return self
+        
+    #     ## Initial Split to separate filename from args
+    #     ## Use shlex to respect quotes, posix=False to keep quotes for now
+    #     try:
+    #         tokens = shlex.split(self.kwargs['fn'], posix=False)
+    #     except:
+    #         tokens = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+            
+    #     if not tokens: return self
+
+    #     ## Extract potential filename (first token)
+    #     first_token = tokens[0]
+    #     if first_token.startswith('"') and first_token.endswith('"'):
+    #         check_path = first_token[1:-1]
+    #     else:
+    #         check_path = first_token
+
+    #     ## Resolve Parent Directory
+    #     parent_dir = None
+    #     if self.kwargs.get('parent') is not None:
+    #          if hasattr(self.kwargs['parent'], 'fn') and self.kwargs['parent'].fn:
+    #               parent_dir = os.path.dirname(self.kwargs['parent'].fn)
+
+    #     ## Check Existence (Relative to Parent or CWD)
+    #     final_fn = check_path
+    #     if os.path.exists(check_path):
+    #         final_fn = check_path
+    #     elif parent_dir:
+    #          if not os.path.isabs(check_path):
+    #               potential_path = os.path.join(parent_dir, check_path)
+    #               if os.path.exists(potential_path):
+    #                    final_fn = potential_path
+
+    #     ## Re-assemble Entry
+    #     if os.path.exists(final_fn):
+    #         this_entry = [final_fn] + [utils.str_or(x) for x in tokens[1:]]
+    #     else:
+    #         this_entry = [utils.str_or(x) for x in tokens]
+
+    #     ## Parse tokens into typed entry list
+    #     try:
+    #         entry = []
+    #         for n, x in enumerate(this_entry):
+    #             if n == 0:
+    #                 val = utils.str_or(x)
+    #                 if isinstance(val, str) and val.startswith('"') and val.endswith('"'):
+    #                     val = val[1:-1]
+    #                 entry.append(val)
+    #             elif n == 1:
+    #                 entry.append(utils.str_or(x, replace_quote=False)) # Format
+    #             elif n == 2:
+    #                 entry.append(utils.float_or(x)) # Weight
+    #             elif n == 3:
+    #                 entry.append(utils.float_or(x)) # Uncertainty
+    #             else:
+    #                 entry.append(utils.str_or(x)) # Metadata
+    #     except Exception as e:
+    #         utils.echo_error_msg(f'Could not parse entry {self.kwargs["fn"]}: {e}')
+    #         return self
+
+    #     ## Determine Data Format
+    #     if len(entry) < 2:
+    #         if self.kwargs.get('data_format') is not None:
+    #             entry.append(self.kwargs.get('data_format'))
+    #         else:
+    #             entry = self.guess_and_insert_fmt(entry)
+    #             if len(entry) < 2:
+    #                 utils.echo_error_msg(f'Could not determine format for entry {self.kwargs["fn"]}')
+    #                 return self
+    #     elif entry[1] is None or entry[1] == '-':
+    #         if self.kwargs.get('data_format') is not None:
+    #             entry[1] = self.kwargs['data_format']
+    #         else:
+    #             entry = self.guess_and_insert_fmt(entry)
+
+    #     ## Parse Format Options
+    #     opts = factory.fmod2dict(str(entry[1]), {})
+    #     parsed_fmt_id = None
+    #     if '_module' in opts:
+    #         parsed_fmt_id = utils.int_or(opts['_module'])
+    #         self.mod_args = {i: opts[i] for i in opts if i != '_module'}
+    #         entry[1] = parsed_fmt_id
+
+    #     if parsed_fmt_id == 0:
+    #         guessed_id = self.guess_data_format(entry[0])
+    #         entry[1] = guessed_id if guessed_id is not None else 168
+            
+    #     fmt_id = utils.int_or(entry[1])
+        
+    #     ## Remote Handling
+    #     if str(entry[0]).startswith('http') and fmt_id == 200:
+    #         if not str(entry[0]).startswith('/vsicurl/'):
+    #             entry[0] = f'/vsicurl/{entry[0]}'
+        
+    #     self.kwargs['data_format'] = fmt_id
+    #     self.mod_name = fmt_id
+        
+    #     ## Resolve File Path and Update kwargs['fn']
+    #     if self.kwargs.get('parent') is None:
+    #         self.kwargs['fn'] = entry[0]
+    #     else:
+    #         parent_fmt = self.kwargs['parent'].data_format
+    #         is_fetcher = self.mod_name < -2
+    #         is_absolute = os.path.isabs(entry[0]) or ':' in entry[0]
+            
+    #         if not is_fetcher and not is_absolute and parent_fmt >= -2:
+    #             parent_dir = os.path.dirname(self.kwargs['parent'].fn)
+    #             if parent_dir != os.path.dirname(entry[0]): 
+    #                 self.kwargs['fn'] = os.path.join(parent_dir, entry[0])
+    #             else:
+    #                 self.kwargs['fn'] = os.path.relpath(entry[0])
+    #         else:
+    #             self.kwargs['fn'] = entry[0]
+
+    #     ## Set Weight
+    #     if len(entry) < 3: entry.append(self.set_default_weight())
+    #     elif entry[2] is None: entry[2] = self.set_default_weight()
+
+    #     if 'weight' not in self.kwargs: self.kwargs['weight'] = 1
+    #     if self.kwargs['parent'] is not None:
+    #         if self.kwargs['weight'] is not None: self.kwargs['weight'] *= entry[2]
+    #     else:
+    #         if self.kwargs['weight'] is not None: self.kwargs['weight'] = entry[2]
+
+    #     ## Set Uncertainty
+    #     if len(entry) < 4: entry.append(self.set_default_uncertainty())
+    #     elif entry[3] is None: entry[3] = self.set_default_uncertainty()
+
+    #     if 'uncertainty' not in self.kwargs: self.kwargs['uncertainty'] = 0
+    #     if self.kwargs['parent'] is not None:
+    #         if self.kwargs['uncertainty'] is not None:
+    #             self.kwargs['uncertainty'] = math.sqrt(self.kwargs['uncertainty']**2 + entry[3]**2)
+    #     else:
+    #         if self.kwargs['uncertainty'] is not None: self.kwargs['uncertainty'] = entry[3]
+                    
+    #     ## Set Metadata
+    #     if 'metadata' not in self.kwargs: self.kwargs['metadata'] = {}
+    #     for key in self._metadata_keys:
+    #         if key not in self.kwargs['metadata']: self.kwargs['metadata'][key] = None
+
+    #     if self.kwargs['parent'] is not None:
+    #         for key in self._metadata_keys:
+    #             if key in self.kwargs['parent'].metadata:
+    #                 if self.kwargs['metadata'][key] is None or key == 'name':
+    #                     self.kwargs['metadata'][key] = self.kwargs['parent'].metadata[key]
+
+    #     for i, key in enumerate(self._metadata_keys):
+    #         if key == 'name':
+    #             if self.kwargs['metadata'][key] is None:
+    #                 clean_fn = self.kwargs['fn'].split(':')[0]
+    #                 self.kwargs['metadata'][key] = utils.fn_basename2(os.path.basename(clean_fn))
+    #             else:
+    #                 clean_fn = self.kwargs['fn'].split(':')[0]
+    #                 self.set_metadata_entry(utils.fn_basename2(os.path.basename(clean_fn)), key, '/')
+    #         else:
+    #             entry_idx = i + 3
+    #             if len(entry) < entry_idx + 1:
+    #                 entry.append(self.kwargs['metadata'][key])
+    #             self.set_metadata_entry(entry[entry_idx], key, ', ')
+    #             if key == 'date':
+    #                 self.kwargs['metadata'][key] = utils.num_strings_to_range(self.kwargs['metadata'][key], entry[entry_idx])
+                
+    #     return self.mod_name, self.mod_args
+    
     
     def set_metadata_entry(self, entry, metadata_field, join_string='/'):
         """Safely append or set a metadata field."""

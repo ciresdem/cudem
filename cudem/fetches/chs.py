@@ -31,6 +31,7 @@ import lxml.etree
 from urllib.parse import urlencode
 from typing import List, Dict, Optional, Any
 
+from cudem import utils
 from cudem import regions
 from cudem.fetches import fetches
 
@@ -108,31 +109,37 @@ class CHS(fetches.FetchModule):
                     lc = [float(x) for x in lc_node.text.split()]
                     uc = [float(x) for x in uc_node.text.split()]
                     
-                    ds_region = regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]])
+                    ## Construct GetCoverage URL
+                    ## CHS Server Axis labels are 'Lat' and 'Long'.
+                    wcs_params = [
+                        ('request', 'GetCoverage'),
+                        ('version', '2.0.1'),
+                        ('CoverageID', f'nonna__NONNA {self.datatype} Coverage'),
+                        ('service', 'WCS'),
+                        ('subset', [f'Long({self.region.xmin},{self.region.xmax})',
+                                    f'Lat({self.region.ymin},{self.region.ymax})']),
+                        ('subsettingcrs', 'http://www.opengis.net/def/crs/EPSG/0/4326'),
+                        ('outputcrs', 'http://www.opengis.net/def/crs/EPSG/0/4326')
+                    ]
+
+                    ## Generate URL by making a request
+                    #wcs_req = fetches.Fetch(self._chs_url).fetch_req(params=wcs_params)
+                    #full_url = wcs_req.url
+                    ## Generate URL without making a request
+                    flat_params = []
+                    for key, val in wcs_params:
+                        if isinstance(val, list):
+                            for v in val:
+                                flat_params.append((key, v))
+                        else:
+                            flat_params.append((key, val))
+
+                    query_string = urlencode(flat_params)
+                    full_url = f"{self._chs_url}{query_string}"
                     
-                    ## Check Intersection
-                    if regions.regions_intersect_ogr_p(self.region, ds_region):
-                        
-                        ## Construct GetCoverage URL
-                        ## CHS Server Axis labels are 'Lat' and 'Long'.
-                        wcs_params = [
-                            ('request', 'GetCoverage'),
-                            ('version', '2.0.1'),
-                            ('CoverageID', f'nonna__NONNA {self.datatype} Coverage'),
-                            ('service', 'WCS'),
-                            ('subset', [f'Long({self.region.xmin},{self.region.xmax})',
-                                        f'Long({self.region.ymin},{self.region.ymax})']),
-                            ('subsettingcrs', 'http://www.opengis.net/def/crs/EPSG/0/4326'),
-                            ('outputcrs', 'http://www.opengis.net/def/crs/EPSG/0/4326')
-                        ]
-                        
-                        ## Generate URL without making a request
-                        query_string = urlencode(wcs_params)
-                        full_url = f"{self._chs_url}{query_string}"
-                        
-                        out_fn = f"chs_nonna{self.datatype}_{self.region.format('fn')}.tif"
-                        
-                        self.add_entry_to_results(full_url, out_fn, 'chs')
+                    out_fn = f"chs_nonna{self.datatype}_{self.region.format('fn')}.tif"
+                    
+                    self.add_entry_to_results(full_url, out_fn, 'chs')
 
         except Exception as e:
             if self.verbose:

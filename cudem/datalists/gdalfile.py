@@ -225,6 +225,20 @@ class GDALFile(ElevationDataset):
             utils.echo_warning_msg(f'{self.fn} doesn\'t exist!')
             return None
 
+        ## Attempt to open the file to verify it is a valid/supported raster.
+        ## This prevents crashes in gdalfun.gdal_infos() or later processing.
+        try:
+            test_ds = gdal.Open(self.fn, gdal.GA_ReadOnly)
+            if test_ds is None:
+                utils.echo_warning_msg(f"Skipping {self.fn}: Not a valid GDAL raster source.")
+                return None
+            test_ds = None # Close dataset
+        except Exception as e:
+            utils.echo_warning_msg(f"Skipping {self.fn}: GDAL Open failed ({e})")
+            return None
+        finally:
+            test_ds = None
+        
         ## Process Open Options
         try:
             if isinstance(self.open_options, str):
