@@ -216,8 +216,8 @@ class TheNationalMap(fetches.FetchModule):
 
                     ## Double-Check the bounding-box in case TNM
                     ## returned data outside of our region.
-                    if 'boundingBox' in feature:
-                        bb = feature['boundingBox']
+                    if 'boundingBox' in features:
+                        bb = features['boundingBox']
                         feature_region = regions.Region().from_list([
                             bb.get('minX'), bb.get('maxX'), 
                             bb.get('minY'), bb.get('maxY')
