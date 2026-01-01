@@ -54,6 +54,9 @@ from cudem import srsfun
 from cudem import gdalfun
 from cudem import factory
 
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+GLOBATO_DATA_DIR = os.path.join(THIS_DIR, 'data')
+
 ## ==============================================
 ## GLOBATO
 ## ==============================================
@@ -630,7 +633,7 @@ class GlobatoStacker:
                         sums_data['z'][mask] = arrs['z'][mask]
 
                     ## --- MEAN MODE ---
-                    elif mode == 'mean':
+                    elif mode in ['mean', 'std', 'var']:
                         sums_data['z'] += arrs['z']
                         sums_data['x'] += arrs['x']
                         sums_data['y'] += arrs['y']
@@ -643,6 +646,18 @@ class GlobatoStacker:
                         term = (arrs['z'] - (sums_data['z'] / sums_data['weights']))
                         sums_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
 
+                    ## --- SUMS / WEIGHTS MODE ---
+                    elif mode in ['sums', 'weights']:
+                        # Simple accumulation
+                        sums_data['z'] += arrs['z']
+                        sums_data['weights'] += arrs['weight']
+                        sums_data['src_uncertainty'] = np.sqrt(
+                            np.power(sums_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2)
+                        )
+                        # For sums, we might not care about x/y averaging, but we track it anyway
+                        sums_data['x'] += arrs['x']
+                        sums_data['y'] += arrs['y']
+                        
                     ## --- MIXED MODE ---
                     elif mode == 'mixed':
                         wt_str = self.stack_mode_args.get('weight_threshold', '1')
@@ -774,18 +789,60 @@ class GlobatoStacker:
         for key in stack_grp.keys():
             stacked_data[key] = stack_grp[key][...]
 
-        stacked_data['count'] = sums_data['count'].copy()
-        stacked_data['weights'] = sums_data['weights'] / sums_data['count']
+        ## Default Normalization (Mean/Supercede/Mixed)
+        if mode not in ['sums', 'weights']:
+            stacked_data['count'] = sums_data['count'].copy()
+            stacked_data['weights'] = sums_data['weights'] / sums_data['count']
 
-        stacked_data['x'] = (sums_data['x'] / stacked_data['weights']) / sums_data['count']
-        stacked_data['y'] = (sums_data['y'] / stacked_data['weights']) / sums_data['count']
-        stacked_data['z'] = (sums_data['z'] / stacked_data['weights']) / sums_data['count']
+            stacked_data['x'] = (sums_data['x'] / stacked_data['weights']) / sums_data['count']
+            stacked_data['y'] = (sums_data['y'] / stacked_data['weights']) / sums_data['count']
+            
+            if mode in ['std', 'var']:
+                ## Calculate Variance/StdDev from the accumulator
+                ## Variance = Accumulator / Sum_Weights
+                variance_map = sums_data['uncertainty'] / sums_data['weights']
+                
+                if mode == 'std':
+                    stacked_data['z'] = np.sqrt(variance_map)
+                else: # var
+                    stacked_data['z'] = variance_map
+                    
+                ## Uncertainty of the variation is complex, keeping src_uncertainty
+                stacked_data['uncertainty'] = sums_data['src_uncertainty']
+            else:
+                ## Standard Mean
+                stacked_data['z'] = (sums_data['z'] / stacked_data['weights']) / sums_data['count']
+                
+                ## Calculate standard error
+                term = (sums_data['uncertainty'] / sums_data['weights']) / sums_data['count']
+                stacked_data['uncertainty'] = np.sqrt(
+                    np.power(sums_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
+                )
+        
+        ## Sums/Weights Finalization
+        else:
+            stacked_data['count'] = sums_data['count'].copy()
+            
+            if mode == 'weights':
+                stacked_data['z'] = sums_data['weights'] # Output weights as Z
+            else:
+                stacked_data['z'] = sums_data['z'] # Output raw sums as Z
+                
+            stacked_data['weights'] = sums_data['weights']
+            stacked_data['uncertainty'] = sums_data['src_uncertainty']
+            
+        # stacked_data['count'] = sums_data['count'].copy()
+        # stacked_data['weights'] = sums_data['weights'] / sums_data['count']
 
-        ## Calculate standard error
-        term = (sums_data['uncertainty'] / sums_data['weights']) / sums_data['count']
-        stacked_data['uncertainty'] = np.sqrt(
-            np.power(sums_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
-        )
+        # stacked_data['x'] = (sums_data['x'] / stacked_data['weights']) / sums_data['count']
+        # stacked_data['y'] = (sums_data['y'] / stacked_data['weights']) / sums_data['count']
+        # stacked_data['z'] = (sums_data['z'] / stacked_data['weights']) / sums_data['count']
+
+        # ## Calculate standard error
+        # term = (sums_data['uncertainty'] / sums_data['weights']) / sums_data['count']
+        # stacked_data['uncertainty'] = np.sqrt(
+        #     np.power(sums_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
+        # )
             
         # Write final rasters
         for key in stack_grp.keys():
@@ -1364,7 +1421,7 @@ class GdalRasterStacker:
 
                         stacked_data = self._average(weight_below, stacked_data, arrs)
 
-                    elif mode == 'min' or mode == 'max':
+                    elif mode in ['min', 'max']:
                         if self.want_mask:
                             m_array[arrs['count'] != 0] = 1
                             m_all_array[arrs['count'] != 0] = 1
@@ -1391,7 +1448,7 @@ class GdalRasterStacker:
                         stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power(term, 2)
                         stacked_data['z'][mask] = arrs['z'][mask]
 
-                    elif mode == 'mean':
+                    elif mode in ['mean', 'std', 'var']:
                         if self.want_mask:
                             m_array[arrs['count'] != 0] = 1
                             m_all_array[arrs['count'] != 0] = 1
@@ -1410,6 +1467,13 @@ class GdalRasterStacker:
                                 (stacked_data['z'] / stacked_data['weights'] / stacked_data['count']))
                         stacked_data['uncertainty'] += arrs['weight'] * np.power(term, 2)
 
+                    elif mode in ['sums', 'weights']:
+                        stacked_data['z'] += arrs['z']
+                        stacked_data['weights'] += arrs['weight']
+                        stacked_data['src_uncertainty'] = np.sqrt(
+                            np.power(stacked_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2)
+                        )
+                        
                     ## --- Write Block Back to Disk ---
                     if self.want_mask:
                         m_band.WriteArray(m_array, srcwin[0], srcwin[1])
@@ -1443,18 +1507,45 @@ class GdalRasterStacker:
                 stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
                 stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-            stacked_data['weights'][stacked_data['weights'] == 0] = 1
-            stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+            if mode not in ['sums', 'weights']:
+                stacked_data['weights'][stacked_data['weights'] == 0] = 1
+                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
 
-            ## Finalize averages
-            for k in ['x', 'y', 'z']:
-                stacked_data[k] = (stacked_data[k] / stacked_data['weights']) / stacked_data['count']
+            ## Finalize Z
+            if mode == 'std':
+                variance = stacked_data['uncertainty'] / stacked_data['weights'] / stacked_data['count']
+                stacked_data['z'] = np.sqrt(variance)
+            elif mode == 'var':
+                variance = stacked_data['uncertainty'] / stacked_data['weights'] / stacked_data['count']
+                stacked_data['z'] = variance
+            else: # mean, min, max, mixed
+                stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
 
-            ## Finalize uncertainty (Standard Error)
-            term = (stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count']
-            stacked_data['uncertainty'] = np.sqrt(
-                np.power(stacked_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
-            )
+            ## Finalize Uncertainty (Standard Error for Mean)
+            if mode == 'mean':
+                term = (stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count']
+                stacked_data['uncertainty'] = np.sqrt(
+                    np.power(stacked_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
+                )
+            
+            else:
+                ## For Sums/Weights, Z is already the value we want
+                if mode == 'weights':
+                    stacked_data['z'] = stacked_data['weights']
+                ## sums is already in 'z'
+                
+            # stacked_data['weights'][stacked_data['weights'] == 0] = 1
+            # stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+
+            # ## Finalize averages
+            # for k in ['x', 'y', 'z']:
+            #     stacked_data[k] = (stacked_data[k] / stacked_data['weights']) / stacked_data['count']
+
+            # ## Finalize uncertainty (Standard Error)
+            # term = (stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count']
+            # stacked_data['uncertainty'] = np.sqrt(
+            #     np.power(stacked_data['src_uncertainty'], 2) + np.power(np.sqrt(term), 2)
+            # )
 
             for key in stack_keys:
                 stacked_data[key][np.isnan(stacked_data[key])] = ndv

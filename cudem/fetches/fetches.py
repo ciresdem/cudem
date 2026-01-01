@@ -372,65 +372,7 @@ class Fetch:
 
         utils.echo_error_msg(f'Max-tries exhausted {self.url}')
         raise ConnectionError('Maximum attempts at connecting have failed.')
-
     
-    # def fetch_req(self, params=None, json=None, tries=5, timeout=None, read_timeout=None) -> Optional[requests.Response]:
-    #     """Fetch src_url and return the requests object (iterative retry)."""
-        
-    #     req = None
-    #     current_timeout = timeout
-    #     current_read_timeout = read_timeout
-
-    #     for attempt in range(tries):
-    #         try:
-    #             ## Calculate timeouts for this attempt
-    #             to_tuple = (
-    #                 current_timeout if current_timeout else None,
-    #                 current_read_timeout if current_read_timeout else None
-    #             )
-
-    #             req = requests.get(
-    #                 self.url,
-    #                 stream=True,
-    #                 params=params,
-    #                 json=json,
-    #                 timeout=to_tuple,
-    #                 verify=self.verify,
-    #                 allow_redirects=self.allow_redirects
-    #             )
-                
-    #             ## Check status codes
-    #             if req.status_code == 504: # Gateway Timeout
-    #                 time.sleep(2)
-    #                 ## Increase timeouts next loop
-    #                 if current_timeout: current_timeout += 1
-    #                 if current_read_timeout: current_read_timeout += 10
-    #                 continue
-
-    #             elif req.status_code == 416: # Range Not Satisfiable
-    #                 if 'Range' in self.headers:
-    #                     del self.headers['Range']
-    #                     ## Retrying without range header
-    #                     continue
-                
-    #             elif 200 <= req.status_code <= 299:
-    #                 return req
-                
-    #             else:
-    #                 if self.verbose:
-    #                     utils.echo_error_msg(f'Request from {req.url} returned {req.status_code}')
-    #                 ## Return it anyway to let caller handle it, or continue? 
-    #                 return req
-
-    #         except Exception as e:
-    #             utils.echo_warning_msg(f"Attempt {attempt + 1}/{tries} failed: {e}")
-    #             if current_timeout: current_timeout *= 2
-    #             if current_read_timeout: current_read_timeout *= 2
-    #             time.sleep(1)
-
-    #     utils.echo_error_msg(f'Max-tries exhausted {self.url}')
-    #     raise ConnectionError('Maximum attempts at connecting have failed.')
-
     
     def fetch_html(self, timeout=2):
         """Fetch src_url and return it as an HTML object."""

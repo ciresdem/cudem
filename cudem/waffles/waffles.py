@@ -79,7 +79,7 @@ from . import __version__
 ## Data cache directory, hold temp data, fetch data, etc here.
 waffles_cache = utils.cudem_cache()
 gc = utils.config_check()
-gdal.DontUseExceptions()
+gdal.UseExceptions()
 gdal.SetConfigOption(
     'CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null'
 )

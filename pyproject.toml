@@ -54,11 +54,15 @@ pointz = "cudem.pointz:pointz_cli"
 regions = "cudem.regions:regions_cli"
 vdatums = "cudem.vdatums:vdatums_cli"
 perspecto = "cudem.perspecto.perspecto:perspecto_cli"
+
+# Globato
+globato_converter = "cudem.globato.globato_converter:globato_converter_cli"
 spatial_metadata = "cudem.globato.spatial_metadata:spatial_metadata_cli"
 
 # Specific Fetch Tools
 bing_bfp = "cudem.fetches.bingbfp:bing_bfp_cli"
 osm_coast = "cudem.fetches.osm:osm_coast_cli"
+
 
 [tool.setuptools.package-data]
 cudem = [

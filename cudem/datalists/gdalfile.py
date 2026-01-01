@@ -310,10 +310,11 @@ class GDALFile(ElevationDataset):
                 self.src_ds = gdal.Open(self.fn)
 
             if self.src_ds is None: return None
-
+            
             ## Prepare for Warp
             tmp_warp = utils.make_temp_fn(f'{self.fn}', temp_dir=self.cache_dir)
             in_bands = self.src_ds.RasterCount
+            src_ds_config = gdalfun.gdal_infos(self.src_ds)
             
             ## If multi-band, extract bands first (gdalwarp limitation handling)
             ## This block handles extraction of Z, U, W bands to temp files
@@ -329,7 +330,7 @@ class GDALFile(ElevationDataset):
 
                 if srcwin_region is not None:
                     srcwin = srcwin_region.srcwin(
-                        src_gt,
+                        src_ds_config['geoT'],
                         src_ds_config['nx'],
                         src_ds_config['ny'],
                         node='pixel'

@@ -479,6 +479,21 @@ def touch(fname, times=None):
     return fname
 
 
+def count_data_lines(fn):
+    """Count lines in a file, skipping blank lines and comments (starting with #).
+    Returns 0 if file does not exist.
+    """
+    
+    if not os.path.exists(fn):
+        return 0
+        
+    try:
+        with open(fn, 'r') as f:
+            return sum(1 for line in f if line.strip() and not line.strip().startswith('#'))
+    except Exception:
+        return 0
+
+
 def get_username():
     username = ''
     while not username:

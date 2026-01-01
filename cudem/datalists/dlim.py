@@ -317,7 +317,7 @@ class ElevationDataset:
     ]
 
     stack_modes = [
-        'min', 'max', 'mean', 'supercede', 'mixed'
+        'min', 'max', 'mean', 'supercede', 'mixed', 'std', 'var', 'weights'
     ]
 
     def __init__(self,
@@ -1692,21 +1692,33 @@ class ElevationDataset:
             dst_srs=self.dst_srs,
             cache_dir=self.cache_dir
         )
-        return gbt.process_stack(self.parse(), out_name=out_name)
+        stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
+
+        ## Perform any desired grits filters on the stack (making a copy, so we can retain the original).
+        if self.stack_fltrs:
+            for f in self.stack_fltrs:
+                utils.echo_msg(f'Filtering stacks module with {f}')
+                grits_filter = grits.GritsFactory(
+                    mod=f,
+                    src_dem=stacked_fn,
+                    uncertainty_mask=4,
+                    weight_mask=3,
+                    count_mask=2,
+                    cache_dir=self.cache_dir,
+                    verbose=self.verbose
+                )._acquire_module()
+            
+                if grits_filter:
+                    grits_filter()
+                    stacked_fn = grits_filter.dst_dem
+
+        return stacked_fn
 
     
     def stacks_yield_xyz(self, out_name=None, ndv=-9999, fmt='GTiff'):
         """Yield the result of `stacks` as an xyz object."""
         
-        gbt = globato.GdalRasterStacker(
-            region=self.region,
-            x_inc=self.x_inc,
-            y_inc=self.y_inc,
-            dst_srs=self.dst_srs,
-            cache_dir=self.cache_dir
-        )
-
-        stacked_fn = gbt.process_stack(self.parse())
+        stacked_fn = self.stacks(out_name=out_name)
         sds = gdal.Open(stacked_fn)
         sds_gt = sds.GetGeoTransform()
         
@@ -1738,10 +1750,8 @@ class ElevationDataset:
                     
         sds = None
 
-        
-    def blocks_yield_xyz(self, out_name=None):
-        """Yield the result of `blocks` as an xyz object."""
-        
+
+    def blocks(self, out_name=None):
         gbt = globato.GlobatoStacker(
             region=self.region,
             x_inc=self.x_inc,
@@ -1750,7 +1760,15 @@ class ElevationDataset:
             cache_dir=self.cache_dir
         )
 
-        stacked_fn = gbt.process_blocks(self.parse())        
+        blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)        
+        
+        return blocked_fn
+
+    
+    def blocks_yield_xyz(self, out_name=None):
+        """Yield the result of `blocks` as an xyz object."""
+
+        stacked_fn = blocks(out_name=out_name)
         sds = h5.File(stacked_fn, 'r')
         sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
         sds_stack = sds['stack'] # Assuming final stack is in 'stack' group
@@ -2774,46 +2792,6 @@ class DatasetFactory(factory.CUDEMFactory):
         
         return entry
     
-    # def guess_and_insert_fmt(self, entry):
-    #     """Analyze the filename in entry[0] and insert the guessed format ID into entry[1]."""
-        
-    #     if len(entry) < 1:
-    #         return entry
-
-    #     ## Check for stdin
-    #     if entry[0] is None or entry[0] == '-':
-    #         if len(entry) > 1:
-    #             entry[1] = 168 # XYZ
-    #         else:
-    #             entry.append(168)
-    #         return entry
-
-    #     ## Analyze string
-    #     fname = entry[0]
-    #     ext = None
-        
-    #     if fname.startswith('http') or fname.startswith('/vsicurl/'):
-    #         ext = 'https'
-    #     else:
-    #         parts = fname.split('.')
-    #         if len(parts) > 1:
-    #             ext = parts[-1]
-    #             #elif ':' in fname:
-    #         else:
-    #             ext = fname.split(':')[0] # Probably a fetches module
-
-    #     ## Match extension to module
-    #     if ext:
-    #         for key, info in self._modules.items():
-    #             if 'fmts' in info and ext in info['fmts']:
-    #                 if len(entry) > 1:
-    #                     entry[1] = int(key)
-    #                 else:
-    #                     entry.append(int(key))
-    #                 break
-        
-    #     return entry
-
     
     def write_parameter_file(self, param_file: str):
         """Dump the factory configuration to a JSON file."""
@@ -2855,13 +2833,13 @@ def datalists_cli():
         "\nSupported %(prog)s modules (see %(prog)s --modules <module-name> for more info):\n" 
         f"{factory.get_module_name_short_desc(DatasetFactory._modules)}\n\n"
         "CUDEM home page: <http://cudem.colorado.edu>",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawTextHelpFormatter
     )
 
     ## --- Positional Arguments ---
     parser.add_argument(
         'data', 
-        nargs='*', 
+        nargs='+', 
         default=[], 
         help="Input datalist(s), file(s), or fetch module name(s)."
     )
@@ -3048,7 +3026,8 @@ def datalists_cli():
         sys.exit(0)
 
     ## --- Process Input Data ---
-    dls = args.data if args.data else [sys.stdin]
+    #dls = args.data if args.data else [sys.stdin]
+    dls = args.data if args.data else []
     
     ## Handle Increment
     if args.increment:

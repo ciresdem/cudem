@@ -356,9 +356,8 @@ class Datalist(ElevationDataset):
         
         if os.path.exists(self.fn):
             ## Get the number of lines in the datalist
-            with open(self.fn, 'r') as f:
-                count = sum(1 for _ in f)
-                
+            count = utils.count_data_lines(self.fn)
+            
             with open(self.fn, 'r') as f:
                 with utils.ccp(
                         total=count,
@@ -381,12 +380,6 @@ class Datalist(ElevationDataset):
                             )
                             data_set = DatasetFactory(**ds_params)._acquire_module()
                             utils.echo_debug_msg(f'Parsed entry from line ({line}): {data_set}, {data_set.fn}')
-                            # data_set = DatasetFactory(
-                            #     mod=line,
-                            #     metadata=md,
-                            #     src_srs=self.src_srs,
-                            #     parent=self
-                            # )._acquire_module()
 
                             if data_set and data_set.valid_p(fmts=DatasetFactory._modules[data_set.data_format]['fmts']):
                                 data_set.initialize()

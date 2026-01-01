@@ -127,6 +127,7 @@ class Grits:
 
         ## initialize the souce dataset info
         #self.init_ds(self.src_dem)
+
         
     def _analyze_mask(self, attr_name, fn_flag, band_flag):
         """Helper to determine if a mask is a file or a band index."""
@@ -139,6 +140,7 @@ class Grits:
             elif os.path.exists(str(val)):
                 setattr(self, fn_flag, True)
 
+                
     def _init_globato(self):
         """Attempt to auto-load weight/uncertainty from Globato HDF5."""
         pass 
@@ -255,6 +257,7 @@ class Grits:
 
     def calculate_difference(self):
         """Calculate statistics on modification:
+
         - Removed Cells: Valid -> NoData
         - Changed Cells: Valid -> Valid (New Value)
         """
@@ -388,7 +391,7 @@ class Grits:
         
     
     def _get_mask_array(self, mask_attr, is_fn_attr, is_band_attr):
-        """Helper to load a mask array based on config."""
+        """Load a mask array based on config."""
         
         mask_val = getattr(self, mask_attr)
         if mask_val is None: return None
