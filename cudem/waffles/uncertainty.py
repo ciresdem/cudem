@@ -83,8 +83,8 @@ class WafflesUncertainty(Waffle):
         self.prox_errs = '{}_errs.dat.gz'.format(self.waffles_module.split(':')[0])
         self.prox_errs_local = self.prox_errs
         if not os.path.exists(self.prox_errs):
-            if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
-                self.prox_errs = os.path.join(utils.cudem_data, self.prox_errs)
+            if os.path.exists(os.path.join(utils.CUDEM_DATA, self.prox_errs)):
+                self.prox_errs = os.path.join(utils.CUDEM_DATA, self.prox_errs)
             else:
                 utils.touch(self.prox_errs)
                 self.accumulate = True
