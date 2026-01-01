@@ -642,7 +642,7 @@ class Waffle:
             if len(chunks) > 0:
                 gdalfun.sample_warp(
                     chunks, self.fn,
-                    self.x_inc, self.y_inc,
+                    self.xinc, self.yinc,
                     src_srs=self.dst_srs,
                     src_region=self.p_region,
                     sample_alg='cubicspline',
@@ -672,7 +672,7 @@ class Waffle:
                 stack_fn = f'{self.name}_stack.{gdalfun.gdal_fext(self.fmt)}'
                 gdalfun.sample_warp(
                     stack_chunks, stack_fn,
-                    self.x_inc, self.y_inc,
+                    self.xinc, self.yinc,
                     src_srs=self.dst_srs,
                     src_region=self.p_region,
                     sample_alg='cubicspline',
@@ -696,7 +696,7 @@ class Waffle:
                 mask_fn = f'{self.name}_msk.{gdalfun.gdal_fext(self.fmt)}'
                 gdalfun.sample_warp(
                     mask_chunks, stack_fn,
-                    self.x_inc, self.y_inc,
+                    self.xinc, self.yinc,
                     src_srs=self.dst_srs,
                     src_region=self.p_region,
                     sample_alg='cubicspline',
