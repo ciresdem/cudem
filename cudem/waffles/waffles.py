@@ -124,7 +124,7 @@ def _run_chunk_worker(args):
     this_params['kwargs']['src_region'] = this_region
     this_params['kwargs']['chunk'] = None
     ## Create a unique cache_dir to hold data, etc.
-    #this_params['kwargs']['cache_dir'] = utils.append_fn('_chunk', this_region, xinc, high_res=True)
+    this_params['kwargs']['cache_dir'] = os.path.join(this_params['kwargs']['cache_dir'], utils.append_fn('_chunk', this_region, xinc, high_res=True))
     
     ## Generate unique name for chunk to avoid collision
     this_params['kwargs']['name'] = utils.append_fn(

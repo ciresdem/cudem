@@ -4,37 +4,37 @@
 
 Designed to work seamlessly with the `waffles` module, Perspecto can accept either an existing raster file or a Waffles JSON configuration file as input. If provided a JSON config, it can automatically generate the requested DEM before visualizing it.
 
-## Core Capabilities
+## Summary
 
-### 1. Visualization Modules
+### Visualization Modules
 
-Perspecto uses a modular factory architecture to support different rendering types:
+`perspecto` uses a modular factory system to support different rendering types:
 
 * **Hillshading:**
-* `hillshade`: Generates standard hillshade images to visualize terrain relief.
-* `hillshade2`: An alternative command-line driven hillshade implementation.
+  * `hillshade`: Generates standard hillshade images to visualize terrain relief.
+  * `hillshade2`: An alternative command-line driven hillshade implementation.
 
 
 * **3D Rendering:**
-* `perspective`: Creates 3D perspective views of the terrain, utilizing ray-tracing capabilities (likely POV-Ray based on module headers).
-* `sphere`: Generates spherical visualizations, useful for global or planetary datasets.
+  * `perspective`: Creates 3D perspective views of the terrain, utilizing ray-tracing capabilities (likely POV-Ray based on module headers).
+   * `sphere`: Generates spherical visualizations, useful for global or planetary datasets.
 
 
 * **PyGMT Integration:**
-* `figure1`: Generates GMT-based figures (requires PyGMT).
-* `colorbar`: Generates color bars for maps (requires PyGMT).
+  * `figure1`: Generates GMT-based figures (requires PyGMT).
+  * `colorbar`: Generates color bars for maps (requires PyGMT).
 
 
 
-### 2. Advanced Color Palette (CPT) Management
+### Advanced Color Palette (CPT) Management
 
 Perspecto includes robust tools for managing color tables, essential for creating hypsometric tints (color relief maps):
 
 * **Auto-Generation:** Can automatically generate an "ETOPO" style color palette based on the min/max elevation of the input DEM.
-* **Fetching:** Can fetch named CPTs (e.g., "city" styles) from remote sources.
+* **Fetching:** Can fetch named CPTs from **cpt-city**.
 * **Processing:** Supports re-scaling CPTs to specific Z-ranges and "splitting" CPTs (e.g., creating distinct color ramps above and below zero for land/sea distinctions).
 
-### 3. Data Export & Formatting
+### Data Export & Formatting
 
 The module includes utility functions for preparing data for external rendering:
 

@@ -4,16 +4,16 @@
 
 Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (tiling), ensuring that operations on multi-gigabyte DEMs do not exceed system memory.
 
-## Core Capabilities
+## Summary
 
-### 1. Framework Features
+### Framework Features
 
 * **Chunked Processing:** Automatically handles large files by processing them in windowed chunks (with edge buffering) to prevent memory overflows.
 * **Auxiliary Data Loading:** Can load and align arbitrary auxiliary rasters (e.g., weight masks, uncertainty grids, count grids) to guide the filtering process.
 * **Standardized Masking:** All filters support "Split" operations, allowing users to apply filters only to pixels within specific Z, Weight, or Uncertainty ranges.
 * **Chaining:** Filters can be chained together in the CLI (e.g., `-M outliers -M fill -M blur`) to create complex processing pipelines.
 
-### 2. Smoothing & Denoising
+### Smoothing & Denoising
 
 * **`blur`:** Applies a **Gaussian Blur** to smooth the entire DEM. Useful for general noise reduction.
 * **`denoise`:**
@@ -23,19 +23,19 @@ Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (t
 
 * **`gmtfilter`:** A wrapper for the Generic Mapping Tools (GMT) `grdfilter` module, providing access to robust geodetic filtering (if GMT/PyGMT is installed).
 
-### 3. Artifact & Outlier Removal
+### Artifact & Outlier Removal
 
 * **`outliers` (LSPOutliers):** A sophisticated statistical filter. It calculates derived Land Surface Parameters (Slope, TPI, TRI, Roughness) and uses Tukey's Fences (IQR) to identify and remove statistical outliers in terrain complexity. Supports multi-pass scanning at different scales.
 * **`zscore`:** Detects local anomalies by calculating the Z-Score of a pixel relative to its immediate neighborhood. Excellent for finding subtle spikes or pits that don't violate global min/max thresholds.
 * **`flats`:** Identifies and removes artificial "terracing" or flat plateaus often caused by integer-precision data or interpolation artifacts.
 
-### 4. Blending & Integration
+### Blending & Integration
 
 * **`blend`:** Smooths the transition between a source DEM and auxiliary data (or high-weight foreground data). It creates a buffer zone where values are interpolated to seamlessly stitch datasets together.
 * **`weights`:** Buffers around "high-quality" (high weight) data pixels and removes lower-quality pixels found within that buffer. This cleans up the "halos" of bad data often found at the edges of swath sonar coverage.
 * **`diff`:** Calculates the difference between the source DEM and a reference grid. Can output the difference grid or mask pixels where the change exceeds a threshold.
 
-### 5. Morphology & Hydrology
+### Morphology & Hydrology
 
 * **`morphology`:** Applies grayscale morphological operations:
 * **Erosion:** Widens valleys/channels and removes small peaks (useful for removing vegetation/buildings).
@@ -45,13 +45,13 @@ Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (t
 
 * **`hydro`:** Provides basic hydrological enforcement, such as **Sink Filling**, to remove local depressions and ensure continuous flow across the surface.
 
-### 6. Masking & Geometry
+### Masking & Geometry
 
 * **`cut`:** Masks the DEM to a specific bounding box (Region). Supports inversion (hole punching).
 * **`clip`:** Clips the DEM to an OGR-compatible vector polygon (Shapefile, GeoJSON).
 * **`slope` (SlopeFilter):** Masks or reverts pixels based on derived terrain metrics (e.g., "Remove all data where Slope > 45 degrees").
 
-### 7. Void Filling
+### Void Filling
 
 * **`fill`:** Fills NoData voids (inpainting) using:
 * **IDW (Inverse Distance Weighting):** Fast filling for small gaps.

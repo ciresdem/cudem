@@ -4,11 +4,11 @@
 
 The module operates on a "stacking" principle, where multiple input datasets are first combined into a weighted mean surface (the "stack") before being passed to an interpolation module to fill gaps and generate the final surface.
 
-## Core Capabilities
+## Summary
 
-### 1. Flexible Interpolation Modules
+### Flexible Interpolation Modules
 
-Waffles utilizes a factory architecture to support numerous gridding algorithms, allowing users to choose the best method for their specific terrain and data density, and is extensible via a factory pattern:
+`waffles` utilizes a factory system to support numerous gridding algorithms, allowing users to choose the best method for their specific terrain and data density, and is extensible via a factory pattern:
 
 * **`stacks`**: Simple weighted averaging of data (no interpolation). Useful for compositing existing grids.
 * **GMT Wrappers**: `surface` (continuous curvature splines), `triangulate` (Delaunay), `nearneighbor` (nearest neighbor averaging).
@@ -16,7 +16,7 @@ Waffles utilizes a factory architecture to support numerous gridding algorithms,
 * **Advanced Methods**: `kriging` (Geostats), `natural_neighbor` (Sibson),`ml_interp` (Machine Learning), `inpaint` (Void Filling), `cudem` (Multi-resolution integration).
 * **Others**: `IDW` (Inverse Distance Weighting), `mbgrid` (MB-System wrapper), `gdal` (GDAL grid wrappers).
 
-### 2. Smart Data Handling (via dlim)
+### Smart Data Handling (via `dlim`)
 
 * **Accepts diverse inputs**: ASCII XYZ, LAS/LAZ, GeoTIFF, BAG, OGR vectors, MB-System datalists, and fetch modules.
 * **Stacking**: Before interpolation, data is "stacked" into a weighted intermediate raster. This handles overlapping datasets by calculating weighted means or allowing high-quality data to supersede lower-quality data.
@@ -27,16 +27,16 @@ Waffles utilizes a factory architecture to support numerous gridding algorithms,
 * **Buffering/Extension**: Automatically buffers regions during processing (-X) to prevent edge artifacts, then crops the result to the desired extent.
 * **Increments**: Supports independent input processing resolution (-E xinc) and output sampling resolution (xsample).
 
-### 4. Advanced Post-Processing
+### Advanced Post-Processing
 
-Once a raw DEM is generated, Waffles (via the `WaffleDEM` class) performs extensive post-processing to ensure quality:
+Once a raw DEM is generated, `waffles` (via the `WaffleDEM` class) performs extensive post-processing to ensure quality:
 
 * **Clipping & Cutting**: Clips the output to vector polygons (e.g., coastlines) or precise bounding boxes.
 * **Filtering**: Applies `grits` filters (e.g., smoothing, outlier removal) to the generated grid.
 * **Limiting**: Constrains interpolation based on proximity to valid data or the size of data gaps, preventing artifacts in sparse areas.
 * **Uncertainty**: Can generate a corresponding uncertainty grid, estimating the error of the interpolation.
 
-### 5. Output Management
+### Output Management
 
 * **Formats**: Supports exporting to GeoTIFF, NetCDF, and HDF5.
 * **Metadata**: Automatically injects spatial metadata (ISO 19115 tags) into the output files.

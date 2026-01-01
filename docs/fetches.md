@@ -4,7 +4,7 @@
 
 Designed to streamline the initial phase of DEM generation, Fetches allows users to target specific geographic regions and automatically pull relevant data without manual searching or downloading.
 
-## Core Capabilities
+## Summary
 
 ### Automated Data Retrieval
 
