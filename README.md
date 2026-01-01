@@ -104,7 +104,7 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 
 ---
 
-## Module Summary:
+## Module Summaries:
 
 ### Fetches (Data Acquisition)
 
