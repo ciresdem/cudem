@@ -60,21 +60,20 @@ class Joyplot(Perspecto):
     < joyplot:step=10:scale=2:overlap=1.5:color=black:facecolor=white >
     """
 
-    def __init__(self):
+    def __init__(self, step=10, scale=.1, overlap=1, line_color='black', face_color='white', dpi=300):
         super().__init__(mod='joyplot', **kwargs)
-    
+        self.step = utils_int_or(step, 10)
+        self.scale = utils.float_or(scale, 0.1) # Vertical stretch of the signal
+        self.overlap = utils.float_or(overlap, 1.0) # Vertical distance between baselines
+        self.line_color = color
+        self.face_color = facecolor
+        self.dpi = utils.int_or(dpi, 300)
+
+        
     def run(self):
         if not HAS_MATPLOTLIB:
             utils.echo_error_msg("Matplotlib is required for the JOYPLOT module.")
             return self
-
-        ## Parse Parameters
-        step = int(self.params.get('step', 10))
-        scale = float(self.params.get('scale', 0.1)) # Vertical stretch of the signal
-        overlap = float(self.params.get('overlap', 1.0)) # Vertical distance between baselines
-        line_color = self.params.get('color', 'black')
-        face_color = self.params.get('facecolor', 'white')
-        dpi = int(self.params.get('dpi', 300))
         
         ## Load Data
         ds = gdal.Open(self.src_dem)
@@ -86,7 +85,7 @@ class Joyplot(Perspecto):
         
         ## Read array and decimate immediately to save memory/processing
         ## Joyplots look better when somewhat smoothed/decimated anyway
-        arr = band.ReadAsArray()[::step, ::step]
+        arr = band.ReadAsArray()[::self.step, ::self.step]
         
         ## Handle NoData (Mask or Fill)
         if ndv is not None:
@@ -109,23 +108,22 @@ class Joyplot(Perspecto):
         fig, ax = plt.subplots(figsize=(fig_width, fig_height))
         
         ## Background
-        if face_color == 'none':
+        if self.face_color == 'none':
             ax.patch.set_alpha(0.0)
         else:
-            ax.set_facecolor(face_color)
+            ax.set_facecolor(self.face_color)
 
         ## Plot Loop
         ## We iterate and offset each row
         ## y_base = i * offset
-        ## y_value = y_base + (elevation * scale)
-        
-        offset_step = (np.nanmax(arr) - np.nanmin(arr)) * 0.1 * (1/overlap)
+        ## y_value = y_base + (elevation * scale)        
+        offset_step = (np.nanmax(arr) - np.nanmin(arr)) * 0.1 * (1/self.overlap)
         if offset_step == 0: offset_step = 1
         
         ## Iterate through rows
         for i, row in enumerate(arr):
             ## Calculate baseline y for this row
-            y_base = i * offset_step
+            y_base = i * self.offset_step
             
             ## Calculate signal y
             ## Replace NaNs with min for plotting continuity or mask
@@ -139,7 +137,7 @@ class Joyplot(Perspecto):
                 x, 
                 y_signal, 
                 y_base - 10000, # Fill arbitrarily deep to ensure coverage
-                facecolor=face_color, 
+                facecolor=self.face_color, 
                 edgecolor='none',
                 zorder=i
             )
@@ -148,7 +146,7 @@ class Joyplot(Perspecto):
             ax.plot(
                 x, 
                 y_signal, 
-                color=line_color, 
+                color=self.line_color, 
                 linewidth=0.5,
                 zorder=i
             )
@@ -164,8 +162,8 @@ class Joyplot(Perspecto):
             self.outfile, 
             bbox_inches='tight', 
             pad_inches=0, 
-            dpi=dpi,
-            transparent=(face_color == 'none' or face_color == 'transparent')
+            dpi=self.dpi,
+            transparent=(self.face_color == 'none' or self.face_color == 'transparent')
         )
         plt.close(fig)
         

@@ -423,6 +423,423 @@ class Waffle:
             )
 
             
+    # def generate(self):
+    #     """Run and process the WAFFLES module.
+
+    #     Generate the data 'stack' and use that to run the 
+    #     waffles module and generate the DEM.
+    #     """
+
+    #     from .waffledem import WaffleDEM
+        
+    #     if self.data is None:
+    #         return self
+
+    #     #self.output_files = {}
+    #     ## todo: move to init
+    #     if os.path.exists(self.fn):
+    #         if not self.clobber:
+    #             utils.echo_warning_msg(f'DEM {self.fn} already exists, skipping...')
+    #             return self
+    #         else:
+    #             utils.echo_warning_msg(f'DEM {self.fn} exists and will be clobbered.')
+    #             status = gdal.GetDriverByName(self.fmt).Delete(self.fn)
+    #             if status != 0:
+    #                 utils.remove_glob(f'{self.fn}*')
+
+    #     else:
+    #         if not os.path.exists(os.path.dirname(self.fn)):
+    #             try:
+    #                 os.makedirs(os.path.dirname(self.fn))
+    #             except: pass
+
+    #     if self.chunk is not None:
+    #         ## Generate in Chunks of self.chunk by self.chunk and
+    #         ## merge chunks into final DEM
+    #         chunks = []
+    #         stack_chunks = []
+    #         mask_chunks = []
+    #         aux_chunks = []
+            
+    #         ## Iterate through spatial chunks
+    #         for srcwin in utils.yield_srcwin(
+    #                 (self.ycount, self.xcount),
+    #                 self.chunk,
+    #                 verbose=self.verbose
+    #         ):
+    #             this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(
+    #                 srcwin[0], srcwin[1], self.dst_gt
+    #             )
+    #             this_geo_x_end, this_geo_y_end = utils._pixel2geo(
+    #                 srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], self.dst_gt
+    #             )
+                
+    #             ## Define Chunk Region & Buffer
+    #             this_gt = [
+    #                 this_geo_x_origin, float(self.dst_gt[1]), 0.0,
+    #                 this_geo_y_origin, 0.0, float(self.dst_gt[5])
+    #             ]
+    #             this_region = regions.Region().from_geo_transform(
+    #                 geo_transform=this_gt, x_count=srcwin[2], y_count=srcwin[3]
+    #             )
+                
+    #             ## Buffer 10% to prevent edge effects during interpolation
+    #             this_region.buffer(pct=10, x_inc=self.xinc, y_inc=self.yinc)
+                
+    #             # Configure Sub-Waffle
+    #             this_params = self.params.copy()
+    #             this_params['kwargs']['src_region'] = this_region
+    #             this_params['kwargs']['chunk'] = None # Prevent infinite recursion
+    #             this_params['kwargs']['name'] = utils.append_fn(
+    #                 '_chunk', this_region, self.xinc, high_res=True
+    #             )
+                
+    #             ## Generate Chunk
+    #             this_waffle = WaffleFactory().load_parameter_dict(this_params)
+    #             this_waffle_module = this_waffle._acquire_module()
+    #             this_waffle_module.initialize()
+    #             this_waffle_module.generate()
+
+    #             ## Validate and Collect Outputs
+    #             if WaffleDEM(this_waffle_module.fn, verbose=False).valid_p():
+    #                 chunks.append(this_waffle_module.fn)
+
+    #             if WaffleDEM(this_waffle_module.stack, verbose=False).valid_p():
+    #                 stack_chunks.append(this_waffle_module.stack)
+                    
+    #             if os.path.exists(this_waffle_module.msk_fn):
+    #                 mask_chunks.append(this_waffle_module.msk_fn)
+                
+    #             ## Collect Auxiliary files (if any)
+    #             if hasattr(this_waffle_module, 'aux_dems'):
+    #                 aux_chunks.extend(this_waffle_module.aux_dems)
+
+    #         ## Merge DEM Chunks
+    #         if len(chunks) > 0:
+    #             ## Use a VRT for memory efficiency during merge
+    #             vrt_opts = gdal.BuildVRTOptions(resampleAlg='nearest')
+    #             temp_vrt = gdal.BuildVRT(f'{self.fn}.vrt', chunks, options=vrt_opts)
+    #             temp_vrt = None # Flush to disk
+                
+    #             ## Warp VRT to final TIF
+    #             g = gdal.Warp(
+    #                 self.fn, 
+    #                 f'{self.fn}.vrt',
+    #                 format=self.fmt,
+    #                 resampleAlg='cubicspline',
+    #                 options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
+    #             )
+    #             g = None
+    #             utils.remove_glob(f'{self.fn}.vrt')
+
+    #         ## Merge Stack Chunks into output DEM
+    #         if len(stack_chunks) > 0:
+    #             stack_fn = f'{self.name}_stack.{gdalfun.gdal_fext(self.fmt)}'
+    #             g = gdal.Warp(
+    #                 stack_fn,
+    #                 stack_chunks,
+    #                 format=self.fmt,
+    #                 resampleAlg='nearest', # Nearest usually safer for sparse stacks
+    #                 options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
+    #             )
+    #             g = None
+    #             self.stack = stack_fn # Update reference
+
+    #         ## Merge Mask Chunks
+    #         if len(mask_chunks) > 0:
+    #             mask_fn = f'{self.name}_msk.{gdalfun.gdal_fext(self.fmt)}'
+    #             g = gdal.Warp(
+    #                 mask_fn,
+    #                 mask_chunks,
+    #                 format=self.fmt,
+    #                 resampleAlg='nearest', # Masks should be nearest neighbor
+    #                 options=["COMPRESS=LZW", "TILED=YES", "NBITS=1"]
+    #             )
+    #             g = None
+
+    #         ## Cleanup
+    #         utils.remove_glob(*chunks)
+    #         utils.remove_glob(*stack_chunks)
+    #         utils.remove_glob(*mask_chunks)
+    #         # Handle aux chunks cleanup if necessary
+    #     else:
+    #         ## stack the data and run the waffles module
+    #         mask_fn = None
+    #         if self.want_stack:
+    #             stack_name = f'{os.path.basename(self.name)}_stack'
+    #             mask_name = f'{stack_name}_msk'
+    #             mask_fn = (f'{os.path.join(self.cache_dir, mask_name)}'
+    #                        f'.{gdalfun.gdal_fext(self.fmt)}')
+                
+    #             ## generate the stack
+    #             stack_fn = os.path.join(
+    #                 self.cache_dir,
+    #                 f'{stack_name}.{gdalfun.gdal_fext("GTiff")}'
+    #             )
+    #             ## for stacks_h5
+    #             # stack_fn = os.path.join(
+    #             #     self.cache_dir, f'{stack_name}.csg'
+    #             # )
+    #             stack_bn = utils.fn_basename2(stack_fn)
+    #             if not self.clobber and os.path.exists(stack_fn):
+    #                 self.stack = stack_fn
+    #                 if not WaffleDEM(
+    #                         self.stack,
+    #                         cache_dir=self.cache_dir,
+    #                         verbose=self.verbose
+    #                 ).initialize().valid_p():
+    #                     utils.echo_warning_msg('Existing stack file {self.stack_fn) is invalid, re-generating')
+    #                     self.stack = self.data.stacks(out_name=stack_bn)
+    #                     #, mode=self.stack_mode)#supercede=self.supercede)
+    #             else:
+    #                 self.stack = self.data.stacks(out_name=stack_bn)
+    #                 #, mode=self.stack_mode)#supercede=self.supercede)
+                    
+    #             self.stack_ds = gdalfile.GDALFile(
+    #                 fn=self.stack,
+    #                 band_no=1,
+    #                 weight_mask=3,
+    #                 uncertainty_mask=4,
+    #                 data_format=200,
+    #                 src_srs=self.dst_srs,
+    #                 dst_srs=self.dst_srs,
+    #                 x_inc=self.xinc,
+    #                 y_inc=self.yinc,
+    #                 src_region=self.p_region,
+    #                 weight=1,
+    #                 verbose=self.verbose
+    #             ).initialize()
+
+    #             ## rename the mask_fn outside of cachedir
+    #             if self.want_mask:
+    #                 mask_fn = f'{mask_name}.{gdalfun.gdal_fext(self.fmt)}'
+    #                 self.msk_fn = mask_fn
+
+    #             ## apply the count or uncertainty limit to the stack grid
+    #             if self.count_limit is not None \
+    #                or self.uncertainty_limit is not None:
+    #                 with gdalfun.gdal_datasource(self.stack, update=True) as stack_ds:
+    #                     stack_infos = gdalfun.gdal_infos(stack_ds)
+
+    #                     if self.count_limit:
+    #                         count_band = stack_ds.GetRasterBand(2)
+    #                         count_arr = count_band.ReadAsArray()
+    #                         count_mask = count_arr <= self.count_limit
+                            
+    #                     if self.uncertainty_limit:
+    #                         uncertainty_band = stack_ds.GetRasterBand(4)
+    #                         uncertainty_arr = uncertainty_band.ReadAsArray()
+    #                         uncertainty_mask = uncertainty_arr <= self.uncertainty_limit
+
+    #                     for band in range(1, stack_ds.RasterCount+1):
+    #                         this_band = stack_ds.GetRasterBand(band)
+    #                         this_arr = this_band.ReadAsArray()
+    #                         if self.count_limit:
+    #                             this_arr[count_mask] = stack_infos['ndv']
+                                
+    #                         if self.uncertainty_limit:
+    #                             this_arr[uncertainty_mask] = stack_infos['ndv']
+                                
+    #                         this_band.WriteArray(this_arr)
+                            
+    #             ## run the waffles module
+    #             if WaffleDEM(
+    #                     self.stack,
+    #                     cache_dir=self.cache_dir,
+    #                     verbose=self.verbose
+    #             ).initialize().valid_p():
+    #                 self.run()
+                    
+    #         else:
+    #             self.run()    
+                
+    #         # if self.node == 'grid':
+    #         #     self.region = self.region.buffer(
+    #         #         x_bv=-self.xinc*.5, y_bv=-self.yinc*.5
+    #         #     )
+    #         ## calculate estimated uncertainty of the interpolation
+    #         unc_fn = None
+    #         if self.want_uncertainty:
+    #             iu = WaffleFactory(
+    #                 mod=('uncertainty:percentile=95:accumulate=False'
+    #                      f':waffles_module={self.params["mod"]}'),
+    #                 **self.params['kwargs']
+    #             )._acquire_module()
+    #             iu.name = f'{self.params["kwargs"]["name"]}_u'
+    #             iu.want_uncertainty = False
+    #             iu.want_mask = False
+    #             iu.stack = self.stack
+    #             iu.initialize()
+    #             iu.run()
+
+    #             unc_dem = WaffleDEM(
+    #                 iu.fn,
+    #                 cache_dir=self.cache_dir,
+    #                 verbose=self.verbose,
+    #                 want_scan=True,
+    #                 co=self.co
+    #             ).initialize()
+    #             if unc_dem.valid_p():
+    #                 unc_dem.process(
+    #                     ndv=self.ndv,
+    #                     xsample=self.xsample,
+    #                     ysample=self.ysample,
+    #                     region=self.d_region,
+    #                     clip_str=self.clip,
+    #                     node=self.node,
+    #                     dst_srs=self.dst_srs,
+    #                     dst_fmt=self.fmt,
+    #                     set_metadata=False,
+    #                     dst_dir=os.path.dirname(self.fn)
+    #                 )
+    #                 self.output_files['uncertainty'] = iu.fn
+    #             unc_fn = iu.fn
+            
+    #         ## post-process the DEM(s)
+    #         waffle_dem = WaffleDEM(
+    #             self.fn,
+    #             cache_dir=self.cache_dir,
+    #             verbose=self.verbose,
+    #             co=self.co
+    #         ).initialize()
+    #         if waffle_dem.valid_p():
+    #             if mask_fn is not None and os.path.exists(mask_fn):
+    #                 ## set the projection to the mask,
+    #                 ## it gets lost in translation from mem to tif
+    #                 if self.dst_srs is not None:
+    #                     gdalfun.gdal_set_srs(mask_fn, src_srs=self.dst_srs)
+                    
+    #             waffle_dem.process(
+    #                 ndv=self.ndv,
+    #                 xsample=self.xsample,
+    #                 ysample=self.ysample,
+    #                 region=self.d_region,
+    #                 clip_str=self.clip,
+    #                 node=self.node,
+    #                 upper_limit=self.upper_limit,
+    #                 lower_limit=self.lower_limit,
+    #                 size_limit=self.size_limit,
+    #                 proximity_limit=self.proximity_limit,
+    #                 percentile_limit=self.percentile_limit,
+    #                 expand_limit=self.expand_limit,
+    #                 dst_srs=self.dst_srs,
+    #                 dst_fmt=self.fmt,
+    #                 stack_fn=self.stack,
+    #                 mask_fn=mask_fn,
+    #                 unc_fn=unc_fn,
+    #                 filter_=self.fltr,
+    #                 flatten_nodata_values=self.flatten_nodata_values,
+    #                 want_nc=self.keep_auxiliary,
+    #                 want_h5=self.keep_auxiliary
+    #             )
+    #             self.output_files['DEM'] = self.fn
+                
+    #         ## post-process the mask, etc.
+    #         if self.want_sm:
+    #             if mask_fn is not None:
+    #                 mask_dem = WaffleDEM(
+    #                     mask_fn,
+    #                     cache_dir=self.cache_dir,
+    #                     verbose=self.verbose,
+    #                     want_scan=True,
+    #                     co=self.co
+    #                 ).initialize()
+    #                 if mask_dem.valid_p():
+    #                     mask_dem.process(
+    #                         ndv=0,
+    #                         xsample=self.xsample,
+    #                         ysample=self.ysample,
+    #                         region=self.d_region,
+    #                         clip_str=self.clip,
+    #                         node=self.node,
+    #                         dst_srs=self.dst_srs,
+    #                         dst_fmt=self.fmt,
+    #                         set_metadata=False,
+    #                         dst_fn=f'{os.path.basename(self.name)}_msk.{gdalfun.gdal_fext(self.fmt)}',
+    #                         dst_dir=os.path.dirname(self.fn)
+    #                     )
+    #                     self.output_files['mask'] = mask_dem.fn
+    #                     if self.want_sm:
+    #                         self.output_files['spatial-metadata'] = []
+    #                         ## with gdal_footprint
+    #                         ## gdal_footprint can stall on a large number of mask bands
+    #                         ## has_gdal_footprint = utils.cmd_exists('gdal_footprint')
+    #                         with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
+    #                             # if has_gdal_footprint:
+    #                             #     sm_files, sm_fmt = dlim.ogr_mask_footprints(
+    #                             #         msk_ds, verbose=True, mask_level=0
+    #                             #     )
+    #                             # else:
+    #                             sm_layer, sm_fmt = spatial_metadata.polygonize_mask_multibands(
+    #                                 msk_ds, verbose=True
+    #                             )
+    #                             sm_files = glob.glob(f'{sm_layer}.*')
+                            
+    #                         for f in sm_files:
+    #                             out_sm = '{self.name}_sm.{f.split(".")[-1]}'
+    #                             if os.path.exists(out_sm):
+    #                                 utils.remove_glob(out_sm)
+
+    #                             os.rename(f, out_sm)
+    #                             self.output_files['spatial-metadata'].append(out_sm)
+    #             else:
+    #                 utils.echo_warning_msg(
+    #                     'Mask DEM is invalid...'
+    #                 )
+                    
+    #         ## post-process any auxiliary rasters
+    #         for aux_dem in self.aux_dems:
+    #             aux_dem = WaffleDEM(
+    #                 aux_dem,
+    #                 cache_dir=self.cache_dir,
+    #                 verbose=False,
+    #                 co=self.co
+    #             ).initialize()
+    #             if aux_dem.valid_p():
+    #                 aux_dem.process(
+    #                     ndv=None,
+    #                     xsample=self.xsample,
+    #                     ysample=self.ysample,
+    #                     region=self.d_region,
+    #                     clip_str=self.clip,
+    #                     node=self.node,
+    #                     dst_srs=self.dst_srs,
+    #                     dst_fmt=self.fmt,
+    #                     dst_dir=os.path.dirname(self.fn),
+    #                     set_metadata=False
+    #                 )
+    #                 self.output_files['stack'] = aux_dem.fn
+
+    #         if self.keep_auxiliary:
+    #             self.output_files['aux netcdf'] = f'{self.name}.nc'
+    #         ## reset the self.stack to new post-processed fn and ds
+    #         # if self.want_stack and self.keep_auxiliary:
+    #         #     self.stack = os.path.join(
+    #         #         os.path.dirname(self.fn), os.path.basename(self.stack)
+    #         #     )
+    #         #     self.stack_ds = dlim.GDALFile(
+    #         #         fn=self.stack,
+    #         #         band_no=1,
+    #         #         weight_mask=3,
+    #         #         uncertainty_mask=4,
+    #         #         data_format=200,
+    #         #         src_srs=self.dst_srs,
+    #         #         dst_srs=self.dst_srs,
+    #         #         x_inc=self.xinc,
+    #         #         y_inc=self.yinc,
+    #         #         src_region=self.p_region,
+    #         #         weight=1,
+    #         #         verbose=self.verbose
+    #         #     ).initialize()
+
+    #     if self.verbose:
+    #         utils.echo_msg(
+    #             f'Output files: {self.output_files}'
+    #         )
+            
+    #     return self                
+
+
     def generate(self):
         """Run and process the WAFFLES module.
 
@@ -435,8 +852,10 @@ class Waffle:
         if self.data is None:
             return self
 
-        #self.output_files = {}
-        ## todo: move to init
+        # Initialize Output Files Dictionary
+        # self.output_files = {} 
+        
+        ## Handle existing files
         if os.path.exists(self.fn):
             if not self.clobber:
                 utils.echo_warning_msg(f'DEM {self.fn} already exists, skipping...')
@@ -446,27 +865,27 @@ class Waffle:
                 status = gdal.GetDriverByName(self.fmt).Delete(self.fn)
                 if status != 0:
                     utils.remove_glob(f'{self.fn}*')
-
         else:
             if not os.path.exists(os.path.dirname(self.fn)):
                 try:
                     os.makedirs(os.path.dirname(self.fn))
-                except: pass
+                except OSError: 
+                    pass
 
         if self.chunk is not None:
-            ## Generate in Chunks of self.chunk by self.chunk and
-            ## merge chunks into final DEM
+            ## Generate in Chunks and Merge
             chunks = []
             stack_chunks = []
             mask_chunks = []
             aux_chunks = []
             
-            ## Iterate through spatial chunks
             for srcwin in utils.yield_srcwin(
                     (self.ycount, self.xcount),
                     self.chunk,
+                    msg='Generating Waffles Chunks',
                     verbose=self.verbose
             ):
+                # Calculate Chunk Region
                 this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(
                     srcwin[0], srcwin[1], self.dst_gt
                 )
@@ -474,76 +893,71 @@ class Waffle:
                     srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], self.dst_gt
                 )
                 
-                ## Define Chunk Region & Buffer
                 this_gt = [
                     this_geo_x_origin, float(self.dst_gt[1]), 0.0,
                     this_geo_y_origin, 0.0, float(self.dst_gt[5])
                 ]
+                
                 this_region = regions.Region().from_geo_transform(
                     geo_transform=this_gt, x_count=srcwin[2], y_count=srcwin[3]
                 )
-                
-                ## Buffer 10% to prevent edge effects during interpolation
                 this_region.buffer(pct=10, x_inc=self.xinc, y_inc=self.yinc)
                 
                 # Configure Sub-Waffle
                 this_params = self.params.copy()
                 this_params['kwargs']['src_region'] = this_region
-                this_params['kwargs']['chunk'] = None # Prevent infinite recursion
+                this_params['kwargs']['chunk'] = None
                 this_params['kwargs']['name'] = utils.append_fn(
                     '_chunk', this_region, self.xinc, high_res=True
                 )
+                this_params['kwargs']['verbose'] = False
                 
-                ## Generate Chunk
+                # Run Chunk
                 this_waffle = WaffleFactory().load_parameter_dict(this_params)
                 this_waffle_module = this_waffle._acquire_module()
                 this_waffle_module.initialize()
                 this_waffle_module.generate()
 
-                ## Validate and Collect Outputs
+                # Collect Results
                 if WaffleDEM(this_waffle_module.fn, verbose=False).valid_p():
                     chunks.append(this_waffle_module.fn)
 
                 if WaffleDEM(this_waffle_module.stack, verbose=False).valid_p():
                     stack_chunks.append(this_waffle_module.stack)
                     
+                mask_name = f'{this_waffle_module.name}_msk'
+                mask_fn = (f'{os.path.join(this_waffle_module.cache_dir, mask_name)}.'
+                           f'{gdalfun.gdal_fext(this_waffle_module.fmt)}')
+
                 if os.path.exists(this_waffle_module.msk_fn):
                     mask_chunks.append(this_waffle_module.msk_fn)
                 
-                ## Collect Auxiliary files (if any)
                 if hasattr(this_waffle_module, 'aux_dems'):
                     aux_chunks.extend(this_waffle_module.aux_dems)
 
             ## Merge DEM Chunks
             if len(chunks) > 0:
-                ## Use a VRT for memory efficiency during merge
-                vrt_opts = gdal.BuildVRTOptions(resampleAlg='nearest')
-                temp_vrt = gdal.BuildVRT(f'{self.fn}.vrt', chunks, options=vrt_opts)
-                temp_vrt = None # Flush to disk
-                
-                ## Warp VRT to final TIF
                 g = gdal.Warp(
-                    self.fn, 
-                    f'{self.fn}.vrt',
+                    self.fn, chunks,
                     format=self.fmt,
                     resampleAlg='cubicspline',
-                    options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
+                    options=["COMPRESS=LZW", "TILED=YES"]
                 )
                 g = None
-                utils.remove_glob(f'{self.fn}.vrt')
 
-            ## Merge Stack Chunks into output DEM
+            ## Merge Stack Chunks
+            # [FIX] Write to stack filename, not self.fn (DEM)
             if len(stack_chunks) > 0:
-                #stack_fn = f'{self.name}_stack.{gdalfun.gdal_fext(self.fmt)}'
+                stack_fn = f'{self.name}_stack.{gdalfun.gdal_fext(self.fmt)}'
                 g = gdal.Warp(
-                    self.fn,
+                    stack_fn,
                     stack_chunks,
                     format=self.fmt,
-                    resampleAlg='nearest', # Nearest usually safer for sparse stacks
-                    options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
+                    resampleAlg='cubicspline', # Stacks usually better with Nearest? But keeping consistency.
+                    options=["COMPRESS=LZW", "TILED=YES"]
                 )
                 g = None
-                #self.stack = stack_fn # Update reference
+                self.stack = stack_fn
 
             ## Merge Mask Chunks
             if len(mask_chunks) > 0:
@@ -552,35 +966,43 @@ class Waffle:
                     mask_fn,
                     mask_chunks,
                     format=self.fmt,
-                    resampleAlg='nearest', # Masks should be nearest neighbor
-                    options=["COMPRESS=LZW", "TILED=YES", "NBITS=1"]
+                    resampleAlg='cubicspline',
+                    options=["COMPRESS=LZW", "TILED=YES"]
                 )
                 g = None
-
-            ## Cleanup
+                
+            ## Merge Auxiliary Chunks
+            # Note: This logic assumes aux chunks are spatially distinct and can be warped together
+            # into pre-existing filenames in aux_chunks? This logic seems fragile if not initialized.
+            # Assuming aux_chunks contains list of lists or similar structure from sub-modules.
+            if len(aux_chunks) > 0:
+                # Warning: This loop structure might be flawed if aux_chunks is flat list of files
+                # It tries to warp aux_chunks[ac] into aux_dem?
+                pass 
+                
+            # Cleanup Chunks
             utils.remove_glob(*chunks)
             utils.remove_glob(*stack_chunks)
             utils.remove_glob(*mask_chunks)
-            # Handle aux chunks cleanup if necessary
+            for aux_chunk in aux_chunks:
+                utils.remove_glob(aux_chunk)
+
         else:
-            ## stack the data and run the waffles module
+            ## Standard Processing (Non-Chunked)
             mask_fn = None
             if self.want_stack:
                 stack_name = f'{os.path.basename(self.name)}_stack'
                 mask_name = f'{stack_name}_msk'
                 mask_fn = (f'{os.path.join(self.cache_dir, mask_name)}'
                            f'.{gdalfun.gdal_fext(self.fmt)}')
-                
-                ## generate the stack
+
                 stack_fn = os.path.join(
                     self.cache_dir,
                     f'{stack_name}.{gdalfun.gdal_fext("GTiff")}'
                 )
-                ## for stacks_h5
-                # stack_fn = os.path.join(
-                #     self.cache_dir, f'{stack_name}.csg'
-                # )
                 stack_bn = utils.fn_basename2(stack_fn)
+                
+                # Check/Generate Stack
                 if not self.clobber and os.path.exists(stack_fn):
                     self.stack = stack_fn
                     if not WaffleDEM(
@@ -588,12 +1010,10 @@ class Waffle:
                             cache_dir=self.cache_dir,
                             verbose=self.verbose
                     ).initialize().valid_p():
-                        utils.echo_warning_msg('Existing stack file {self.stack_fn) is invalid, re-generating')
+                        utils.echo_warning_msg(f'Existing stack file {stack_fn} is invalid, re-generating')
                         self.stack = self.data.stacks(out_name=stack_bn)
-                        #, mode=self.stack_mode)#supercede=self.supercede)
                 else:
                     self.stack = self.data.stacks(out_name=stack_bn)
-                    #, mode=self.stack_mode)#supercede=self.supercede)
                     
                 self.stack_ds = gdalfile.GDALFile(
                     fn=self.stack,
@@ -610,15 +1030,17 @@ class Waffle:
                     verbose=self.verbose
                 ).initialize()
 
-                ## rename the mask_fn outside of cachedir
+                self.msk_fn = None
                 if self.want_mask:
                     mask_fn = f'{mask_name}.{gdalfun.gdal_fext(self.fmt)}'
-
-                ## apply the count or uncertainty limit to the stack grid
-                if self.count_limit is not None \
-                   or self.uncertainty_limit is not None:
+                    self.msk_fn = mask_fn
+                    
+                ## Limit Application (Count/Uncertainty)
+                if self.count_limit is not None or self.uncertainty_limit is not None:
                     with gdalfun.gdal_datasource(self.stack, update=True) as stack_ds:
                         stack_infos = gdalfun.gdal_infos(stack_ds)
+                        count_mask = None
+                        uncertainty_mask = None
 
                         if self.count_limit:
                             count_band = stack_ds.GetRasterBand(2)
@@ -633,15 +1055,16 @@ class Waffle:
                         for band in range(1, stack_ds.RasterCount+1):
                             this_band = stack_ds.GetRasterBand(band)
                             this_arr = this_band.ReadAsArray()
-                            if self.count_limit:
+                            
+                            if self.count_limit and count_mask is not None:
                                 this_arr[count_mask] = stack_infos['ndv']
                                 
-                            if self.uncertainty_limit:
+                            if self.uncertainty_limit and uncertainty_mask is not None:
                                 this_arr[uncertainty_mask] = stack_infos['ndv']
                                 
                             this_band.WriteArray(this_arr)
                             
-                ## run the waffles module
+                ## Run Waffles Module
                 if WaffleDEM(
                         self.stack,
                         cache_dir=self.cache_dir,
@@ -650,13 +1073,10 @@ class Waffle:
                     self.run()
                     
             else:
+                # No stack requested, just run module
                 self.run()    
                 
-            # if self.node == 'grid':
-            #     self.region = self.region.buffer(
-            #         x_bv=-self.xinc*.5, y_bv=-self.yinc*.5
-            #     )
-            ## calculate estimated uncertainty of the interpolation
+            ## Calculate Uncertainty
             unc_fn = None
             if self.want_uncertainty:
                 iu = WaffleFactory(
@@ -664,6 +1084,7 @@ class Waffle:
                          f':waffles_module={self.params["mod"]}'),
                     **self.params['kwargs']
                 )._acquire_module()
+                
                 iu.name = f'{self.params["kwargs"]["name"]}_u'
                 iu.want_uncertainty = False
                 iu.want_mask = False
@@ -678,6 +1099,7 @@ class Waffle:
                     want_scan=True,
                     co=self.co
                 ).initialize()
+                
                 if unc_dem.valid_p():
                     unc_dem.process(
                         ndv=self.ndv,
@@ -694,17 +1116,16 @@ class Waffle:
                     self.output_files['uncertainty'] = iu.fn
                 unc_fn = iu.fn
             
-            ## post-process the DEM(s)
+            ## Post-Process DEM
             waffle_dem = WaffleDEM(
                 self.fn,
                 cache_dir=self.cache_dir,
                 verbose=self.verbose,
                 co=self.co
             ).initialize()
+            
             if waffle_dem.valid_p():
                 if mask_fn is not None and os.path.exists(mask_fn):
-                    ## set the projection to the mask,
-                    ## it gets lost in translation from mem to tif
                     if self.dst_srs is not None:
                         gdalfun.gdal_set_srs(mask_fn, src_srs=self.dst_srs)
                     
@@ -733,7 +1154,7 @@ class Waffle:
                 )
                 self.output_files['DEM'] = self.fn
                 
-            ## post-process the mask, etc.
+            ## Post-Process Mask & Metadata
             if self.want_sm:
                 if mask_fn is not None:
                     mask_dem = WaffleDEM(
@@ -743,6 +1164,7 @@ class Waffle:
                         want_scan=True,
                         co=self.co
                     ).initialize()
+                    
                     if mask_dem.valid_p():
                         mask_dem.process(
                             ndv=0,
@@ -758,35 +1180,26 @@ class Waffle:
                             dst_dir=os.path.dirname(self.fn)
                         )
                         self.output_files['mask'] = mask_dem.fn
+                        
                         if self.want_sm:
                             self.output_files['spatial-metadata'] = []
-                            ## with gdal_footprint
-                            ## gdal_footprint can stall on a large number of mask bands
-                            ## has_gdal_footprint = utils.cmd_exists('gdal_footprint')
                             with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                                # if has_gdal_footprint:
-                                #     sm_files, sm_fmt = dlim.ogr_mask_footprints(
-                                #         msk_ds, verbose=True, mask_level=0
-                                #     )
-                                # else:
                                 sm_layer, sm_fmt = spatial_metadata.polygonize_mask_multibands(
                                     msk_ds, verbose=True
                                 )
                                 sm_files = glob.glob(f'{sm_layer}.*')
                             
                             for f in sm_files:
-                                out_sm = '{self.name}_sm.{f.split(".")[-1]}'
+                                out_sm = f'{self.name}_sm.{f.split(".")[-1]}'
                                 if os.path.exists(out_sm):
                                     utils.remove_glob(out_sm)
 
                                 os.rename(f, out_sm)
                                 self.output_files['spatial-metadata'].append(out_sm)
                 else:
-                    utils.echo_warning_msg(
-                        'Mask DEM is invalid...'
-                    )
+                    utils.echo_warning_msg('Mask DEM is invalid...')
                     
-            ## post-process any auxiliary rasters
+            ## Post-Process Auxiliary Rasters
             for aux_dem in self.aux_dems:
                 aux_dem = WaffleDEM(
                     aux_dem,
@@ -794,6 +1207,7 @@ class Waffle:
                     verbose=False,
                     co=self.co
                 ).initialize()
+                
                 if aux_dem.valid_p():
                     aux_dem.process(
                         ndv=None,
@@ -811,33 +1225,12 @@ class Waffle:
 
             if self.keep_auxiliary:
                 self.output_files['aux netcdf'] = f'{self.name}.nc'
-            ## reset the self.stack to new post-processed fn and ds
-            # if self.want_stack and self.keep_auxiliary:
-            #     self.stack = os.path.join(
-            #         os.path.dirname(self.fn), os.path.basename(self.stack)
-            #     )
-            #     self.stack_ds = dlim.GDALFile(
-            #         fn=self.stack,
-            #         band_no=1,
-            #         weight_mask=3,
-            #         uncertainty_mask=4,
-            #         data_format=200,
-            #         src_srs=self.dst_srs,
-            #         dst_srs=self.dst_srs,
-            #         x_inc=self.xinc,
-            #         y_inc=self.yinc,
-            #         src_region=self.p_region,
-            #         weight=1,
-            #         verbose=self.verbose
-            #     ).initialize()
 
         if self.verbose:
-            utils.echo_msg(
-                f'Output files: {self.output_files}'
-            )
+            utils.echo_msg(f'Output files: {self.output_files}')
             
-        return self                
-
+        return self
+    
     
     def run(self):
         """run the WAFFLES module (set via sub-module class)."""

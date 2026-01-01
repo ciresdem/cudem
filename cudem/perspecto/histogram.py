@@ -59,12 +59,12 @@ class Histogram(Perspecto):
     < histogram:bins=100:type=pdf:stats=True:color=steelblue >
     """
 
-    def __init__(self, bins=100, type='pdf', color='gray', stats=False, title=None, dpi=300, **kwargs):
+    def __init__(self, bins=100, plot_type='pdf', color='gray', show_stats=False, title=None, dpi=300, **kwargs):
         super().__init__(mod='histogram', **kwargs)
         self.bins = utils.int_or(bins, 100)
-        self.type = type
+        self.plot_type = plot_type
         self.color = color
-        self.stats = stats
+        self.show_stats = show_stats
         self.title = title
         self.dpi = utils.int_or(dpi)
 
@@ -73,14 +73,6 @@ class Histogram(Perspecto):
         if not HAS_MATPLOTLIB:
             utils.echo_error_msg("Matplotlib is required for the HISTOGRAM module.")
             return self
-
-        ## Parse Parameters
-        bins = self.bins
-        plot_type = self.type.lower()
-        color = self.color
-        show_stats = utils.str2bool(self.stats)
-        title = self.title
-        dpi = int(self.dpi)
         
         ## Load Data
         ds = gdal.Open(self.src_dem)
@@ -121,32 +113,32 @@ class Histogram(Perspecto):
         ## Plotting
         fig, ax = plt.subplots(figsize=(10, 6))
         
-        cumulative = (plot_type == 'cdf')
+        cumulative = (self.plot_type == 'cdf')
         density = True # Normalize y-axis
         
         ## Histogram
         n, bins_out, patches = ax.hist(
             data, 
-            bins=bins, 
+            bins=self.bins, 
             density=density, 
             cumulative=cumulative, 
-            color=color, 
+            color=self.color, 
             alpha=0.75, 
             edgecolor='black',
             linewidth=0.5
         )
 
         ## Labels
-        if title is None:
-            title = f"Hypsometry: {utils.fn_basename2(self.src_dem)}"
+        if self.title is None:
+            self.title = f"Hypsometry: {utils.fn_basename2(self.src_dem)}"
             
-        ax.set_title(title, fontsize=14, fontweight='bold')
+        ax.set_title(self.title, fontsize=14, fontweight='bold')
         ax.set_xlabel("Elevation (z)", fontsize=12)
         ax.set_ylabel("Frequency / Probability", fontsize=12)
         ax.grid(True, linestyle='--', alpha=0.5)
 
         ## Overlay Stats
-        if show_stats:
+        if self.show_stats:
             stats_text = (
                 f"Min: {min_val:.2f}\n"
                 f"Max: {max_val:.2f}\n"
@@ -175,7 +167,7 @@ class Histogram(Perspecto):
         if self.verbose:
             utils.echo_msg(f"Saving histogram to {self.outfile}...")
             
-        plt.savefig(self.outfile, dpi=dpi, bbox_inches='tight')
+        plt.savefig(self.outfile, dpi=self.dpi, bbox_inches='tight')
         plt.close(fig)
         
         return self.outfile

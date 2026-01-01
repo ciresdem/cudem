@@ -155,6 +155,23 @@ The **[grits](/docs/grits.md)** module provides a standardized framework for ras
 * **Hydrology**: `hydro` (Sink filling).
 * **Geometry**: `cut` (Mask to region), `clip` (Clip to vector), `slope` (Slope-based filtering).
 
+### Waffles (Gridding & Interpolation)
+
+The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation engine within the framework. It provides a unified factory interface to transform scattered elevation data into seamless raster surfaces using a wide range of gridding algorithms. It manages the entire production pipeline, from data ingestion and spatial partitioning (chunking) to interpolation and post-processing.
+
+**Key Capabilities:**
+
+* **Unified Interface**: Users can switch between different interpolation methods simply by changing the module flag (e.g., `-M gmt-surface` for spline, `-M IDW` for inverse distance weighting).
+* **Algorithms**:
+* **Internal**: `IDW` (Inverse Distance Weighting), `stacks` (Weighted Mean/Supercedure), `linear`/`cubic`/`nearest` (Scipy-based), `natural_neighbor` (Sibson), `kriging` (Geostatistical), and `ml_interp` (Machine Learning Regression).
+* **Wrappers**: `surface` / `triangulate` (GMT), `mbgrid` (MB-System), and `gdal` (GDAL Grid).
+* **Specialized**: `coastline` (Land/Water masking), `vdatum` (Vertical datum grids), `inpaint` (Void filling), and `uncertainty` (Interpolation error estimation).
+
+
+* **Scalability**: Supports "chunking" (`-K`) to process massive datasets by splitting the region into tiles, processing them in parallel, and merging the results.
+* **Smart Stacking**: Pre-processes overlapping datasets into a weighted intermediate raster ("stack") to resolve conflicts before interpolation.
+* **Post-Processing**: Automatically handles buffering (`-X`) to prevent edge artifacts, clipping (`-C`) to vector polygons, and generating auxiliary products like uncertainty grids (`-u`) and data masks (`-m`).
+
 # Usage Examples
 
 ### General Wokflows
