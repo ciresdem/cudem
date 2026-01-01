@@ -460,120 +460,108 @@ class Waffle:
             stack_chunks = []
             mask_chunks = []
             aux_chunks = []
+            
+            ## Iterate through spatial chunks
             for srcwin in utils.yield_srcwin(
                     (self.ycount, self.xcount),
                     self.chunk,
                     verbose=self.verbose
             ):
-                this_geo_x_origin, this_geo_y_origin \
-                    = utils._pixel2geo(
-                        srcwin[0], srcwin[1], self.dst_gt
-                    )
-                this_geo_x_end, this_geo_y_end \
-                    = utils._pixel2geo(
-                        srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], self.dst_gt
-                    )
+                this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(
+                    srcwin[0], srcwin[1], self.dst_gt
+                )
+                this_geo_x_end, this_geo_y_end = utils._pixel2geo(
+                    srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], self.dst_gt
+                )
+                
+                ## Define Chunk Region & Buffer
                 this_gt = [
-                    this_geo_x_origin,
-                    float(self.dst_gt[1]),
-                    0.0,
-                    this_geo_y_origin,
-                    0.0,
-                    float(self.dst_gt[5])
+                    this_geo_x_origin, float(self.dst_gt[1]), 0.0,
+                    this_geo_y_origin, 0.0, float(self.dst_gt[5])
                 ]
-                this_region = regions.Region()
-                this_region.from_geo_transform(
+                this_region = regions.Region().from_geo_transform(
                     geo_transform=this_gt, x_count=srcwin[2], y_count=srcwin[3]
                 )
-                this_region.buffer(pct=10, x_inc = self.xinc, y_inc = self.yinc)
+                
+                ## Buffer 10% to prevent edge effects during interpolation
+                this_region.buffer(pct=10, x_inc=self.xinc, y_inc=self.yinc)
+                
+                # Configure Sub-Waffle
                 this_params = self.params.copy()
                 this_params['kwargs']['src_region'] = this_region
-                this_params['kwargs']['chunk'] = None
-                this_params['kwargs']['name'] \
-                    = utils.append_fn(
-                        '_chunk', this_region, self.xinc, high_res=True
-                    )
+                this_params['kwargs']['chunk'] = None # Prevent infinite recursion
+                this_params['kwargs']['name'] = utils.append_fn(
+                    '_chunk', this_region, self.xinc, high_res=True
+                )
+                
+                ## Generate Chunk
                 this_waffle = WaffleFactory().load_parameter_dict(this_params)
                 this_waffle_module = this_waffle._acquire_module()
                 this_waffle_module.initialize()
                 this_waffle_module.generate()
 
-                ## append the chunk to the chunk list if the DEM generated ok
-                if WaffleDEM(
-                        this_waffle_module.fn,
-                        cache_dir=self.cache_dir,
-                        verbose=self.verbose
-                ).initialize().valid_p():
+                ## Validate and Collect Outputs
+                if WaffleDEM(this_waffle_module.fn, verbose=False).valid_p():
                     chunks.append(this_waffle_module.fn)
 
-                if WaffleDEM(
-                        this_waffle_module.stack,
-                        cache_dir=self.cache_dir,
-                        verbose=self.verbose
-                ).initialize().valid_p():
+                if WaffleDEM(this_waffle_module.stack, verbose=False).valid_p():
                     stack_chunks.append(this_waffle_module.stack)
                     
-                mask_name = f'{this_waffle_module.name}_msk'
-                utils.echo_msg(
-                    f'Output increments: '
-                    f'{self.xsample if self.xsample is not None else self.xinc}/'
-                    f'{self.ysample if self.ysample is not None else self.yinc}'
-                )
-                mask_fn = (f'{os.path.join(this_waffle_module.cache_dir, mask_name)}.'
-                           f'{gdalfun.gdal_fext(this_waffle_module.fmt)}')
+                if os.path.exists(this_waffle_module.msk_fn):
+                    mask_chunks.append(this_waffle_module.msk_fn)
+                
+                ## Collect Auxiliary files (if any)
+                if hasattr(this_waffle_module, 'aux_dems'):
+                    aux_chunks.extend(this_waffle_module.aux_dems)
 
-                mask_chunks.append(this_waffle_module.msk_fn)
-                aux_chunks.append(this_waffle_module.aux_dems)
-
-            ## combine DEM chunks
+            ## Merge DEM Chunks
             if len(chunks) > 0:
+                ## Use a VRT for memory efficiency during merge
+                vrt_opts = gdal.BuildVRTOptions(resampleAlg='nearest')
+                temp_vrt = gdal.BuildVRT(f'{self.fn}.vrt', chunks, options=vrt_opts)
+                temp_vrt = None # Flush to disk
+                
+                ## Warp VRT to final TIF
                 g = gdal.Warp(
-                    self.fn, chunks,
+                    self.fn, 
+                    f'{self.fn}.vrt',
                     format=self.fmt,
                     resampleAlg='cubicspline',
-                    options=["COMPRESS=LZW", "TILED=YES"]
+                    options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
                 )
                 g = None
+                utils.remove_glob(f'{self.fn}.vrt')
 
-            ## combine STACK chunks
-            ## multi-band
+            ## Merge Stack Chunks into output DEM
             if len(stack_chunks) > 0:
+                #stack_fn = f'{self.name}_stack.{gdalfun.gdal_fext(self.fmt)}'
                 g = gdal.Warp(
                     self.fn,
                     stack_chunks,
                     format=self.fmt,
-                    resampleAlg='cubicspline',
-                    options=["COMPRESS=LZW", "TILED=YES"]
+                    resampleAlg='nearest', # Nearest usually safer for sparse stacks
+                    options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
                 )
                 g = None
+                #self.stack = stack_fn # Update reference
 
-            ## combine MASK chunks
-            ## multi-band
+            ## Merge Mask Chunks
             if len(mask_chunks) > 0:
+                mask_fn = f'{self.name}_msk.{gdalfun.gdal_fext(self.fmt)}'
                 g = gdal.Warp(
                     mask_fn,
                     mask_chunks,
                     format=self.fmt,
-                    resampleAlg='cubicspline',
-                    options=["COMPRESS=LZW", "TILED=YES"]
+                    resampleAlg='nearest', # Masks should be nearest neighbor
+                    options=["COMPRESS=LZW", "TILED=YES", "NBITS=1"]
                 )
                 g = None
-                
-            ## combine AUXILIARY chunks
-            if len(aux_chunks) > 0:
-                for ac, aux_dem in enumerate(aux_chunks):
-                    g = gdal.Warp(
-                        aux_dem,
-                        aux_chunks[ac],
-                        format=self.fmt,
-                        resampleAlg='cubicspline',
-                        options=["COMPRESS=LZW", "TILED=YES"]
-                    )
-                    g = None
-                
+
+            ## Cleanup
             utils.remove_glob(*chunks)
-            for aux_chunk in aux_chunks:
-                utils.remove_glob(aux_chunk)
+            utils.remove_glob(*stack_chunks)
+            utils.remove_glob(*mask_chunks)
+            # Handle aux chunks cleanup if necessary
         else:
             ## stack the data and run the waffles module
             mask_fn = None
@@ -582,35 +570,6 @@ class Waffle:
                 mask_name = f'{stack_name}_msk'
                 mask_fn = (f'{os.path.join(self.cache_dir, mask_name)}'
                            f'.{gdalfun.gdal_fext(self.fmt)}')
-
-                ## Threaded...no worky
-                # num_threads = 8
-                # try:
-                #     sk = dlim.stacks_ds(
-                #         self.data,
-                #         n_threads=num_threads,
-                #         out_name=os.path.join(self.cache_dir, stack_name),
-                #         supercede=self.supercede,
-                #         want_mask=self.want_mask
-                #     )
-                #     sk.daemon = True
-                
-                #     sk.start()
-                #     sk.join()                
-                # except (KeyboardInterrupt, SystemExit):
-                #     utils.echo_error_msg(
-                #         'user breakage...please wait while fetches exits.'
-                #     )
-                #     stop_threads = True
-                #     while not sk.arr_q.empty():
-                #         try:
-                #             sk.arr_q.get(False)
-                #         except Empty:
-                #             continue
-                
-                #         sk.arr_q.task_done()                        
-                
-                # self.stack = sk.out_file
                 
                 ## generate the stack
                 stack_fn = os.path.join(

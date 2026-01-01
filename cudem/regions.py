@@ -1,6 +1,6 @@
 ### regions.py
 ##
-## Copyright (c) 2010 - 2025 CIRES Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 CIRES Regents of the University of Colorado
 ##
 ## regions.py is part of CUDEM
 ##
@@ -612,12 +612,14 @@ class Region:
             utils.echo_error_msg(f'Could not perform region transformation; {self}')
             return self
 
-        if include_z and (self.zmin is not None and self.zmax is not None):
-            self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin)
-            self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax)
-        else:
-            self.xmin, self.ymin = transformer.transform(self.xmin, self.ymin)
-            self.xmax, self.ymax = transformer.transform(self.xmax, self.ymax)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            if include_z and (self.zmin is not None and self.zmax is not None):
+                self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin)
+                self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax)
+            else:
+                self.xmin, self.ymin = transformer.transform(self.xmin, self.ymin)
+                self.xmax, self.ymax = transformer.transform(self.xmax, self.ymax)
 
         return self
 

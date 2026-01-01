@@ -1,4 +1,4 @@
-## Copyright (c) 2012 - 2025 Regents of the University of Colorado
+## Copyright (c) 2012 - 2026 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -19,7 +19,7 @@
 ##
 ### Code:
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
@@ -31,5 +31,7 @@ from . import povray
 from . import sphere
 from . import perspective
 from . import figure1
+from . import joyplot
+from . import histogram
 
 ### End

@@ -378,6 +378,39 @@ def str_or(instr, or_val=None, replace_quote=True):
     except:
         return or_val
 
+
+def str2bool(v):
+    """Convert a string (or other type) to a boolean.
+    
+    Accepts:
+      True:  'yes', 'true', 't', 'y', '1', 1, True
+      False: 'no', 'false', 'f', 'n', '0', 0, False, None
+      
+    Args:
+        v (str, int, bool): The value to convert.
+        
+    Returns:
+        bool: The boolean representation of v.
+    """
+    
+    if v is None:
+        return False
+        
+    if isinstance(v, bool):
+        return v
+        
+    if isinstance(v, (int, float)):
+        return bool(v)
+        
+    v_str = str(v).lower().strip()
+    
+    if v_str in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v_str in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        return False
+    
     
 def list_str(l: list) -> str:
     """

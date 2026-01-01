@@ -237,7 +237,7 @@ class WafflesCoastline(Waffle):
         if this_cst is not None:
             with utils.ccp(
                     total=len(this_cst.results),
-                    desc='processing osm coastline',
+                    desc='Processing osm coastline',
                     leave=True
             ) as pbar:
                 for n, cst_result in enumerate(this_cst.results):                
@@ -284,7 +284,7 @@ class WafflesCoastline(Waffle):
         if this_cst is not None:
             with utils.ccp(
                     total=len(this_cst.results),
-                    desc='processing charts coastline',
+                    desc='Processing charts coastline',
                     leave=True
             ) as pbar:
                 for n, cst_result in enumerate(this_cst.results):
@@ -532,7 +532,7 @@ class WafflesCoastline(Waffle):
         
         with utils.ccp(
                 total=len(this_osm.results),
-                desc='processing OSM buildings',
+                desc='Processing OSM buildings',
                 leave=self.verbose
         ) as pbar:
             for n, osm_result in enumerate(this_osm.results):
@@ -582,7 +582,7 @@ class WafflesCoastline(Waffle):
         
         with utils.ccp(
                 total=len(this_bing.results),
-                desc='processing BING buildings',
+                desc='Processing BING buildings',
                 leave=self.verbose
         ) as pbar:
             for n, bing_result in enumerate(this_bing.results):                
@@ -605,7 +605,7 @@ class WafflesCoastline(Waffle):
                         )
                     except Exception as e:
                         utils.remove_glob(bing_gz)
-                        utils.echo_error_msg(f'could not process bing bfp, {e}')
+                        utils.echo_error_msg(f'Could not process bing bfp, {e}')
                         status = -1
                     
                     if status == 0:

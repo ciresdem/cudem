@@ -1,6 +1,6 @@
 ### perspecto.py
 ##
-## Copyright (c) 2023 - 2025 Regents of the University of Colorado
+## Copyright (c) 2023 - 2026 Regents of the University of Colorado
 ##
 ## perspecto.py is part of cudem
 ##
@@ -88,7 +88,7 @@ class Perspecto:
         )
         
         if self.outfile is None:
-            self.outfile = f"{utils.fn_basename2(self.src_dem)}_{self.mod}.tif"
+            self.outfile = f"{utils.fn_basename2(self.src_dem)}_{self.mod if self.mod else 'pp'}.tif"
 
         self.init_cpt(want_gdal=want_gdal_cpt)
 
@@ -198,15 +198,18 @@ class PerspectoFactory(factory.CUDEMFactory):
     from . import hillshade
     from . import perspective
     from . import sphere
-    # Conditional imports for PyGMT dependent modules
     from . import figure1
     from . import colorbar
+    from . import joyplot
+    from . import histogram
 
     _modules = {
         'hillshade': {'call': hillshade.Hillshade},
         'hillshade2': {'call': hillshade.Hillshade_cmd},
         'perspective': {'call': perspective.Perspective},
         'sphere': {'call': sphere.Sphere},
+        'joyplot': {'call': joyplot.Joyplot},
+        'histogram': {'call': histogram.Histogram},
     }
 
     if HAS_PYGMT:
@@ -220,6 +223,9 @@ class PerspectoFactory(factory.CUDEMFactory):
 
 ## ==============================================
 ## Command-line Interface (CLI)
+## $ perspecto
+##
+## perspecto cli
 ## ==============================================
 class PrintModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
