@@ -23,7 +23,32 @@
 ##
 ### Commentary:
 ##
-## Point Cloud Filtering and Manipulation Tools.
+## Pointz: The CUDEM Point Cloud Filtering Engine.
+##
+## Pointz provides specialized tools for filtering, thinning, and manipulating
+## raw point cloud data (XYZ, LAS/LAZ) prior to gridding. It ensures data quality
+## by removing noise and reducing redundancy.
+##
+## Key Capabilities:
+##   1. Outlier Removal:
+##      - Statistical filters (Local Z-Score/IQR) to remove spikes.
+##      - 'Coplanar' filters to detect points deviating from local planes.
+##      - 'RQ' (Reference Quotient) filters to validate data against a known basemap.
+##
+##   2. Data Thinning:
+##      - Grid-based thinning (block_thin) to normalize point density.
+##      - Shoal-biased thinning (block_minmax) for hydrographic safety.
+##      - Random, Median, or Center-based decimation.
+##
+##   3. Masking & Selection:
+##      - Filter points using vector polygons or raster masks.
+##      - 'RangeZ' and 'DiffZ' filters to select points based on absolute elevation
+##        or difference from a reference surface.
+##
+## Usage:
+##   CLI: pointz input.xyz output.xyz -M outlierz:percentile=95 -M block_thin:res=10
+##   API: p = PointFilterFactory(mod='outlierz', points=my_points).acquire()
+##        clean_points = p.run()
 ##
 ### Code:
 

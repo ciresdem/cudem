@@ -23,15 +23,34 @@
 ##
 ### Commentary:
 ##
-## Filter grids using various methods (Outliers, Blur, Flats, etc.)
+## Grits: The CUDEM Grid Filtering Engine.
 ##
-## Grits (GRId filTerS) is the elevation grid processing and filtering engine within the CUDEM
-## software suite. It provides a standardized framework for manipulating raster datasets,
-## allowing users to clean artifacts, smooth noise, blend overlapping datasets, and enforce
-## hydrological or morphological constraints.
+## Grits (GRId filTerS) provides a standardized framework for manipulating and
+## filtering raster DEMs. It is designed to clean artifacts, smooth noise, and
+## perform morphological operations on massive datasets via chunked processing.
 ##
-## Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (tiling),
-## ensuring that operations on multi-gigabyte DEMs do not exceed system memory.
+## Key Capabilities:
+##   1. Smoothing & Denoising:
+##      - Gaussian Blur, Median/Bilateral denoising, and GMT filter wrappers
+##        to remove high-frequency noise.
+##
+##   2. Cleaning & Restoration:
+##      - Statistical outlier removal (IQR-based).
+##      - Identification and removal of "flats" (artifacts).
+##      - Gap filling (inpainting) using interpolation or spline methods.
+##
+##   3. Advanced Morphology & Hydrology:
+##      - Erosion, Dilation, Opening, and Closing for structural manipulation.
+##      - Hydro-enforcement (breaching/filling) and river discovery.
+##
+##   4. Integration:
+##      - Seamless blending of overlapping datasets.
+##      - Quality-based masking and cutting/clipping to vector polygons.
+##
+## Usage:
+##   CLI: grits input.tif -M outliers:k=2.5 -M fill:method=spline -O clean.tif
+##   API: g = GritsFactory(mod='blur:sigma=2', src_dem='dem.tif').acquire()
+##        g.run()
 ##
 ### Code:
 

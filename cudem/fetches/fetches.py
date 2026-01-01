@@ -23,10 +23,41 @@
 ##
 ### Commentary:
 ##
-## Fetch elevation and related data from a variety of sources.
+## Fetches: The CUDEM Data Acquisition Engine.
 ##
-## Use CLI command 'fetches'
-## or use FetchesFactory() to acquire and use a fetch module in python.
+## Fetches provides a unified interface for discovering and downloading geospatial
+## data from a wide variety of public repositories and APIs. It automates the 
+## complex logic of querying remote services, parsing metadata, and managing 
+## concurrent downloads.
+##
+## Key Capabilities:
+##   1. Extensive Data Support:
+##      - Integrates with 40+ data sources including NOAA (NOS, NCEI, OCM), 
+##        USGS (TNM, 3DEP), USACE (eHydro), NASA (EarthData), and OSM.
+##      - Supports diverse formats: Bathymetry (BAG, XYZ), Topography (DEM, LiDAR),
+##        Vectors (SHP, PBF), and Oceanographic data (Tides, Buoys).
+##
+##   2. Intelligent Querying:
+##      - Spatially filters datasets using bounding boxes or vector polygons.
+##      - Parses ISO XML and HTML metadata to extract valid download links 
+##        and spatial extents.
+##      - Handles authentication (Netrc, EarthData tokens) transparently.
+##
+##   3. Robust Downloading:
+##      - Multi-threaded download engine for high-throughput data retrieval.
+##      - Built-in resiliency with automatic retries, timeout handling, and 
+##        resume capability (via Range headers).
+##      - "List mode" to generate URL lists without downloading.
+##
+##   4. Modular Architecture:
+##      - Uses a Factory pattern to easily extend support for new datasets.
+##      - Each module (e.g., 'srtm_plus', 'multibeam') encapsulates the specific
+##        logic for querying its respective API.
+##
+## Usage:
+##   CLI: fetches -R <region> <module> [options] (e.g., fetches -R -90/-89/29/30 srtm_plus)
+##   API: f = FetchesFactory(mod='gmrt', src_region=region).acquire()
+##        f.run()
 ##
 ### Code:
 

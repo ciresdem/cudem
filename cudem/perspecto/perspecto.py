@@ -23,13 +23,29 @@
 ##
 ### Commentary:
 ##
-## Generate iMAGEs from a DEm
+## Perspecto: The CUDEM Visualization Engine.
 ##
-## uses:
-##   povray
-##   gdal
-##   ImageMagick
-##   GMT
+## Perspecto automates the generation of high-quality 2D and 3D visualizations
+## from DEMs. It wraps standard tools like GDAL, POV-Ray, and GMT to create
+## aesthetic maps, hillshades, and data analysis plots.
+##
+## Key Capabilities:
+##   1. Hillshading & Relief:
+##      - Generates standard, multidirectional, and color-relief hillshades.
+##      - Manages Color Palette Tables (CPTs) automatically based on data range.
+##
+##   2. 3D Rendering:
+##      - 'Perspective' module uses POV-Ray to create ray-traced 3D views.
+##      - 'Sphere' module generates orthographic global views.
+##
+##   3. Data Analysis & Art:
+##      - 'Histogram' generates hypsometric curves and CDF plots.
+##      - 'Joyplot' creates aesthetic ridgeline plots of elevation profiles.
+##
+## Usage:
+##   CLI: perspecto input.tif -M hillshade -C globe.cpt -O output.tif
+##   API: p = PerspectoFactory(mod='perspective', src_dem='dem.tif').acquire()
+##        p.run()
 ##
 ### Code:
 

@@ -23,65 +23,33 @@
 ##
 ### Commentary:
 ##
-## A datalist is similar to an MBSystem datalist; it is a space-delineated file
-## containing the following columns:
-## data-path data-format data-weight data-uncertainty data-name data-source
-## data-date data-resolution data-type data-horz data-vert data-url
-## Minimally, data-path (column 1) is all that is needed.
+## Dlim: The CUDEM Data Ingestion and Processing Engine.
 ##
-## An associated inf and geojson file will be gerenated for each datalist
-## only an associated inf file will be genereated for individual datasets
+## Dlim (Data Lists IMproved) manages the ingestion, processing, and standardization
+## of diverse elevation datasets. It utilizes text-based "datalists" to organize
+## hierarchical data collections and stream them into unified processing pipelines.
 ##
-## Parse various dataset types by region/increments and yield data as xyz or
-## array recursive data-structures which point to datasets (datalist, zip,
-## fetches, etc) are negative format numbers, e.g. -1 for datalist
+## Key Capabilities:
+##   1. Robust Format Handling:
+##      - Auto-detects and parses Raster (GeoTIFF, BAG, NetCDF), Point Cloud
+##        (XYZ, LAS/LAZ, IceSat2), and Vector (OGR, Shapefile) formats.
+##      - Abstracts file access, allowing downstream tools to treat all inputs
+##        as a uniform stream of XYZ points or Raster arrays.
 ##
-## supported datasets include: xyz, gdal, ogr, las/laz (laspy), mbs (MBSystem),
-## fetches (see cudem.fetches)
+##   2. On-the-Fly Transformation:
+##      - Handles vertical and horizontal coordinate transformations using Proj
+##        and VDatum grids during data streaming.
+##      - Supports spatial windowing (regions) and resolution blocking.
 ##
-## Initialize a datalist/dataset using init_data(list-of-datalist-entries)
-## where the list of datalist entries can be any of the supported dataset
-## formats. init_data will combine all the input datafiles into an internal
-## scratch datalist and process that.
+##   3. Data Management & Archival:
+##      - Archives processed datasets into standardized directory structures or
+##        tarballs for long-term storage.
+##      - Generates spatial metadata (footprints) and JSON/INF catalogs.
 ##
-## If region, x_inc, and y_inc are set, all processing will go through
-## Dataset.stacks() where the data will be combined
-## either using the 'supercede', 'weighted-mean', 'min' or 'max' method.
-## Dataset.stacks will output a multi-banded gdal file with the following
-## bands: 1: z, 2: count, 3: weight, 4: uncerainty, 5: source-uncertainty
-##
-## If want_mask is set, stacks() will also generate a multi-band gdal raster
-## file where each mask band contains the mask (0/1) of a specific dataset/datalist,
-## depending on the input data. For a datalist, each band will contain a mask for
-## each of the top-level datasets. If want_sm is also set, the multi-band mask
-## will be processed to an OGR supported vector, with a feature for each band and
-## the metadata items (cols > 4 in the datalist entry) as fields.
-##
-## Transform data between horizontal/vertical projections/datums by setting src_srs
-## and dst_srs as 'EPSG:<>'
-## if src_srs is not set, but dst_srs is, dlim will attempt to obtain the source srs
-## from the data file itself or its respective inf file; otherwise, it will be
-## assumed the source data file is in the same srs as dst_srs
-##
-## A dataset module should have at least an `__init__` and a `yield_points` method.
-## `yield_points` should yield a numpy rec array with at least
-## 'x', 'y' and 'z' fields, and optionally 'w' and 'u' fields.
-## Other methods that can be re-written include `parse` which yields dlim
-## dataset module(s).
-##
-### Examples:
-##
-## my_data_list = ['nos_data.xy', 'my_grid.tif', 'gmrt', 'other_data.datalist'] 
-## my_processed_datalist = init_data(my_data_list) # initialize the data
-## my_processed_datalist.dump_xyz() # dump all the xyz data
-##
-## from cudem import regions
-## my_region = regions.Region().from_list([-160, -150, 30, 40])
-## my_data_list = ['nos_data.xy', 'my_grid.tif', 'gmrt', 'other_data.datalist'] 
-## my_processed_datalist = init_data(my_data_list, src_region=my_region, x_inc=1s, y_inc=1s)
-## my_stack = my_processed_datalist.stacks() # stack the data to the region/increments
-## my_processed_datalist.archive_xyz() # archive the data to the region/increments
-## my_mask = my_processed_datalist._mask() # mask the data to the region/increments
+## Usage:
+##   CLI: dlim -R <region> -E <increment> [options] input.datalist
+##   API: dl = dlim.DatasetFactory(fn="input.xyz", src_srs="epsg:4326").acquire()
+##        for point in dl.yield_xyz(): ...
 ##
 ### Code:
 
