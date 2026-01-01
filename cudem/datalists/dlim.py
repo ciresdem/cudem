@@ -1673,11 +1673,11 @@ class ElevationDataset:
                     weight_mask=3,
                     count_mask=2,
                     cache_dir=self.cache_dir,
-                    verbose=self.verbose
+                    verbose=True
                 )._acquire_module()
             
                 if grits_filter:
-                    grits_filter()
+                    grits_filter = grits_filter()
                     stacked_fn = grits_filter.dst_dem
 
         return stacked_fn

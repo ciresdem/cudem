@@ -30,26 +30,25 @@
 ## of various interpolation algorithms and data processing steps into a single,
 ## coherent pipeline.
 ##
-## Key Capabilities:
-##   1. Unified Gridding Interface:
+##   * Unified Gridding Interface:
 ##      - Supports internal algorithms: IDW, Stacks (Weighted Mean), Linear/Cubic/Nearest,
 ##        Natural Neighbor, Kriging, Machine Learning Regression (RF, KNN, MLP),
 ##        and Computer Vision Inpainting.
 ##      - Wraps external tools: GMT Surface/Triangulate, MB-System mbgrid, GDAL Grid, VDatum.
 ##      - Specialized modules: Coastline masking, Lake filling, and Uncertainty estimation.
 ##
-##   2. Robust Data Handling (via DLIM):
+##   * Robust Data Handling (via DLIM):
 ##      - Ingests diverse formats: XYZ, LAS/LAZ, GeoTIFF, BAG, OGR, Fetch modules.
 ##      - "Stacking": Pre-processes overlapping data into a weighted intermediate raster
 ##        to resolve conflicts and enforce data hierarchy before interpolation.
 ##
-##   3. Scalability & Region Management:
+##   * Scalability & Region Management:
 ##      - Chunking: Automatically splits large regions into tiles for parallel processing
 ##        and seamless stitching.
 ##      - Buffering: Handles region buffering to eliminate edge artifacts.
 ##      - Resolution: Manages independent processing (input) and sampling (output) resolutions.
 ##
-##   4. Post-Processing:
+##   * Post-Processing:
 ##      - Automated clipping to vector polygons.
 ##      - Generation of auxiliary products: Uncertainty grids, Data Masks, Spatial Metadata.
 ##      - Filtering: Application of 'grits' filters (smoothing, outlier removal) to the output.
@@ -291,11 +290,9 @@ class Waffle:
 
     
     def initialize(self):
-        init_str = []
-        # if self.verbose:
-        #     utils.echo_msg('--------------')
-        #     utils.echo_msg(f'Initializing waffles module < \033[1m{self.params["mod"]}\033[m >')
-        #init_str.append('--------------')
+        ## Setup the initialization 'string' to print out in a single blob.
+        init_str = ['']
+        init_str.append('--------------')
         init_str.append(f'Initializing waffles module < \033[1m{self.params["mod"]}\033[m >')
         
         ## Output dem filename
@@ -330,11 +327,6 @@ class Waffle:
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
         
-        # if self.verbose:
-        #     utils.echo_msg(
-        #         f'Output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}'
-        #     )
-        #     utils.echo_msg('--------------')
         init_str.append(f'Output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}')
         init_str.append(f'Output srs: {self.dst_srs}')
         init_str.append(f'Output basename: {self.name}')
@@ -392,17 +384,11 @@ class Waffle:
             x_inc=self.xinc, y_inc=self.yinc
         )
 
-        # if self.verbose:
-        #     utils.echo_msg(f'Input region: {self.region}')
-        #     utils.echo_msg(f'Distribution region: {self.d_region}')
-        #     utils.echo_msg(f'Processing region: {self.p_region}')
-        #     utils.echo_msg(f'Cache directory is: {self.cache_dir}')
-
+        ## Append some info to the init_str
         init_str.append(f'Input region: {self.region}')
         init_str.append(f'Distribution region: {self.d_region}')
         init_str.append(f'Processing region: {self.p_region}')
         init_str.append(f'Cache directory is: {self.cache_dir}')
-
         return init_str
 
     
@@ -474,21 +460,11 @@ class Waffle:
         self.xsample = utils.str2inc(self.xsample)
         self.ysample = utils.str2inc(self.ysample)
 
-        # if self.verbose:
-        #     utils.echo_msg(f'Gridding increments: {self.xinc}/{self.yinc}')
-        #     utils.echo_msg(
-        #         f'Output increments: '
-        #         f'{self.xsample if self.xsample is not None else self.xinc}/'
-        #         f'{self.ysample if self.ysample is not None else self.yinc}'
-        #     )
-
-        if self.verbose:
-            init_str.append(f'Gridding increments: {self.xinc}/{self.yinc}')
-            init_str.append(f'Output increments: '
-                            f'{self.xsample if self.xsample is not None else self.xinc}/'
-                            f'{self.ysample if self.ysample is not None else self.yinc}')
-
-
+        ## Append some info to the init_str
+        init_str.append(f'Gridding increments: {self.xinc}/{self.yinc}')
+        init_str.append(f'Output increments: '
+                        f'{self.xsample if self.xsample is not None else self.xinc}/'
+                        f'{self.ysample if self.ysample is not None else self.yinc}')
         return init_str
 
     
@@ -881,6 +857,8 @@ class Waffle:
                     want_h5=self.keep_auxiliary
                 )
                 self.output_files['DEM'] = self.fn
+            else:
+                utils.echo_warning_msg(f'{self.fn} is invalid')
                 
             ## Post-Process Mask & Metadata
             if self.want_sm:
@@ -1187,12 +1165,14 @@ def waffles_cli():
     parser.add_argument(
         '-E', '--increment',
         required=True,
-        help="Gridding Increment (xinc[/yinc][:xsample/ysample])."
+        help=("Gridding Increment (xinc[/yinc][:xsample/ysample]).\n"
+              "Note: Increment units should be the same as the input region.")
     )
     parser.add_argument(
         '-M', '--module', 
         default='stacks', 
-        help="Waffles Module and options (e.g. 'surface:tension=0.35'). Default: stacks."
+        help=("Waffles Module and options (e.g. 'gmt-surface:tension=0.35'). Default: stacks.\n"
+              "Where MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]")
     )
     
     ## --- Output Control ---
@@ -1209,7 +1189,8 @@ def waffles_cli():
     parser.add_argument(
         '-P', '--t_srs', 
         default='epsg:4326', 
-        help="Target Projection (EPSG code or WKT). Default: epsg:4326."
+        help=("Target Projection (EPSG code or WKT). Default: epsg:4326.\n"
+              "Note: The target projection should align with the input region.")
     )
     parser.add_argument(
         '-f', '--transform', 
@@ -1236,16 +1217,20 @@ def waffles_cli():
     ## --- Processing Options ---
     parser.add_argument(
         '-X', '--extend', 
-        help="Extend region (cells[:percent]). e.g. '6:10'."
+        help=("Extend region (cells[:percent]). e.g. '6:10'.\n"
+              "Where 'cells' extends the output region and 'percent' extends the processing region.")
     )
     parser.add_argument(
         '-T', '--filter', 
         action='append', 
-        help="Apply Grits Filter (e.g. 'outliers:k=2.5')."
+        help=("Apply Grits Filter (e.g. 'outliers:k=2.5').\n"
+              "Where FILTER is fltr_name[:opts] (see `grits --modules` for more information)\n"
+              "This may be set multiple times to perform multiple filters.\n"
+              "Append `:stacks=True` to the filter to perform the filter on the data stack")
     )
     parser.add_argument(
         '-C', '--clip', 
-        help="Clip output to polygon file."
+        help="Clip output to polygon file. e.g. 'clip_ply.shp:invert=False'"
     )
     parser.add_argument(
         '-K', '--chunk', 
@@ -1283,7 +1268,7 @@ def waffles_cli():
     parser.add_argument(
         '-L', '--limits', 
         action='append', 
-        help="Set limits (u=upper, l=lower, p=prox, s=size, etc.). e.g. -Lu0."
+        help="Set limits (u=upper, l=lower, p=prox, s=size, n=count, r=uncertainty, c=nodata, e=expand). e.g. -Lu0."
     )
 
     ## --- System / Misc ---
@@ -1357,6 +1342,40 @@ def waffles_cli():
     if args.modules:
         factory.echo_modules(WaffleFactory._modules)
         sys.exit(0)
+
+
+    ## Load the user wg json and run waffles with that.
+    ## TODO: allow input of multiple config files with -G .. -G ..
+    if args.config:
+        if os.path.exists(args.config):
+            with open(args.config, 'r') as wg_json:
+                wg = json.load(wg_json)
+                # if wg['kwargs']['src_region'] is not None and \
+                #    isinstance(wg['kwargs']['src_region'], list):
+                #     wg['kwargs']['src_region'] = regions.Region().from_list(
+                #         wg['kwargs']['src_region']
+                #     )
+
+            this_waffle = WaffleFactory(
+                mod=None,
+                mod_name=wg['mod_name'],
+                mod_args=wg['mod_args'],
+                **wg['kwargs']
+            )
+            this_waffle_module = this_waffle._acquire_module()
+            try:
+                this_waffle_module()
+            except Exception as e:
+                utils.echo_error_msg(
+                    f'Failed to generate {this_waffle_module}, {e}'
+                )
+                print(traceback.format_exc())
+                
+            sys.exit(0)   
+        else:
+            utils.echo_error_msg(
+                f'specified waffles config file does not exist, {args.config}'
+            )
         
     ## Initialize Config Dictionary
     wg = {
@@ -1436,11 +1455,12 @@ def waffles_cli():
     i_regions = args.region if args.region else [None]
     these_regions = regions.parse_cli_region(i_regions, wg['verbose'])
 
-    ## Setup Multiprocessing
+    ## Setup Multiprocessing regions
     #waffle_q = mp.Queue()
     #processes = []
 
     try:
+        ## For mp regions
         # for _ in range(args.threads):
         #     t = mp.Process(target=waffle_queue, args=([waffle_q]))
         #     t.daemon = True
@@ -1494,13 +1514,25 @@ def waffles_cli():
                 utils.echo_error_msg(f"Invalid module: {mod_name}")
                 continue
 
+            ## Export the waffles module config file
+            if args.config: 
+                wg['src_region'] = this_region.export_as_list()
+                wg['name'] = os.path.abspath(wg['name'])
+                ## Create Factory
+                ## We pass 'mod' string to factory which parses opts
+                utils.echo_msg(wg)
+                this_waffle = WaffleFactory(mod=args.module, **wg)
+                this_waffle.write_parameter_file(f'{args.config}.json')
+                continue
+
             ## Create Factory
             ## We pass 'mod' string to factory which parses opts
             this_waffle = WaffleFactory(mod=args.module, **wg)
-
+            
             ## Acquire and Queue
             module_instance = this_waffle._acquire_module()
             if module_instance:
+                ## for mp regions
                 #waffle_q.put([module_instance])
                 try:
                     module_instance()
@@ -1510,7 +1542,7 @@ def waffles_cli():
                     )
                     print(traceback.format_exc())
 
-        ## Cleanup
+        ## Cleanup for mp regions
         # for _ in range(args.threads):
         #     waffle_q.put(None)
         
@@ -1519,6 +1551,7 @@ def waffles_cli():
 
     except KeyboardInterrupt:
         utils.echo_error_msg("Killed by user, Terminating processes...\n")
+        ## for mp regions
         # for t in processes:
         #     if t.is_alive():
         #         t.terminate() 

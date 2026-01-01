@@ -574,19 +574,20 @@ class CUDEMFactory:
         try:
             with open(param_file, 'w') as outfile:
                 params = self.__dict__.copy()
-                
+                params.pop('_modules')
                 ## Convert paths to absolute paths
                 if 'mod_args' in params:
                     for key in params['mod_args']:
                         val = params['mod_args'][key]
                         if isinstance(val, str) and os.path.exists(val):
                             params['mod_args'][key] = os.path.abspath(val)
-                    
+
                 for key in params:
                     val = params[key]
                     if isinstance(val, str) and os.path.exists(val):
                         params[key] = os.path.abspath(val)
-                            
+
+                utils.echo_msg(params)
                 json.dump(params, outfile, indent=4)                
                 utils.echo_msg(f'New CUDEMFactory file written to {param_file}')
                 

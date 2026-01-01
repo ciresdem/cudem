@@ -38,11 +38,11 @@ updates DEMs across all spatial scales.
 ## CUDEM Framework
 
 The CUDEM framework provides a set of powerful open-source command-line tools as well as a Python-3-based application programming interface (API) for:
-1.  **Fetching**: Identifying and downloading topographic and bathymetric source data from more than forty different publicly available datasets (e.g., NOAA, USGS, USACE).
-2.  **Processing**: Filtering, cleaning, and masking source data (point clouds, rasters, vectors) to remove artifacts and enforce quality standards.
-3.  **Gridding**: Ranking and merging multiple datasets using a variety of interpolation algorithms to generate seamless Digital Elevation Models (DEMs).
-4.  **Analysis**: Generating auxiliary data products including uncertainty grids, data masks, and spatial metadata.
-5.  **Transformation**: converting data between various horizontal and vertical datums.
+* **Fetching**: Identifying and downloading topographic and bathymetric source data from more than forty different publicly available datasets (e.g., NOAA, USGS, USACE).
+* **Processing**: Filtering, cleaning, and masking source data (point clouds, rasters, vectors) to remove artifacts and enforce quality standards.
+* **Gridding**: Ranking and merging multiple datasets using a variety of interpolation algorithms to generate seamless Digital Elevation Models (DEMs).
+* **Analysis**: Generating auxiliary data products including uncertainty grids, data masks, and spatial metadata.
+* **Transformation**: converting data between various horizontal and vertical datums.
 
 Individual components are modular and may be run standalone; for example, the `fetches` module can download airborne lidar data or nautical charts covering specific geographic regions; the `waffles` module can generate DEMs from scattered data; and the `grits` module can filter and post-process those DEMs. The CUDEM tools may also be conjoined in end-to-end workflows ensuring permanent traceability and reproducibility in DEM generation.
 
