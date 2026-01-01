@@ -978,6 +978,11 @@ class WaffleFactory(factory.CUDEMFactory):
     from . import lakes
     from . import uncertainty
     from . import cudemgrid
+    from . import kriging
+    from . import ml_interp
+    from . import natural_neighbor
+    from . import inpaint
+    from . import cube
     
     _modules = {
         'stacks': {'name': 'stacks', 'stack': True, 'call': WafflesStacks},
@@ -1000,10 +1005,14 @@ class WaffleFactory(factory.CUDEMFactory):
         'uncertainty': {'name': 'uncertainty', 'stack': True, 'call': uncertainty.WafflesUncertainty},
         'scratch': {'name': 'scratch', 'stack': True, 'call': WafflesScratch},
         'flatten': {'name': 'flatten', 'stack': True, 'call': flatten.WafflesFlatten},
+        'kriging': {'name': 'kriging', 'stack': True, 'call': kriging.WafflesKriging},
+        'ml_interp': {'name': 'ml_interp', 'stack': True, 'call': ml_interp.WafflesML},
+        'natural_neighbor': {'name': 'natural_neighbor', 'stack': True, 'call': natural_neighbor.WafflesNaturalNeighbor},
+        'inpaint': {'name': 'inpaint', 'stack': True, 'call': inpaint.WafflesInpaint},
+        'cube': {'name': 'cube', 'stack': True, 'call': cube.WafflesCUBE},
         ## testing
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
         #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch}, # test
-        #'cube': {'name': 'cube', 'stack': True, 'call': WafflesCUBE}, # test
         #'bgrid': {'name': 'bgrid', 'stack': True, 'call': WafflesBGrid}, # test            
     }
 

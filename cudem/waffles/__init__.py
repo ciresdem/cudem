@@ -1,4 +1,4 @@
-## Copyright (c) 2012 - 2025 Regents of the University of Colorado
+## Copyright (c) 2012 - 2026 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -20,7 +20,7 @@
 ###############################################################################
 ### Code:
 
-__version__ = "1.0.2"
+__version__ = "1.2.0"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
@@ -36,6 +36,10 @@ from . import lakes
 from . import uncertainty
 from . import flatten
 from . import cube
+from . import kriging
+from . import ml_interp
+from . import natural_neighbor
+from . import inpaint
 from . import cudemgrid
 
 ### End

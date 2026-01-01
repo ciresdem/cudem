@@ -848,9 +848,9 @@ def chunk_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     return list(yield_srcwin(n_size, n_chunk, step, verbose=verbose))
 
 
-def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin',
-                 end_msg='chunked srcwin', start_at_edge=True, verbose=True):
-    """yield source windows in n_chunks at step"""
+def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='Chunking srcwin',
+                 end_msg='Chunked srcwin', start_at_edge=True, verbose=True):
+    """Yield source windows in n_chunks at step"""
     
     if step is None:
         step = n_chunk

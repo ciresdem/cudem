@@ -21,7 +21,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
 ### Commentary:
 ##
 ### Code:
@@ -30,23 +29,17 @@ from cudem import gdalfun
 from cudem.waffles.waffles import Waffle
 
 class WafflesFlatten(Waffle):
-    """Stack the data into a DEM and then hydro-flatten all the 
-    void areas.
+    """Stack the data into a DEM and then flatten all the void areas.
 
     specify 'size_threshold' to only flatten voids above threshold.
 
-    -----------
     Parameters:
-    
-    min_count=[val] - only retain data cells if they contain `min_count` 
-                      overlapping data
+    -----------    
     size_threshold=[val] - the minimum size void to flatten (in cells)
     """
     
-    ## todo: add parameters for specifying outputs...
-    def __init__(self, min_count=None, size_threshold=1, **kwargs):
+    def __init__(self, size_threshold=1, **kwargs):
         super().__init__(**kwargs)
-        self.min_count = min_count
         self.size_threshold = size_threshold
 
         
@@ -58,6 +51,6 @@ class WafflesFlatten(Waffle):
             size_threshold=self.size_threshold
         )
         
-        return(self)
+        return self
 
 ### End

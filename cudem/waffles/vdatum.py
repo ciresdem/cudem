@@ -1,6 +1,6 @@
 ### vdatum.py
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
 ##
 ## vdatum.py is part of CUDEM
 ##
@@ -33,14 +33,11 @@ class WafflesVDatum(Waffle):
     """VDATUM transformation grid.
     Generate a Vertical DATUM transformation grid.
 
-    -----------
     Parameters:
-
+    -----------
     mode=[waffle-module] - the waffles module to use to interpolate/extrapolate 
     vdatum_in=[vdatum] - input vertical datum
-    vdatum_out=[vdatum] - output vertical datum
-    
-    < mode=gmt-surface:vdatum:vdatum_in=None:vdatum_out=None >
+    vdatum_out=[vdatum] - output vertical datum    
     """
 
     def __init__(self, mode='IDW', vdatum_in=None, vdatum_out=None, **kwargs):
@@ -85,8 +82,7 @@ class WafflesVDatum(Waffle):
             cache_dir=waffles_cache
         ).run(outfile='{}.tif'.format(self.name))
 
-        utils.echo_msg(status)
-        return(self)
+        return self
 
 
 ### End

@@ -39,6 +39,7 @@ from cudem import utils
 from cudem import regions
 from cudem import gdalfun
 from cudem import factory
+from cudem.grits import grits
 
 from cudem.waffles.waffles import Waffle
 
@@ -130,9 +131,12 @@ class WaffleDEM:
             band_check = []
             for band_num in range(1, self.ds_config['raster_count']+1):
                 #band_infos = gdalfun.gdal_infos(self.fn, scan=True, band=band_num)
-                if np.isnan(self.ds_config['zr'][0]) \
-                   or np.isnan(self.ds_config['zr'][1]):
-                    band_check.append(0)
+                if 'zr' in self.ds_config:
+                    if np.isnan(self.ds_config['zr'][0]) \
+                       or np.isnan(self.ds_config['zr'][1]):
+                        band_check.append(0)
+                    else:
+                        band_check.append(1)
                 else:
                     band_check.append(1)
 

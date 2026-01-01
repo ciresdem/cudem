@@ -29,12 +29,14 @@
 
 import os
 import re
+import warnings
 import numpy as np
 from osgeo import gdal
 
 from cudem import utils
 from cudem import regions
 from cudem import gdalfun
+from cudem import vrbag
 from cudem.grits import grits
 from cudem.datalists.dlim import ElevationDataset
 
@@ -394,20 +396,22 @@ class GDALFile(ElevationDataset):
 
 
             ## Perform Warp
-            warped_ds = gdalfun.sample_warp(
-                tmp_ds_to_warp, tmp_warp, self.x_inc, self.y_inc,
-                src_region=self.warp_region,
-                src_srs=self.transform['src_horz_crs'].to_proj4()
-                if self.transform['src_horz_crs'] is not None \
-                else None,
-                dst_srs=self.transform['dst_horz_crs'].to_proj4() \
-                if self.transform['dst_horz_crs'] is not None \
-                else None,                
-                sample_alg=self.sample_alg,
-                ndv=ndv,
-                verbose=False,
-                co=["COMPRESS=DEFLATE", "TILED=YES"]
-            )[0]
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                warped_ds = gdalfun.sample_warp(
+                    tmp_ds_to_warp, tmp_warp, self.x_inc, self.y_inc,
+                    src_region=self.warp_region,
+                    src_srs=self.transform['src_horz_crs'].to_proj4()
+                    if self.transform['src_horz_crs'] is not None \
+                    else None,
+                    dst_srs=self.transform['dst_horz_crs'].to_proj4() \
+                    if self.transform['dst_horz_crs'] is not None \
+                    else None,                
+                    sample_alg=self.sample_alg,
+                    ndv=ndv,
+                    verbose=False,
+                    co=["COMPRESS=DEFLATE", "TILED=YES"]
+                )[0]
             
             ## Load Warped DS into Memory
             self.src_ds = gdal.Open(warped_ds) if warped_ds else None
