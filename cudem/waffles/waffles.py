@@ -642,6 +642,7 @@ class Waffle:
             if len(chunks) > 0:
                 gdalfun.sample_warp(
                     chunks, self.fn,
+                    self.x_inc, self.y_inc,
                     src_srs=self.dst_srs,
                     src_region=self.p_region,
                     sample_alg='cubicspline',
@@ -671,6 +672,7 @@ class Waffle:
                 stack_fn = f'{self.name}_stack.{gdalfun.gdal_fext(self.fmt)}'
                 gdalfun.sample_warp(
                     stack_chunks, stack_fn,
+                    self.x_inc, self.y_inc,
                     src_srs=self.dst_srs,
                     src_region=self.p_region,
                     sample_alg='cubicspline',
@@ -694,6 +696,7 @@ class Waffle:
                 mask_fn = f'{self.name}_msk.{gdalfun.gdal_fext(self.fmt)}'
                 gdalfun.sample_warp(
                     mask_chunks, stack_fn,
+                    self.x_inc, self.y_inc,
                     src_srs=self.dst_srs,
                     src_region=self.p_region,
                     sample_alg='cubicspline',
@@ -1503,7 +1506,7 @@ def waffles_cli():
                     module_instance()
                 except Exception as e:
                     utils.echo_error_msg(
-                        f'Failed to generate {waffle_module}, {e}'
+                        f'Failed to generate {module_instance}, {e}'
                     )
                     print(traceback.format_exc())
 
