@@ -291,18 +291,21 @@ class Waffle:
 
     
     def initialize(self):
-        if self.verbose:
-            utils.echo_msg('--------------')
-            utils.echo_msg(f'Initializing waffles module < \033[1m{self.params["mod"]}\033[m >')
-
+        init_str = []
+        # if self.verbose:
+        #     utils.echo_msg('--------------')
+        #     utils.echo_msg(f'Initializing waffles module < \033[1m{self.params["mod"]}\033[m >')
+        #init_str.append('--------------')
+        init_str.append(f'Initializing waffles module < \033[1m{self.params["mod"]}\033[m >')
+        
         ## Output dem filename
         self.fn = f'{self.name}.{gdalfun.gdal_fext(self.fmt)}'
         ## Cudem config file holding foriegn programs and versions
         self.gc = utils.config_check()
         ## Initialize regions
-        self._init_regions()
+        init_str = self._init_regions(init_str=init_str)
         ## Initialize increments
-        self._init_incs() 
+        init_str = self._init_incs(init_str=init_str) 
 
         if isinstance(self.co, list):
             if len(self.co) == 0:
@@ -327,12 +330,20 @@ class Waffle:
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
         
-        if self.verbose:
-            utils.echo_msg(
-                f'Output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}'
-            )
-            utils.echo_msg('--------------')
+        # if self.verbose:
+        #     utils.echo_msg(
+        #         f'Output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}'
+        #     )
+        #     utils.echo_msg('--------------')
+        init_str.append(f'Output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}')
+        init_str.append(f'Output srs: {self.dst_srs}')
+        init_str.append(f'Output basename: {self.name}')
+        init_str.append('--------------')
 
+        if self.verbose:
+            out_str = '\n\t '.join(init_str)
+            utils.echo_msg(out_str)
+            
         ## Use self._init in a sub-module to do custom intializations.
         self.status = self._init()
         return self
@@ -350,7 +361,7 @@ class Waffle:
             utils.echo_warning_msg('Failed to initialize from sub-module')
 
             
-    def _init_regions(self):
+    def _init_regions(self, init_str=[]):
         """Initialize and set regions.
         
         regions set here include:
@@ -381,14 +392,21 @@ class Waffle:
             x_inc=self.xinc, y_inc=self.yinc
         )
 
-        if self.verbose:
-            utils.echo_msg(f'Input region: {self.region}')
-            utils.echo_msg(f'Distribution region: {self.d_region}')
-            utils.echo_msg(f'Processing region: {self.p_region}')
-            utils.echo_msg(f'Cache directory is: {self.cache_dir}')
+        # if self.verbose:
+        #     utils.echo_msg(f'Input region: {self.region}')
+        #     utils.echo_msg(f'Distribution region: {self.d_region}')
+        #     utils.echo_msg(f'Processing region: {self.p_region}')
+        #     utils.echo_msg(f'Cache directory is: {self.cache_dir}')
 
-            
-    def _init_data(self, set_incs=False):
+        init_str.append(f'Input region: {self.region}')
+        init_str.append(f'Distribution region: {self.d_region}')
+        init_str.append(f'Processing region: {self.p_region}')
+        init_str.append(f'Cache directory is: {self.cache_dir}')
+
+        return init_str
+
+    
+    def _init_data(self, set_incs=False, init_str=[]):
         """Initialize the data for processing
         parses data paths to dlim dataset objects.
 
@@ -443,7 +461,7 @@ class Waffle:
             return None
 
         
-    def _init_incs(self):
+    def _init_incs(self, init_str=[]):
         """Initialize increments
         
         xinc/yinc are the DEM increments, in native units.
@@ -456,15 +474,24 @@ class Waffle:
         self.xsample = utils.str2inc(self.xsample)
         self.ysample = utils.str2inc(self.ysample)
 
-        if self.verbose:
-            utils.echo_msg(f'Gridding increments: {self.xinc}/{self.yinc}')
-            utils.echo_msg(
-                f'Output increments: '
-                f'{self.xsample if self.xsample is not None else self.xinc}/'
-                f'{self.ysample if self.ysample is not None else self.yinc}'
-            )
-            
+        # if self.verbose:
+        #     utils.echo_msg(f'Gridding increments: {self.xinc}/{self.yinc}')
+        #     utils.echo_msg(
+        #         f'Output increments: '
+        #         f'{self.xsample if self.xsample is not None else self.xinc}/'
+        #         f'{self.ysample if self.ysample is not None else self.yinc}'
+        #     )
 
+        if self.verbose:
+            init_str.append(f'Gridding increments: {self.xinc}/{self.yinc}')
+            init_str.append(f'Output increments: '
+                            f'{self.xsample if self.xsample is not None else self.xinc}/'
+                            f'{self.ysample if self.ysample is not None else self.yinc}')
+
+
+        return init_str
+
+    
     def _coast_region(self):
         """Coastline region 
         (extended by percentage self.extend_proc)
@@ -613,46 +640,77 @@ class Waffle:
 
             ## Merge DEM Chunks
             if len(chunks) > 0:
+                gdalfun.sample_warp(
+                    chunks, self.fn,
+                    src_srs=self.dst_srs,
+                    src_region=self.p_region,
+                    sample_alg='cubicspline',
+                    ndv=-9999,
+                    co=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"],
+                    ot=gdal.GDT_Float32,
+                    verbose=self.verbose
+                )
                 ## Use VRT for efficient merging
                 ## TODO: use gdalfun.create_temp_vrt instead here.
-                vrt_opts = gdal.BuildVRTOptions(resampleAlg='nearest')
-                gdal.BuildVRT(f'{self.fn}.vrt', chunks, options=vrt_opts)
+                # vrt_opts = gdal.BuildVRTOptions(resampleAlg='nearest')
+                # gdal.BuildVRT(f'{self.fn}.vrt', chunks, options=vrt_opts)
                 
-                ## Warp VRT to final TIF
-                g = gdal.Warp(
-                    self.fn, 
-                    f'{self.fn}.vrt',
-                    format=self.fmt,
-                    resampleAlg='cubicspline',
-                    options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
-                )
-                g = None
-                utils.remove_glob(f'{self.fn}.vrt')
+                # ## Warp VRT to final TIF                
+                # g = gdal.Warp(
+                #     self.fn, 
+                #     f'{self.fn}.vrt',
+                #     format=self.fmt,
+                #     resampleAlg='cubicspline',
+                #     options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
+                # )
+                # g = None
+                # utils.remove_glob(f'{self.fn}.vrt')
 
             ## Merge Stack Chunks
             if len(stack_chunks) > 0:
                 stack_fn = f'{self.name}_stack.{gdalfun.gdal_fext(self.fmt)}'
-                g = gdal.Warp(
-                    stack_fn,
-                    stack_chunks,
-                    format=self.fmt,
-                    resampleAlg='cubicspline',
-                    options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
+                gdalfun.sample_warp(
+                    stack_chunks, stack_fn,
+                    src_srs=self.dst_srs,
+                    src_region=self.p_region,
+                    sample_alg='cubicspline',
+                    ndv=-9999,
+                    co=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"],
+                    ot=gdal.GDT_Float32,
+                    verbose=self.verbose
                 )
-                g = None
+                # g = gdal.Warp(
+                #     stack_fn,
+                #     stack_chunks,
+                #     format=self.fmt,
+                #     resampleAlg='cubicspline',
+                #     options=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"]
+                # )
+                # g = None
                 self.stack = stack_fn
 
             ## Merge Mask Chunks
             if len(mask_chunks) > 0:
                 mask_fn = f'{self.name}_msk.{gdalfun.gdal_fext(self.fmt)}'
-                g = gdal.Warp(
-                    mask_fn,
-                    mask_chunks,
-                    format=self.fmt,
-                    resampleAlg='cubicspline',
-                    options=["COMPRESS=LZW", "TILED=YES", "NBITS=1"]
+                gdalfun.sample_warp(
+                    mask_chunks, stack_fn,
+                    src_srs=self.dst_srs,
+                    src_region=self.p_region,
+                    sample_alg='cubicspline',
+                    ndv=-9999,
+                    co=["COMPRESS=LZW", "TILED=YES", "BIGTIFF=YES"],
+                    ot=gdal.GDT_Float32,
+                    verbose=self.verbose
                 )
-                g = None
+                # g = gdal.Warp(
+                #     mask_fn,
+                #     mask_chunks,
+                #     format=self.fmt,
+                #     resampleAlg='cubicspline',
+                #     options=["COMPRESS=LZW", "TILED=YES", "NBITS=1"]
+                # )
+                # g = None
+                self.msk_fn = mask_fn
                 
             ## Cleanup
             utils.remove_glob(*chunks)
@@ -894,7 +952,7 @@ class Waffle:
                 self.output_files['aux netcdf'] = f'{self.name}.nc'
 
         if self.verbose:
-            utils.echo_msg(f'Output files: {self.output_files}')
+            utils.echo_msg(f'\033[1mOutput files:\033[m {self.output_files}')
             
         return self    
 
@@ -1376,15 +1434,15 @@ def waffles_cli():
     these_regions = regions.parse_cli_region(i_regions, wg['verbose'])
 
     ## Setup Multiprocessing
-    waffle_q = mp.Queue()
-    processes = []
+    #waffle_q = mp.Queue()
+    #processes = []
 
     try:
-        for _ in range(args.threads):
-            t = mp.Process(target=waffle_queue, args=([waffle_q]))
-            t.daemon = True
-            processes.append(t)
-            t.start()
+        # for _ in range(args.threads):
+        #     t = mp.Process(target=waffle_queue, args=([waffle_q]))
+        #     t.daemon = True
+        #     processes.append(t)
+        #     t.start()
 
         ## Iterate Regions
         for this_region in these_regions:
@@ -1440,21 +1498,28 @@ def waffles_cli():
             ## Acquire and Queue
             module_instance = this_waffle._acquire_module()
             if module_instance:
-                waffle_q.put([module_instance])
+                #waffle_q.put([module_instance])
+                try:
+                    module_instance()
+                except Exception as e:
+                    utils.echo_error_msg(
+                        f'Failed to generate {waffle_module}, {e}'
+                    )
+                    print(traceback.format_exc())
 
         ## Cleanup
-        for _ in range(args.threads):
-            waffle_q.put(None)
+        # for _ in range(args.threads):
+        #     waffle_q.put(None)
         
-        for t in processes:
-            t.join()
+        # for t in processes:
+        #     t.join()
 
     except KeyboardInterrupt:
         utils.echo_error_msg("Killed by user, Terminating processes...\n")
-        for t in processes:
-            if t.is_alive():
-                t.terminate() 
-                t.join()
+        # for t in processes:
+        #     if t.is_alive():
+        #         t.terminate() 
+        #         t.join()
         sys.exit(1)
         
     if not args.keep_cache:

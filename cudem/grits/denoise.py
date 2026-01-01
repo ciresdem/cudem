@@ -1,6 +1,6 @@
 ### denoise.py - GRId filTerS
 ##
-## Copyright (c) 2024 - 2025 Regents of the University of Colorado
+## Copyright (c) 2025 - 2026 Regents of the University of Colorado
 ##
 ## denoise.py is part of cudem
 ##
