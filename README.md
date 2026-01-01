@@ -104,13 +104,13 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 
 ---
 
-## Module Synopsis:
+## Module Summary:
 
 ### Fetches (Data Acquisition)
 
 The **[fetches](/docs/fetches.md)** module automates the discovery and retrieval of geospatial data. It interfaces with over forty public APIs and repositories to download topographic and bathymetric data.
 
-**Key Capabilities:**
+**Summary:**
 
 * **Sources**: Access data from federal agencies including NOAA (NOS, NCEI, OCM), USGS (3DEP, CoNED), USACE, and more.
 * **Spatial Querying**: Download data specific to a bounding box or vector polygon.
@@ -120,7 +120,7 @@ The **[fetches](/docs/fetches.md)** module automates the discovery and retrieval
 
 The **[dlim](/docs/dlim.md)** module serves as the primary data ingestion engine. It utilizes "datalists"—text-based configuration files—to manage, process, and standardize diverse datasets into a unified stream for gridding.
 
-**Key Capabilities:**
+**Summary:**
 
 * **Abstraction**: Handles mixed formats (Raster, XYZ, LAS/LAZ, COPC) seamlessly, abstracting file-specific parsing.
 * **Manipulation**: Supports on-the-fly vertical datum transformation, spatial clipping, and masking.
@@ -130,7 +130,7 @@ The **[dlim](/docs/dlim.md)** module serves as the primary data ingestion engine
 
 The **[pointz](/docs/pointz.md)** module provides specialized tools for filtering and manipulating raw point cloud data (XYZ, LAS/LAZ) prior to gridding.
 
-**Key Capabilities:**
+**Summary:**
 
 * **Outlier Removal**: Statistical filters (`outlierz`) to remove noise spikes and gross errors.
 * **Quality Control**: Reference-based checks (`rq`) to validate data against known baselines.
@@ -141,7 +141,7 @@ The **[pointz](/docs/pointz.md)** module provides specialized tools for filterin
 
 The **[grits](/docs/grits.md)** module provides a standardized framework for raster manipulation. It supports chunked processing for large files and can chain multiple filters together.
 
-**Available Filters:**
+**Summary:**
 
 * **Smoothing**: `blur` (Gaussian), `denoise` (Median/Bilateral), `gmtfilter` (GMT wrapper).
 * **Cleaning**: `outliers` (Statistical outlier removal), `zscore` (Local anomaly detection), `flats` (Remove artifacts).
@@ -154,7 +154,7 @@ The **[grits](/docs/grits.md)** module provides a standardized framework for ras
 
 The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation engine within the framework. It provides a unified factory interface to transform scattered elevation data into seamless raster surfaces using a wide range of gridding algorithms. It manages the entire production pipeline, from data ingestion and spatial partitioning (chunking) to interpolation and post-processing.
 
-**Key Capabilities:**
+**Summary:**
 
 * **Unified Interface**: Users can switch between different interpolation methods simply by changing the module flag (e.g., `-M gmt-surface` for spline, `-M IDW` for inverse distance weighting).
 * **Algorithms**:
@@ -169,13 +169,13 @@ The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation 
 
 # Usage Examples
 
-### General Wokflows
+### General
 
 * [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
 * [Generate a set of Tiled CRMs of Northern California](/docs/example_crm_norcal.md)
 * [Generate a set of Tiled CUDEMs of North-West Washington State](/docs/dem_examples/northern_wa/northern_wa.md)
 
-### Specific Tasks
+### Specific cli tools
 
 * **Fetching Data**: `fetches -R -90/-89/29/30 CUDEM`
 * **Processing Data**: `dlim input.datalist -R -90/-89/29/30 -E .3s`
