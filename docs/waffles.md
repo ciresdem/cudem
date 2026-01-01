@@ -16,17 +16,18 @@ Waffles utilizes a factory architecture to support numerous gridding algorithms,
 * **Advanced Methods**: `kriging` (Geostats), `natural_neighbor` (Sibson),`ml_interp` (Machine Learning), `inpaint` (Void Filling), `cudem` (Multi-resolution integration).
 * **Others**: `IDW` (Inverse Distance Weighting), `mbgrid` (MB-System wrapper), `gdal` (GDAL grid wrappers).
 
-### 2 Smart Data Handling (via dlim)
+### 2. Smart Data Handling (via dlim)
+
 * **Accepts diverse inputs**: ASCII XYZ, LAS/LAZ, GeoTIFF, BAG, OGR vectors, MB-System datalists, and fetch modules.
 * **Stacking**: Before interpolation, data is "stacked" into a weighted intermediate raster. This handles overlapping datasets by calculating weighted means or allowing high-quality data to supersede lower-quality data.
 
-### 3 Region & Resolution Management
+### 3. Region & Resolution Management
 
 * **Chunking**: Capable of processing massive datasets by splitting the region into smaller chunks (-K), processing them in parallel, and stitching the results back together.
 * **Buffering/Extension**: Automatically buffers regions during processing (-X) to prevent edge artifacts, then crops the result to the desired extent.
 * **Increments**: Supports independent input processing resolution (-E xinc) and output sampling resolution (xsample).
 
-### 3 Advanced Post-Processing
+### 4. Advanced Post-Processing
 
 Once a raw DEM is generated, Waffles (via the `WaffleDEM` class) performs extensive post-processing to ensure quality:
 
@@ -35,7 +36,7 @@ Once a raw DEM is generated, Waffles (via the `WaffleDEM` class) performs extens
 * **Limiting**: Constrains interpolation based on proximity to valid data or the size of data gaps, preventing artifacts in sparse areas.
 * **Uncertainty**: Can generate a corresponding uncertainty grid, estimating the error of the interpolation.
 
-### 4. Output Management
+### 5. Output Management
 
 * **Formats**: Supports exporting to GeoTIFF, NetCDF, and HDF5.
 * **Metadata**: Automatically injects spatial metadata (ISO 19115 tags) into the output files.
