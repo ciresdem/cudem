@@ -6,27 +6,24 @@ Designed to streamline the initial phase of DEM generation, Fetches allows users
 
 ## Core Capabilities
 
-### 1. Automated Data Retrieval
+### Automated Data Retrieval
 
 * **Region-Based fetching:** Users specify a geographic extent (bounding box or vector polygon), and the module identifies all available data tiles or granules from supported services that intersect that region.
 * **Smart Buffering:** It typically downloads data in an area slightly larger (~5%) than the requested extent to prevent edge effects during interpolation.
 * **Protocol Handling:** Manages various remote access protocols (HTTP, FTP, S3, APIs) to retrieve files seamlessly.
 
-### 2. On-the-Fly Processing & Parsing
+### On-the-Fly Processing & Parsing
 
-The module does not just download files; it acts as an interface to standardize diverse data formats for the CUDEM pipeline. Through the `Fetcher` classes defined in `fetchers.py`:
+The module does not just download files; it acts as an interface to standardize diverse data formats for the CUDEM pipeline. Through the `Fetcher` classes defined in `datalists.fetchers.py`:
 
-* **Format Conversion:** It can parse complex formats (e.g., BAG, HDF5, NetCDF) and yield them as standardized datasets (XYZ or Raster) for processing.
+* **Format Conversion:** It can parse complex formats (e.g., BAG, HDF5, NetCDF) and yield them through `dlim` as standardized datasets (XYZ or Raster) for processing.
 * **Metadata Extraction:** It extracts critical metadata such as horizontal/vertical datums, resolution, and collection dates from the source files.
-* **Specific Handling:**
 * **Masking:** Can automatically apply coastline or water masks to global grids (e.g., masking land in bathymetry grids).
-* **Filtering:** Can pre-filter point clouds (e.g., removing specific classifications from ICESat-2 data) before they enter the gridding pipeline.
+* **Filtering:** Can pre-filter point clouds (via `dlim`, `pointz` and `grits`)(e.g., removing specific classifications from ICESat-2 data) before they enter the gridding pipeline.
 
+### Modular & Extensible
 
-
-### 3. Modular & Extensible
-
-Fetches uses a factory pattern, allowing specific modules to be written for different data providers. If a dataset requires special API calls or post-download processing (like unzipping or converting datums), a dedicated `Fetcher` subclass handles it.
+Fetches uses a factory system, allowing specific modules to be written for different data providers. If a dataset requires special API calls or post-download processing (like unzipping or converting datums), a dedicated datalists `Fetcher` subclass handles it.
 
 ## Supported Data Sources
 
