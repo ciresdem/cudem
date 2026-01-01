@@ -89,7 +89,7 @@ pip install --upgrade --no-deps git+[https://github.com/ciresdem/cudem.git](http
 
 The CUDEM suite is composed of several key modules, each accessible via command-line tools or Python API:
 
-### CUDEM Modules
+## CUDEM Modules
 
 | Module | Description | CLI Command |
 | --- | --- | --- |
@@ -169,13 +169,13 @@ The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation 
 
 # Usage Examples
 
-### General
+## General
 
 * [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
 * [Generate a set of Tiled CRMs of Northern California](/docs/example_crm_norcal.md)
 * [Generate a set of Tiled CUDEMs of North-West Washington State](/docs/dem_examples/northern_wa/northern_wa.md)
 
-### Specific cli tools
+## Specific cli tools
 
 * **Fetching Data**: `fetches -R -90/-89/29/30 CUDEM`
 * **Processing Data**: `dlim input.datalist -R -90/-89/29/30 -E .3s`
