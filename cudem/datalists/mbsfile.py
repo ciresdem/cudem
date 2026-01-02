@@ -299,10 +299,10 @@ class MBSParser(ElevationDataset):
 
         ## Build Command
         mb_region = self.region.copy().buffer(pct=25) if self.region else None
-        region_arg = f" -I{mb_region.format('gmt')}" if mb_region else ""
+        region_arg = f" {mb_region.format('gmt')}" if mb_region else ""
         fmt_arg = f" -F{mb_format}" if mb_format else ""
         
-        cmd = f'mblist -M{self.mb_exclude} -OXYZDS{region_arg} {self.fn}{fmt_arg}'
+        cmd = f'mblist -M{self.mb_exclude} -OXYZDS{region_arg} -I{self.fn}{fmt_arg}'
         
         mb_points = []
         BATCH_SIZE = 50000
