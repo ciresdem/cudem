@@ -34,12 +34,6 @@ Perspecto includes robust tools for managing color tables, essential for creatin
 * **Fetching:** Can fetch named CPTs from **cpt-city**.
 * **Processing:** Supports re-scaling CPTs to specific Z-ranges and "splitting" CPTs (e.g., creating distinct color ramps above and below zero for land/sea distinctions).
 
-### Data Export & Formatting
-
-The module includes utility functions for preparing data for external rendering:
-
-* **16-bit PNG Export:** Can convert floating-point DEMs into 16-bit unsigned integer PNGs, scaling the elevation data to the full 0-65535 range for high-precision heightmaps.
-* **RGB Color Relief:** Can render the DEM into a standard RGB PNG using a specified CPT file.
 
 ## Usage
 
