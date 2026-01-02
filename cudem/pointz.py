@@ -770,7 +770,10 @@ class OutlierZ(PointZ):
         if percentile_is_threshold:
             outlier_threshold = percentile
         else:
-            outlier_threshold = np.nanpercentile(residuals, percentile)
+            if np.any(np.isfinite(residuals)):
+                outlier_threshold = np.nanpercentile(residuals, percentile)
+            else:
+                outlier_threshold = np.nan
 
         outliers = residuals > outlier_threshold
         if self.verbose:
@@ -883,7 +886,7 @@ class RQOutlierZ(OutlierZ):
                         raster = [gdalfun.sample_warp(
                             raster, None, self.xyinc[0], self.xyinc[1],
                             sample_alg='bilinear', src_region=self.region,
-                            verbose=True,
+                            verbose=False,
                             co=["COMPRESS=DEFLATE", "TILED=YES"]
                         )[0]]
                 return raster

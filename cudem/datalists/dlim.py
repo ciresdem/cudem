@@ -1439,6 +1439,7 @@ class ElevationDataset:
             if len(points) > 0:
                 if isinstance(self.pnt_fltrs, list):
                     for f in self.pnt_fltrs:
+                        ## set verbosity in the mod
                         point_filter = pointz.PointFilterFactory(
                             mod=f,
                             points=points,
@@ -1641,7 +1642,7 @@ class ElevationDataset:
                 )
 
         if self.verbose:
-            utils.echo_msg_bold(f'Parsed {count} data records from ...{self.fn[:-20]} @ a weight of {self.weight}')
+            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn[:-20]} @ a weight of {self.weight}')
 
             
     def yield_array(self, want_sums=True):
@@ -1668,7 +1669,7 @@ class ElevationDataset:
             )
 
         if self.verbose:
-            utils.echo_msg_bold(f'Parsed {count} data records from ...{self.fn[:-20]} @ a weight of {self.weight}')    
+            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn[:-20]} @ a weight of {self.weight}')    
 
             
     def stacks(self, out_name=None, use_blocks=False):
