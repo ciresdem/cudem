@@ -29,19 +29,18 @@
 ## of diverse elevation datasets. It utilizes text-based "datalists" to organize
 ## hierarchical data collections and stream them into unified processing pipelines.
 ##
-## Key Capabilities:
-##   1. Robust Format Handling:
+##   * Robust Format Handling:
 ##      - Auto-detects and parses Raster (GeoTIFF, BAG, NetCDF), Point Cloud
 ##        (XYZ, LAS/LAZ, IceSat2), and Vector (OGR, Shapefile) formats.
 ##      - Abstracts file access, allowing downstream tools to treat all inputs
 ##        as a uniform stream of XYZ points or Raster arrays.
 ##
-##   2. On-the-Fly Transformation:
+##   * On-the-Fly Transformation:
 ##      - Handles vertical and horizontal coordinate transformations using Proj
 ##        and VDatum grids during data streaming.
 ##      - Supports spatial windowing (regions) and resolution blocking.
 ##
-##   3. Data Management & Archival:
+##   * Data Management & Archival:
 ##      - Archives processed datasets into standardized directory structures or
 ##        tarballs for long-term storage.
 ##      - Generates spatial metadata (footprints) and JSON/INF catalogs.
@@ -83,6 +82,7 @@ from cudem import fetches
 from cudem import pointz
 from cudem.grits import grits
 from cudem.globato import globato
+from cudem.globato import globato_converter
 from cudem.datalists import inf
 from cudem.fetches import fetches
 from cudem import __version__ as __cudem_version__
@@ -412,6 +412,14 @@ class ElevationDataset:
         opts.setdefault('verbose', False)
         opts.setdefault('min_z', None)
         opts.setdefault('max_z', None)
+        # if 'invert' not in opts:
+        #     opts['invert'] = False
+        # if 'verbose' not in opts:
+        #     opts['verbose'] = False
+        # if 'min_z' not in opts:
+        #     opts['min_z'] = None
+        # if 'max_z' not in opts:
+        #     opts['max_z'] = None
 
         if opts['min_z'] is not None: opts['min_z'] = utils.float_or(opts['min_z'])
         if opts['max_z'] is not None: opts['max_z'] = utils.float_or(opts['max_z'])
@@ -428,7 +436,7 @@ class ElevationDataset:
                     x_inc=self.x_inc,
                     y_inc=self.y_inc,
                     dst_srs=self.dst_srs,
-                    invert=True,
+                    invert=False,
                     verbose=True,
                     temp_dir=self.cache_dir,
                 )
@@ -1447,10 +1455,13 @@ class ElevationDataset:
 
         
     def mask_and_yield_array(self):
-        """Mask the incoming array from `self.yield_array` and yield the results."""
+        """Mask the incoming array from `self.yield_array` and yield the results.
+        Points within the mask will be retained, unless data_mask['invert'] is True.
+        """
         
         mask_band = None
         mask_infos = None
+        mask_count = 0
         data_masks = []
         if self.mask is not None:
             for mask in self.mask:
@@ -1491,18 +1502,25 @@ class ElevationDataset:
                         mask_data[mask_data == mask_infos['ndv']] = np.nan
                         
                     out_mask = ((~np.isnan(mask_data)) & (z_mask))                    
-                    
-                    for arr in out_arrays.keys():
-                        if out_arrays[arr] is not None:
-                            val = 0 if arr == 'count' else np.nan
-                            if data_mask['invert']:
-                                out_arrays[arr][~out_mask] = val
-                            else:                                    
-                                out_arrays[arr][out_mask] = val
 
+                    try:
+                        for arr in out_arrays.keys():
+                            if arr not in ['pixel_x', 'pixel_y']:
+                                if out_arrays[arr] is not None:
+                                    val = 0 if arr == 'count' else np.nan
+                                    if data_mask['invert']:
+                                        out_arrays[arr][~out_mask] = val
+                                    else:                                    
+                                        out_arrays[arr][out_mask] = val
+                    except Exception as e:
+                        utils.echo_error_msg(f'could not mask array: {arr}, {e}')
+
+                    mask_count += np.count_nonzero(~out_mask) if data_mask['invert'] else np.count_nonzero(out_mask)                        
                     mask_data = None
                     src_mask = mask_band = None
-                
+
+            if mask_count > 0 and self.verbose:
+                utils.echo_msg_bold(f'Masked {mask_count} data records from {self.fn}')
             yield out_arrays, this_srcwin, this_gt
 
             
@@ -1622,7 +1640,7 @@ class ElevationDataset:
                 )
 
         if self.verbose:
-            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn} @ a weight of {self.weight}')
+            utils.echo_msg_bold(f'Parsed {count} data records from ...{self.fn[:-20]} @ a weight of {self.weight}')
 
             
     def yield_array(self, want_sums=True):
@@ -1649,19 +1667,30 @@ class ElevationDataset:
             )
 
         if self.verbose:
-            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn} @ a weight of {self.weight}')    
+            utils.echo_msg_bold(f'Parsed {count} data records from ...{self.fn[:-20]} @ a weight of {self.weight}')    
 
             
     def stacks(self, out_name=None):
-        gbt = globato.GdalRasterStacker(
+        # gbt = globato.GdalRasterStacker(
+        #     region=self.region,
+        #     x_inc=self.x_inc,
+        #     y_inc=self.y_inc,
+        #     dst_srs=self.dst_srs,
+        #     cache_dir=self.cache_dir
+        # )
+        # stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
+
+        gbt = globato.GlobatoStacker(
             region=self.region,
             x_inc=self.x_inc,
             y_inc=self.y_inc,
             dst_srs=self.dst_srs,
             cache_dir=self.cache_dir
         )
-        stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
 
+        blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)
+        stacked_fn = globato_converter(blocked_fn, tif_path=f'{out_name}.tif', verbose=True)
+        
         ## Perform any desired grits filters on the stack (making a copy, so we can retain the original).
         if self.stack_fltrs:
             for f in self.stack_fltrs:
@@ -1673,12 +1702,15 @@ class ElevationDataset:
                     weight_mask=3,
                     count_mask=2,
                     cache_dir=self.cache_dir,
-                    verbose=True
+                    verbose=False
                 )._acquire_module()
             
                 if grits_filter:
                     grits_filter = grits_filter()
-                    stacked_fn = grits_filter.dst_dem
+                    if os.path.exists(grits_filter.dst_dem):
+                        stacked_fn = grits_filter.dst_dem
+                    else:
+                        utils.echo_warning_msg('Grits output in invalid: {grits_filter.dst_dem}')
 
         return stacked_fn
 
@@ -2881,7 +2913,7 @@ def datalists_cli():
     filter_grp.add_argument(
         '--invert-region', '-v', 
         action='store_true', 
-        help="Invert the region mask."
+        help="Invert the given region."
     )
 
     ## --- Output Options (Mutually Exclusive) ---

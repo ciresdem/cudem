@@ -30,26 +30,25 @@
 ## complex logic of querying remote services, parsing metadata, and managing 
 ## concurrent downloads.
 ##
-## Key Capabilities:
-##   1. Extensive Data Support:
+##   * Extensive Data Support:
 ##      - Integrates with 40+ data sources including NOAA (NOS, NCEI, OCM), 
 ##        USGS (TNM, 3DEP), USACE (eHydro), NASA (EarthData), and OSM.
 ##      - Supports diverse formats: Bathymetry (BAG, XYZ), Topography (DEM, LiDAR),
 ##        Vectors (SHP, PBF), and Oceanographic data (Tides, Buoys).
 ##
-##   2. Intelligent Querying:
+##   * Intelligent Querying:
 ##      - Spatially filters datasets using bounding boxes or vector polygons.
 ##      - Parses ISO XML and HTML metadata to extract valid download links 
 ##        and spatial extents.
 ##      - Handles authentication (Netrc, EarthData tokens) transparently.
 ##
-##   3. Robust Downloading:
+##   * Robust Downloading:
 ##      - Multi-threaded download engine for high-throughput data retrieval.
 ##      - Built-in resiliency with automatic retries, timeout handling, and 
 ##        resume capability (via Range headers).
 ##      - "List mode" to generate URL lists without downloading.
 ##
-##   4. Modular Architecture:
+##   * Modular Architecture:
 ##      - Uses a Factory pattern to easily extend support for new datasets.
 ##      - Each module (e.g., 'srtm_plus', 'multibeam') encapsulates the specific
 ##        logic for querying its respective API.

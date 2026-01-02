@@ -64,15 +64,17 @@ class Flats(grits.Grits):
         count_removed = 0
         
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
-            if src_ds is None: return
+            if src_ds is None:
+                utils.echo_error_msg('Could not load {self.src_dem}')
+                return
             
             self.init_ds(src_ds)
             
             ## Default to processing the whole file at once if no chunk size given
             ## (Flats detection works best on larger areas to see full extent of flat)
             if self.n_chunk is None:
-                self.n_chunk = self.ds_config['ny'] # scanline processing often safest
-                #self.n_chunk = self.ds_config['nb'] # total pixels
+                #self.n_chunk = self.ds_config['ny'] # scanline processing often safest
+                self.n_chunk = self.ds_config['nb'] # total pixels
 
             ## Iterate chunks
             for srcwin in gdalfun.gdal_yield_srcwin(
@@ -115,12 +117,8 @@ class Flats(grits.Grits):
                         ## Write back to Destination
                         dst_band = dst_ds.GetRasterBand(self.band)
                         dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
-
+                        dst_ds.FlushCache()
         dst_ds = None
-        
-        # if self.verbose:
-        #     utils.echo_msg(f'Removed {count_removed} flat pixels.')
-            
         return self.dst_dem, 0
 
 ### End

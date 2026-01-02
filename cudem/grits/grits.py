@@ -29,21 +29,20 @@
 ## filtering raster DEMs. It is designed to clean artifacts, smooth noise, and
 ## perform morphological operations on massive datasets via chunked processing.
 ##
-## Key Capabilities:
-##   1. Smoothing & Denoising:
+##   * Smoothing & Denoising:
 ##      - Gaussian Blur, Median/Bilateral denoising, and GMT filter wrappers
 ##        to remove high-frequency noise.
 ##
-##   2. Cleaning & Restoration:
+##   * Cleaning & Restoration:
 ##      - Statistical outlier removal (IQR-based).
 ##      - Identification and removal of "flats" (artifacts).
 ##      - Gap filling (inpainting) using interpolation or spline methods.
 ##
-##   3. Advanced Morphology & Hydrology:
+##   * Advanced Morphology & Hydrology:
 ##      - Erosion, Dilation, Opening, and Closing for structural manipulation.
 ##      - Hydro-enforcement (breaching/filling) and river discovery.
 ##
-##   4. Integration:
+##   * Integration:
 ##      - Seamless blending of overlapping datasets.
 ##      - Quality-based masking and cutting/clipping to vector polygons.
 ##
@@ -267,6 +266,17 @@ class Grits:
 
         ## Calculate final statistics
         self.calculate_difference()
+
+        if self.verbose:
+            utils.echo_msg(f'Filtered {self.src_dem} to {self.dst_dem}')
+            
+        self.run()
+        self.split_by_z()
+        self.split_by_weight()
+        self.split_by_uncertainty()
+
+        ## Calculate final statistics
+
         return self        
 
     
@@ -345,7 +355,7 @@ class Grits:
             
             if self.verbose:
                 utils.echo_msg("Filter Statistics:")
-                utils.echo_msg(f"  Total Valid Source: {total_src_valid}")
+                utils.echo_msg(f"  Total Valid Cells: {total_src_valid}")
                 utils.echo_msg(f"  Removed Cells: {removed_count} ({(removed_count/total_src_valid)*100:.2f}%)" if total_src_valid else "  Removed Cells: 0")
                 utils.echo_msg(f"  Changed Cells: {changed_count} ({(changed_count/total_src_valid)*100:.2f}%)" if total_src_valid else "  Changed Cells: 0")
                 if changed_count > 0:

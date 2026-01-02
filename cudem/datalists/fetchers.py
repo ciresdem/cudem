@@ -129,21 +129,22 @@ class Fetcher(ElevationDataset):
             
             ## Fetch OSM Coastline
             this_osm = osm.osmCoastline(
-                region=self.region, chunks=True, verbose=False, attempts=5, cache_dir=self.cache_dir
+                region=self.region, chunks=True, verbose=True, attempts=5,
+                cache_dir=self.cache_dir, landmask_is_watermask=True
             )
-            coast_mask = this_osm(return_geom=False, overwrite=False)
+            coast_mask = this_osm(return_geom=False, overwrite=True)
 
-            ## Fetch OSM Water
-            this_osm_water = osm.osmCoastline(
-                region=self.region, chunks=True, verbose=False, attempts=5, cache_dir=self.cache_dir, q='water'
-            )
-            water_mask = this_osm_water(return_geom=False, overwrite=False)
+            # ## Fetch OSM Water
+            # this_osm_water = osm.osmCoastline(
+            #     region=self.region, chunks=True, verbose=False, attempts=5, cache_dir=self.cache_dir, q='water'
+            # )
+            # water_mask = this_osm_water(return_geom=False, overwrite=False)
             
             masks = []
             if coast_mask:
                 masks.append(f'mask_fn={coast_mask}:invert={self.invert_coast}')
-            if water_mask:
-                masks.append(f'mask_fn={water_mask}:invert={self.invert_coast}')
+            # if water_mask:
+            #     masks.append(f'mask_fn={water_mask}:invert={self.invert_coast}')
                 
             if masks:
                 self.fetches_params['mask'] = masks
@@ -187,6 +188,7 @@ class Fetcher(ElevationDataset):
                 
                 if status == 0:
                     ## Update Mod Param to local path
+                    self._reset_params()
                     self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result['dst_fn'])
 
                     ## Yield Child Datasets

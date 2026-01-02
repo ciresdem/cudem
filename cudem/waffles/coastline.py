@@ -24,6 +24,7 @@
 ### Commentary:
 ##
 ## Generate a coastline (land/etc-mask) using a variety of sources.
+## Default output has mask over water.
 ##
 ### Code:
 

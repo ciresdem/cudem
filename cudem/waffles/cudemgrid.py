@@ -389,6 +389,7 @@ class WafflesCUDEM(Waffle):
                 else 'stacks'\
                      if pre != 0 \
                         else 'IDW'
+
                 utils.echo_msg(
                     'cudem gridding surface {} @ {} {}/{} to {} using {}...'.format(
                         pre, pre_region, pre_xinc, pre_yinc, _pre_name, waffles_mod

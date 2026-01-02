@@ -16,7 +16,7 @@ Designed to work seamlessly with the `waffles` module, Perspecto can accept eith
 
 
 * **3D Rendering:**
-  * `perspective`: Creates 3D perspective views of the terrain, utilizing ray-tracing capabilities (likely POV-Ray based on module headers).
+  * `perspective`: Creates 3D perspective views of the terrain, utilizing POV-Ray ray-tracing capabilities.
    * `sphere`: Generates spherical visualizations, useful for global or planetary datasets.
 
 

@@ -1363,13 +1363,16 @@ def waffles_cli():
                 **wg['kwargs']
             )
             this_waffle_module = this_waffle._acquire_module()
-            try:
-                this_waffle_module()
-            except Exception as e:
-                utils.echo_error_msg(
-                    f'Failed to generate {this_waffle_module}, {e}'
-                )
-                print(traceback.format_exc())
+            if not wg['chunk']:
+                waffle_q.put([this_waffle_module])
+            else:
+                try:
+                    this_waffle_module()
+                except Exception as e:
+                    utils.echo_error_msg(
+                        f'Failed to generate {this_waffle_module}, {e}'
+                    )
+                    print(traceback.format_exc())
                 
             sys.exit(0)   
         else:
@@ -1456,16 +1459,18 @@ def waffles_cli():
     these_regions = regions.parse_cli_region(i_regions, wg['verbose'])
 
     ## Setup Multiprocessing regions
-    #waffle_q = mp.Queue()
-    #processes = []
+    if not args.chunk:
+        waffle_q = mp.Queue()
+        processes = []
 
     try:
         ## For mp regions
-        # for _ in range(args.threads):
-        #     t = mp.Process(target=waffle_queue, args=([waffle_q]))
-        #     t.daemon = True
-        #     processes.append(t)
-        #     t.start()
+        if not args.chunk:
+            for _ in range(args.threads):
+                t = mp.Process(target=waffle_queue, args=([waffle_q]))
+                t.daemon = True
+                processes.append(t)
+                t.start()
 
         ## Iterate Regions
         for this_region in these_regions:
@@ -1533,29 +1538,33 @@ def waffles_cli():
             module_instance = this_waffle._acquire_module()
             if module_instance:
                 ## for mp regions
-                #waffle_q.put([module_instance])
-                try:
-                    module_instance()
-                except Exception as e:
-                    utils.echo_error_msg(
-                        f'Failed to generate {module_instance}, {e}'
-                    )
-                    print(traceback.format_exc())
+                if not args.chunk:
+                    waffle_q.put([module_instance])
+                else:
+                    try:
+                        module_instance()
+                    except Exception as e:
+                        utils.echo_error_msg(
+                            f'Failed to generate {module_instance}, {e}'
+                        )
+                        print(traceback.format_exc())
 
         ## Cleanup for mp regions
-        # for _ in range(args.threads):
-        #     waffle_q.put(None)
-        
-        # for t in processes:
-        #     t.join()
+        if not args.chunk:
+            for _ in range(args.threads):
+                waffle_q.put(None)
+            
+            for t in processes:
+                t.join()
 
     except KeyboardInterrupt:
         utils.echo_error_msg("Killed by user, Terminating processes...\n")
         ## for mp regions
-        # for t in processes:
-        #     if t.is_alive():
-        #         t.terminate() 
-        #         t.join()
+        if not args.chunk:
+            for t in processes:
+                if t.is_alive():
+                    t.terminate() 
+                    t.join()
         sys.exit(1)
         
     if not args.keep_cache:

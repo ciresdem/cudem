@@ -13,7 +13,7 @@ The module operates on a "stacking" principle, where multiple input datasets are
 * **`stacks`**: Simple weighted averaging of data (no interpolation). Useful for compositing existing grids.
 * **GMT Wrappers**: `surface` (continuous curvature splines), `triangulate` (Delaunay), `nearneighbor` (nearest neighbor averaging).
 * **Scipy Wrappers**: `linear` (TIN), `cubic` (Spline), `nearest` (Nearest Neighbor).
-* **Advanced Methods**: `kriging` (Geostats), `natural_neighbor` (Sibson),`ml_interp` (Machine Learning), `inpaint` (Void Filling), `cudem` (Multi-resolution integration).
+* **Advanced Methods** (testing): `kriging` (Geostats), `natural_neighbor` (Sibson), `ml_interp` (Machine Learning), `inpaint` (Void Filling), `cudem` (Multi-resolution integration).
 * **Others**: `IDW` (Inverse Distance Weighting), `mbgrid` (MB-System wrapper), `gdal` (GDAL grid wrappers).
 
 ### Smart Data Handling (via `dlim`)

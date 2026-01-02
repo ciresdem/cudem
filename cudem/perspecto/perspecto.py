@@ -29,18 +29,16 @@
 ## from DEMs. It wraps standard tools like GDAL, POV-Ray, and GMT to create
 ## aesthetic maps, hillshades, and data analysis plots.
 ##
-## Key Capabilities:
-##   1. Hillshading & Relief:
+##   * Hillshading & Relief:
 ##      - Generates standard, multidirectional, and color-relief hillshades.
 ##      - Manages Color Palette Tables (CPTs) automatically based on data range.
 ##
-##   2. 3D Rendering:
+##   * 3D Rendering (Using POVRay):
 ##      - 'Perspective' module uses POV-Ray to create ray-traced 3D views.
 ##      - 'Sphere' module generates orthographic global views.
 ##
-##   3. Data Analysis & Art:
+##   * Data Analysis:
 ##      - 'Histogram' generates hypsometric curves and CDF plots.
-##      - 'Joyplot' creates aesthetic ridgeline plots of elevation profiles.
 ##
 ## Usage:
 ##   CLI: perspecto input.tif -M hillshade -C globe.cpt -O output.tif
@@ -216,15 +214,15 @@ class PerspectoFactory(factory.CUDEMFactory):
     from . import sphere
     from . import figure1
     from . import colorbar
-    from . import joyplot
     from . import histogram
+    #from . import joyplot
 
     _modules = {
         'hillshade': {'call': hillshade.Hillshade},
         'hillshade2': {'call': hillshade.Hillshade_cmd},
         'perspective': {'call': perspective.Perspective},
         'sphere': {'call': sphere.Sphere},
-        'joyplot': {'call': joyplot.Joyplot},
+        #'joyplot': {'call': joyplot.Joyplot},
         'histogram': {'call': histogram.Histogram},
     }
 

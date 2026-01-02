@@ -286,12 +286,15 @@ class GDALFile(ElevationDataset):
         # Handle Flats Removal (Grits)
         if self.remove_flat:
             grits_filter = grits.GritsFactory(
-                mod='flats', src_dem=self.fn, cache_dir=self.cache_dir, verbose=self.verbose
+                mod='flats', src_dem=self.fn, cache_dir=self.cache_dir, verbose=False
             )._acquire_module()
             if grits_filter is not None:
-                grits_filter()                
-                self.fn = grits_filter.dst_dem
-                self.flat_removed = True
+                grits_filter()
+                if os.path.exists(grits_filter.dst_dem):
+                    self.fn = grits_filter.dst_dem
+                    self.flat_removed = True
+                else:
+                    utils.echo_warning_msg('Grits output in invalid: {grits_filter.dst_dem}')
             
         ## --- Resample / Warp ---
         if self.resample_and_warp:
@@ -354,8 +357,8 @@ class GDALFile(ElevationDataset):
                     srcwin=srcwin,
                     inverse=False
                 )
-                tmp_ds = self.tmp_elev_band
-                if tmp_ds is None:
+                tmp_ds_to_warp = self.tmp_elev_band
+                if tmp_ds_to_warp is None:
                     return(None)
                 
                 ## band is now 1!
@@ -465,21 +468,23 @@ class GDALFile(ElevationDataset):
             elif os.path.exists(self.weight_mask):
                 # some numbers now return true here (file-descriptors),
                 # check for int first!
-                src_weight = gdalfun.sample_warp(
-                    self.weight_mask, None, src_dem_x_inc, src_dem_y_inc,
-                    src_srs=self.transform['src_horz_crs'].to_proj4() \
-                    if self.transform['src_horz_crs'] is not None \
-                    else None,
-                    dst_srs=self.transform['dst_horz_crs'].to_proj4() \
-                    if self.transform['dst_horz_crs'] is not None \
-                    else None,
-                    src_region=src_dem_region,
-                    sample_alg=self.sample_alg,
-                    ndv=ndv,
-                    verbose=self.verbose,
-                    co=["COMPRESS=DEFLATE", "TILED=YES"]
-                )[0]
-                weight_band = src_weight.GetRasterBand(1)
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    src_weight = gdalfun.sample_warp(
+                        self.weight_mask, None, src_dem_x_inc, src_dem_y_inc,
+                        src_srs=self.transform['src_horz_crs'].to_proj4() \
+                        if self.transform['src_horz_crs'] is not None \
+                        else None,
+                        dst_srs=self.transform['dst_horz_crs'].to_proj4() \
+                        if self.transform['dst_horz_crs'] is not None \
+                        else None,
+                        src_region=src_dem_region,
+                        sample_alg=self.sample_alg,
+                        ndv=ndv,
+                        verbose=self.verbose,
+                        co=["COMPRESS=DEFLATE", "TILED=YES"]
+                    )[0]
+                    weight_band = src_weight.GetRasterBand(1)
 
             else:
                 utils.echo_warning_msg(
@@ -498,21 +503,23 @@ class GDALFile(ElevationDataset):
                     int(self.uncertainty_mask)
                 )
             elif os.path.exists(self.uncertainty_mask):
-                src_uncertainty = gdalfun.sample_warp(
-                    self.uncertainty_mask, None, src_dem_x_inc, src_dem_y_inc,
-                    src_srs=self.transform['src_horz_crs'].to_proj4() \
-                    if self.transform['src_horz_crs'] is not None \
-                    else None,
-                    dst_srs=self.transform['dst_horz_crs'].to_proj4() \
-                    if self.transform['dst_horz_crs'] is not None \
-                    else None,
-                    src_region=src_dem_region,
-                    sample_alg='bilinear',
-                    ndv=ndv,
-                    verbose=self.verbose,
-                    co=["COMPRESS=DEFLATE", "TILED=YES"]
-                )[0]
-                uncertainty_band = src_uncertainty.GetRasterBand(1)
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    src_uncertainty = gdalfun.sample_warp(
+                        self.uncertainty_mask, None, src_dem_x_inc, src_dem_y_inc,
+                        src_srs=self.transform['src_horz_crs'].to_proj4() \
+                        if self.transform['src_horz_crs'] is not None \
+                        else None,
+                        dst_srs=self.transform['dst_horz_crs'].to_proj4() \
+                        if self.transform['dst_horz_crs'] is not None \
+                        else None,
+                        src_region=src_dem_region,
+                        sample_alg='bilinear',
+                        ndv=ndv,
+                        verbose=self.verbose,
+                        co=["COMPRESS=DEFLATE", "TILED=YES"]
+                    )[0]
+                    uncertainty_band = src_uncertainty.GetRasterBand(1)
             else:
                 utils.echo_warning_msg(
                     f'could not load uncertainty mask {self.uncertainty_mask}'
@@ -523,19 +530,21 @@ class GDALFile(ElevationDataset):
         ## uncertainty from the vertical transformation
         ## ==============================================
         if self.transform['trans_fn_unc'] is not None:
-            trans_uncertainty = gdalfun.sample_warp(
-                self.transform['trans_fn_unc'], None, src_dem_x_inc, src_dem_y_inc,
-                src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84',
-                dst_srs=self.transform['dst_horz_crs'].to_proj4() \
-                if self.transform['dst_horz_crs'] is not None \
-                else None,
-                src_region=src_dem_region,
-                sample_alg='bilinear',
-                ndv=ndv,
-                verbose=self.verbose,
-                co=["COMPRESS=DEFLATE", "TILED=YES"]
-            )[0]
-
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                trans_uncertainty = gdalfun.sample_warp(
+                    self.transform['trans_fn_unc'], None, src_dem_x_inc, src_dem_y_inc,
+                    src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84',
+                    dst_srs=self.transform['dst_horz_crs'].to_proj4() \
+                    if self.transform['dst_horz_crs'] is not None \
+                    else None,
+                    src_region=src_dem_region,
+                    sample_alg='bilinear',
+                    ndv=ndv,
+                    verbose=self.verbose,
+                    co=["COMPRESS=DEFLATE", "TILED=YES"]
+                )[0]
+                
             if uncertainty_band is not None:
                 trans_uncertainty_band = trans_uncertainty.GetRasterBand(1)
                 trans_uncertainty_arr = trans_uncertainty_band.ReadAsArray()
@@ -745,8 +754,8 @@ class GDALFile(ElevationDataset):
                     yield points
 
         self.src_ds = None
-        if self.remove_flat and self.flat_removed:
-            utils.remove_glob(self.fn)
+        # if self.remove_flat and self.flat_removed:
+        #     utils.remove_glob(self.fn)
 
             
 ## ==============================================

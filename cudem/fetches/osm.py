@@ -156,7 +156,7 @@ class OpenStreetMap(fetches.FetchModule):
         if self.region is None:
             return []
 
-        ## Case 1: Fetch Whole Planet
+        ## Fetch Whole Planet
         if self.planet:
             self.add_entry_to_results(
                 OSM_PLANET_PBF,
@@ -165,7 +165,7 @@ class OpenStreetMap(fetches.FetchModule):
             )
             return self
 
-        ## Case 2: Fetch by Region (Chunked or Whole)
+        ## Fetch by Region (Chunked or Whole)
         if self.chunks:
             ## Divide region into manageable chunks for Overpass API
             x_delta = self.region.xmax - self.region.xmin
@@ -182,7 +182,7 @@ class OpenStreetMap(fetches.FetchModule):
 
             ## Create Chunks
             these_regions = self.region.chunk(0.1) # Hardcoded reasonable chunk size for Overpass
-            utils.echo_msg(f'Chunking OSM request into {len(these_regions)} regions')
+            utils.echo_msg(f'Chunking OSM request into {len(these_regions)} regions from {self.region.format("str")}')
         else:
             these_regions = [self.region]
 
@@ -325,7 +325,7 @@ class OSMCoastlinePolygonizer:
         line_geometries = gdalfun.ogr_union_geom(
             line_layer,
             ogr.wkbMultiLineString,
-            verbose=True
+            verbose=self.verbose
         )
         
         if line_geometries.IsEmpty():
@@ -549,14 +549,14 @@ class osmCoastline:
                         local_file = entry[1]
                         
                         ## Generate temporary output name if needed
-                        temp_out = out_fn if out_fn else utils.make_temp_fn(
+                        out_fn = out_fn if out_fn else utils.make_temp_fn(
                             f'{utils.fn_basename2(local_file)}_coast.gpkg',
                             temp_dir=self.cache_dir
                         )
 
                         polygonize_osm_coastline(
                             local_file,
-                            temp_out,
+                            out_fn,
                             region=self.region,
                             include_landmask=self.include_landmask,
                             landmask_is_watermask=self.landmask_is_watermask,
@@ -618,7 +618,8 @@ class osmCoastline:
             out_bn = utils.append_fn(f'osm_{self.q}', self.region, 1, high_res=True)
             out_fn = os.path.join(self.cache_dir, f'{out_bn}.gpkg')
 
-        utils.echo_msg_bold(f"Output: {out_fn}")
+        if self.verbose:
+            utils.echo_msg_bold(f"Output: {out_fn}")
         
         ## Check Overwrite
         if not overwrite and os.path.exists(out_fn):

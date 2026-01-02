@@ -29,18 +29,17 @@
 ## raw point cloud data (XYZ, LAS/LAZ) prior to gridding. It ensures data quality
 ## by removing noise and reducing redundancy.
 ##
-## Key Capabilities:
-##   1. Outlier Removal:
+##   * Outlier Removal:
 ##      - Statistical filters (Local Z-Score/IQR) to remove spikes.
 ##      - 'Coplanar' filters to detect points deviating from local planes.
 ##      - 'RQ' (Reference Quotient) filters to validate data against a known basemap.
 ##
-##   2. Data Thinning:
+##   * Data Thinning:
 ##      - Grid-based thinning (block_thin) to normalize point density.
 ##      - Shoal-biased thinning (block_minmax) for hydrographic safety.
 ##      - Random, Median, or Center-based decimation.
 ##
-##   3. Masking & Selection:
+##   * Masking & Selection:
 ##      - Filter points using vector polygons or raster masks.
 ##      - 'RangeZ' and 'DiffZ' filters to select points based on absolute elevation
 ##        or difference from a reference surface.
@@ -55,6 +54,7 @@
 import os
 import sys
 import argparse
+import warnings
 import numpy as np
 from osgeo import ogr, gdal
 
@@ -109,7 +109,7 @@ class PointPixels:
                 x_count=self.x_size, y_count=self.y_size
             )
 
-    def __call__(self, points, weight=1, uncertainty=0, mode='mean'):
+    def __call__(self, points, weight=1.0, uncertainty=0.0, mode='mean'):
         """Process points into a gridded array.
         
         Args:
@@ -119,10 +119,11 @@ class PointPixels:
             mode (str): Aggregation mode.
                         Options: 'mean', 'min', 'max', 'median', 'std', 'var', 'sums'.
         """
-        
+
+        ## mrl: removed 'mask': None
         out_arrays = {
             'z': None, 'count': None, 'weight': None, 'uncertainty': None,
-            'mask': None, 'x': None, 'y': None, 'pixel_x': None, 'pixel_y': None
+            'x': None, 'y': None, 'pixel_x': None, 'pixel_y': None
         }
 
         if points is None or len(points) == 0:
@@ -136,7 +137,7 @@ class PointPixels:
 
         ## Sanitize inputs
         weight = utils.float_or(weight, 1)
-        uncertainty = utils.float_or(uncertainty, 0)
+        uncertainty = utils.float_or(uncertainty, 0.0)
         mode = mode.lower()
 
         ## Extract data columns
@@ -282,7 +283,7 @@ class PointPixels:
         
         ## Uncertainty
         out_arrays['uncertainty'] = fill_grid(
-            np.sqrt(uu**2 + (uncertainty)**2), fill_val=0
+            np.sqrt(uu**2 + (uncertainty)**2), fill_val=0.0
         )
 
         ## Weights
@@ -340,7 +341,7 @@ class PointPixels_:
             )
 
             
-    def __call__(self, points, weight=1, uncertainty=0, mode='mean'):
+    def __call__(self, points, weight=1, uncertainty=0.0, mode='mean'):
         """Process points into a gridded array.
         
         Args:
@@ -349,10 +350,11 @@ class PointPixels_:
             uncertainty (float): Global uncertainty value.
             mode (str): Aggregation mode ('mean', 'min', 'max', 'sums').
         """
-        
+
+        ## mrl: removed 'mask': None
         out_arrays = {
             'z': None, 'count': None, 'weight': None, 'uncertainty': None,
-            'mask': None, 'x': None, 'y': None, 'pixel_x': None, 'pixel_y': None
+            'x': None, 'y': None, 'pixel_x': None, 'pixel_y': None
         }
 
         if points is None or len(points) == 0:
@@ -365,8 +367,8 @@ class PointPixels_:
             self.init_gt()
 
         ## Sanitize inputs
-        weight = utils.float_or(weight, 1)
-        uncertainty = utils.float_or(uncertainty, 0)
+        weight = utils.float_or(weight, 1.)
+        uncertainty = utils.float_or(uncertainty, 0.)
 
         ## Extract data columns
         points_x = np.array(points['x'])
@@ -493,7 +495,7 @@ class PointPixels_:
         
         # Uncertainty
         out_arrays['uncertainty'] = fill_grid(
-            np.sqrt(uu**2 + (uncertainty)**2), fill_val=0
+            np.sqrt(uu**2 + (uncertainty)**2), fill_val=0.0
         )
 
         # Weights
@@ -926,12 +928,14 @@ class RQOutlierZ(OutlierZ):
             raster = [gdalfun.gmt_grd2gdal(x, verbose=False) \
                       if x.split('.')[-1] == 'grd' else x for x in raster]
             if self.xyinc is not None and self.resample_raster:
-                raster = [gdalfun.sample_warp(
-                    raster, _raster, self.xyinc[0], self.xyinc[1],
-                    sample_alg='bilinear', src_region=self.region,
-                    verbose=self.verbose,
-                    co=["COMPRESS=DEFLATE", "TILED=YES"]
-                )[0]]
+                with warnings.catch_warnings():
+                    warnings.simplefilter('ignore')
+                    raster = [gdalfun.sample_warp(
+                        raster, _raster, self.xyinc[0], self.xyinc[1],
+                        sample_alg='bilinear', src_region=self.region,
+                        verbose=self.verbose,
+                        co=["COMPRESS=DEFLATE", "TILED=YES"]
+                    )[0]]
         else:
             utils.echo_warning_msg(f'could not parse rq raster {raster}')
         return raster
