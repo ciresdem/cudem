@@ -28,7 +28,7 @@ Designed to work seamlessly with the `waffles` module, Perspecto can accept eith
 
 ### Advanced Color Palette (CPT) Management
 
-Perspecto includes robust tools for managing color tables, essential for creating hypsometric tints (color relief maps):
+Perspecto includes robust tools for managing color tables, essential for creating color relief maps:
 
 * **Auto-Generation:** Can automatically generate an "ETOPO" style color palette based on the min/max elevation of the input DEM.
 * **Fetching:** Can fetch named CPTs from **cpt-city**.
