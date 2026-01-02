@@ -1223,7 +1223,7 @@ class GdalRasterStacker:
             driver.Delete(out_file)
             utils.remove_glob('{}*'.format(out_file))
 
-        if not os.path.exists(os.path.dirname(os.path.abspat(out_file))):
+        if not os.path.exists(os.path.dirname(os.path.abspath(out_file))):
             os.makedirs(os.path.dirname(os.path.abspath(out_file)))
                 
         gdt = gdal.GDT_Float32
