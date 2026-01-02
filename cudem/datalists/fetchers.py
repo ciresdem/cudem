@@ -129,7 +129,7 @@ class Fetcher(ElevationDataset):
             
             ## Fetch OSM Coastline
             this_osm = osm.osmCoastline(
-                region=self.region, chunks=True, verbose=True, attempts=5,
+                region=self.region, chunks=True, verbose=False, attempts=5,
                 cache_dir=self.cache_dir, landmask_is_watermask=True
             )
             coast_mask = this_osm(return_geom=False, overwrite=True)
