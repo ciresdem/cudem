@@ -1,6 +1,6 @@
 ### htdp.py - CUDEM wrapper for NGS HTDP
 ##
-## Copyright (c) 2022 - 2025 Regents of the University of Colorado
+## Copyright (c) 2022 - 2026 Regents of the University of Colorado
 ##
 ## htdp.py is part of CUDEM
 ##

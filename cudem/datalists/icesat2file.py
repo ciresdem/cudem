@@ -1,6 +1,6 @@
 ### icesat2file.py - DataLists IMproved
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2023 - 2026 Regents of the University of Colorado
 ##
 ## icesat2file.py is part of CUDEM
 ##
@@ -51,6 +51,10 @@ from cudem.fetches import osm
 from cudem.fetches import bingbfp
 from cudem.datalists.dlim import ElevationDataset
 
+
+## ==============================================
+## ATL-24 Dataset (Bathymetry)
+## ==============================================
 class IceSat2_ATL24(ElevationDataset):
     """ICESat-2 ATL24 (Bathymetry) Data Parser.
     """
@@ -186,7 +190,10 @@ class IceSat2_ATL24(ElevationDataset):
                             utils.echo_warning_msg(f"Missing dataset in {beam}: {e}")
                         continue
 
-                    
+
+## ==============================================
+## ATL03 Dataset (full) - classified
+## ==============================================
 class IceSat2_ATL03(ElevationDataset):
     """ICESat-2 ATL03 (Global Geolocated Photon Data) Parser.
     
@@ -502,6 +509,7 @@ class IceSat2_ATL03(ElevationDataset):
 
         return ph_h_classed, ph_h_bathy_conf, lat, lon, h, h_mean, h_geoid
 
+    
     def read_atl03(self, f, laser_num, orientation=None, atl08_fn=None, atl24_fn=None, atl06_fn=None, atl12_fn=None, atl13_fn=None):
         """Read and classify data from an ATL03 file/laser."""
         

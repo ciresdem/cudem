@@ -1,6 +1,6 @@
 ### natural_neighbor.py
 ##
-## Copyright (c) 2010 - 2026 Regents of the University of Colorado
+## Copyright (c) 2025 - 2026 Regents of the University of Colorado
 ##
 ## natural_neighbor.py is part of CUDEM
 ##

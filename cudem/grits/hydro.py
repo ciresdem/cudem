@@ -1,6 +1,6 @@
 ### hydro.py - GRId filTerS
 ##
-## Copyright (c) 2024 - 2025 Regents of the University of Colorado
+## Copyright (c) 2024 - 2026 Regents of the University of Colorado
 ##
 ## hydro.py is part of cudem
 ##
@@ -113,8 +113,6 @@ class Hydro(grits.Grits):
             ndv = self.ds_config['ndv']
             
             if self.method == 'fill_sinks':
-                ## Note: grey_closing is a morphological approximation.
-                ## True sink filling requires priority-flood algorithm.
                 result = self._fill_sinks(data, ndv)
                 
                 dst_band = dst_ds.GetRasterBand(self.band)

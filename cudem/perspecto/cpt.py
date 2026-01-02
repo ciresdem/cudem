@@ -1,6 +1,6 @@
 ### cpt.py
 ##
-## Copyright (c) 2023 - 2025 Regents of the University of Colorado
+## Copyright (c) 2026 - 2025 Regents of the University of Colorado
 ##
 ## cpt.py is part of CUDEM
 ##

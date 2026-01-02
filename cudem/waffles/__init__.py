@@ -17,7 +17,10 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
-###############################################################################
+### Commentary:
+##
+## Load the waffles modules
+##
 ### Code:
 
 __version__ = "1.2.0"

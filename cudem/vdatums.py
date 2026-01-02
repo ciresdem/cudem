@@ -1,6 +1,6 @@
 ### vdatums.py
 ##
-## Copyright (c) 2021 - 2025 Regents of the University of Colorado
+## Copyright (c) 2021 - 2026 Regents of the University of Colorado
 ##
 ## vdatums.py is part of CUDEM
 ##
@@ -18,6 +18,9 @@
 ## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+##
+### Commentary
+##
 ##
 ### Code:
 
@@ -38,9 +41,9 @@ from cudem import __version__ as __cudem_version__
 _vdatums_cache = utils.cudem_cache()
 __version__ = '0.2.5'
 
-###############################################################################
+## ==============================================
 ## Vertical Datum References
-###############################################################################
+## ==============================================
 _tidal_frames = {
     1089: {'name': 'mllw', 'description': 'Mean Lower Low Water', 'uncertainty': 0, 'epsg': 5866},
     5866: {'name': 'mllw', 'description': 'Mean Lower Low Water', 'uncertainty': 0, 'epsg': 5866},
@@ -150,9 +153,9 @@ def get_vdatum_by_name(datum_name):
 
     return None
 
-###############################################################################
+## ==============================================
 ## Vertical Transformation Grid Class
-###############################################################################
+## ==============================================
 class VerticalTransform:
     """Generate a vertical transformation grid based on input/output vertical EPSG."""
     
@@ -475,9 +478,9 @@ class VerticalTransform:
             return trans_array, unc_array, trans_infos
 
         
-###############################################################################
+## ==============================================
 ## NOAA's VDATUM Wrapper
-###############################################################################
+## ==============================================
 class Vdatum:
     def __init__(self, jar=None, ivert='navd88:m:height', overt='mhw:m:height',
                  ihorz='NAD83_2011', ohorz='NAD83_2011', region='4', fmt='txt',
@@ -587,7 +590,10 @@ class Vdatum:
 
 ## ==============================================
 ## Command-line Interface (CLI)
-## ==============================================        
+## $ vdatums
+##
+## vdatums cli
+## ==============================================
 def vdatums_cli():
     parser = argparse.ArgumentParser(
         description=f'%(prog)s ({__version__}): Transform a grid between vertical datums',

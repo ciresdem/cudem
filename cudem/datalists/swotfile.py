@@ -1,6 +1,6 @@
 ### swotfile.py 
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
 ##
 ## swotfile.py is part of CUDEM
 ##
@@ -261,14 +261,6 @@ class SWOT_HR_Raster(ElevationDataset):
                     check_path=False
                 )
             )._acquire_module()
-            
-            # sub_ds = DatasetFactory(
-            #     mod=target_sub[0],
-            #     data_format=200, # Treat as GDAL Raster
-            #     node='grid',
-            #     check_path=False,
-            #     src_srs=src_srs
-            # )._acquire_module()
             
             self.data_entries.append(sub_ds)
             sub_ds.initialize()

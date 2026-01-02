@@ -8,21 +8,21 @@ The module provides tools for statistical outlier removal, reference-based quali
 
 ### Statistical Outlier Detection (`outlierz`)
 
-* **Block-Based Statistics:** The `PointZOutlier` class divides the point cloud into local blocks (spatial bins) and calculates statistics (mean, standard deviation) for each block.
+* **Block-Based Statistics:** The `outlierz` module divides the point cloud into local blocks (spatial bins) and calculates statistics (mean, standard deviation) for each block.
 * **Residual Analysis:** It computes the residual of each point relative to the local block mean.
 * **Thresholding:** Points with residuals exceeding a user-defined percentile (e.g., 95th or 99th percentile) are flagged as outliers. This is effective for removing noise spikes or gross errors that deviate significantly from the local trend.
 * **Multi-Pass Filtering:** Supports iterative filtering at multiple resolutions (`multipass`), gradually refining the outlier detection from coarse to fine scales to catch different types of errors.
 
-### Reference-Based Quality Control (`rq`)
+### Reference Query (`rq`)
 
-* **External Reference Validation:** The `RQOutlierZ` class compares input points against a trusted reference surface (e.g., a low-resolution regional grid like GMRT, ETOPO, or a previous CUDEM version).
+* **External Reference Validation:** The `rq` module compares input points against a trusted reference surface (e.g., a low-resolution regional grid like GMRT, ETOPO, or a previous CUDEM version).
 * **Difference Thresholding:** Points that deviate from the reference surface by more than a specified threshold (absolute difference or percentage) are flagged. This is useful for identifying gross vertical errors or datum shifts in new datasets.
 * **Dynamic Fetching:** Can automatically fetch and use standard reference datasets (GMRT, CUDEM) if a local reference raster is not provided.
 
 ### Spatial Masking
 
-* **Vector Masking (`vector_mask`):** The `PointZVectorMask` class filters points based on their inclusion within vector polygons (e.g., Shapefiles). It supports both "keep inside" and "remove inside" operations via the `invert` parameter.
-* **Raster Masking (`raster_mask`):** The `PointZRasterMask` class filters points based on the values of an underlying raster file (e.g., Land/Water mask). It keeps points on valid (non-zero) pixels by default.
+* **Vector Masking (`vector_mask`):** The `vector_mask` module filters points based on their inclusion within vector polygons (e.g., Shapefiles). It supports both "keep inside" and "remove inside" operations via the `invert` parameter.
+* **Raster Masking (`raster_mask`):** The `raster_mask` module filters points based on the values of an underlying raster file (e.g., Land/Water mask). It keeps points on valid (non-zero) pixels by default.
 
 ### Thinning and Density Control
 
@@ -37,7 +37,7 @@ The module provides tools for statistical outlier removal, reference-based quali
 
 ### Point Gridding Utilities
 
-* **`PointPixels` Class:** A helper utility that bins scattered points into a regular grid structure, calculating aggregated statistics (mean, min, max, sum, std, var, weights, uncertainty) for each cell. This is the foundational logic used by the outlier filters to establish local statistics.
+* **`PointPixels` Class:** A utility in the Python APO that bins scattered points into a regular grid structure, calculating aggregated statistics (mean, min, max, sum, std, var, weights, uncertainty) for each cell. This is the foundation used by the outlier filters to establish local statistics.
 
 ## Usage and Examples
 
@@ -66,7 +66,7 @@ pointz dense.laz thinned.xyz -M block_minmax:res=10:mode=min
 
 ```
 
-### Complex Workflow: Clip to a range, mask out land, and remove outliers.
+### A chain of filters: Clip to a range, mask out land, and remove outliers.
 
 ```bash
 

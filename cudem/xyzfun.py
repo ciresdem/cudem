@@ -1,6 +1,6 @@
 ### xyzfun.py - CUDEM utilities and functions
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
 ##
 ## xyzfun.py is part of CUDEM
 ##
@@ -20,6 +20,9 @@
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
+##
+### Commentary:
+##
 ##
 ### Code:
 
@@ -210,9 +213,7 @@ class XYZPoint:
         return self
 
 
-###############################################################################    
 ## XYZ Processing Utilities - DEPRECIATED
-###############################################################################
 _xyz_config = {
     'delim': None, 'xpos': 0, 'ypos': 1, 'zpos': 2, 'wpos': 3,
     'upos': 4, 'skip': 0, 'z-scale': 1, 'x-off': 0, 'y-off': 0,

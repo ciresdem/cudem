@@ -2,8 +2,6 @@
 
 **Perspecto** is the visualization module within the CUDEM software suite, designed to generate high-quality images and 2D/3D representations from Digital Elevation Models (DEMs). It serves as a unified interface for various rendering backends, including GDAL, POV-Ray, and GMT/PyGMT.
 
-Designed to work seamlessly with the `waffles` module, Perspecto can accept either an existing raster file or a Waffles JSON configuration file as input. If provided a JSON config, it can automatically generate the requested DEM before visualizing it.
-
 ## Summary
 
 ### Visualization Modules
@@ -24,8 +22,6 @@ Designed to work seamlessly with the `waffles` module, Perspecto can accept eith
   * `figure1`: Generates GMT-based figures (requires PyGMT).
   * `colorbar`: Generates color bars for maps (requires PyGMT).
 
-
-
 ### Advanced Color Palette (CPT) Management
 
 Perspecto includes robust tools for managing color tables, essential for creating color relief maps:
@@ -34,10 +30,9 @@ Perspecto includes robust tools for managing color tables, essential for creatin
 * **Fetching:** Can fetch named CPTs from **cpt-city**.
 * **Processing:** Supports re-scaling CPTs to specific Z-ranges and "splitting" CPTs (e.g., creating distinct color ramps above and below zero for land/sea distinctions).
 
-
 ## Usage
 
-The module is accessed via the command line, requiring a module selection and an input DEM (or Waffles config).
+The module is accessed via the command line, requiring a module selection and an input DEM.
 
 ```bash
 perspecto input_dem.tif -M hillshade
@@ -51,7 +46,7 @@ perspecto input_dem.tif -M hillshade
 * `-Z, --split-cpt`: Split the color palette at a specific value (e.g., 0 for coastlines).
 * `--min_z / --max_z`: Force specific elevation ranges for color scaling.
 
-If `input_dem` is a JSON file (Waffles config), Perspecto will attempt to parse it and generate the DEM using the `waffles` module if the file does not already exist.
+## Examples
 
 ```bash
 perspecto my_dem.tif -M hillshade -C GMT_wysiwyg

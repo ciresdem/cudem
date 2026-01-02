@@ -1,6 +1,6 @@
 ### srsfun.py - Projection functions
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
 ##
 ## srsfun.py is part of CUDEM
 ##
@@ -20,6 +20,9 @@
 ## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
+##
+### Commentary:
+##
 ##
 ### Code:
 

@@ -1,6 +1,6 @@
 ### fetches.py
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
 ##
 ## fetches.py is part of CUDEM
 ##
@@ -360,7 +360,6 @@ class Fetch:
                     current_read_timeout if current_read_timeout else None
                 )
 
-                # [FIX] Added headers=self.headers to pass Range requests
                 req = requests.get(
                     self.url,
                     stream=True,

@@ -1,6 +1,6 @@
 ### ziplistfile.py 
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
 ##
 ## ziplistfile.py is part of CUDEM
 ##
@@ -248,16 +248,6 @@ class ZIPlist(ElevationDataset):
                     )
                 )._acquire_module()
                 
-                # ds = DatasetFactory(
-                #     mod=extracted_path,
-                #     data_format=None, # Auto-detect
-                #     src_srs=self.src_srs,
-                #     parent=self,
-                #     weight=self.weight,
-                #     uncertainty=self.uncertainty,
-                #     verbose=self.verbose
-                # )._acquire_module()
-
                 if ds is not None and ds.valid_p():
                     ds.initialize()
                     

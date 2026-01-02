@@ -1,6 +1,6 @@
 ### utils.py - CUDEM utilities and functions
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
 ##
 ## utils.py is part of CUDEM
 ##
@@ -1233,12 +1233,14 @@ def _print_msg(msg, use_tqdm=False, dst_port=sys.stdout):
         tqdm.write(msg, file=dst_port)
     else:
         dst.port.write(msg)
-        
 
+        
+## ==============================================
 ## echo message `m` to sys.stderr using
 ## auto-generated prefix
 ## lambda runs: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
 ## `echo` goes to stderr while `print` goes to stdout
+## ==============================================
 echo_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='info', use_tqdm=USE_TQDM, dst_port=DST_PORT)
 echo_msg_bold = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='info', bold=True, use_tqdm=USE_TQDM, dst_port=DST_PORT)
 echo_msg_inline = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='info', nl=False, use_tqdm=USE_TQDM, dst_port=DST_PORT)

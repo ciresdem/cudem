@@ -1,6 +1,6 @@
 ### FRED.py
 ##
-## Copyright (c) 2010 - 2023 CIRES Coastal DEM Team
+## Copyright (c) 2012 - 2026 CIRES Coastal DEM Team
 ##
 ## FRED.py is part of CUDEM
 ##
@@ -326,10 +326,10 @@ class FRED:
             
         return _results
 
-###############################################################################
+## ==============================================
 ## Lambdas for the FRED using the module object `mod`
 ## These lambdas assume `mod` is an object with attributes: FRED, region, where, name.
-###############################################################################
+## ==============================================
 _filter_FRED = lambda mod: mod.FRED._filter(region=mod.region, where=mod.where, layers=[mod.name])
 _update_FRED = lambda mod, s: mod.FRED._add_surveys(s)
 _filter_FRED_index = lambda mod: [utils.echo_msg(json.dumps(f, indent=2)) for f in _filter_FRED(mod)]

@@ -1,6 +1,6 @@
 ### fill.py - GRId filTerS
 ##
-## Copyright (c) 2024 - 2025 Regents of the University of Colorado
+## Copyright (c) 2024 - 2026 Regents of the University of Colorado
 ##
 ## fill.py is part of cudem
 ##
@@ -123,11 +123,11 @@ class Fill(grits.Grits):
             is_valid = data != ndv
             is_void = data == ndv
             
-            ## Optimization: If no voids in this chunk (including buffer), skip
+            ## If no voids in this chunk (including buffer), skip
             if not np.any(is_void):
                 continue
                 
-            ## Optimization: If chunk is completely empty, we can't fill it
+            ## If chunk is completely empty, we can't fill it
             if not np.any(is_valid):
                 continue
 
@@ -152,8 +152,6 @@ class Fill(grits.Grits):
             
             try:
                 ## Interpolate
-                ## Note: griddata can be slow for very large numbers of points.
-                ## Linear/Cubic require qhull.
                 filled_data = interpolate.griddata(
                     (valid_y, valid_x), 
                     valid_values, 
@@ -164,8 +162,7 @@ class Fill(grits.Grits):
                 
                 ## We only want to update the VOIDS, preserving original valid data exactly
                 ## (Interpolation might slightly alter valid points due to precision)
-                ## Also, we only write back the unbuffered center region.
-                
+                ## Also, we only write back the unbuffered center region.                
                 out_arr = center_slice.copy()
                 
                 ## Extract fill result for center

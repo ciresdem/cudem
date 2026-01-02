@@ -1,6 +1,6 @@
 ### pointz.py 
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
 ##
 ## pointz.py is part of CUDEM
 ##
@@ -300,7 +300,7 @@ class PointPixels:
 
         return out_arrays, this_srcwin, self.dst_gt
 
-    
+
 class PointPixels_:
     """Bins point cloud data into a grid coinciding with a desired region.
     Returns aggregated values (Z, Weights, Uncertainty) for each grid cell.
@@ -1508,10 +1508,14 @@ class DiffZ(PointZ):
             utils.echo_msg(f"Diff filter: {np.count_nonzero(outliers)} points flagged.")
             
         return outliers
+
     
-## =============================================================================
-## Factory & CLI
-## =============================================================================
+## ==============================================
+## Command-line Interface (CLI)
+## $ pointz
+##
+## pointz cli
+## ==============================================
 class PointFilterFactory(factory.CUDEMFactory):
     _modules = {
         'outlierz': {'name': 'outlierz', 'call': OutlierZ},

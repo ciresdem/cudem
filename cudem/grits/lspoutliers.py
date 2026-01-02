@@ -1,6 +1,6 @@
 ### lspoutliers.py - GRId filTerS
 ##
-## Copyright (c) 2024 - 2025 Regents of the University of Colorado
+## Copyright (c) 2024 - 2026 Regents of the University of Colorado
 ##
 ## lspoutliers.py is part of cudem
 ##

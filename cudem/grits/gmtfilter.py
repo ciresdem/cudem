@@ -1,6 +1,6 @@
 ### gmtfilter.py - GRId filTerS
 ##
-## Copyright (c) 2024 - 2025 Regents of the University of Colorado
+## Copyright (c) 2016 - 2026 Regents of the University of Colorado
 ##
 ## gmtfilter.py is part of cudem
 ##

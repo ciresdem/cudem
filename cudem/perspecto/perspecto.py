@@ -66,7 +66,9 @@ try:
 except ImportError:
     HAS_PYGMT = False
 
-
+## ==============================================
+## Main Perspecto Class
+## ==============================================
 class Perspecto:
     def __init__(
         self,
@@ -208,6 +210,9 @@ class Perspecto:
         raise NotImplementedError("Perspecto is an abstract base class; run() must be implemented by subclasses.")
 
 
+## ==============================================
+## Perspecto Factory
+## ==============================================
 class PerspectoFactory(factory.CUDEMFactory):
     from . import hillshade
     from . import perspective

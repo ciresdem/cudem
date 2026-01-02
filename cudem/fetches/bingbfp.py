@@ -257,9 +257,13 @@ class BingBuildings:
 
 ## Alias
 bingBuildings = BingBuildings
-    
+
+
 ## ==============================================
 ## Command-line Interface (CLI)
+## $ bing_bfp
+##
+## bing_bfp cli
 ## ==============================================
 def bing_bfp_cli():
     parser = argparse.ArgumentParser(

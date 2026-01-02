@@ -1,8 +1,8 @@
 # Dlim (Data Lists IMproved)
 
-**Dlim** is the data management and processing module within the CUDEM software suite. It is designed to handle the complex logistics of organizing, cleaning, and standardizing diverse geospatial data sources before they enter the gridding pipeline. Dlim acts as a universal adapter, converting various input formats—from simple XYZ text files to complex lidar point clouds or remote datasets—into a unified stream of data ready for interpolation.
+**Dlim** is the data management and processing module within the CUDEM software suite. It is designed to handle the complex logistics of organizing, cleaning, and standardizing diverse geospatial data sources before they enter the gridding pipeline. `dlim` can convert various input formats (from simple XYZ text files to complex lidar point clouds or remote datasets) into a unified stream of data ready for interpolation.
 
-The module operates on the concept of **Data Lists** (`.datalist`), which are text-based configuration files that define a collection of datasets, their locations (local paths or remote URLs), and specific processing instructions for each entry.
+The module operates on the concept of **Data-Lists** (`.datalist`), which are text-based configuration files that define a collection of datasets, their locations (local paths or remote URLs), and specific processing instructions for each entry.
 
 ## Summary
 
@@ -15,16 +15,15 @@ The module operates on the concept of **Data Lists** (`.datalist`), which are te
   * **Text:** XYZ, CSV, DAT.
   * **Remote:** URLs pointing to data fetched via the `fetches` module.
 
-
-* **Standardized Output:** regardless of the input format, Dlim processes and yields data in a consistent structure (typically XYZ or array chunks), abstracting away file-specific parsing logic from downstream tools like `waffles`.
+* **Standardized Output:** regardless of the input format, `dlim` processes and yields data in a consistent structure (typically XYZ or array chunks), abstracting away file-specific parsing from downstream tools like `waffles`.
 
 ### Advanced Data Processing
 
-Dlim applies a suite of operations to data on-the-fly as it is read:
+`dlim` applies a suite of operations to data on-the-fly as it is read:
 
 * **Spatial Filtering:**
-* **Region Clipping:** Automatically filters data to a specified bounding box (`-R`) or vector polygon, ensuring only relevant data is processed.
-* **Masking:** Can apply complex polygon masks (e.g., land/water masks) to exclude unwanted areas.
+  * **Region Clipping:** Automatically filters data to a specified bounding box (`-R`) or vector polygon, ensuring only relevant data is processed.
+  * **Masking:** Can apply complex polygon masks (e.g., land/water masks) to exclude unwanted areas.
 
 
 * **Vertical Transformation:**
@@ -36,8 +35,8 @@ Dlim applies a suite of operations to data on-the-fly as it is read:
 
 ### Data List Management (Recursive Processing)
 
-* **Hierarchical DataLists:** `dlim` supports nested datalists, where a principal list can reference other lists. This allows for organized, multi-scale data management (e.g., a "Global" list pointing to "Regional" lists).
-* **Weighted Ranking:** Data entries can be assigned weights. When datasets overlap, `dlim` (in conjunction with `waffles`) uses these weights to determine which data source takes precedence, allowing high-quality modern surveys to supercede older, lower-resolution data.
+* **Hierarchical DataLists:** `dlim` supports nested datalists, where a principal datalist can reference other datalists. This allows for organized, multi-scale data management (e.g., a "Global" list pointing to "Regional" lists).
+* **Weighted Ranking:** Datalist entries can be assigned weights. When datasets overlap, `dlim` uses these weights to determine which data source takes precedence, allowing high-quality modern surveys to supercede older, lower-resolution data.
 * **Archive Generation:** The module can package referenced data into a portable archive, facilitating data sharing and reproducibility.
 
 ### Integration

@@ -79,6 +79,7 @@
 ##         for k in self.__dict__:
 ##             if k not in self.params['kwargs'].keys():
 ##                 self.params['mod_args'][k] = self.__dict__[k]
+##
 ### Code:
 
 import os
@@ -93,6 +94,9 @@ except ImportError:
     pass  # Expecting calling environment to have cudem installed
 
 
+## ==============================================
+## Utility Functions
+## ==============================================
 def _parse_value_string(val_str: str) -> Any:
     """Helper to parse string values into Python types (bool, None, list)."""
     
@@ -284,16 +288,14 @@ def _factory_module_check(mf: Any, mc: Any) -> Optional[str]:
     return None
 
 
-###############################################################################
-##
+## ==============================================
 ## Module Description Helpers
 ##
 ## modules are a dictionary with the module name
 ## as the key and at least a 'class' key which
 ## points to the class/function to call for the module
 ## uses <class>.__doc__ as description
-##
-###############################################################################
+## ==============================================
 def get_module_short_desc(m: Dict) -> str:
     return ', '.join([f'{key}' for key in m])
 
@@ -337,7 +339,9 @@ def get_module_md_table(m: Dict) -> str:
     return header + '\n'.join(rows)
 
 
+## ==============================================
 ## Aliases
+## ==============================================
 _cudem_module_short_desc = get_module_short_desc
 _cudem_module_name_short_desc = get_module_name_short_desc
 _cudem_module_long_desc = get_module_long_desc
@@ -375,6 +379,10 @@ def echo_modules(module_dict: Dict, key: Any, md: bool = False) -> None:
     sys.stderr.flush()
     return 0
 
+
+## ==============================================
+## Default Factory Compatible Module
+## ==============================================
 class CUDEMModule:
     """CUDEM factory module.
 
@@ -410,6 +418,9 @@ class CUDEMModule:
         )
 
 
+## ==============================================
+## Main Factory Class
+## ==============================================
 class CUDEMFactory:
     """CUDEM module factory.
 
@@ -623,3 +634,6 @@ class CUDEMFactory:
 
 if __name__ == '__main__':
     f = CUDEMFactory()
+
+
+### End

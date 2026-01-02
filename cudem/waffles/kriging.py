@@ -1,6 +1,6 @@
 ### kriging.py
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2025 - 2026 Regents of the University of Colorado
 ##
 ## kriging.py is part of CUDEM
 ##

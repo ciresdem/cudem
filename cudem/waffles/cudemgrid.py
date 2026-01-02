@@ -1,6 +1,6 @@
 ### cudemgrid.py
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2015 - 2025 Regents of the University of Colorado
 ##
 ## cudemgrid.py is part of CUDEM
 ##

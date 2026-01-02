@@ -1,6 +1,6 @@
 ### figure1.py 
 ##
-## Copyright (c) 2023 - 2025 Regents of the University of Colorado
+## Copyright (c) 2023 - 2026 Regents of the University of Colorado
 ##
 ## figure1.py is part of CUDEM
 ##

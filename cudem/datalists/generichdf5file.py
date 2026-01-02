@@ -1,3 +1,32 @@
+### generichdf5file.py - OSGEO functions
+##
+## Copyright (c) 2010 - 2026 Regents of the University of Colorado
+##
+## generichdf5file.py is part of CUDEM
+##
+## Permission is hereby granted, free of charge, to any person obtaining a copy 
+## of this software and associated documentation files (the "Software"), to deal 
+## in the Software without restriction, including without limitation the rights 
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
+## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## subject to the following conditions:
+##
+## The above copyright notice and this permission notice shall be included in all
+## copies or substantial portions of the Software.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+## SOFTWARE.
+##
+### Commentary:
+##
+## Generic hdf5 file parsing.
+##
+### Code:
+
 import h5py
 import numpy as np
 from cudem import utils
@@ -85,4 +114,4 @@ class GenericHDF5File(ElevationDataset):
             except KeyError as e:
                 utils.echo_error_msg(f"Variable not found in {self.fn}: {e}")
 
-###
+### End

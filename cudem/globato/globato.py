@@ -1,6 +1,6 @@
 ### globato.py 
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2016 - 2026 Regents of the University of Colorado
 ##
 ## globato.py is part of CUDEM
 ##
@@ -58,7 +58,7 @@ THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 GLOBATO_DATA_DIR = os.path.join(THIS_DIR, 'data')
 
 ## ==============================================
-## GLOBATO
+## GLOBATO File reader
 ## ==============================================
 class GlobatoStack:
     """
@@ -190,7 +190,10 @@ class GlobatoStack:
         status = "Open" if self.is_open else "Closed"
         return f"<GlobatoStack '{os.path.basename(self.filepath)}' [{status}]>"
 
-    
+
+## ==============================================
+## The Globato Stacker (used in dlim)
+## ==============================================
 class GlobatoStacker:
     """The GlobatoStacker creates a hierarchical scientific data container. 
     It is best used when you need to store not just the final result, but also the intermediate sums, 
@@ -854,7 +857,7 @@ class GlobatoStacker:
 
     
 ## ==============================================
-## GDAL Multi-Band tif stac
+## GDAL Multi-Band tif stack reader
 ## ==============================================
 class GdalStack:
     """
@@ -1011,7 +1014,10 @@ class GdalStack:
         mask_status = "Found" if os.path.exists(self.mask_filepath) else "Missing"
         return f"<GdalStack '{os.path.basename(self.filepath)}' [{status}] Mask:{mask_status}>"
 
-    
+
+## ==============================================
+## The Globato GDAL stacker (used in dlim)
+## ==============================================
 class GdalRasterStacker:
     """The GdalRasterStacker creates standard geospatial rasters compatible with GIS software (like QGIS, ArcGIS, or GDAL command-line tools). 
     It is best used for generating final product deliverables.

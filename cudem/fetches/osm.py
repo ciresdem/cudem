@@ -1,6 +1,6 @@
 ### osm.py
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2020 - 2026 Regents of the University of Colorado
 ##
 ## osm.py is part of CUDEM
 ##
@@ -648,6 +648,9 @@ class osmCoastline:
 
 ## ==============================================
 ## Command-line Interface (CLI)
+## $ osm_coast
+##
+## osm_coast cli
 ## ==============================================
 def osm_coast_cli():
     parser = argparse.ArgumentParser(description="Fetch and Process OSM Data")

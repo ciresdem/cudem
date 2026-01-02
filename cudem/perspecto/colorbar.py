@@ -1,6 +1,6 @@
 ### colorbar.py 
 ##
-## Copyright (c) 2023 - 2025 Regents of the University of Colorado
+## Copyright (c) 2023 - 2026 Regents of the University of Colorado
 ##
 ## colorbar.py is part of CUDEM
 ##
@@ -63,8 +63,8 @@ class Colorbar(perspecto.Perspecto):
 
         fig = pygmt.Figure()
         
-        # Draw the colorbar
-        # Position: Top Center (jTC), width/height specified in cm (+w), horizontal (+h)
+        ## Draw the colorbar
+        ## Position: Top Center (jTC), width/height specified in cm (+w), horizontal (+h)
         fig.colorbar(
             cmap=self.cpt,  # Ensure CPT is passed from parent/init
             region=[0, 10, 0, 3],

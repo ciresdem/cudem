@@ -1,6 +1,6 @@
 ### mrdem.py
 ##
-## Copyright (c) 2023 - 2025 Regents of the University of Colorado
+## Copyright (c) 2023 - 2026 Regents of the University of Colorado
 ##
 ## mrdem.py is part of CUDEM
 ##

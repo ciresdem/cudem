@@ -2,19 +2,18 @@
 
 **Fetches** is the data acquisition and download module within the CUDEM software suite. It automates the process of identifying, locating, and retrieving topographic and bathymetric source data from over forty different publicly available datasets.
 
-Designed to streamline the initial phase of DEM generation, Fetches allows users to target specific geographic regions and automatically pull relevant data without manual searching or downloading.
+Designed to streamline the initial phase of DEM generation, `fetches` allows users to target specific geographic regions and automatically pull relevant data without manual searching or downloading.
 
 ## Summary
 
 ### Automated Data Retrieval
 
 * **Region-Based fetching:** Users specify a geographic extent (bounding box or vector polygon), and the module identifies all available data tiles or granules from supported services that intersect that region.
-* **Smart Buffering:** It typically downloads data in an area slightly larger (~5%) than the requested extent to prevent edge effects during interpolation.
 * **Protocol Handling:** Manages various remote access protocols (HTTP, FTP, S3, APIs) to retrieve files seamlessly.
 
 ### On-the-Fly Processing & Parsing
 
-The module does not just download files; it acts as an interface to standardize diverse data formats for the CUDEM pipeline. Through the `Fetcher` classes defined in `datalists.fetchers`:
+`fetches` does not just download files; with the help of **`dlim`** it acts as an interface to standardize diverse data formats for the CUDEM pipeline. Through the `Fetcher` classes defined in `datalists.fetchers`:
 
 * **Format Conversion:** It can parse complex formats (e.g., BAG, HDF5, NetCDF) and yield them through `dlim` as standardized datasets (XYZ or Raster) for processing.
 * **Metadata Extraction:** It extracts critical metadata such as horizontal/vertical datums, resolution, and collection dates from the source files.
@@ -23,7 +22,7 @@ The module does not just download files; it acts as an interface to standardize 
 
 ### Modular & Extensible
 
-Fetches uses a factory system, allowing specific modules to be written for different data providers. If a dataset requires special API calls or post-download processing (like unzipping or converting datums), a dedicated datalists `Fetcher` subclass handles it.
+`fetches` uses a factory system, allowing specific modules to be written for different data providers. If a dataset requires special API calls or post-download processing (like unzipping or converting datums), a dedicated datalists `Fetcher` subclass handles it.
 
 ## Supported Data Sources
 

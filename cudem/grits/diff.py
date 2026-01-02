@@ -1,6 +1,6 @@
 ### diff.py - GRId filTerS
 ##
-## Copyright (c) 2024 - 2025 Regents of the University of Colorado
+## Copyright (c) 2025 - 2026 Regents of the University of Colorado
 ##
 ## diff.py is part of cudem
 ##
@@ -25,8 +25,8 @@
 ##
 ## Calculates difference between Source and Auxiliary DEM.
 ## Usage:
-## 1. Filter: Remove Source pixels where abs(Source - Aux) > Threshold.
-## 2. Output: Generate a difference grid (Output = Source - Aux).
+## * Filter: Remove Source pixels where abs(Source - Aux) > Threshold.
+## * Output: Generate a difference grid (Output = Source - Aux).
 ##
 ### Code:
 
@@ -121,7 +121,7 @@ class Diff(grits.Grits):
                 ## Calculate Difference
                 diff_arr = src_arr - aux_arr
                 
-                ## Mode 1: Filtering (Masking)
+                ## Filtering (Masking)
                 if self.diff_threshold is not None:
                     mask = np.zeros(diff_arr.shape, dtype=bool)
                     
@@ -137,7 +137,7 @@ class Diff(grits.Grits):
                         dst_data[mask] = ndv
                         dst_band.WriteArray(dst_data, srcwin[0], srcwin[1])
                         
-                ## Mode 2: Output Difference Grid
+                ## Output Difference Grid
                 else:
                     diff_arr[np.isnan(diff_arr)] = ndv
                     dst_band = dst_ds.GetRasterBand(self.band)

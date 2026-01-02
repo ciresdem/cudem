@@ -2,7 +2,7 @@
 
 **Grits** is the elevation grid processing and filtering engine within the CUDEM software suite. It provides a standardized framework for manipulating raster datasets, allowing users to clean artifacts, smooth noise, blend overlapping datasets, and enforce hydrological or morphological constraints.
 
-Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (tiling), ensuring that operations on multi-gigabyte DEMs do not exceed system memory.
+Designed to handle massive datasets, `grits` can operate on a chunk-by-chunk basis (tiling), ensuring that operations on multi-gigabyte DEMs do not exceed system memory.
 
 ## Summary
 
@@ -17,8 +17,8 @@ Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (t
 
 * **`blur`:** Applies a **Gaussian Blur** to smooth the entire DEM. Useful for general noise reduction.
 * **`denoise`:**
-* **Median Filter:** Removes "salt-and-pepper" noise (single-pixel spikes or pits) while preserving sharp edges like cliffs.
-* **Bilateral Filter:** A non-linear filter that smooths flat areas but preserves strong edges (requires `scikit-image`).
+  * **Median Filter:** Removes "salt-and-pepper" noise (single-pixel spikes or pits) while preserving sharp edges like cliffs.
+  * **Bilateral Filter:** A non-linear filter that smooths flat areas but preserves strong edges (requires `scikit-image`).
 
 
 * **`gmtfilter`:** A wrapper for the Generic Mapping Tools (GMT) `grdfilter` module, providing access to robust geodetic filtering (if GMT/PyGMT is installed).
@@ -38,9 +38,9 @@ Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (t
 ### Morphology & Hydrology
 
 * **`morphology`:** Applies grayscale morphological operations:
-* **Erosion:** Widens valleys/channels and removes small peaks (useful for removing vegetation/buildings).
-* **Dilation:** Widens peaks/ridges and fills small pits.
-* **Opening/Closing:** Combinations used to remove specific noise features while preserving overall shape.
+  * **Erosion:** Widens valleys/channels and removes small peaks (useful for removing vegetation/buildings).
+  * **Dilation:** Widens peaks/ridges and fills small pits.
+  * **Opening/Closing:** Combinations used to remove specific noise features while preserving overall shape.
 
 
 * **`hydro`:** Provides basic hydrological enforcement, such as **Sink Filling**, to remove local depressions and ensure continuous flow across the surface.
@@ -54,9 +54,8 @@ Designed to handle massive datasets, Grits operates on a chunk-by-chunk basis (t
 ### Void Filling
 
 * **`fill`:** Fills NoData voids (inpainting) using:
-* **IDW (Inverse Distance Weighting):** Fast filling for small gaps.
-* **Spline/Linear Interpolation:** Fits a smooth surface across larger voids to maintain terrain trends.
-
+  * **IDW (Inverse Distance Weighting):** Fast filling for small gaps.
+  * **Spline/Linear Interpolation:** Fits a smooth surface across larger voids to maintain terrain trends.
 
 
 ## Usage Example

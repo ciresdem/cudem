@@ -17,9 +17,13 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
+### Commentary:
+##
+## Load all the fetches modules
+##
 ### Code:
 
-__version__ = "1.6.0"
+__version__ = "1.7.0"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
@@ -66,6 +70,5 @@ from . import cptcity
 from . import wadnr
 from . import nswtb
 from . import cdse
-#from . import fetches_factory
 
 ### End
