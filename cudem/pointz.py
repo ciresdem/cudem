@@ -868,6 +868,25 @@ class RQOutlierZ(OutlierZ):
         if raster and isinstance(raster, str):
             if os.path.exists(raster) and os.path.isfile(raster):
                 return [raster]
+
+            elif any(raster in item for item in self.fetches_modules):
+                _raster = [item for item in self.fetches_modules if raster in item][0]
+                #elif raster.split(':')[0] in self.fetches_modules:
+                this_fetch = self.fetch_data(_raster, self.region.copy().buffer(pct=1))
+                raster = [x[1] for x in this_fetch.results]
+                ## gmrt now comes as tif, as do most others
+                #raster = [gdalfun.gmt_grd2gdal(x, verbose=False) \
+                #          if x.split('.')[-1] == 'grd' else x for x in raster]
+                if self.xyinc is not None and self.resample_raster:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter('ignore')
+                        raster = [gdalfun.sample_warp(
+                            raster, None, self.xyinc[0], self.xyinc[1],
+                            sample_alg='bilinear', src_region=self.region,
+                            verbose=True,
+                            co=["COMPRESS=DEFLATE", "TILED=YES"]
+                        )[0]]
+                return raster
             
         elif raster is None:
             if (self.region is not None or self.xyinc is not None) and self.resample_raster:
@@ -920,22 +939,6 @@ class RQOutlierZ(OutlierZ):
             )
             raster.extend([x[1] for x in this_fetch.results])                    
 
-        elif any(raster in item for item in self.fetches_modules):
-            _raster = [item for item in self.fetches_modules if raster in item][0]
-            #elif raster.split(':')[0] in self.fetches_modules:
-            this_fetch = self.fetch_data(_raster, self.region)
-            raster = [x[1] for x in this_fetch.results]
-            raster = [gdalfun.gmt_grd2gdal(x, verbose=False) \
-                      if x.split('.')[-1] == 'grd' else x for x in raster]
-            if self.xyinc is not None and self.resample_raster:
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore')
-                    raster = [gdalfun.sample_warp(
-                        raster, _raster, self.xyinc[0], self.xyinc[1],
-                        sample_alg='bilinear', src_region=self.region,
-                        verbose=self.verbose,
-                        co=["COMPRESS=DEFLATE", "TILED=YES"]
-                    )[0]]
         else:
             utils.echo_warning_msg(f'could not parse rq raster {raster}')
         return raster
