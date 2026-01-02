@@ -3125,8 +3125,9 @@ def datalists_cli():
                         utils.remove_glob(f'{this_archive.name}*')
 
                 elif args.globato:
-                    this_datalist.blocks(out_name=args.globato)
-                
+                    this_globato_fn = this_datalist.blocks(out_name=args.globato)
+                    utils.echo_msg(f'Generated GLOBATO file: {this_globato_fn}')
+                    
                 else:
                     ## Default: Dump Data
                     if args.separate:

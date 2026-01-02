@@ -394,7 +394,7 @@ def str2bool(v):
     """
     
     if v is None:
-        return False
+        return None
         
     if isinstance(v, bool):
         return v
@@ -409,7 +409,7 @@ def str2bool(v):
     elif v_str in ("no", "false", "f", "n", "0"):
         return False
     else:
-        return False
+        return None
     
     
 def list_str(l: list) -> str:

@@ -97,6 +97,8 @@ def _parse_value_string(val_str: str) -> Any:
     """Helper to parse string values into Python types (bool, None, list)."""
     
     val_lower = val_str.lower()
+    # if utils.str2bool(val_str) is not None:
+    #     return utils.str2bool(val_str)
     if val_lower == 'false':
         return False
     elif val_lower == 'true':
