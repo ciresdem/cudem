@@ -14,7 +14,7 @@ Designed to streamline the initial phase of DEM generation, Fetches allows users
 
 ### On-the-Fly Processing & Parsing
 
-The module does not just download files; it acts as an interface to standardize diverse data formats for the CUDEM pipeline. Through the `Fetcher` classes defined in `datalists.fetchers.py`:
+The module does not just download files; it acts as an interface to standardize diverse data formats for the CUDEM pipeline. Through the `Fetcher` classes defined in `datalists.fetchers`:
 
 * **Format Conversion:** It can parse complex formats (e.g., BAG, HDF5, NetCDF) and yield them through `dlim` as standardized datasets (XYZ or Raster) for processing.
 * **Metadata Extraction:** It extracts critical metadata such as horizontal/vertical datums, resolution, and collection dates from the source files.
@@ -30,42 +30,42 @@ Fetches uses a factory system, allowing specific modules to be written for diffe
 The module supports a wide array of global and regional datasets, including but not limited to:
 
 * **NOAA (National Oceanic and Atmospheric Administration):**
-* **NOS Hydrographic Surveys:** Bathymetric sounding data (`HydroNOS`).
-* **Digital Coast:** CoNED Topobathy and Sea Level Rise (SLR) DEMs.
-* **Multibeam:** Raw and processed swath sonar data (`MBS`).
-* **BlueTopo:** High-resolution target detection bathymetry.
-* **Electronic Navigational Charts (ENC):** Digital soundings and contours (`Charts`).
-* **Geodesy:** NGS Monuments (`NGS`) and VDatum grids.
+  * **NOS Hydrographic Surveys:** Bathymetric sounding data (`HydroNOS`).
+  * **Digital Coast:** CoNED Topobathy and Sea Level Rise (SLR) DEMs.
+  * **Multibeam:** Raw and processed swath sonar data (`MBS`).
+  * **BlueTopo:** High-resolution target detection bathymetry.
+  * **Electronic Navigational Charts (ENC):** Digital soundings and contours (`Charts`).
+  * **Geodesy:** NGS Monuments (`NGS`) and VDatum grids.
 
 
 * **USGS (United States Geological Survey):**
-* **The National Map (TNM):** National Elevation Dataset (NED/3DEP).
-* **Water Services:** River and stream gauge data.
+  * **The National Map (TNM):** National Elevation Dataset (NED/3DEP).
+  * **Water Services:** River and stream gauge data.
 
 
 * **NASA (National Aeronautics and Space Administration):**
-* **ICESat-2:** Satellite laser altimetry (ATL03/ATL24).
-* **SWOT:** Surface Water and Ocean Topography data.
+  * **ICESat-2:** Satellite laser altimetry (ATL03/ATL24).
+  * **SWOT:** Surface Water and Ocean Topography data.
 
 
 * **Global & Regional Grids:**
-* **GEBCO:** General Bathymetric Chart of the Oceans.
-* **GMRT:** Global Multi-Resolution Topography.
-* **Copernicus:** European global DEM.
-* **FABDEM:** Forest And Buildings removed Copernicus DEM.
-* **EMODnet:** European Marine Observation and Data Network.
+  * **GEBCO:** General Bathymetric Chart of the Oceans.
+  * **GMRT:** Global Multi-Resolution Topography.
+  * **Copernicus:** European global DEM.
+  * **FABDEM:** Forest And Buildings removed Copernicus DEM.
+  * **EMODnet:** European Marine Observation and Data Network.
 
 
 * **Other Sources:**
-* **Crowd Sourced Bathymetry (CSB):** Citizen science depth data.
-* **USACE:** eHydro hydrographic surveys.
-* **MarGrav:** Satellite-derived marine gravity bathymetry.
+  * **Crowd Sourced Bathymetry (CSB):** Citizen science depth data.
+  * **USACE:** eHydro hydrographic surveys.
+  * **MarGrav:** Satellite-derived marine gravity bathymetry.
 
 
 
 ## Integration
 
-While `fetches` can be run as a standalone command-line tool to download files, it is tightly integrated with the **`dlim`** (Data Lists IMproved) module. `dlim` can directly call `fetches` modules to stream remote data into the **`waffles`** gridding engine without creating intermediate local files, enabling efficient end-to-end processing workflows.
+While `fetches` can be run as a standalone command-line tool to download files, it is tightly integrated with the **`dlim`** module. `dlim` can directly call `fetches` modules to stream remote data into the **`waffles`** gridding engine without creating intermediate local files, enabling efficient end-to-end processing workflows.
 
 
 ## Python API
