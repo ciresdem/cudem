@@ -118,7 +118,7 @@ class WaffleDEM:
             utils.echo_warning_msg(f'could not parse dem: {self.fn}')
             return False
         
-        if not 'zr' in self.ds_config:
+        if 'zr' not in self.ds_config:
             utils.echo_msg(f'dem {self.fn} has no z values?')
             return False
 
@@ -129,21 +129,24 @@ class WaffleDEM:
             return False
         else:
             band_check = []
-            for band_num in range(1, self.ds_config['raster_count']+1):
-                #band_infos = gdalfun.gdal_infos(self.fn, scan=True, band=band_num)
-                if 'zr' in self.ds_config:
-                    if np.isnan(self.ds_config['zr'][0]) \
-                       or np.isnan(self.ds_config['zr'][1]):
-                        band_check.append(0)
+            try:
+                for band_num in range(1, self.ds_config['raster_count']+1):
+                    #band_infos = gdalfun.gdal_infos(self.fn, scan=True, band=band_num)
+                    if 'zr' in self.ds_config:
+                        if np.isnan(self.ds_config['zr'][0]) \
+                           or np.isnan(self.ds_config['zr'][1]):
+                            band_check.append(0)
+                        else:
+                            band_check.append(1)
                     else:
                         band_check.append(1)
-                else:
-                    band_check.append(1)
 
-            if not np.any(band_check):
-                utils.echo_warning_msg(
-                    f'dem {self.fn} is all nan'
-                )
+                if not np.any(band_check):
+                    utils.echo_warning_msg(
+                        f'dem {self.fn} is all nan'
+                    )
+                    return False
+            except:
                 return False
                 
         return True

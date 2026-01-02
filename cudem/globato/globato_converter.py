@@ -127,7 +127,7 @@ def globato_to_gdal(h5_path, tif_path=None, co=None, verbose=False):
         ## Transfer Masks (Sidecar)
         ## Globato stores masks in /mask group. GdalStack expects {tif_path}_msk.tif
         mask_keys = list(gs.masks.keys())
-        
+        mask_keys = None # TODO: need to fix the processing, as the h5 groups can go deep.
         if mask_keys:
             mask_path = os.path.splitext(tif_path)[0] + "_msk.tif"
             if verbose: utils.echo_msg(f"Generating mask sidecar: {mask_path}")
@@ -154,7 +154,7 @@ def globato_to_gdal(h5_path, tif_path=None, co=None, verbose=False):
                 ## Copy attributes as metadata
                 md = {}
                 for attr_key, attr_val in src_dset.attrs.items():
-                    # Skip internal netcdf/hdf attributes
+                    ## Skip internal netcdf/hdf attributes
                     if attr_key not in ['DIMENSION_LIST', 'grid_mapping']:
                         md[attr_key] = str(attr_val)
                 dst_band.SetMetadata(md)
@@ -163,6 +163,7 @@ def globato_to_gdal(h5_path, tif_path=None, co=None, verbose=False):
                     if y + block_size < y_size: rows = block_size
                     else: rows = y_size - y
                     dst_band.WriteArray(src_dset[y:y+rows, :], 0, y)
+
                     
             msk_ds = None
 

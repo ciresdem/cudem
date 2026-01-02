@@ -1,10 +1,10 @@
 # Regions (Spatial Management)
 
-**Regions** is the spatial management module within the CUDEM software suite. It provides a robust `Region` class and associated utilities to handle geographic bounding boxes, coordinate systems, and tiling logic. This module is fundamental to CUDEM's chunked processing architecture, defining the spatial extent of operations for modules like `fetches`, `waffles`, and `grits`.
+**Regions** is the spatial management module within the CUDEM software suite. It provides a robust `Region` class and associated utilities to handle geographic bounding boxes, coordinate systems, and tiling. This module is fundamental to CUDEM's chunked processing architecture, defining the spatial extent of operations for modules like `fetches`, `waffles`, and `grits`.
 
-## Core Capabilities
+## Summary
 
-### 1. Unified Region Representation
+### Unified Region Representation
 
 The `Region` class standardizes spatial bounds across the suite. It stores more than just X/Y coordinates; it tracks data range (Z), weights (W), and uncertainty (U) limits:
 
@@ -12,7 +12,7 @@ The `Region` class standardizes spatial bounds across the suite. It stores more 
 * **Data Limits:** `zmin`/`zmax` (elevation), `wmin`/`wmax` (weight), `umin`/`umax` (uncertainty).
 * **Projection Awareness:** Tracks the source SRS (`src_srs`) and supports warping regions between coordinate systems (e.g., transforming a bounding box from NAD83 to WGS84) via `pyproj`.
 
-### 2. Flexible Input Parsing
+### Flexible Input Parsing
 
 The module can parse region definitions from a wide variety of formats:
 
@@ -20,7 +20,7 @@ The module can parse region definitions from a wide variety of formats:
 * **Vector Files:** Can read OGR-compatible vector files (Shapefile, GeoJSON) and extract the bounding box of every feature within the file.
 * **Geotransforms:** Can derive regions from GDAL geotransform arrays and pixel dimensions.
 
-### 3. Manipulation & Tiling
+### Manipulation & Tiling
 
 Regions includes powerful tools for manipulating spatial extents:
 
@@ -29,7 +29,7 @@ Regions includes powerful tools for manipulating spatial extents:
 * **Intersection/Union:** Calculate the intersection (overlap) or union (merge) of multiple regions.
 * **Cutting:** "Cut" one region out of another, handling grid alignment to ensuring pixels remain snapped to the grid.
 
-### 4. Output Formatting
+### Output Formatting
 
 Regions can be exported to numerous standard formats for interoperability with other tools:
 

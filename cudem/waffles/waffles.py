@@ -333,7 +333,7 @@ class Waffle:
         init_str.append('--------------')
 
         if self.verbose:
-            out_str = '\n\t '.join(init_str)
+            out_str = '\n'.join(init_str)
             utils.echo_msg(out_str)
             
         ## Use self._init in a sub-module to do custom intializations.

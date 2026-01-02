@@ -4,9 +4,9 @@
 
 Vdatums generates vertical transformation grids that represent the offset between two specified vertical datums. These grids are then added to or subtracted from the source DEM to shift it into the desired target datum.
 
-## Core Capabilities
+## Summary
 
-### 1. Extensive Datum Support
+### Extensive Datum Support
 
 Vdatums supports transformations between three major categories of vertical reference frames:
 
@@ -14,16 +14,16 @@ Vdatums supports transformations between three major categories of vertical refe
 * **Ellipsoidal Datums:** Supports transformations between various geometric reference frames used by GPS/GNSS, such as NAD83 variants (2011, PA11, MA11), WGS84 realizations (G730, G873, G1150, G1674, G1762, G2139), and ITRF realizations (ITRF88-2020). It utilizes the **HTDP** (Horizontal Time-Dependent Positioning) utility for these geodetic shifts.
 * **Orthometric Datums:** Supports transformations involving gravity-based datums like NAVD88, NGVD29, EGM96, EGM2008, CGVD2013, and PRVD02. It accesses the **CDN** (Cumulative Distribution Network) or internal geoid grids (e.g., GEOID12B, GEOID18) to perform these conversions.
 
-### 2. Grid-Based Transformation Generation
+### Grid-Based Transformation Generation
 
 Rather than transforming points one by one, Vdatums generates a spatially varying transformation grid (raster) that covers the extent of the input data. This ensures that local variations in the separation between datums (e.g., the geoid slope or tidal variance) are accurately captured across the entire dataset.
 
-### 3. Integrated Workflow
+### Integrated Workflow
 
 * **Seamless Chaining:** The module intelligently chains transformations. If a direct conversion doesn't exist (e.g., NAVD88 to MLLW), it routes the transformation through intermediate steps (e.g., NAVD88 -> NAD83 -> MLLW) automatically.
 * **Uncertainty Estimation:** Vdatums can estimate the uncertainty introduced by the transformation process, providing an error grid alongside the transformation grid.
 
-### 4. External Tool Integration
+### External Tool Integration
 
 Vdatums acts as a wrapper and orchestrator for industry-standard geodesy tools:
 
@@ -42,7 +42,7 @@ vdatums input_navd88.tif output_wgs84.tif -i 5703 -o 7662
 
 This command will:
 
-1. Identify the transformation path (NAVD88 -> NAD83 -> WGS84).
-2. Fetch or generate the necessary separation grids (Geoid18, etc.).
-3. Compute the composite offset grid.
-4. Apply the offset to `input_navd88.tif` to create `output_wgs84.tif`.
+* Identify the transformation path (NAVD88 -> NAD83 -> WGS84).
+* Fetch or generate the necessary separation grids (Geoid18, etc.).
+* Compute the composite offset grid.
+* Apply the offset to `input_navd88.tif` to create `output_wgs84.tif`.

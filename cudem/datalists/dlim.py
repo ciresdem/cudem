@@ -1670,26 +1670,26 @@ class ElevationDataset:
             utils.echo_msg_bold(f'Parsed {count} data records from ...{self.fn[:-20]} @ a weight of {self.weight}')    
 
             
-    def stacks(self, out_name=None):
-        # gbt = globato.GdalRasterStacker(
-        #     region=self.region,
-        #     x_inc=self.x_inc,
-        #     y_inc=self.y_inc,
-        #     dst_srs=self.dst_srs,
-        #     cache_dir=self.cache_dir
-        # )
-        # stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
-
-        gbt = globato.GlobatoStacker(
-            region=self.region,
-            x_inc=self.x_inc,
-            y_inc=self.y_inc,
-            dst_srs=self.dst_srs,
-            cache_dir=self.cache_dir
-        )
-
-        blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)
-        stacked_fn = globato_converter(blocked_fn, tif_path=f'{out_name}.tif', verbose=True)
+    def stacks(self, out_name=None, use_blocks=False):
+        if not use_blocks:
+            gbt = globato.GdalRasterStacker(
+                region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                dst_srs=self.dst_srs,
+                cache_dir=self.cache_dir
+            )
+            stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
+        else:
+            gbt = globato.GlobatoStacker(
+                region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                dst_srs=self.dst_srs,
+                cache_dir=self.cache_dir
+            )
+            blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)
+            stacked_fn = globato_converter.globato_to_gdal(blocked_fn, tif_path=f'{out_name}.tif', verbose=True)
         
         ## Perform any desired grits filters on the stack (making a copy, so we can retain the original).
         if self.stack_fltrs:
@@ -2946,6 +2946,12 @@ def datalists_cli():
         help="Archive the DATALIST to the given REGION. Optional dirname."
     )
     out_grp.add_argument(
+        '-G', '--globato', 
+        nargs='?', 
+        const='globato', 
+        help="Archive the DATALIST to a GLOBATO file. Optional filename."
+    )
+    out_grp.add_argument(
         '-s', '--separate', 
         action='store_true', 
         help="Process and dump each dataset entry independently."
@@ -3118,6 +3124,9 @@ def datalists_cli():
                     if this_archive.numpts == 0:
                         utils.remove_glob(f'{this_archive.name}*')
 
+                elif args.globato:
+                    this_datalist.blocks(out_name=args.globato)
+                
                 else:
                     ## Default: Dump Data
                     if args.separate:
