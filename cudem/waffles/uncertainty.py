@@ -189,7 +189,7 @@ class WafflesUncertainty(Waffle):
             dst_srs=self.dst_srs,
             srs_transform=self.srs_transform,
             clobber=True,
-            verbose=self.verbose,
+            verbose=False,
             keep_auxiliary=False
         )._acquire_module()
         src_unc_surface.initialize()
@@ -381,7 +381,7 @@ class WafflesUncertainty(Waffle):
                 if not WaffleDEM(
                         wf.fn,
                         cache_dir=self.cache_dir,
-                        verbose=self.verbose
+                        verbose=False
                 ).initialize().valid_p():
                     continue
 
