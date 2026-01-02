@@ -57,7 +57,6 @@ Other useful external programs needed for full functionality include:
 * **GMT** / **PyGMT**: For robust gridding and filtering options.
 * **MB-System**: For processing raw bathymetric sonar formats.
 * **VDatum**: For vertical datum transformations.
-* **PDAL**: For processing point cloud formats (LAS/LAZ/COPC).
 
 ## Install via Pip
 Download and install git (If you have not already): [git installation](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
