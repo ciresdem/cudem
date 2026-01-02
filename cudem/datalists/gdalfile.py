@@ -412,7 +412,7 @@ class GDALFile(ElevationDataset):
                     else None,                
                     sample_alg=self.sample_alg,
                     ndv=ndv,
-                    verbose=self.verbose,
+                    verbose=False,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]
             
@@ -481,7 +481,7 @@ class GDALFile(ElevationDataset):
                         src_region=src_dem_region,
                         sample_alg=self.sample_alg,
                         ndv=ndv,
-                        verbose=self.verbose,
+                        verbose=False,
                         co=["COMPRESS=DEFLATE", "TILED=YES"]
                     )[0]
                     weight_band = src_weight.GetRasterBand(1)
@@ -516,7 +516,7 @@ class GDALFile(ElevationDataset):
                         src_region=src_dem_region,
                         sample_alg='bilinear',
                         ndv=ndv,
-                        verbose=self.verbose,
+                        verbose=False,
                         co=["COMPRESS=DEFLATE", "TILED=YES"]
                     )[0]
                     uncertainty_band = src_uncertainty.GetRasterBand(1)
@@ -541,7 +541,7 @@ class GDALFile(ElevationDataset):
                     src_region=src_dem_region,
                     sample_alg='bilinear',
                     ndv=ndv,
-                    verbose=self.verbose,
+                    verbose=False,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]
                 
