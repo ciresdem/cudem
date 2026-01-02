@@ -412,7 +412,7 @@ class GDALFile(ElevationDataset):
                     else None,                
                     sample_alg=self.sample_alg,
                     ndv=ndv,
-                    verbose=False,
+                    verbose=self.verbose,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]
             

@@ -266,47 +266,31 @@ class WafflesCUDEM(Waffle):
             self.inc_levels.sort()
         
         if self.verbose:
-            utils.echo_msg_bold('==============================================')
-            utils.echo_msg('')
-            #utils.echo_msg_bold('cudem pre-mode: {}'.format(self.pre_mode))
-                
-            utils.echo_msg_bold(
-                f'cudem generating {self.pre_count} pre-surface(s):'
-            )
+            init_str = ['\n==============================================\n']
+            init_str.append(f'cudem generating {self.pre_count} pre-surface(s):\n')
             for i in range(len(self.inc_levels)-1, -1, -1):
-                utils.echo_msg_bold(
-                    '* {} {} <{}> @ {} using data with a minimum weight of {}'.format(
-                        'pre_surface' if i !=0 else 'final surface',
-                        i,
-                        self.pre_mode if i == self.pre_count \
-                        else 'stacks' if i != 0 \
-                        else self.final_mode,
-                        self.inc_levels[i],
-                        self.weight_levels[i],
-                    )
-                )
-                
-            utils.echo_msg('')
-            utils.echo_msg_bold(f'cudem using stack file: {self.stack}')
+                init_str.append((f'* {"pre_surface" if i !=0 else "final_surface"} {i} '
+                                 f'<{self.pre_mode if i == self.pre_count else "stacks" if i != 0 else self.final_mode}> '
+                                 f'@ {self.inc_levels[1]} using data with a min weight of {self.weight_levels[i]}'))
+
+            init_str.append(f'\ncudem using stack file: {self.stack}')
             if self.landmask:
                 if isinstance(self.landmask, str):
                     if os.path.exists(self.landmask.split(':')[0]):
-                        utils.echo_msg_bold(
-                            f'cudem using coastline: {self.landmask}'
-                        )
+                        init_str.append(f'cudem using coastline: {self.landmask}')
                     else:
                         self.landmask = True
                         
                 if isinstance(self.landmask, bool):
-                    utils.echo_msg_bold(
-                        'cudem using coastline: Waffles COASTLINE module'
-                    )
-                
-            utils.echo_msg_bold(f'cudem flattening: {self.flatten}')
-            utils.echo_msg_bold(f'cudem output DEM: {self.name}')
-            utils.echo_msg('')
-            utils.echo_msg_bold('==============================================')
+                    init_str.append('cudem using coastline: Waffles COASTLINE module')
 
+            init_str.append(f'cudem flattening: {self.flatten}')
+            init_str.append(f'cudem output DEM: {self.name}')
+            init_str.append('\n==============================================')
+            
+            out_str = '\n'.join(init_str)
+            utils.echo_msg(out_str)
+            
         orig_stack = self.stack
         pre = self.pre_count
         pre_weight = 0 # initial run will use all data weights
@@ -362,7 +346,7 @@ class WafflesCUDEM(Waffle):
                     )
                     _pre_unc_name = f'{_pre_name_plus}_u.tif' if self.want_uncertainty else None
                     pre_data_entry = (f'"{_pre_name_plus}.tif",200'
-                                      f':uncertainty_mask="{_pre_unc_name}"'
+                                      f':uncertainty_mask={"_pre_unc_name" if _pre_unc_name else None}'
                                       f':sample=cubicspline:check_path=True'
                                       f',{pre_weight-.1}')
 
@@ -392,7 +376,7 @@ class WafflesCUDEM(Waffle):
 
                 utils.echo_msg(
                     'cudem gridding surface {} @ {} {}/{} to {} using {}...'.format(
-                        pre, pre_region, pre_xinc, pre_yinc, _pre_name, waffles_mod
+                        pre, pre_region.format('str'), pre_xinc, pre_yinc, _pre_name, waffles_mod
                     )
                 )
                 pre_surface = WaffleFactory(
