@@ -1228,6 +1228,13 @@ def get_calling_module_name(stack_level=1):
     return inspect.getmodulename(caller_frame.filename)
 
 
+def _print_msg(msg, use_tqdm=False, dst_port=sys.stdout):
+    if use_tqdm:
+        tqdm.write(msg, file=dst_port)
+    else:
+        dst.port.write(msg)
+        
+
 ## echo message `m` to sys.stderr using
 ## auto-generated prefix
 ## lambda runs: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
@@ -1237,6 +1244,7 @@ echo_msg_inline = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_le
 echo_debug_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='debug', use_tqdm=USE_TQDM, dst_port=DST_PORT)
 echo_error_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='error', use_tqdm=USE_TQDM, dst_port=DST_PORT)
 echo_warning_msg = lambda m: echo_msg2(m, prefix=get_calling_module_name(stack_level=2), level='warning', use_tqdm=USE_TQDM, dst_port=DST_PORT)
+print_msg = lambda m: _print_msg(m, use_tqdm=USE_TQDM)
 
 ## Module Descriptions
 ## echo cudem module options

@@ -888,8 +888,9 @@ class ElevationDataset:
                 l.append(entry.weight)
 
             entry_string = f'{sep.join([str(x) for x in l])}'
-            out.append(entry_string)
-            print(entry_string)
+            if entry_string:
+                out.append(entry_string)
+                utils.print_msg(entry_string)
 
         return out
 
