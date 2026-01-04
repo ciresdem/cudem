@@ -52,23 +52,24 @@ classifiers = [
 ]
 
 dependencies = [
-    "numpy",
-    "scipy",
-    "pyproj",
-    "requests[security]",
-    "lxml",
-    "matplotlib",
-    "laspy[lazrs,laszip]",
-    "h5py",
-    "boto3",
-    "tqdm",
-    "mercantile",
-    "utm",
-    "pandas",
-    "netCDF4",
+    "numpy", # system wide
+    "scipy", # waffles mods
+    "pyproj", # srsfun etc.
+    "requests[security]", # fetches
+    "lxml", # fetches xml parsing
+    "matplotlib", # uncertainty plots/perspecto mods
+    "laspy[lazrs,laszip]", # datalists.lasfile
+    "h5py", # datalists h5 parsing/globato
+    "boto3", # s3 support in fetches
+    "tqdm", # progress bar (optional)
+    "mercantile", # bing buildings
+    "utm", # bing buildings
+    "pandas", # icesat2 export
+    "netCDF4", # datalists netcdf support
 ]
 
 [project.optional-dependencies]
+gdal = ["gdal"] # GDAL and bindings (may be installed via system)
 gmt = ["pygmt"]  # Optional GMT bindings
 scikit = ["scikit-image", "scikit-learn"] # Optional SciKit
 

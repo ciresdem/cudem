@@ -30,7 +30,6 @@
 import os
 import numpy as np
 from osgeo import gdal
-from osgeo_utils import gdal_calc
 
 from cudem import utils
 from cudem import gdalfun
@@ -88,6 +87,8 @@ class Hillshade(perspecto.Perspecto):
         
     def gamma_correction_calc(self, hs_fn=None, outfile='gdaldem_gamma.tif'):
         """Apply gamma correction using gdal_calc (External utility)."""
+
+        from osgeo_utils import gdal_calc
         
         gdal_calc.Calc(
             "uint8(((A / 255.)**(1/0.5)) * 255)",

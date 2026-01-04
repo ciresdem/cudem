@@ -42,7 +42,7 @@ from cudem import srsfun
 from cudem import __version__ as __cudem_version__
 
 ## Suppress OGR exceptions to maintain legacy behavior
-ogr.DontUseExceptions()
+ogr.UseExceptions()
 
 __version__ = '1.0.0'
 

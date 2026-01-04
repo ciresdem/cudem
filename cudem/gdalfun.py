@@ -1925,7 +1925,7 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None, co=Tr
 def gmt_grd2gdal(src_grd, dst_fmt='GTiff', ndv=-9999, verbose=True):
     """convert the grd file to tif using GMT"""
 
-    dst_gdal = f'{".".join(src_grd.split('.')[:-1])}.{gdal_fext(dst_fmt)}'
+    dst_gdal = f'{".".join(src_grd.split(".")[:-1])}.{gdal_fext(dst_fmt)}'
     
     grd2gdal_cmd = 'gmt grdconvert {src_grd} {dst_gdal}=gd+n{ndv}:{dst_fmt} -V'
     

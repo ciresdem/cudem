@@ -685,9 +685,12 @@ def vdatums_cli():
         )
         utils.run_cmd(warp_cmd, verbose=not args.quiet)
 
+        a_val = src_grd.replace(" ", r"\ ")
+        b_val = out_trans_grid.replace(" ", r"\ ")
+        out_val = dst_grid.replace(" ", r"\ ")
         gdc_cmd = (
-            f'gdal_calc.py -A {src_grid.replace(" ", r"\ ")} -B {out_trans_grid.replace(" ", r"\ ")} '
-            f'--calc "A+B" --outfile {dst_grid.replace(" ", r"\ ")} --co COMPRESS=LZW '
+            f'gdal_calc.py -A {a_val} -B {b_val} '
+            f'--calc "A+B" --outfile {out_val} --co COMPRESS=LZW '
             f'--co TILED=YES --co PREDICTOR=3 --overwrite'
         )
         

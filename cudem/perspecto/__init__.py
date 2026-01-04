@@ -35,7 +35,6 @@ from . import povray
 from . import sphere
 from . import perspective
 from . import figure1
-from . import joyplot
 from . import histogram
 
 ### End

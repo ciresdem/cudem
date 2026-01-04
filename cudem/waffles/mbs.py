@@ -81,7 +81,7 @@ class WafflesMBGrid(Waffle):
     def _gmt_grd2gdal(self, src_grd, dst_fmt='GTiff'):
         """Convert the grd file to tif using GMT."""
 
-        dst_gdal = f'{os.path.basename(src_grd).split('.')[0]}.{gdalfun.gdal_fext(dst_fmt)}'
+        dst_gdal = f'{os.path.basename(src_grd).split(".")[0]}.{gdalfun.gdal_fext(dst_fmt)}'
         grd2gdal_cmd = f'gmt grdconvert "{src_grd}" "{dst_gdal}"=gd+n{self.ndv}:{dst_fmt} -V'
         
         out, status = utils.run_cmd(grd2gdal_cmd, verbose=self.verbose)
@@ -94,7 +94,7 @@ class WafflesMBGrid(Waffle):
     def _gmt_grdsample(self, src_grd, dst_fmt='GTiff'):
         """Resample the grd file to tif using GMT."""
 
-        dst_gdal = f'{os.path.basename(src_grd).split('.')[0]}.{gdalfun.gdal_fext(dst_fmt)}'
+        dst_gdal = f'{os.path.basename(src_grd).split(".")[0]}.{gdalfun.gdal_fext(dst_fmt)}'
         grdsample_cmd = f'gmt grdsample "{src_grd}" -T -G{dst_gdal}=gd+n{self.ndv}:{dst_fmt} -V'
         
         out, status = utils.run_cmd(grdsample_cmd, verbose=self.verbose)        
