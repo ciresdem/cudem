@@ -221,7 +221,7 @@ class WafflesKriging(Waffle):
                 # if np.ma.is_masked(ss_chunk):
                 #     ss_chunk = ss_chunk.filled(self.ndv)
                 
-                utils.echo_msg(z_chunk)
+                #utils.echo_msg(z_chunk)
                     
                 ## Write to disk
                 elev_band.WriteArray(z_chunk)#, x_off, y_off)

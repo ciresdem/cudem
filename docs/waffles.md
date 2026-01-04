@@ -21,7 +21,7 @@ The module operates on a "stacking" principle, where multiple input datasets are
 * **Accepts diverse inputs**: ASCII XYZ, LAS/LAZ, GeoTIFF, BAG, OGR vectors, MB-System datalists, and fetch modules.
 * **Stacking**: Before interpolation, data is "stacked" into a weighted intermediate raster. This handles overlapping datasets by calculating weighted means or allowing high-quality data to supersede lower-quality data.
 
-### 3. Region & Resolution Management
+### Region & Resolution Management
 
 * **Chunking**: Capable of processing massive datasets by splitting the region into smaller chunks (-K), processing them in parallel, and stitching the results back together.
 * **Buffering/Extension**: Automatically buffers regions during processing (-X) to prevent edge artifacts, then crops the result to the desired extent.

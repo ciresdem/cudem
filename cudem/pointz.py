@@ -866,21 +866,17 @@ class RQOutlierZ(OutlierZ):
                 return out_fn
         return None
 
-    
-    def init_raster(self, raster):
 
+    def init_raster(self, raster):
         if raster and isinstance(raster, str):
             if os.path.exists(raster) and os.path.isfile(raster):
                 return [raster]
 
             elif any(raster in item for item in self.fetches_modules):
                 _raster = [item for item in self.fetches_modules if raster in item][0]
-                #elif raster.split(':')[0] in self.fetches_modules:
                 this_fetch = self.fetch_data(_raster, self.region.copy().buffer(pct=1))
                 raster = [x[1] for x in this_fetch.results]
-                ## gmrt now comes as tif, as do most others
-                #raster = [gdalfun.gmt_grd2gdal(x, verbose=False) \
-                #          if x.split('.')[-1] == 'grd' else x for x in raster]
+                
                 if self.xyinc is not None and self.resample_raster:
                     with warnings.catch_warnings():
                         warnings.simplefilter('ignore')
@@ -893,18 +889,17 @@ class RQOutlierZ(OutlierZ):
                 return raster
             
         elif raster is None:
+            ## Align naming with point_residuals (rq_merged instead of rq_raster_None)
             if (self.region is not None or self.xyinc is not None) and self.resample_raster:
                 _raster = utils.append_fn(
-                    f'rq_raster_{raster}', self.region,
+                    'rq_merged', self.region, 
                     self.xyinc[0], res=1 if not all(self.xyinc) else None
                 )
                 _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
             else:
-                _raster = utils.make_temp_fn('rq_raster.tif', self.cache_dir)
+                _raster = utils.make_temp_fn('rq_merged.tif', self.cache_dir)
                 
-            if not os.path.exists(os.path.dirname(os.path.abspath(_raster))):
-                os.makedirs(os.path.dirname(os.path.abspath(_raster)))
-                
+            # If the merged raster from a previous run exists, return it immediately.
             if os.path.exists(_raster) and os.path.isfile(_raster):
                 return [_raster]
                 
@@ -922,8 +917,6 @@ class RQOutlierZ(OutlierZ):
                 'etopo:datatype=surface', self.region.copy().buffer(pct=1)
             )
             raster.extend([x[1] for x in this_fetch.results])
-            # raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) \
-            #                if x.split('.')[-1] == 'grd' else x for x in raster_])
 
             ## Try gmrt swath
             this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
@@ -944,21 +937,19 @@ class RQOutlierZ(OutlierZ):
             this_fetch = self.fetch_data(
                 'CUDEM:datatype=19:keep_footprints=True', self.region.copy().buffer(pct=1)
             )
-            raster.extend([x[1] for x in this_fetch.results])                    
+            raster.extend([x[1] for x in this_fetch.results])                     
 
         else:
             utils.echo_warning_msg(f'could not parse rq raster {raster}')
         return raster
 
-    
     def init_raster_fallback(self, raster):
         """Initialize the reference raster list."""
         
         if raster and os.path.exists(raster) and os.path.isfile(raster):
             return [raster]
         
-        ## Fetch Defaults
-        ## GMRT/ETOPO/CUDEM
+        ## Fetch Default GMRT
         rasters = []
         gmrt_fetch = self.fetch_data('gmrt')
         if gmrt_fetch:
@@ -976,7 +967,7 @@ class RQOutlierZ(OutlierZ):
                 rasters.extend([r[1] for r in cudem_fetch.results])
 
         return rasters
-        
+
     
     def point_residuals(self, points, percentage=True, res=50):
         """Calculate residuals against the loaded raster(s)."""
@@ -989,17 +980,17 @@ class RQOutlierZ(OutlierZ):
         temp_merged = None
         
         if len(self.raster) > 1 or self.resample_raster:
-            #tmp_raster_fn = os.path.join(self.cache_dir, f'rq_merged_{utils.this_year()}.vrt')
             if self.region is None: self.region = self.init_region()
             
+            ## Ensure we check the cache_dir for the merged file
             tmp_raster_fn = utils.append_fn(
-                f'rq_merged', self.region,
-                self.xyinc[0] if self.xyinc[0] else 1,
+                'rq_merged', self.region, 
+                self.xyinc[0] if self.xyinc[0] else 1, 
                 res=1 if not all(self.xyinc) else None
             )
+            tmp_raster_fn = os.path.join(self.cache_dir, f'{tmp_raster_fn}.tif')
 
-            ## Create a temporary region buffered by 5% to ensure points on the 
-            ## exact edges of the bounding box are covered by the new raster grid.
+            ## Create a temporary region buffered by 5%
             warp_region = self.region.copy()
             warp_region.buffer(pct=5) 
 
@@ -1007,14 +998,7 @@ class RQOutlierZ(OutlierZ):
             y_res = self.xyinc[1] if self.xyinc else 0.0000925
 
             try:
-                ## Either use the size=True along with xcount/ycount or
-                ## use x_res/y_res with the warp_region instead of self.region
-                # warped = gdalfun.sample_warp(
-                #     self.raster, tmp_raster_fn, None, None,
-                #     xcount=None, ycount=None, size=True,
-                #     sample_alg='bilinear', src_region=self.region, 
-                #     verbose=self.verbose
-                # )
+                ## Check if the file exists in the cache_dir before attempting to warp
                 if os.path.exists(tmp_raster_fn):
                     ref_raster = tmp_raster_fn
                     temp_merged = ref_raster
@@ -1034,21 +1018,20 @@ class RQOutlierZ(OutlierZ):
         ## Interpolate
         sampled_z = gdalfun.gdal_query(points, ref_raster, 'g').flatten()
         
-        # if temp_merged and os.path.exists(temp_merged):
-        #     if temp_merged.endswith('.vrt'):
-        #         try: os.remove(temp_merged)
-        #         except OSError: pass
+        ## Cleanup: Only delete if it's a VRT (temp). 
+        ## TIFs are kept for reuse.
+        if temp_merged and os.path.exists(temp_merged):
+            if temp_merged.endswith('.vrt'):
+                try: os.remove(temp_merged)
+                except OSError: pass
 
         ## Validation check to catch alignment errors early
         if len(sampled_z) != len(points):
-            ## If lengths still mismatch, pad with NaNs to prevent crash (though buffer usually fixes this)
             utils.echo_warning_msg(
                 f"Shape mismatch in RQ filter: Points {len(points)} vs Sampled {len(sampled_z)}. "
                 "Padding with NaNs."
             )
             new_sampled = np.full(len(points), np.nan)
-            ## Fallback to fill what we can
-            ## Ideally, this never gets reached.
             limit = min(len(points), len(sampled_z))
             new_sampled[:limit] = sampled_z[:limit]
             sampled_z = new_sampled
@@ -1065,6 +1048,180 @@ class RQOutlierZ(OutlierZ):
             return vals
         else:
             return np.abs(diff)
+        
+    
+    # def init_raster(self, raster):
+
+    #     if raster and isinstance(raster, str):
+    #         if os.path.exists(raster) and os.path.isfile(raster):
+    #             return [raster]
+
+    #         elif any(raster in item for item in self.fetches_modules):
+    #             _raster = [item for item in self.fetches_modules if raster in item][0]
+    #             #elif raster.split(':')[0] in self.fetches_modules:
+    #             this_fetch = self.fetch_data(_raster, self.region.copy().buffer(pct=1))
+    #             raster = [x[1] for x in this_fetch.results]
+    #             ## gmrt now comes as tif, as do most others
+    #             #raster = [gdalfun.gmt_grd2gdal(x, verbose=False) \
+    #             #          if x.split('.')[-1] == 'grd' else x for x in raster]
+    #             if self.xyinc is not None and self.resample_raster:
+    #                 with warnings.catch_warnings():
+    #                     warnings.simplefilter('ignore')
+    #                     raster = [gdalfun.sample_warp(
+    #                         raster, None, self.xyinc[0], self.xyinc[1],
+    #                         sample_alg='bilinear', src_region=self.region,
+    #                         verbose=False,
+    #                         co=["COMPRESS=DEFLATE", "TILED=YES"]
+    #                     )[0]]
+    #             return raster
+            
+    #     elif raster is None:
+    #         if (self.region is not None or self.xyinc is not None) and self.resample_raster:
+    #             _raster = utils.append_fn(
+    #                 f'rq_raster_{raster}', self.region,
+    #                 self.xyinc[0], res=1 if not all(self.xyinc) else None
+    #             )
+    #             _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
+    #         else:
+    #             _raster = utils.make_temp_fn('rq_raster.tif', self.cache_dir)
+                
+    #         if not os.path.exists(os.path.dirname(os.path.abspath(_raster))):
+    #             os.makedirs(os.path.dirname(os.path.abspath(_raster)))
+                
+    #         if os.path.exists(_raster) and os.path.isfile(_raster):
+    #             return [_raster]
+                
+    #         raster = []
+    #         ## Try gmrt all
+    #         this_fetch = self.fetch_data(
+    #             'gmrt', self.region.copy().buffer(pct=1)
+    #         )
+    #         raster_ = [x[1] for x in this_fetch.results]
+    #         raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) \
+    #                        if x.split('.')[-1] == 'grd' else x for x in raster_])
+            
+    #         ## Try etopo
+    #         this_fetch = self.fetch_data(
+    #             'etopo:datatype=surface', self.region.copy().buffer(pct=1)
+    #         )
+    #         raster.extend([x[1] for x in this_fetch.results])
+    #         # raster.extend([gdalfun.gmt_grd2gdal(x, verbose=False) \
+    #         #                if x.split('.')[-1] == 'grd' else x for x in raster_])
+
+    #         ## Try gmrt swath
+    #         this_fetch = self.fetch_data('gmrt', self.region.copy().buffer(pct=1))
+    #         raster_ = [x[1] for x in this_fetch.results]
+    #         raster_ = [gdalfun.gmt_grd2gdal(x, verbose=False) \
+    #                    if x.split('.')[-1] == 'grd' else x for x in raster_]
+    #         gmrt_swath = self.mask_gmrt(raster_[0])
+    #         if gmrt_swath is not None:
+    #             raster.extend([gmrt_swath])
+
+    #         ## Try cudem 1/3
+    #         this_fetch = self.fetch_data(
+    #             'CUDEM:datatype=13:keep_footprints=True', self.region.copy().buffer(pct=1)
+    #         )
+    #         raster.extend([x[1] for x in this_fetch.results])        
+
+    #         ## Try cudem 1/9
+    #         this_fetch = self.fetch_data(
+    #             'CUDEM:datatype=19:keep_footprints=True', self.region.copy().buffer(pct=1)
+    #         )
+    #         raster.extend([x[1] for x in this_fetch.results])                    
+
+    #     else:
+    #         utils.echo_warning_msg(f'could not parse rq raster {raster}')
+    #     return raster
+
+            
+    
+    # def point_residuals(self, points, percentage=True, res=50):
+    #     """Calculate residuals against the loaded raster(s)."""
+        
+    #     if not self.raster:
+    #         return None
+
+    #     ## Handle Multiple Rasters via Warping/Merging
+    #     ref_raster = self.raster[0]
+    #     temp_merged = None
+        
+    #     if len(self.raster) > 1 or self.resample_raster:
+    #         #tmp_raster_fn = os.path.join(self.cache_dir, f'rq_merged_{utils.this_year()}.vrt')
+    #         if self.region is None: self.region = self.init_region()
+            
+    #         tmp_raster_fn = utils.append_fn(
+    #             f'rq_merged', self.region,
+    #             self.xyinc[0] if self.xyinc[0] else 1,
+    #             res=1 if not all(self.xyinc) else None
+    #         )
+
+    #         ## Create a temporary region buffered by 5% to ensure points on the 
+    #         ## exact edges of the bounding box are covered by the new raster grid.
+    #         warp_region = self.region.copy()
+    #         warp_region.buffer(pct=5) 
+
+    #         x_res = self.xyinc[0] if self.xyinc else 0.0000925
+    #         y_res = self.xyinc[1] if self.xyinc else 0.0000925
+
+    #         try:
+    #             ## Either use the size=True along with xcount/ycount or
+    #             ## use x_res/y_res with the warp_region instead of self.region
+    #             # warped = gdalfun.sample_warp(
+    #             #     self.raster, tmp_raster_fn, None, None,
+    #             #     xcount=None, ycount=None, size=True,
+    #             #     sample_alg='bilinear', src_region=self.region, 
+    #             #     verbose=self.verbose
+    #             # )
+    #             if os.path.exists(tmp_raster_fn):
+    #                 ref_raster = tmp_raster_fn
+    #                 temp_merged = ref_raster
+    #             else:
+    #                 warped = gdalfun.sample_warp(
+    #                     self.raster, tmp_raster_fn, x_res, y_res,
+    #                     sample_alg='bilinear', src_region=warp_region, 
+    #                     verbose=self.verbose
+    #                 )
+    #                 if warped:
+    #                     ref_raster = warped[0]
+    #                     temp_merged = ref_raster
+    #         except Exception as e:
+    #             utils.echo_error_msg(f"Failed to merge rasters: {e}")
+    #             return None
+
+    #     ## Interpolate
+    #     sampled_z = gdalfun.gdal_query(points, ref_raster, 'g').flatten()
+        
+    #     if temp_merged and os.path.exists(temp_merged):
+    #         if temp_merged.endswith('.vrt'):
+    #             try: os.remove(temp_merged)
+    #             except OSError: pass
+
+    #     ## Validation check to catch alignment errors early
+    #     if len(sampled_z) != len(points):
+    #         ## If lengths still mismatch, pad with NaNs to prevent crash (though buffer usually fixes this)
+    #         utils.echo_warning_msg(
+    #             f"Shape mismatch in RQ filter: Points {len(points)} vs Sampled {len(sampled_z)}. "
+    #             "Padding with NaNs."
+    #         )
+    #         new_sampled = np.full(len(points), np.nan)
+    #         ## Fallback to fill what we can
+    #         ## Ideally, this never gets reached.
+    #         limit = min(len(points), len(sampled_z))
+    #         new_sampled[:limit] = sampled_z[:limit]
+    #         sampled_z = new_sampled
+                
+    #     diff = points['z'] - sampled_z
+        
+    #     if percentage:
+    #         with np.errstate(divide='ignore', invalid='ignore'):
+    #             if self.scaled_percentile:
+    #                 vals = np.abs(diff / (points['z'] + sampled_z)) * 100
+    #             else:
+    #                 vals = np.abs(diff / sampled_z) * 100
+    #             vals[~np.isfinite(vals)] = 0
+    #         return vals
+    #     else:
+    #         return np.abs(diff)
 
 
 class BlockThin(PointZ):
