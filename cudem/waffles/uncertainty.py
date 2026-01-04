@@ -362,9 +362,9 @@ class WafflesMLUncertainty(Uncertainty):
                             y_all.append(diff)
 
                     ds_sub = None
-                    utils.remove_glob(sub_interp_fn + '*')
+                    utils.remove_glob(f'{sub_interp_fn}*')
 
-            utils.remove_glob(train_xyz_fn)
+            utils.remove_glob(f'{train_xyz_fn}*')
 
         if len(X_all) == 0:
             return None, None
@@ -534,7 +534,7 @@ class WafflesMLUncertainty(Uncertainty):
         #gdalfun.gdal_write(unc_array, unc_out_fn, self.ds_config)
         
         ## Cleanup
-        utils.remove_glob(self.prox)
+        utils.remove_glob(f'{self.prox}*')
         
         return self
     
