@@ -386,7 +386,7 @@ class Waffle:
 
         ## Append some info to the init_str
         init_str.append(f'Input region: {self.region}')
-        init_str.append(f'Distribution region: {self.d_region}')
+        init_str.append(f'Output region: {self.d_region}')
         init_str.append(f'Processing region: {self.p_region}')
         init_str.append(f'Cache directory is: {self.cache_dir}')
         return init_str
@@ -1060,7 +1060,8 @@ class WaffleFactory(factory.CUDEMFactory):
         'coastline': {'name': 'coastline', 'stack': False, 'call': coastline.WafflesCoastline},
         'lakes': {'name': 'lakes', 'stack': False, 'call': lakes.WafflesLakes},
         'cudem': {'name': 'cudem', 'stack': True, 'call': cudemgrid.WafflesCUDEM},
-        'uncertainty': {'name': 'uncertainty', 'stack': True, 'call': uncertainty.WafflesUncertainty},
+        'uncertainty': {'name': 'uncertainty', 'stack': True, 'call': uncertainty.WafflesSplitSampleUncertainty},
+        'uncertainty-ml': {'name': 'uncertainty-ml', 'stack': True, 'call': uncertainty.WafflesMLUncertainty},
         'scratch': {'name': 'scratch', 'stack': True, 'call': WafflesScratch},
         'flatten': {'name': 'flatten', 'stack': True, 'call': flatten.WafflesFlatten},
         ## testing

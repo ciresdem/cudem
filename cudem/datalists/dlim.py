@@ -1446,6 +1446,7 @@ class ElevationDataset:
                             region=self.region,
                             xyinc=[self.x_inc, self.y_inc],
                             cache_dir=self.cache_dir,
+                            verbose=False,
                         )._acquire_module()
                         if point_filter:
                             points = point_filter()
@@ -1642,7 +1643,7 @@ class ElevationDataset:
                 )
 
         if self.verbose:
-            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn[:-20]} @ a weight of {self.weight}')
+            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn[-20:]} @ a weight of {self.weight}')
 
             
     def yield_array(self, want_sums=True):
@@ -1669,7 +1670,7 @@ class ElevationDataset:
             )
 
         if self.verbose:
-            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn[:-20]} @ a weight of {self.weight}')    
+            utils.echo_msg_bold(f'Parsed {count} data records from {self.fn[-20:]} @ a weight of {self.weight}')    
 
             
     def stacks(self, out_name=None, use_blocks=False):

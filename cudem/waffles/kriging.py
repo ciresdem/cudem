@@ -118,7 +118,8 @@ class WafflesKriging(Waffle):
             py, px = np.nonzero(valid_mask)
             
             z_train = points_array[py, px]
-            x_train, y_train = utils._pixel2geo(px, py, gt, node='pixel')
+            #x_train, y_train = utils._pixel2geo(px, py, gt, node='pixel')
+            x_train, y_train = px, py
             
             ## Decimate if too many points to prevent memory crash
             if len(z_train) > self.max_points:
@@ -154,7 +155,7 @@ class WafflesKriging(Waffle):
             ## Train Kriging Model
             if self.verbose:
                 utils.echo_msg("Training Variogram model...")
-                
+
             try:
                 OK = OrdinaryKriging(
                     x_train, 
@@ -162,60 +163,71 @@ class WafflesKriging(Waffle):
                     z_train, 
                     variogram_model=self.model,
                     nlags=self.nlags,
-                    verbose=self.verbose,
+                    verbose=True,
                     enable_plotting=False
                 )
             except Exception as e:
                 utils.echo_error_msg(f"Kriging training failed: {e}")
                 return self
 
-            ## Execute Interpolation (Chunked)
-            ## PyKrige execute('grid') takes unique 1D arrays for x and y axes.
-            ## We iterate through srcwin chunks to manage memory.            
-            for srcwin in utils.yield_srcwin(
-                    (self.ycount, self.xcount),
-                    n_chunk=n_chunk,
-                    msg='Kriging Interpolation',
-                    verbose=self.verbose
-            ):
-                ## Calculate coordinate vectors for this chunk
-                x_off, y_off, x_size, y_size = srcwin
+            # ## Execute Interpolation (Chunked)
+            # ## PyKrige execute('grid') takes unique 1D arrays for x and y axes.
+            # ## We iterate through srcwin chunks to manage memory.            
+            # for srcwin in utils.yield_srcwin(
+            #         (self.ycount, self.xcount),
+            #         n_chunk=n_chunk,
+            #         msg='Kriging Interpolation',
+            #         verbose=self.verbose
+            # ):
+            #     ## Calculate coordinate vectors for this chunk
+            #     x_off, y_off, x_size, y_size = srcwin
                 
-                ## Get the Geo coordinates for the chunk axes
-                ## Pixel centers
-                x_start, y_start = utils._pixel2geo(x_off, y_off, self.dst_gt, node='pixel')
-                x_end, y_end = utils._pixel2geo(x_off + x_size, y_off + y_size, self.dst_gt, node='pixel')
+            #     ## Get the Geo coordinates for the chunk axes
+            #     ## Pixel centers
+            #     #x_start, y_start = utils._pixel2geo(x_off, y_off, self.dst_gt, node='pixel')
+            #     #x_end, y_end = utils._pixel2geo(x_off + x_size, y_off + y_size, self.dst_gt, node='pixel')
                 
-                ## Generate 1D coordinate arrays for PyKrige
-                ## Note: linspace endpoint=False is slightly safer for raster align
-                ## But PyKrige expects exact coords. Using arange/linspace based on GT.
+            #     ## Generate 1D coordinate arrays for PyKrige
+            #     ## Note: linspace endpoint=False is slightly safer for raster align
+            #     ## But PyKrige expects exact coords. Using arange/linspace based on GT.
                 
-                ## X coordinates (Columns)
-                grid_x = np.linspace(x_start, x_start + (x_size * self.dst_gt[1]), x_size, endpoint=False)
+            #     ## X coordinates (Columns)
+            #     #grid_x = np.linspace(x_start, x_start + (x_size * self.dst_gt[1]), x_size, endpoint=False)
+            #     #grid_x = np.linspace(x_off, x_off + x_size, x_size)
+            grid_x = np.linspace(0, self.xcount, self.xcount)
                 
-                ## Y coordinates (Rows)
-                ## Note: dst_gt[5] is usually negative.
-                grid_y = np.linspace(y_start, y_start + (y_size * self.dst_gt[5]), y_size, endpoint=False)
-                
-                ## Execute Kriging
-                ## returns: z_values, sigma_squared (variance)
-                try:
-                    z_chunk, ss_chunk = OK.execute('grid', grid_x, grid_y)
-                    
-                    ## PyKrige returns masked arrays if points fall outside domain, 
-                    ## fill with NDV.
-                    if np.ma.is_masked(z_chunk):
-                        z_chunk = z_chunk.filled(self.ndv)
-                    if np.ma.is_masked(ss_chunk):
-                        ss_chunk = ss_chunk.filled(self.ndv)
-                        
-                    ## Write to disk
-                    elev_band.WriteArray(z_chunk, x_off, y_off)
-                    var_band.WriteArray(ss_chunk, x_off, y_off)
-                    
-                except Exception as e:
-                    utils.echo_warning_msg(f"Chunk failed @ {srcwin}: {e}")
+            #     ## Y coordinates (Rows)
+            #     ## Note: dst_gt[5] is usually negative.
+            #     #grid_y = np.linspace(y_start, y_start + (y_size * self.dst_gt[5]), y_size, endpoint=False)
+            #     #grid_y = np.linspace(y_off, y_off + y_size, y_size)
+            grid_y = np.linspace(0, self.ycount, self.ycount)
 
+            #     # ## srcwin: (x_off, y_off, x_size, y_size)
+            #     # xi, yi = np.mgrid[srcwin[0]:srcwin[0] + srcwin[2],
+            #     #                   srcwin[1]:srcwin[1] + srcwin[3]]
+
+            #     #utils.echo_msg(f'{grid_x}, {grid_y}')
+            #     ## Execute Kriging
+            #     ## returns: z_values, sigma_squared (variance)
+            try:
+                z_chunk, ss_chunk = OK.execute('grid', grid_x, grid_y, backend='loop', n_closest_points=10)
+                
+                ## PyKrige returns masked arrays if points fall outside domain, 
+                ## fill with NDV.
+                # if np.ma.is_masked(z_chunk):
+                #     z_chunk = z_chunk.filled(self.ndv)
+                # if np.ma.is_masked(ss_chunk):
+                #     ss_chunk = ss_chunk.filled(self.ndv)
+                
+                utils.echo_msg(z_chunk)
+                    
+                ## Write to disk
+                elev_band.WriteArray(z_chunk)#, x_off, y_off)
+                var_band.WriteArray(ss_chunk)#, x_off, y_off)
+                    
+            except Exception as e:
+                utils.echo_warning_msg(f"Krige failed; {e}")
+                    
             dst_ds = None
             
         return self

@@ -866,6 +866,7 @@ class RQOutlierZ(OutlierZ):
                 return out_fn
         return None
 
+    
     def init_raster(self, raster):
 
         if raster and isinstance(raster, str):
@@ -898,11 +899,14 @@ class RQOutlierZ(OutlierZ):
                     self.xyinc[0], res=1 if not all(self.xyinc) else None
                 )
                 _raster = os.path.join(self.cache_dir, f'{_raster}.tif')
-                if not os.path.exists(os.path.dirname(_raster)):
-                    os.makedirs(os.path.dirname(_raster))
-
-                if os.path.exists(_raster) and os.path.isfile(_raster):
-                    return [_raster]
+            else:
+                _raster = utils.make_temp_fn('rq_raster.tif', self.cache_dir)
+                
+            if not os.path.exists(os.path.dirname(os.path.abspath(_raster))):
+                os.makedirs(os.path.dirname(os.path.abspath(_raster)))
+                
+            if os.path.exists(_raster) and os.path.isfile(_raster):
+                return [_raster]
                 
             raster = []
             ## Try gmrt all
@@ -985,8 +989,14 @@ class RQOutlierZ(OutlierZ):
         temp_merged = None
         
         if len(self.raster) > 1 or self.resample_raster:
-            tmp_raster_fn = os.path.join(self.cache_dir, f'rq_merged_{utils.this_year()}.vrt')
+            #tmp_raster_fn = os.path.join(self.cache_dir, f'rq_merged_{utils.this_year()}.vrt')
             if self.region is None: self.region = self.init_region()
+            
+            tmp_raster_fn = utils.append_fn(
+                f'rq_merged', self.region,
+                self.xyinc[0] if self.xyinc[0] else 1,
+                res=1 if not all(self.xyinc) else None
+            )
 
             ## Create a temporary region buffered by 5% to ensure points on the 
             ## exact edges of the bounding box are covered by the new raster grid.
@@ -1005,14 +1015,18 @@ class RQOutlierZ(OutlierZ):
                 #     sample_alg='bilinear', src_region=self.region, 
                 #     verbose=self.verbose
                 # )
-                warped = gdalfun.sample_warp(
-                    self.raster, tmp_raster_fn, x_res, y_res,
-                    sample_alg='bilinear', src_region=warp_region, 
-                    verbose=self.verbose
-                )
-                if warped:
-                    ref_raster = warped[0]
+                if os.path.exists(tmp_raster_fn):
+                    ref_raster = tmp_raster_fn
                     temp_merged = ref_raster
+                else:
+                    warped = gdalfun.sample_warp(
+                        self.raster, tmp_raster_fn, x_res, y_res,
+                        sample_alg='bilinear', src_region=warp_region, 
+                        verbose=self.verbose
+                    )
+                    if warped:
+                        ref_raster = warped[0]
+                        temp_merged = ref_raster
             except Exception as e:
                 utils.echo_error_msg(f"Failed to merge rasters: {e}")
                 return None
@@ -1020,10 +1034,10 @@ class RQOutlierZ(OutlierZ):
         ## Interpolate
         sampled_z = gdalfun.gdal_query(points, ref_raster, 'g').flatten()
         
-        if temp_merged and os.path.exists(temp_merged):
-            if temp_merged.endswith('.vrt'):
-                try: os.remove(temp_merged)
-                except OSError: pass
+        # if temp_merged and os.path.exists(temp_merged):
+        #     if temp_merged.endswith('.vrt'):
+        #         try: os.remove(temp_merged)
+        #         except OSError: pass
 
         ## Validation check to catch alignment errors early
         if len(sampled_z) != len(points):

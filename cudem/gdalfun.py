@@ -951,12 +951,13 @@ def gdal_infos(src_ds, scan=False, band=1):
             force_scan = 1 if (scan and not is_remote) else 0
             
             stats = target_band.GetStatistics(1, force_scan)
-            
-            if stats[0] != stats[1]: 
-                zr = [stats[0], stats[1]]
-            else:
-                if scan and not is_remote:
-                    zr = target_band.ComputeRasterMinMax(1)
+
+            if stats:
+                if stats[0] != stats[1]: 
+                    zr = [stats[0], stats[1]]
+                else:
+                    if scan and not is_remote:
+                        zr = target_band.ComputeRasterMinMax(1)
                     
         except Exception as e:
             if scan: utils.echo_warning_msg(f"Could not retrieve stats: {e}")
@@ -1768,26 +1769,26 @@ def gdal_proximity(src_gdal, dst_gdal, band=1, distunits='pixel'):
             mem_band = mem_ds.GetRasterBand(1)
             mem_band.WriteArray(src_arr)
 
-    drv = gdal.GetDriverByName('GTiff')
-    dst_ds = drv.Create(
-        dst_gdal,
-        ds_config['nx'],
-        ds_config['ny'],
-        1,
-        gdal.GDT_Int32 if distunits == 'PIXEL' else gdal.GDT_Float32,
-        []
-    )
-    dst_ds.SetGeoTransform(ds_config['geoT'])
-    dst_ds.SetProjection(ds_config['proj'])
-    dst_band = dst_ds.GetRasterBand(1)
-    dst_band.SetNoDataValue(ds_config['ndv'])
-    gdal.ComputeProximity(
-        mem_band,
-        dst_band,
-        ['VALUES=1', 'DISTUNITS={}'.format(distunits)],
-        callback = prog_func
-    )
-    mem_ds = dst_ds = None
+            drv = gdal.GetDriverByName('GTiff')
+            dst_ds = drv.Create(
+                dst_gdal,
+                ds_config['nx'],
+                ds_config['ny'],
+                1,
+                gdal.GDT_Int32 if distunits == 'PIXEL' else gdal.GDT_Float32,
+                []
+            )
+            dst_ds.SetGeoTransform(ds_config['geoT'])
+            dst_ds.SetProjection(ds_config['proj'])
+            dst_band = dst_ds.GetRasterBand(1)
+            dst_band.SetNoDataValue(ds_config['ndv'])
+            gdal.ComputeProximity(
+                mem_band,
+                dst_band,
+                ['VALUES=1', 'DISTUNITS={}'.format(distunits)],
+                callback = prog_func
+            )
+            mem_ds = dst_ds = None
     return dst_gdal
 
 
