@@ -365,9 +365,9 @@ class Datalist(ElevationDataset):
                         leave=False
                 ) as pbar:
                     for line in f:
-                        pbar.update()
                         line = line.strip()
                         if line and not line.startswith('#'):
+                            pbar.update()
                             md = copy.deepcopy(self.metadata)
                             md['name'] = utils.fn_basename2(os.path.basename(self.fn))
 

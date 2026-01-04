@@ -1067,7 +1067,10 @@ class WaffleFactory(factory.CUDEMFactory):
         ## testing
         'kriging': {'name': 'kriging', 'stack': True, 'call': kriging.WafflesKriging},
         'ml-interp': {'name': 'ml_interp', 'stack': True, 'call': ml_interp.WafflesML},
-        'natural_neighbor': {'name': 'natural_neighbor', 'stack': True, 'call': natural_neighbor.WafflesNaturalNeighbor},
+        'ml-rf': {'name': 'ml-rf', 'stack': True, 'call': ml_interp.WafflesRF},
+        'ml-knn': {'name': 'ml-knn', 'stack': True, 'call': ml_interp.WafflesKNN},
+        'ml-mlp': {'name': 'ml-mlp', 'stack': True, 'call': ml_interp.WafflesMLP},
+        'natural-neighbor': {'name': 'natural-neighbor', 'stack': True, 'call': natural_neighbor.WafflesNaturalNeighbor},
         'inpaint': {'name': 'inpaint', 'stack': True, 'call': inpaint.WafflesInpaint},
         'cube': {'name': 'cube', 'stack': True, 'call': cube.WafflesCUBE},
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct

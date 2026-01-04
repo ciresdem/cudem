@@ -277,4 +277,46 @@ class WafflesML(Waffle):
             
         return self
 
+    
+class WafflesRF(WafflesML):
+    """ Random Forest (rf) Predicted DEM
+    
+    -----------
+    Parameters:
+    
+    chunk_size=[val] - size of chunks in pixels
+    """
+        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.algo = 'rf'
+
+
+class WafflesKNN(WafflesML):
+    """KNeighbors (knn) Predicted DEM
+    
+    -----------
+    Parameters:
+    
+    chunk_size=[val] - size of chunks in pixels
+    """
+        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.algo = 'knn'
+
+
+class WafflesMLP(WafflesML):
+    """Neural Net (mlp) Predicted DEM
+    
+    -----------
+    Parameters:
+    
+    chunk_size=[val] - size of chunks in pixels
+    """
+        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.algo = 'mlp'
+        
 ### End

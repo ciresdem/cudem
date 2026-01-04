@@ -72,6 +72,7 @@ dependencies = [
 gdal = ["gdal"] # GDAL and bindings (may be installed via system)
 gmt = ["pygmt"]  # Optional GMT bindings
 scikit = ["scikit-image", "scikit-learn"] # Optional SciKit
+cv2 = ["cv2"] # Option CV2 for waffles mods
 
 [tool.setuptools.packages.find]
 where = ["."]  

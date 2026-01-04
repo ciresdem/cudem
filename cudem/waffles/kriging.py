@@ -25,6 +25,8 @@
 ##
 ## Geostatistical Gridding via PyKrige.
 ##
+## https://geostat-framework.readthedocs.io/projects/pykrige/en/latest/contents.html
+##
 ### Code:
 
 import numpy as np

@@ -147,7 +147,7 @@ The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation 
 
 * **Unified Interface**: Users can switch between different interpolation methods simply by changing the module flag (e.g., `-M gmt-surface` for spline, `-M IDW` for inverse distance weighting).
 * **Algorithms**:
-  * **Internal**: `IDW` (Inverse Distance Weighting), `stacks` (Weighted Mean/Supercedure), `linear`/`cubic`/`nearest` (Scipy-based), `natural_neighbor` (Sibson), `kriging` (Geostatistical), and `ml_interp` (Machine Learning Regression).
+  * **Internal**: `IDW` (Inverse Distance Weighting), `stacks` (Weighted Mean/Supercedure), `linear`/`cubic`/`nearest` (Scipy-based), `natural-neighbor` (Sibson), `kriging` (Geostatistical), and `ml-rf`/`ml-knn`/`ml-mlp` (Machine Learning Regression (SciKit-based)).
   * **Wrappers**: `surface` / `triangulate` (GMT), `mbgrid` (MB-System), and `gdal` (GDAL Grid).
   * **Specialized**: `coastline` (Land/Water masking), `vdatum` (Vertical datum grids), `inpaint` (Void filling), and `uncertainty` (Interpolation error estimation).
 
