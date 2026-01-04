@@ -111,10 +111,21 @@ def fetches_callback(r: List[Any]):
     pass
 
 
-def urlencode(opts: Dict) -> str:
+def urlencode_(opts: Dict) -> str:
     """Encode `opts` for use in a URL."""
     
     return urllib.parse.urlencode(opts)
+
+
+def urlencode(opts: Dict, doseq: bool = True) -> str:
+    """Encode `opts` for use in a URL.
+    
+    Args:
+        opts: Dictionary of query parameters.
+        doseq: If True, lists in values are encoded as separate parameters 
+               (e.g., {'a': [1, 2]} -> 'a=1&a=2').
+    """
+    return urllib.parse.urlencode(opts, doseq=doseq)
 
 
 def xml2py(node) -> Optional[Dict]:
@@ -689,14 +700,15 @@ class fetch_results(threading.Thread):
         ## Populate queue
         ## Queue item: [url, path, type, module, retries, results_ptr]
         for row in self.mod.results:
-            self.fetch_q.put([
-                row['url'],
-                os.path.join(self.mod._outdir, row['dst_fn']),
-                row['data_type'],
-                self.mod,
-                self.attempts,
-                self.results
-            ])
+            if row['dst_fn']:
+                self.fetch_q.put([
+                    row['url'],
+                    os.path.join(self.mod._outdir, row['dst_fn']),
+                    row['data_type'],
+                    self.mod,
+                    self.attempts,
+                    self.results
+                ])
 
         ## Wait
         while not self.fetch_q.empty() and not self.stop_event.is_set():
@@ -824,31 +836,71 @@ class HttpDataset(FetchModule):
                 'https'
             )
 
-            
+
 class Nominatim(FetchModule):
-    """Test module for Nominatim (Geocoding)."""
+    """Fetch coordinates from OpenStreetMap's Nominatim service.
+    
+    Nominatim requires a valid User-Agent identifying the application.
+    """
     
     def __init__(self, q='boulder', **kwargs):
         super().__init__(name='nominatim', **kwargs)
         self.q = q
-        self._nom_url = 'https://nominatim.openstreetmap.org/search?'
+        self._nom_url = 'https://nominatim.openstreetmap.org/search'
+        
+        ## Nominatim usage policy requires a custom User-Agent and Referer.
         self.headers = {
-            'User-Agent': 'Fetches/CUDEM',
-            'referer': 'https://nominatim.openstreetmap.org/ui/search.html'
+            'User-Agent': 'CUDEM/Fetches 1.0 (cudem.colorado.edu)',
+            'Referer': 'https://cudem.colorado.edu'
         }
 
         
     def run(self):
         if utils.str_or(self.q) is not None:
-            q_url = f'{self._nom_url}q={self.q}&format=jsonv2'
-            _req = Fetch(q_url, verbose=self.verbose).fetch_req()
-            if _req is not None:
-                results = _req.json()
-                ## Assuming list return
-                if results and isinstance(results, list):
-                    x = utils.float_or(results[0]["lon"])
-                    y = utils.float_or(results[0]["lat"])
-                    print(f'{x}, {y}')
+            ## Construct parameters using the module's urlencode helper
+            params = {
+                'q': self.q,
+                'format': 'jsonv2',
+                'limit': 1,
+                'addressdetails': 1
+            }
+            query_str = urlencode(params)
+            q_url = f'{self._nom_url}?{query_str}'
+
+            _req = Fetch(q_url, headers=self.headers, verbose=self.verbose).fetch_req()
+            
+            if _req is not None and _req.status_code == 200:
+                try:
+                    results = _req.json()
+                    if results and isinstance(results, list) and len(results) > 0:
+                        ## Parse coordinates
+                        x = utils.float_or(results[0].get("lon"))
+                        y = utils.float_or(results[0].get("lat"))
+                        
+                        if self.verbose:
+                            ## Print the display name found (helpful for debugging vague queries)
+                            disp_name = results[0].get("display_name", "Unknown Location")
+                            utils.echo_msg(f"Resolved '{self.q}' to: {disp_name}")
+                            
+                        ## Standard output for CLI piping: "lon, lat"
+                        #print(f'{x}, {y}')
+                        
+                        ## Populate results list in case this is called programmatically
+                        self.results.append({
+                            'url': q_url,
+                            'dst_fn': None,
+                            'data_type': 'coords',
+                            'metadata': results[0],
+                            'x': x,
+                            'y': y
+                        })
+                    else:
+                        utils.echo_warning_msg(f"Nominatim: No results found for query '{self.q}'")
+                except Exception as e:
+                    utils.echo_error_msg(f"Nominatim parse error: {e}")
+            else:
+                status = _req.status_code if _req else "Connection Failed"
+                utils.echo_error_msg(f"Nominatim request failed: {status}")                
 
                     
 class GPSCoordinates(FetchModule):
@@ -938,6 +990,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'csb': {'call': csb.CSB},
         'cpt_city': {'call': cptcity.CPTCity},
         'gps_coordinates': {'call': GPSCoordinates},
+        'nominatim': {'call': Nominatim},
         'wa_dnr': {'call': wadnr.WADNR},
         'nsw_tb': {'call': nswtb.NSW_TB},
         'sentinel2': {'call': cdse.Sentinel2},
@@ -978,12 +1031,7 @@ CUDEM home page: <http://cudem.colorado.edu>
     parser.add_argument(
         '-R', '--region', '--aoi',
         action='append',
-        help=("Restrict processing to the desired REGION \n"
-              "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"
-              "OR an OGR-compatible vector file with regional polygons.\n"
-              "Note: When specifying negative coordinates, attach the value directly to the switch\n"
-              "(e.g., -R-90/...) or use an equals sign (-R=-90/...) to prevent the negative sign from\n"
-              "being misinterpreted as a new flag.")
+        help=regions.region_help_msg()
     )
     parser.add_argument(
         '-H', '--threads',

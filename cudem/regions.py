@@ -833,67 +833,44 @@ def region_list_to_ogr(region_list: List[Region], dst_ogr: str, dst_fmt: str = '
     
     ## Cleanup
     dst_ds = None
-
-
-def parse_cli_region(region_list: List[str], verbose: bool = True):
-    """Parse a list of region strings into Region objects."""
     
-    these_regions = []
-    
-    for i_region in region_list:
-        if i_region is None:
-            continue
-        
-        i_region_s = i_region.split(':')
-        base_region_str = i_region_s[0]
-        args = utils.args2dict(i_region_s[1:])
-        
-        tmp_region = Region().from_string(base_region_str)
-        
-        if tmp_region.is_valid(check_xy=True):
-            if 'pct_buffer' in args:
-                tmp_region.buffer(pct=utils.float_or(args['pct_buffer']))
-            these_regions.append(tmp_region)
-            
-        elif base_region_str == 'tile_set':
-            these_regions = generate_tile_set(**args)
-            
-        elif base_region_str == 'coordinates':
-            kwargs = factory.args2dict(i_region_s[1:])
-            tmp_region = quarter_tile_from_coordinates(**kwargs)
-            these_regions.append(tmp_region)
-            
-        elif base_region_str == 'q':
-            if len(i_region_s) > 1:
-                coords = fetch_gps_coordinates(i_region_s[1])
-                if coords:
-                    tmp_region = quarter_tile_from_coordinates(x=coords[0], y=coords[1])
-                    these_regions.append(tmp_region)
-                    
-        else:
-            ## Try parsing as OGR source
-            tmp_regions_ogr = ogr_wkts(base_region_str)
-            for r in tmp_regions_ogr:
-                if r.is_valid():
-                    if 'pct_buffer' in args:
-                        r.buffer(pct=utils.float_or(args['pct_buffer']))
-                    these_regions.append(r)
 
-    if verbose:
-        if not these_regions:
-            utils.echo_warning_msg(f'Failed to parse region(s): {region_list}')
-        else:
-            msg = f'Parsed {len(these_regions)} region(s)'
-            if len(these_regions) > 4:
-                msg += f': {these_regions[:2]}...{these_regions[-2:]}'
-            else:
-                msg += f': {these_regions}'
-            utils.echo_msg(msg)
+def fetch_nominatim_coordinates(q):
+    """Fetch coordinates for a query string using the fetches.Nominatim module.
+    
+    Args:
+        q (str): The place name or address to query (e.g. "Boulder, CO").
+        
+    Returns:
+        tuple: (x, y) coordinates if found, otherwise None.
+    """
+    
+    from cudem.fetches import fetches
+    
+    ## Initialize the Nominatim module with the query.
+    nom = fetches.Nominatim(q=q, verbose=False)
+    
+    try:
+        nom.run()
+        
+        ## Check if the module successfully populated results
+        if nom.results:
+            ## We take the first result (top match)
+            result = nom.results[0]
             
-    return these_regions
+            ## Ensure the expected keys exist before returning
+            if 'x' in result and 'y' in result:
+                return result['x'], result['y']
+                
+    except Exception as e:
+        cudem.utils.echo_error_msg(f"Error fetching nominatim coords: {e}")
+        
+    return None
 
 
 def fetch_gps_coordinates(q):
+    """Depreciated, use fetch_nominatim_coordinates instead"""
+    
     from cudem import fetches
     
     fetches.GPSCoordinates(q)
@@ -927,6 +904,113 @@ def quarter_tile_from_coordinates(x=None, y=None):
         
     return None
 
+    
+def parse_cli_region(region_list: List[str], verbose: bool = True):
+    """Parse a list of region strings into Region objects."""
+    
+    these_regions = []
+    
+    for i_region in region_list:
+        if i_region is None:
+            continue
+        
+        i_region_s = i_region.split(':')
+        base_region_str = i_region_s[0]
+        args = utils.args2dict(i_region_s[1:])
+
+        if base_region_str in ['loc', 'place']:
+            if len(i_region_s) > 1:
+                ## The second item is the query (e.g. "Boulder, CO")
+                query_str = i_region_s[1]
+                
+                ## Fetch coordinates
+                coords = fetch_nominatim_coordinates(query_str)
+                
+                if coords:
+                    ## Create quarter-degree tile
+                    tmp_region = quarter_tile_from_coordinates(x=coords[0], y=coords[1])
+                    
+                    ## Apply buffer if specified in args (e.g. :pct_buffer=5)
+                    ## We have to re-parse args because we "stole" the second index for the name
+                    remaining_args = utils.args2dict(i_region_s[2:])
+                    if 'pct_buffer' in remaining_args:
+                        tmp_region.buffer(pct=utils.float_or(remaining_args['pct_buffer']))
+                        
+                    these_regions.append(tmp_region)
+                else:
+                    utils.echo_warning_msg(f"Could not locate place: {query_str}")
+            else:
+                 utils.echo_error_msg("No place name provided for loc: search.")
+
+        elif base_region_str == 'q':
+            if len(i_region_s) > 1:
+                coords = fetch_gps_coordinates(i_region_s[1])
+                if coords:
+                    tmp_region = quarter_tile_from_coordinates(x=coords[0], y=coords[1])
+                    these_regions.append(tmp_region)
+
+        else:
+            tmp_region = Region().from_string(base_region_str)
+
+            if tmp_region.is_valid(check_xy=True):
+                if 'pct_buffer' in args:
+                    tmp_region.buffer(pct=utils.float_or(args['pct_buffer']))
+                these_regions.append(tmp_region)
+
+            elif base_region_str == 'tile_set':
+                these_regions = generate_tile_set(**args)
+
+            elif base_region_str == 'coordinates':
+                kwargs = factory.args2dict(i_region_s[1:])
+                tmp_region = quarter_tile_from_coordinates(**kwargs)
+                these_regions.append(tmp_region)
+
+            else:
+                ## Try parsing as OGR source
+                tmp_regions_ogr = ogr_wkts(base_region_str)
+                for r in tmp_regions_ogr:
+                    if r.is_valid():
+                        if 'pct_buffer' in args:
+                            r.buffer(pct=utils.float_or(args['pct_buffer']))
+                        these_regions.append(r)
+
+    if verbose:
+        if not these_regions:
+            utils.echo_warning_msg(f'Failed to parse region(s): {region_list}')
+        else:
+            msg = f'Parsed {len(these_regions)} region(s)'
+            if len(these_regions) > 4:
+                msg += f': {these_regions[:2]}...{these_regions[-2:]}'
+            else:
+                msg += f': {these_regions}'
+            utils.echo_msg(msg)
+            
+    return these_regions
+
+
+def region_help_msg():
+    """Return a formatted help string for the region argument."""
+    return (
+        "Restrict processing to the desired REGION.\n"
+        "Supported formats:\n"
+        " Bounding Box: xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\n"
+        "  (e.g., -R-90/-89/30/31)\n"
+        " Place Name: loc:<name> or place:<name>\n"
+        "  (e.g., -R loc:\"Boulder, CO\":pct_buffer=5)\n"
+        "  (Resolves via OSM Nominatim and snaps to 0.25 deg grid)\n"
+        " Vector File: /path/to/file.shp\n"
+        "  (Uses the bounding box of features in the OGR-compatible file)\n"
+        " Tile Set: tile_set:inc=<increment>\n"
+        "  (Generates a set of tiles based on the input parameters)\n"
+        "\n"
+        "Modifiers:\n"
+        "  Append :pct_buffer=<value> to buffer the region by a percentage.\n"
+        "\n"
+        "Note: When using negative coordinates, attach the value directly to the\n"
+        "switch (e.g., -R-90/...) or use an equals sign (e.g., -R=-90/...) to\n"
+        "prevent the negative sign from being interpreted as a flag."
+    )
+
 
 ## ==============================================
 ## Command-line Interface (CLI)
@@ -947,13 +1031,7 @@ def regions_cli():
         '-R', '--region', '--aoi',
         required=True,
         action='append',
-        help="The desired REGION \n"
-             "Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]\n"
-             "Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/- \n"
-             "OR an OGR-compatible vector file with regional polygons.\n"
-             "Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].\n"
-             "If a vector file is supplied, will use each region found therein.\n"
-             "Optionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage."
+        help=region_help_msg()
     )
     
     parser.add_argument(
