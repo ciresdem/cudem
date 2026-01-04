@@ -212,7 +212,7 @@ class WafflesCUDEM(Waffle):
             srs_transform=self.srs_transform,
             clobber=True,
             cache_dir=self.cache_dir,
-            verbose=True)._acquire_module()
+            verbose=self.pre_verbose)._acquire_module()
         coastline.initialize()
         coastline.generate()
 

@@ -102,7 +102,7 @@ class WafflesML(Waffle):
             ## Random Forest: Robust, handles non-linearities well, no scaling needed usually
             return RandomForestRegressor(
                 n_estimators=self.trees,
-                n_jobs=-1,  # Use all cores
+                n_jobs=1, #set to -1 for all cores, waffles already starts mp
                 random_state=42
             )
             
@@ -114,7 +114,7 @@ class WafflesML(Waffle):
                 KNeighborsRegressor(
                     n_neighbors=self.neighbors,
                     weights='distance',
-                    n_jobs=-1
+                    n_jobs=1 # set to -1 for all-cores, waffles already starts mp
                 )
             )
             
