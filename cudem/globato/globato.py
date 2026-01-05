@@ -298,8 +298,8 @@ class GlobatoStacker:
 
         lon_start = dst_gt[0] + (dst_gt[1] / 2)
         lat_start = dst_gt[3] + (dst_gt[5] / 2)
-        lon_end = dst_gt[0] + (dst_gt[1] * xcount)
-        lat_end = dst_gt[3] + (dst_gt[5] * ycount)
+        #lon_end = dst_gt[0] + (dst_gt[1] * xcount)
+        #lat_end = dst_gt[3] + (dst_gt[5] * ycount)
         lon_inc = dst_gt[1]
         lat_inc = dst_gt[5]
         
@@ -313,7 +313,8 @@ class GlobatoStacker:
             crs_dset.attrs['crs_wkt'] = srsfun.osr_wkt(self.dst_srs)
 
         ## Latitude
-        lat_array = np.arange(lat_start, lat_end, lat_inc)
+        lat_array = np.arange(ycount) * lat_inc + lat_start
+        #lat_array = np.arange(lat_start, lat_end, lat_inc)
         lat_dset = stack_ds.create_dataset('lat', data=lat_array)
         lat_dset.make_scale('latitude')
         lat_dset.attrs["long_name"] = "latitude"
@@ -322,7 +323,8 @@ class GlobatoStacker:
         lat_dset.attrs["actual_range"] = [lat_end, lat_start]
 
         ## Longitude
-        lon_array = np.arange(lon_start, lon_end, lon_inc)
+        #lon_array = np.arange(lon_start, lon_end, lon_inc)
+        lon_array = np.arange(xcount) * lon_inc + lon_start
         lon_dset = stack_ds.create_dataset('lon', data=lon_array)
         lon_dset.make_scale('longitude')
         lon_dset.attrs["long_name"] = "longitude"

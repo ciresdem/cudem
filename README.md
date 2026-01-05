@@ -115,7 +115,7 @@ The **[fetches](/docs/fetches.md)** module automates the discovery and retrieval
 
 ### Dlim (Data Lists & Processing)
 
-The **[dlim](/docs/dlim.md)** module serves as the primary data ingestion engine. It utilizes "datalists"—text-based configuration files—to manage, process, and standardize diverse datasets into a unified stream for gridding.
+The **[dlim](/docs/dlim.md)** module serves as the primary data ingestion engine. It utilizes "datalists" (text-based configuration files) to manage, process, and standardize diverse datasets into a unified stream for gridding.
 
 * **Abstraction**: Handles mixed formats (Raster, XYZ, LAS/LAZ, COPC) seamlessly, abstracting file-specific parsing.
 * **Manipulation**: Supports on-the-fly vertical datum transformation, spatial clipping, and masking.
