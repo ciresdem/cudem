@@ -473,16 +473,14 @@ class GlobatoStacker:
         
         ## Initialize output filename
         if out_name is None:
-            out_name = os.path.join(self.cache_dir, '{}'.format(
-                utils.append_fn('globato_blocks', self.region, self.x_inc)
-            ))
-            
-        out_file = '{}.h5'.format(out_name)
+            out_name = 'globato'            
+        out_name = f'{utils.append_fn(out_name, self.region, self.x_inc)}'            
+        out_file = f'{out_name}.h5'
         
         if os.path.exists(out_file):
             stack_ds = self._load_globato(out_file)
             if stack_ds is None:
-                utils.remove_glob('{}.*'.format(out_file))
+                utils.remove_glob(f'{out_file}.*')
                 stack_ds = self._create_globato(out_file)
         else:
             stack_ds = self._create_globato(out_file)        
