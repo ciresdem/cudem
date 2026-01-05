@@ -51,6 +51,7 @@ except ImportError:
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
+from cudem import srsfun
 
 # Initialize Configuration
 gc = utils.config_check()

@@ -1557,7 +1557,7 @@ class ElevationDataset:
                 if mask_band is not None:
                     mask_data = mask_band.ReadAsArray(*this_srcwin)
                     if mask_data is None or len(mask_data) == 0: continue
-                        
+
                     if not np.isnan(mask_infos['ndv']):
                         mask_data[mask_data == mask_infos['ndv']] = np.nan
                         

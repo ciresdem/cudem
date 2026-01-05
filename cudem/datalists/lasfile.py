@@ -25,9 +25,9 @@
 ##
 ## LAS/LAZ Lidar Data Parser.
 ## Handles both:
-## 1. Local LAS/LAZ files via laspy
-## 2. Remote COPC (Cloud Optimized Point Cloud) files via HTTP Range Requests
-## 3. Remote standard LAS/LAZ files (Fallback -> Download -> Process)
+## * Local LAS/LAZ files via laspy
+## * Remote COPC (Cloud Optimized Point Cloud) files via HTTP Range Requests
+## * Remote standard LAS/LAZ files (Fallback -> Download -> Process)
 ##
 ### Code:
 
