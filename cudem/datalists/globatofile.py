@@ -119,7 +119,7 @@ class GlobatoFile(ElevationDataset):
         return self.infos
 
 
-    def _yield_group_points(self, grp, lats, lons):
+    def _yield_group_points(self, grp, lats, lons, is_sums=False):
         """Internal generator to yield points from a specific h5 group/dataset recursively.
         
         This traverses the HDF5 group structure until it finds the group containing 
@@ -154,78 +154,88 @@ class GlobatoFile(ElevationDataset):
                     local_x = grp['x'][...]
                     local_y = grp['y'][...]
 
-                #height, width = data.shape
-
-                local_z = None
-                if 'z' in grp:
-                    local_z = grp['z'][...]
-
-                valid_mask = counts > 0
-                weights = weights / counts
-                local_x = local_x / weights / counts
-                local_y = local_y / weights / counts
-                local_z = local_z / weights / counts
+                # else:
+                #     local_x = lons.copy()
+                #     local_y = lats.copy()
+                    
+                height, width = data.shape
                 
-                ds = np.rec.fromarrays(
-                    [local_x[valid_mask], local_y[valid_mask], local_z[valid_mask],
-                     weights[valid_mask], uncertainty[valid_mask]],
-                    names=['x', 'y', 'z', 'w', 'u']
-                )
-                yield ds
+                # local_z = None
+                # if 'z' in grp:
+                #     local_z = grp['z'][...]
+
+                #valid_mask = counts > 0
+
+                # if is_sums:
+                #     weights = weights / counts
+                #     local_x = local_x / weights / counts
+                #     local_y = local_y / weights / counts
+                #     local_z = local_z / weights / counts
                 
-                # ## Iterate scanlines (chunks) to yield points
-                # for i in range(height):
-                #     row_data = data[i, :]
-                #     row_valid = ~np.isnan(row_data)
+                # ds = np.rec.fromarrays(
+                #     [local_x[valid_mask], local_y[valid_mask], local_z[valid_mask],
+                #      weights[valid_mask], uncertainty[valid_mask]],
+                #     names=['x', 'y', 'z', 'w', 'u']
+                # )
+                # yield ds
+                
+                ## Iterate scanlines (chunks) to yield points
+                for i in range(height):
+                    row_data = data[i, :]
+                    row_valid = ~np.isnan(row_data)
                     
-                #     if not np.any(row_valid): continue
+                    if not np.any(row_valid): continue
                     
-                #     ## --- Coordinate Processing ---
-                #     if local_x is not None and local_y is not None:
-                #         ## Use group-specific coordinates
-                #         ## If 2D (swath/stack-node), slice the row
-                #         if local_x.ndim == 2:
-                #             x_vals = local_x[i, :][row_valid]
-                #             y_vals = local_y[i, :][row_valid]
-                #         ## If 1D (grid axes), broadcast Y
-                #         else:
-                #             y_val = local_y[i]
-                #             x_vals = local_x[row_valid]
-                #             y_vals = np.full(x_vals.shape, y_val)
-                #     else:
-                #         ## Use global lat/lon vectors
-                #         y_val = lats[i]
-                #         x_vals = lons[row_valid]
-                #         y_vals = np.full(x_vals.shape, y_val)
+                    ## --- Coordinate Processing ---
+                    if local_x is not None and local_y is not None:
+                        ## Use group-specific coordinates
+                        ## If 2D (swath/stack-node), slice the row
+                        # if local_x.ndim == 2:
+                        x_vals = local_x[i, :][row_valid]
+                        y_vals = local_y[i, :][row_valid]
+                        # ## If 1D (grid axes), broadcast Y
+                        # else:
+                        #     y_val = local_y[i]
+                        #     x_vals = local_x[row_valid]
+                        #     #y_vals = np.full(x_vals.shape, y_val)
+                    else:
+                        ## Use global lat/lon vectors
+                        y_val = lats[i]
+                        x_vals = lons[row_valid]
+                        y_vals = np.full(x_vals.shape, y_val)
                     
-                #     z_vals = row_data[row_valid]
+                    z_vals = row_data[row_valid]
                     
-                #     ## --- Weights & Uncertainty ---
-                #     if weights is not None:
-                #         w_vals = weights[i, :][row_valid]
-                #     else:
-                #         w_vals = np.ones(x_vals.shape)
+                    ## --- Weights & Uncertainty ---
+                    if weights is not None:
+                        w_vals = weights[i, :][row_valid]
+                    else:
+                        w_vals = np.ones(x_vals.shape)
                     
-                #     if uncertainty is not None:
-                #         u_vals = uncertainty[i, :][row_valid]
-                #     else:
-                #         u_vals = np.zeros(x_vals.shape)
+                    if uncertainty is not None:
+                        u_vals = uncertainty[i, :][row_valid]
+                    else:
+                        u_vals = np.zeros(x_vals.shape)
 
-                #     if counts is not None:
-                #         c_vals = counts[i, :][row_valid]
-                #     else:
-                #         c_vals = np.zeros(x_vals.shape)
+                    if counts is not None:
+                        c_vals = counts[i, :][row_valid]
+                    else:
+                        c_vals = np.zeros(x_vals.shape)
 
-                #     w_vals = w_vals / c_vals
-                #     x_vals = x_vals / w_vals / c_vals
-                #     y_vals = y_vals / w_vals / c_vals
-                #     z_vals = z_vals / w_vals / c_vals
+                    if self.group != 'stack':
+                        w_vals = w_vals / c_vals
+                        z_vals = z_vals / w_vals / c_vals
+
+                        if self.use_group_xy:
+                            x_vals = x_vals / w_vals / c_vals
+                            y_vals = y_vals / w_vals / c_vals
                         
-                #     ds = np.rec.fromarrays(
-                #         [x_vals, y_vals, z_vals, w_vals, u_vals],
-                #         names=['x', 'y', 'z', 'w', 'u']
-                #     )
-                #     yield ds
+                        
+                    ds = np.rec.fromarrays(
+                        [x_vals, y_vals, z_vals, w_vals, u_vals],
+                        names=['x', 'y', 'z', 'w', 'u']
+                    )
+                    yield ds
 
             except Exception as e:
                 utils.echo_error_msg(f"Error parsing group {grp.name}: {e}")
@@ -235,7 +245,7 @@ class GlobatoFile(ElevationDataset):
         ## If the layer isn't here, check if this is a group and recurse into children
         elif isinstance(grp, h5py.Group):
             for key in grp.keys():
-                yield from self._yield_group_points(grp[key], lats, lons)
+                yield from self._yield_group_points(grp[key], lats, lons, is_sums=is_sums)
 
                 
     def yield_points(self):
@@ -251,11 +261,11 @@ class GlobatoFile(ElevationDataset):
                     if 'datasets' in f:
                         for ds_name in f['datasets']:
                             ## Yield points from each dataset sub-group
-                            yield from self._yield_group_points(f['datasets'][ds_name], lats, lons)
+                            yield from self._yield_group_points(f['datasets'][ds_name], lats, lons, is_sums=True)
                 else:
                     ## Default to stack
                     if 'stack' in f:
-                        yield from self._yield_group_points(f['stack'], lats, lons)
+                        yield from self._yield_group_points(f['stack'], lats, lons, is_sums=False)
 
             except Exception as e:
                 utils.echo_error_msg(f"Globato read error: {e}")
