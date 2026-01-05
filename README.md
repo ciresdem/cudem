@@ -168,7 +168,7 @@ The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation 
 
 * **Fetching Data**: `fetches -R -90/-89/29/30 CUDEM`
 * **Processing Data**: `dlim input.datalist -R -90/-89/29/30 -E .3s`
-* **Generating DEM**: `waffles -M surface:tension=.35 -R -90/-89/29/30 -E .1s -O my_dem.tif input.xyz`
+* **Generating DEM**: `waffles -M gmt-surface:tension=.35 -R -90/-89/29/30 -E .1s -O my_dem.tif input.xyz`
 * **Filtering DEM**: `grits my_dem.tif -M outliers:k=2.5 -M fill:method=spline -M clip:src_ply=coast.shp -O clean_dem.tif`
 * **Estimating Uncertainty**: [Docs](/docs/uncertainty.md)
 
