@@ -320,7 +320,8 @@ class GlobatoStacker:
         lat_dset.attrs["long_name"] = "latitude"
         lat_dset.attrs["units"] = "degrees_north"
         lat_dset.attrs["standard_name"] = "latitude"
-        lat_dset.attrs["actual_range"] = [lat_end, lat_start]
+        #lat_dset.attrs["actual_range"] = [lat_end, lat_start]
+        lat_dset.attrs["actual_range"] = [lat_array[-1], lat_array[0]]
 
         ## Longitude
         #lon_array = np.arange(lon_start, lon_end, lon_inc)
@@ -330,7 +331,8 @@ class GlobatoStacker:
         lon_dset.attrs["long_name"] = "longitude"
         lon_dset.attrs["units"] = "degrees_east" 
         lon_dset.attrs["standard_name"]= "longitude"
-        lon_dset.attrs["actual_range"] = [lon_start, lon_end]
+        #lon_dset.attrs["actual_range"] = [lon_start, lon_end]
+        lon_dset.attrs["actual_range"] = [lon_array[0], lon_array[-1]]
 
         ## Stack Group
         stack_grp = stack_ds.create_group('stack')
