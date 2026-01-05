@@ -145,6 +145,6 @@ fetches -R -90/-89/28/29 -l nos:datatype=bag > my_survey_data.datalist
 ### Fetch Multiple Sources:
 ```bash
 
-fetches -R -90/-89/28/29 'noaa_lidar' 'usace' 'tnm_laz'
+fetches -R -90/-89/28/29 'digital_coast:datatype=lidar' 'usace' 'tnm_laz'
 
 ```
