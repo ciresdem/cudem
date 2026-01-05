@@ -1138,6 +1138,63 @@ class ElevationDataset:
             return None
 
         
+    # def _wkt_from_mini_grid(self, region, mini_grid):
+    #     """Generate a WKT polygon footprint from the valid cells of the mini-grid."""
+        
+    #     if not mini_grid or not region:
+    #         if region: return region.export_as_wkt()
+    #         return None
+
+    #     try:
+    #         y_size = len(mini_grid)
+    #         x_size = len(mini_grid[0])
+            
+    #         if x_size == 0 or y_size == 0:
+    #             return region.export_as_wkt()
+
+    #         if region.xmax is None or region.xmin is None or region.ymax is None or region.ymin is None:
+    #             return None
+
+    #         x_inc = (float(region.xmax) - float(region.xmin)) / float(x_size)
+    #         y_inc = abs(float(region.ymax) - float(region.ymin)) / float(y_size)
+            
+    #         multipoly = ogr.Geometry(ogr.wkbMultiPolygon)
+    #         has_valid = False
+            
+    #         for y in range(y_size):
+    #             for x in range(x_size):
+    #                 if mini_grid[y][x] is not None:
+    #                     has_valid = True
+                        
+    #                     cell_ymax = region.ymax - (y * y_inc)
+    #                     cell_ymin = region.ymax - ((y + 1) * y_inc)
+    #                     cell_xmin = region.xmin + (x * x_inc)
+    #                     cell_xmax = region.xmin + ((x + 1) * x_inc)
+                        
+    #                     ring = ogr.Geometry(ogr.wkbLinearRing)
+    #                     # Explicit float cast for OGR/SWIG compatibility
+    #                     ring.AddPoint(float(cell_xmin), float(cell_ymax))
+    #                     ring.AddPoint(float(cell_xmax), float(cell_ymax))
+    #                     ring.AddPoint(float(cell_xmax), float(cell_ymin))
+    #                     ring.AddPoint(float(cell_xmin), float(cell_ymin))
+    #                     ring.AddPoint(float(cell_xmin), float(cell_ymax))
+                        
+    #                     poly = ogr.Geometry(ogr.wkbPolygon)
+    #                     poly.AddGeometry(ring)
+    #                     multipoly.AddGeometry(poly)
+            
+    #         if not has_valid:
+    #             return region.export_as_wkt()
+                
+    #         union_poly = multipoly.UnionCascaded()
+    #         return union_poly.ExportToWkt()
+
+    #     except Exception as e:
+    #         if self.verbose:
+    #             utils.echo_warning_msg(f"Failed to generate tight WKT from mini-grid: {e}")
+    #         return region.export_as_wkt()
+
+        
     def _wkt_from_mini_grid(self, region, mini_grid):
         """Generate a WKT polygon footprint from the valid cells of the mini-grid.
         
@@ -1237,12 +1294,12 @@ class ElevationDataset:
                     np.min(points['z']), np.max(points['z'])
                 ])
             else:
-                if np.min(points['x']) < this_region.xmin: this_region.xmin = np.min(points['x'])
-                if np.max(points['x']) > this_region.xmax: this_region.xmax = np.max(points['x'])
-                if np.min(points['y']) < this_region.ymin: this_region.ymin = np.min(points['y'])
-                if np.max(points['y']) > this_region.ymax: this_region.ymax = np.max(points['y'])
-                if np.min(points['z']) < this_region.zmin: this_region.zmin = np.min(points['z'])
-                if np.max(points['z']) > this_region.zmax: this_region.zmax = np.max(points['z'])
+                if np.min(points['x']) < this_region.xmin: this_region.xmin = utils.float_or(np.min(points['x']))
+                if np.max(points['x']) > this_region.xmax: this_region.xmax = utils.float_or(np.max(points['x']))
+                if np.min(points['y']) < this_region.ymin: this_region.ymin = utils.float_or(np.min(points['y']))
+                if np.max(points['y']) > this_region.ymax: this_region.ymax = utils.float_or(np.max(points['y']))
+                if np.min(points['z']) < this_region.zmin: this_region.zmin = utils.float_or(np.min(points['z']))
+                if np.max(points['z']) > this_region.zmax: this_region.zmax = utils.float_or(np.max(points['z']))
             point_count += len(points)
 
         ## Populate INF Basic Stats
@@ -1760,7 +1817,8 @@ class ElevationDataset:
             x_inc=self.x_inc,
             y_inc=self.y_inc,
             dst_srs=self.dst_srs,
-            cache_dir=self.cache_dir
+            cache_dir=self.cache_dir,
+            verbose=self.verbose
         )
 
         blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)        
@@ -2443,6 +2501,8 @@ class DatasetFactory(factory.CUDEMFactory):
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt', 'XYZ'], 'description': 'ASCII x,y,z', 'call': xyzfile.XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'description': 'GDAL Raster', 'call': gdalfile.GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'description': 'BAG Bathymetry', 'call': gdalfile.BAGFile},
+        ## moved globato to top so it's first h5 file detected...
+        310: {'name': 'globato', 'fmts': ['csg', 'glbt', 'nc', 'h5'], 'description': 'CUDEM Globato Block/Stack file.', 'call': globatofile.GlobatoFile}, 
         202: {'name': 'swot_pixc', 'fmts': ['h5'], 'description': 'SWOT PIXC HDF5', 'call': swotfile.SWOT_PIXC},
         203: {'name': 'swot_hr_raster', 'fmts': ['nc'], 'description': 'SWOT HR Raster', 'call': swotfile.SWOT_HR_Raster},
         300: {'name': 'las', 'fmts': ['las', 'laz'], 'description': 'LAS/LAZ Lidar', 'call': lasfile.LASFile},
@@ -2450,7 +2510,6 @@ class DatasetFactory(factory.CUDEMFactory):
         302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb'], 'description': 'OGR Vector', 'call': ogrfile.OGRFile},
         303: {'name': 'icesat2_atl03', 'fmts': ['h5'], 'description': 'IceSat2 ATL03', 'call': icesat2file.IceSat2_ATL03},
         304: {'name': 'icesat2_atl24', 'fmts': ['h5'], 'description': 'IceSat2 ATL24', 'call': icesat2file.IceSat2_ATL24},
-        310: {'name': 'globato', 'fmts': ['csg', 'nc', 'h5'], 'description': 'CUDEM Globato Block/Stack file.', 'call': CUDEMFile},
         # 310: {'name': 'cudem', 'fmts': ['csg', 'nc', 'h5'], 'description': 'CUDEM NetCDF/H5', 'call': CUDEMFile},
     }
 

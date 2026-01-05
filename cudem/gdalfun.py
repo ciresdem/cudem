@@ -640,45 +640,127 @@ def ogr_polygonize(src_ds, dst_srs='epsg:4326', ogr_format='ESRI Shapefile',
 
 def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
                   dst_srs='epsg:4326', invert=False, verbose=True,
-                  temp_dir='./'):
-    """Create a raster mask from an OGR vector."""
+                  burn_val=1, temp_dir='./'):
+    """Create a raster mask from an OGR vector using GDAL Python API."""
     
+    ## Setup Output Filename
     dst_fn = utils.make_temp_fn(
-        f'{mask_fn}.tif', region=region, inc=x_inc, temp_dir=temp_dir
+        f'{os.path.basename(mask_fn)}.tif', region=region, inc=x_inc, temp_dir=temp_dir
     )
 
     if os.path.exists(dst_fn):
         return dst_fn
     
     if region is not None and x_inc is not None and y_inc is not None:
+        ## Calculate Grid Dimensions
         xcount, ycount, dst_gt = region.geo_transform(
             x_inc=x_inc, y_inc=y_inc, node='grid'
         )
         
         if xcount <= 0 or ycount <= 0:
             utils.echo_error_msg(f'Invalid grid size {xcount}x{ycount} for mask generation.')
-            sys.exit(-1)
+            return None
 
-        ds_config = gdal_set_infos(
-            xcount, ycount, xcount * ycount, dst_gt,
-            dst_srs, gdal.GDT_Float32, 0, 'GTiff', {}, 1
-        )
-        gdal_nan(ds_config, dst_fn, nodata=0)
-        
-        clip_layer = ogr_get_layer_name(mask_fn)
-        if clip_layer is None:
-            clip_layer = os.path.splitext(os.path.basename(mask_fn))[0]
+        ## Initialize Target Raster (Zero-filled)
+        ## Using utils or direct GDAL calls to create the blank canvas
+        try:
+            driver = gdal.GetDriverByName('GTiff')
+            target_ds = driver.Create(dst_fn, xcount, ycount, 1, gdal.GDT_Float32)
+            target_ds.SetGeoTransform(dst_gt)
+            target_ds.SetProjection(utils.srs_wkt(dst_srs))
             
-        burn_val = 1
-        invert_flag = '-i' if invert else ''
-        
-        ## Use gdal_rasterize
-        cmd = f'gdal_rasterize -burn {burn_val} -l {clip_layer} "{mask_fn}" "{dst_fn}" {invert_flag}'
-        utils.run_cmd(cmd, verbose=verbose)
-        
-        return dst_fn
+            ## Initialize with 0
+            band = target_ds.GetRasterBand(1)
+            band.Fill(0)
+            band.SetNoDataValue(0)
+        except Exception as e:
+            utils.echo_error_msg(f"Failed to initialize mask raster {dst_fn}: {e}")
+            return None
+
+        ## Rasterize using Python API (Avoids shell quoting issues)
+        try:
+            # Ensure burn_val is valid
+            if burn_val is None: 
+                burn_val = 1
+                
+            ## Setup Rasterize Options
+            ## Note: We use the dataset object 'target_ds', not the filename
+            opts = gdal.RasterizeOptions(
+                burnValues=[burn_val],
+                inverse=invert,
+                layers=[utils.get_layer_name(mask_fn)] # Helper to get layer name or None
+            )
+            
+            if verbose:
+                utils.echo_msg(f"Rasterizing {mask_fn} -> {dst_fn} (Burn: {burn_val}, Invert: {invert})")
+
+            ## Perform Rasterization
+            ## Opening the vector source
+            src_vec_ds = ogr.Open(mask_fn)
+            if src_vec_ds is None:
+                utils.echo_error_msg(f"Could not open vector mask: {mask_fn}")
+                return None
+
+            gdal.Rasterize(target_ds, src_vec_ds, options=opts)
+            
+            ## Cleanup / Flush
+            target_ds = None
+            src_vec_ds = None
+            
+            return dst_fn
+
+        except Exception as e:
+            utils.echo_error_msg(f"gdal.Rasterize failed: {e}")
+            ## Clean up partial file
+            if os.path.exists(dst_fn):
+                try: os.remove(dst_fn)
+                except: pass
+            return None
     
     return None
+
+
+# def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
+#                   dst_srs='epsg:4326', invert=False, verbose=True,
+#                   temp_dir='./'):
+#     """Create a raster mask from an OGR vector."""
+    
+#     dst_fn = utils.make_temp_fn(
+#         f'{mask_fn}.tif', region=region, inc=x_inc, temp_dir=temp_dir
+#     )
+
+#     if os.path.exists(dst_fn):
+#         return dst_fn
+    
+#     if region is not None and x_inc is not None and y_inc is not None:
+#         xcount, ycount, dst_gt = region.geo_transform(
+#             x_inc=x_inc, y_inc=y_inc, node='grid'
+#         )
+        
+#         if xcount <= 0 or ycount <= 0:
+#             utils.echo_error_msg(f'Invalid grid size {xcount}x{ycount} for mask generation.')
+#             sys.exit(-1)
+
+#         ds_config = gdal_set_infos(
+#             xcount, ycount, xcount * ycount, dst_gt,
+#             dst_srs, gdal.GDT_Float32, 0, 'GTiff', {}, 1
+#         )
+#         gdal_nan(ds_config, dst_fn, nodata=0)
+        
+#         clip_layer = ogr_get_layer_name(mask_fn)
+#         if clip_layer is None:
+#             clip_layer = os.path.splitext(os.path.basename(mask_fn))[0]
+            
+#         burn_val = 1
+#         invert_flag = '-i' if invert else ''
+        
+#         Use gdal_rasterize
+#         cmd = f'gdal_rasterize -burn {burn_val} -l {clip_layer} "{mask_fn}" "{dst_fn}" {invert_flag}'
+#         utils.run_cmd(cmd, verbose=verbose)
+        
+#         return dst_fn
+    
+#     return None
 
 
 def ogr_geoms2ogr(geoms, out, dst_srs='epsg:4326', ogr_format='ESRI Shapefile'):

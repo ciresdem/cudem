@@ -389,7 +389,7 @@ class Region:
     
     def export_as_wkt(self, flatten=True):
         """Convert a region to WKT."""
-        
+
         eg = [[self.ymin, self.xmin],
               [self.ymin, self.xmax],
               [self.ymax, self.xmax],
@@ -717,6 +717,27 @@ def regions_within_ogr_p(region_a: Region, region_b: Region) -> bool:
     return False
 
 
+# def create_wkt_polygon(coords, xpos=1, ypos=0, flatten=True):
+#     """Convert coordinate list to WKT Polygon."""
+    
+#     ring = ogr.Geometry(ogr.wkbLinearRing)
+#     for coord in coords:
+#         try:
+#             x = float(coord[xpos])
+#             y = float(coord[ypos])
+#             ring.AddPoint(x, y)
+#         except (ValueError, TypeError):
+#             continue
+        
+#     poly = ogr.Geometry(ogr.wkbPolygon)
+#     poly.AddGeometry(ring)
+    
+#     if flatten:
+#         poly.FlattenTo2D()
+        
+#     return poly.ExportToWkt()
+
+
 def create_wkt_polygon(coords, xpos=1, ypos=0, flatten=True):
     """Convert coordinate list to WKT Polygon."""
     
@@ -904,7 +925,8 @@ def quarter_tile_from_coordinates(x=None, y=None):
         
     return None
 
-    
+
+## TODO: add an 'epsg=' option to set the region projection, default to 4326...
 def parse_cli_region(region_list: List[str], verbose: bool = True):
     """Parse a list of region strings into Region objects."""
     

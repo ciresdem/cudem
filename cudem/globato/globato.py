@@ -135,6 +135,12 @@ class GlobatoStack:
             return [float(x) for x in self._f['crs'].attrs['GeoTransform'].split()]
         return None
 
+    @property
+    def stack_mode(self):
+        self._check_open()
+        if 'name' in self._f['stack_mode'].attrs:
+            return self._f['stack_mode'].attrs['name']
+        return None    
     
     ## --- Data Access ---
     @property
@@ -328,10 +334,23 @@ class GlobatoStacker:
         stack_grp = stack_ds.create_group('stack')
         stacked_keys = ['z', 'count', 'weights', 'uncertainty', 'src_uncertainty', 'x', 'y']
 
+        ## Stack Mode
+        sm_dset = stack_ds.create_dataset('stack_mode', dtype=h5.string_dtype())
+        sm_dset.attrs['name'] = self.stack_mode_name
+        #sm_dset.attrs['args'] = self.stack_mode_args
+        
         for key in stacked_keys:
+            # stack_dset = stack_grp.create_dataset(
+            #     key, data=np.full((ycount, xcount), np.nan),
+            #     compression='lzf', maxshape=(ycount, xcount),
+            #     chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
+            #     dtype=np.float32
+            # )
             stack_dset = stack_grp.create_dataset(
-                key, data=np.full((ycount, xcount), np.nan),
-                compression='lzf', maxshape=(ycount, xcount),
+                key, shape=(ycount, xcount), fillvalue=np.nan,
+                #data=np.full((ycount, xcount), np.nan),
+                compression='gzip', compression_opts=5, shuffle=True,
+                maxshape=(ycount, xcount),
                 chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
                 dtype=np.float32
             )
@@ -343,8 +362,11 @@ class GlobatoStacker:
         sums_grp = stack_ds.create_group('sums')
         for key in stacked_keys:
             sums_dset = sums_grp.create_dataset(
-                key, data=np.full((ycount, xcount), np.nan),
-                compression='lzf', maxshape=(ycount, xcount),
+                key, shape=(ycount, xcount), fillvalue=np.nan,
+                #data=np.full((ycount, xcount), np.nan),
+                compression='gzip', compression_opts=5, shuffle=True,
+                #compression='lzf',
+                maxshape=(ycount, xcount),
                 chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
                 dtype=np.float32
             )
@@ -356,8 +378,11 @@ class GlobatoStacker:
         mask_grp = stack_ds.create_group('mask')
 
         mask_coast_dset = mask_grp.create_dataset(
-            'coast_mask', data=np.zeros((ycount,xcount)),
-            compression='lzf', maxshape=(ycount, xcount),
+            'coast_mask', shape=(ycount, xcount), fillvalue=0,
+            #data=np.zeros((ycount,xcount)),
+            compression='gzip', compression_opts=5, shuffle=True,
+            #compression='lzf',
+            maxshape=(ycount, xcount),
             chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*(min(100, ycount)),
             dtype=np.uint8
         )
@@ -366,8 +391,11 @@ class GlobatoStacker:
         mask_coast_dset.attrs['grid_mapping'] = "crs"
 
         mask_all_dset = mask_grp.create_dataset(
-            'full_dataset_mask', data=np.zeros((ycount,xcount)),
-            compression='lzf', maxshape=(ycount, xcount),
+            'full_dataset_mask', shape=(ycount, xcount), fillvalue=0,
+            #data=np.zeros((ycount,xcount)),
+            compression='gzip', compression_opts=5, shuffle=True,
+            #compression='lzf',
+            maxshape=(ycount, xcount),
             chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*(min(100, ycount)),
             dtype=np.uint8
         )
@@ -532,8 +560,9 @@ class GlobatoStacker:
                 datasets_dset_grp = datasets_grp.create_group(entry_name)
                 for key in datasets_data.keys():
                     ds_dset = datasets_dset_grp.create_dataset(
-                        key, data=np.full((ycount, xcount), np.nan),
-                        compression='lzf', maxshape=(ycount, xcount),
+                        key, shape=(ycount, xcount), fillvalue=np.nan,
+                        compression='gzip', compression_opts=5, shuffle=True,
+                        maxshape=(ycount, xcount),
                         chunks=(min(100, ycount), xcount), rdcc_nbytes=1024*xcount*400,
                         dtype=np.float32
                     )
@@ -546,14 +575,52 @@ class GlobatoStacker:
                     if arrs['count'] is None or np.all(arrs['count'] == 0):
                         continue
 
-                    ## Update masks
+                    ## Set the srcwin slices
+                    # srcwin_slice = np.s_[srcwin[1]:srcwin[1]+srcwin[3],
+                    #                      srcwin[0]:srcwin[0]+srcwin[2]]                    
                     y_slice = slice(srcwin[1], srcwin[1]+srcwin[3])
                     x_slice = slice(srcwin[0], srcwin[0]+srcwin[2])
 
+                    ## Update masks
                     mask_all_dset[y_slice, x_slice][arrs['count'] != 0] = 1
                     if mask_dset is not None:
                         mask_dset[y_slice, x_slice][arrs['count'] != 0] = 1
 
+                    ## Update the dataset
+                    if ds_dset is not None:
+                        ## Accumulate 'count' first
+                        d_count = datasets_dset_grp['count'][y_slice, x_slice]
+                        d_count[np.isnan(d_count)] = 0
+                        
+                        inc_count = arrs['count']
+                        inc_count[np.isnan(inc_count)] = 0
+                        
+                        d_count += inc_count
+                        
+                        ## Identify valid pixels (where count > 0)
+                        valid_mask = d_count > 0
+                        
+                        ## Write count back (NaN where 0)
+                        final_count = d_count.copy()
+                        final_count[~valid_mask] = np.nan
+                        datasets_dset_grp['count'][y_slice, x_slice] = final_count
+                        
+                        ## Accumulate other fields
+                        for key in datasets_data.keys():
+                            if key == 'count' or key not in arrs: continue
+                            
+                            d_data = datasets_dset_grp[key][y_slice, x_slice]
+                            d_data[np.isnan(d_data)] = 0
+                            
+                            inc_data = arrs[key]
+                            inc_data[np.isnan(inc_data)] = 0
+                            
+                            d_data += inc_data
+                            
+                            ## Mask and write back
+                            d_data[~valid_mask] = np.nan
+                            datasets_dset_grp[key][y_slice, x_slice] = d_data
+                            
                     ## Read saved accumulated rasters
                     for key in sums_grp.keys():
                         sums_data[key] = sums_grp[key][y_slice, x_slice]
