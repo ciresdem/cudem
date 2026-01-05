@@ -160,6 +160,69 @@ def osr_wkt(src_srs: str, esri: bool = False) -> Optional[str]:
         return None
 
 
+def srs_wkt(srs_input):
+    """Convert a Spatial Reference System input (EPSG code, WKT, PROJ4 string) 
+    into a WKT string.
+    
+    Args:
+        srs_input (str or int): The SRS definition. 
+                                Examples: 4326, 'EPSG:4326', '+proj=longlat...', 
+                                or an existing WKT string.
+                                
+    Returns:
+        str: The WKT representation of the SRS, or None if invalid.
+    """
+    if srs_input is None:
+        return None
+        
+    srs = osr.SpatialReference()
+    ## Ensure axis mapping strategy is traditional (Lat/Lon) to avoid GDAL 3+ axis swap issues
+    if hasattr(srs, 'SetAxisMappingStrategy'):
+        srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+    
+    try:
+        ## Handle Integer (assumed EPSG)
+        if isinstance(srs_input, int):
+            srs.ImportFromEPSG(srs_input)
+            
+        ## Handle String
+        elif isinstance(srs_input, str):
+            s_input = srs_input.strip()
+            
+            if s_input.lower().startswith('epsg:'):
+                try:
+                    code = int(s_input.split(':')[1])
+                    srs.ImportFromEPSG(code)
+                except IndexError:
+                    return None
+            
+            elif s_input.startswith('+'):
+                srs.ImportFromProj4(s_input)
+                
+            elif s_input.startswith(('GEOGCS', 'PROJCS', 'COMPD_CS', 'VERT_CS')):
+                srs.ImportFromWkt(s_input)
+                
+            elif s_input.isdigit():
+                srs.ImportFromEPSG(int(s_input))
+                
+            else:
+                err = srs.SetFromUserInput(s_input)
+                if err != 0:
+                    return None
+                    
+        else:
+            return None
+            
+        wkt = srs.ExportToWkt()
+        if not wkt:
+            return None
+            
+        return wkt
+        
+    except Exception:
+        return None
+    
+
 def osr_prj_file(dst_fn: str, src_srs: str) -> int:
     """Generate a .prj file given a src_srs.
     

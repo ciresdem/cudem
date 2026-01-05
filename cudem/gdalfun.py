@@ -667,7 +667,7 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
             driver = gdal.GetDriverByName('GTiff')
             target_ds = driver.Create(dst_fn, xcount, ycount, 1, gdal.GDT_Float32)
             target_ds.SetGeoTransform(dst_gt)
-            target_ds.SetProjection(utils.srs_wkt(dst_srs))
+            target_ds.SetProjection(srsfun.srs_wkt(dst_srs))
             
             ## Initialize with 0
             band = target_ds.GetRasterBand(1)

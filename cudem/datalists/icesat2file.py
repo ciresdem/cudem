@@ -31,7 +31,7 @@
 ## ATL06,Land Ice,"Glaciers, Ice Sheets",6
 ## ATL13,Inland Water,"Lakes, Rivers, Reservoirs",42
 ## ATL12,Ocean,Open Ocean Surface,44
-## ATL09,Atmosphere,Cloud Layers (Filtering Noise),0 (Noise)
+## ATL09,Atmosphere,Cloud Layers (Filtering Noise),0 (Noise) (todo)
 ### Code:
 
 import os
