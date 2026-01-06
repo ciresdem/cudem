@@ -88,6 +88,18 @@ class PointPixels:
         self.dst_gt = None
 
         
+    # def init_region_from_points(self, points):
+    #     """Initialize the source region based on point extents."""
+        
+    #     if self.src_region is None:
+    #         self.src_region = regions.Region().from_list([
+    #             np.min(points['x']), np.max(points['x']),
+    #             np.min(points['y']), np.max(points['y'])
+    #         ])
+    #     if not self.src_region.is_valid():
+    #         self.src_region.buffer(pct=2, check_if_valid=False)
+    #     self.init_gt()
+
     def init_region_from_points(self, points):
         """Initialize the source region based on point extents."""
         
@@ -96,8 +108,17 @@ class PointPixels:
                 np.min(points['x']), np.max(points['x']),
                 np.min(points['y']), np.max(points['y'])
             ])
+            
+        ## If percentage buffering results in 0 (because width is 0),
+        ## fallback to a small fixed epsilon.
         if not self.src_region.is_valid():
             self.src_region.buffer(pct=2, check_if_valid=False)
+            
+            # If still invalid (width/height is 0), force a tiny buffer
+            if not self.src_region.is_valid():
+                epsilon = 0.00001
+                self.src_region.buffer(x_bv=epsilon, y_bv=epsilon, check_if_valid=False)
+                
         self.init_gt()
 
         
@@ -154,6 +175,7 @@ class PointPixels:
 
         ## Convert to pixel coordinates
         ## dst_gt: [origin_x, pixel_width, 0, origin_y, 0, pixel_height]
+
         pixel_x = np.floor((points_x - self.dst_gt[0]) / self.dst_gt[1]).astype(int)
         pixel_y = np.floor((points_y - self.dst_gt[3]) / self.dst_gt[5]).astype(int)
 
@@ -620,7 +642,6 @@ class PointZ:
             ## Use the dst_gt calculated by PA
             dst_gt = pa.dst_gt
             if dst_gt is None: return None
-
             pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
             pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
             
@@ -847,7 +868,10 @@ class RQOutlierZ(OutlierZ):
         self.raster = self.init_raster(raster)
         self.scaled_percentile = scaled_percentile
 
-        
+        if self.verbose:
+            utils.echo_msg('Using Raster: {self.raster}')
+
+            
     def mask_gmrt(self, raster_path):
         out_fn = f'{raster_path}_swath.tif'
         if os.path.exists(out_fn): return out_fn

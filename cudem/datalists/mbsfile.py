@@ -76,7 +76,7 @@ class MBSParser(ElevationDataset):
         """
         
         ## Try to parse existing MB-System .inf file
-        inf_fn = f"{self.fn}.inf" if not self.fn.endswith('.inf') else self.fn
+        inf_fn = f"{self.fn}.inf" #if not self.fn.endswith('.inf') else self.fn
         parsed_ok = False
         
         if os.path.exists(inf_fn) and not (make_grid or make_block_mean):
@@ -310,7 +310,7 @@ class MBSParser(ElevationDataset):
         cmd = f'mblist -M{self.mb_exclude} -OXYZDS{region_arg} -I{self.fn}{fmt_arg}'
         
         mb_points = []
-        BATCH_SIZE = 100000
+        BATCH_SIZE = 1000000
 
         for line in utils.yield_cmd(cmd, verbose=False):
             try:

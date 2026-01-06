@@ -314,7 +314,7 @@ class Waffle:
         ## Initialize data, setting set_incs to True will force dlim to process the
         ## data to the set increments
         if self.want_stack:
-            self._init_data(set_incs=True) 
+            self._init_data(set_incs=True)
 
         ## Set the DataSource Configuration dictionary
         self.xcount, self.ycount, self.dst_gt \
@@ -330,6 +330,7 @@ class Waffle:
         init_str.append(f'Output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}')
         init_str.append(f'Output srs: {self.dst_srs}')
         init_str.append(f'Output basename: {self.name}')
+        init_str.append(f'Data: {self.data}')
         init_str.append('--------------')
 
         if self.verbose:
@@ -1150,7 +1151,7 @@ def waffles_cli():
     ## --- Data Input ---
     parser.add_argument(
         'datalist', 
-        nargs='+', 
+        nargs='*', 
         help="Input datalist(s) or data files."
     )
     
@@ -1342,7 +1343,6 @@ def waffles_cli():
         factory.echo_modules(WaffleFactory._modules)
         sys.exit(0)
 
-
     ## Load the user wg json and run waffles with that.
     ## TODO: allow input of multiple config files with -G .. -G ..
     if args.config:
@@ -1428,6 +1428,16 @@ def waffles_cli():
         wg['extend'] = utils.int_or(exts[0], 0)
         if len(exts) > 1: wg['extend_proc'] = utils.float_or(exts[1], 10)
 
+    if WaffleFactory._modules[args.module.split(':')[0]]['stack']:
+        if len(args.datalist) == 0:
+            sys.stderr.write(waffles_cli_usage())
+            utils.echo_error_msg(
+                '''You must specify a datalist/entry, try `gmrt` or `srtm` for global data.'''
+            )
+            sys.exit(-1)
+    else:
+        wg['want_stack'] = True if len(args.datalist) > 0 else False
+        
     ## Limits (-L)
     ## Map CLI flags to config keys
     limit_map = {

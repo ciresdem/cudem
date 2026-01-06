@@ -1059,10 +1059,12 @@ class WafflesSplitSampleUncertainty(Waffle):
                 )
             )
             ## Fallback to extracting uncertainty from stack
-            gdalfun.gdal_extract_band(self.stack, self.fn, band=4) 
-            with gdalfun.gdal_datasource(self.fn, update=True) as unc_ds:
-                unc_band = unc_ds.GetRasterBand(1)
-                unc_band.SetDescription('tvu')
+            ## Some modules didn't generate a stack (e.g. uncertainty)
+            if self.stack:
+                gdalfun.gdal_extract_band(self.stack, self.fn, band=4) 
+                with gdalfun.gdal_datasource(self.fn, update=True) as unc_ds:
+                    unc_band = unc_ds.GetRasterBand(1)
+                    unc_band.SetDescription('tvu')
             return self
         
         s_dp = None
