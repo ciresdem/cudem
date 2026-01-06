@@ -172,6 +172,7 @@ def srs_wkt(srs_input):
     Returns:
         str: The WKT representation of the SRS, or None if invalid.
     """
+    
     if srs_input is None:
         return None
         

@@ -441,8 +441,9 @@ class ElevationDataset:
                     temp_dir=self.cache_dir,
                 )
                 opts['ogr_or_gdal'] = 0 # Now it's a raster
-        
-        opts['data_mask'] = data_mask
+
+        if data_mask and os.path.exists(data_mask):
+            opts['data_mask'] = os.path.abspath(data_mask)
         return opts
 
     
@@ -1536,6 +1537,11 @@ class ElevationDataset:
         for out_arrays, this_srcwin, this_gt in self.yield_array():
             for data_mask in data_masks:
                 if data_mask is None: continue
+                if 'data_mask' in data_mask:
+                    if data_mask['data_mask'] is None:
+                        continue
+                else:
+                    continue
                 
                 src_mask = None
                 if os.path.exists(data_mask['data_mask']):

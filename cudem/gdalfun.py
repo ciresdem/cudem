@@ -668,15 +668,15 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
             driver = gdal.GetDriverByName('GTiff')
             target_ds = driver.Create(dst_fn, xcount, ycount, 1, gdal.GDT_Float32)
             target_ds.SetGeoTransform(dst_gt)
-            target_ds.SetProjection(srsfun.srs_wkt(dst_srs))
-            
+            target_ds.SetProjection(srsfun.osr_wkt(dst_srs))
+
             ## Initialize with 0
             band = target_ds.GetRasterBand(1)
             band.Fill(0)
             band.SetNoDataValue(0)
         except Exception as e:
-            utils.echo_error_msg(f"Failed to initialize mask raster {dst_fn}: {e}")
-            return None
+           utils.echo_error_msg(f"Failed to initialize mask raster {dst_fn}: {e}")
+           return None
 
         ## Rasterize using Python API (Avoids shell quoting issues)
         try:
@@ -689,7 +689,7 @@ def ogr2gdal_mask(mask_fn, region=None, x_inc=None, y_inc=None,
             opts = gdal.RasterizeOptions(
                 burnValues=[burn_val],
                 inverse=invert,
-                layers=[utils.get_layer_name(mask_fn)] # Helper to get layer name or None
+                layers=[ogr_get_layer_name(mask_fn)] # Helper to get layer name or None
             )
             
             if verbose:
