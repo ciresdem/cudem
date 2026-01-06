@@ -1278,10 +1278,10 @@ class ElevationDataset:
             _region_backup = self.region.copy()
             self.region = None # Unset to scan full file
 
-        _x_inc_backup = None
-        if self.x_inc:
-            _x_inc_backup = self.x_inc
-            self.x_inc = None
+        # _x_inc_backup = None
+        # if self.x_inc:
+        #     _x_inc_backup = self.x_inc
+        #     self.x_inc = None
             
         this_region = regions.Region()
         point_count = 0
@@ -1328,8 +1328,8 @@ class ElevationDataset:
         if _region_backup is not None:
             self.region = _region_backup.copy()
 
-        if _x_inc_backup:
-            self.x_inc = _x_inc_backup
+        # if _x_inc_backup:
+        #     self.x_inc = _x_inc_backup
                             
         return self.infos
 

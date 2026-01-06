@@ -224,8 +224,7 @@ class GlobatoStacker:
     
     def __init__(self, region, x_inc, y_inc, stack_mode='mean', stack_mode_args=None, 
                  dst_srs=None, cache_dir='.', verbose=False):
-        """
-        Initialize the GlobatoStacker.
+        """Initialize the GlobatoStacker.
 
         Parameters:
         -----------
@@ -267,6 +266,12 @@ class GlobatoStacker:
                 return None
         else:
             return None
+
+        if self.verbose:
+            utils.echo_msg(
+                (f'Loading {fn} and stacking using {self.stack_mode_name} '
+                 f'with {self.stack_mode_args} ')
+            )
         
         return stack_ds
 
@@ -280,6 +285,9 @@ class GlobatoStacker:
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         )
+
+        xcount = int(xcount)
+        ycount = int(ycount)
         
         if xcount <= 0 or ycount <= 0:
             utils.echo_error_msg(
@@ -291,9 +299,8 @@ class GlobatoStacker:
 
         if self.verbose:
             utils.echo_msg(
-                (f'stacking using {self.stack_mode_name} '
-                 f'with {self.stack_mode_args} '
-                 f'to {out_file} at {ycount}x{xcount}')
+                (f'Creating {out_file} and stacking using {self.stack_mode_name} '
+                 f'with {self.stack_mode_args} ')
             )
 
         lon_start = dst_gt[0] + (dst_gt[1] / 2)
@@ -314,7 +321,6 @@ class GlobatoStacker:
 
         ## Latitude
         lat_array = np.arange(ycount) * lat_inc + lat_start
-        utils.echo_msg(lat_array)
         #lat_array = np.arange(lat_start, lat_end, lat_inc)
         lat_dset = stack_ds.create_dataset('lat', data=lat_array)
         lat_dset.make_scale('latitude')
@@ -327,7 +333,6 @@ class GlobatoStacker:
         ## Longitude
         #lon_array = np.arange(lon_start, lon_end, lon_inc)
         lon_array = np.arange(xcount) * lon_inc + lon_start
-        utils.echo_msg(lon_array)
         lon_dset = stack_ds.create_dataset('lon', data=lon_array)
         lon_dset.make_scale('longitude')
         lon_dset.attrs["long_name"] = "longitude"
@@ -478,9 +483,11 @@ class GlobatoStacker:
         mask_level = utils.int_or(self.stack_mode_args.get('mask_level'), 0)
         
         ## Initialize output filename
-        if out_name is None:
-            out_name = 'globato'            
-        out_name = f'{utils.append_fn(out_name, self.region, self.x_inc)}'            
+        if out_name == 'globato' or out_name is None:
+            #out_name = 'globato'            
+            #out_name = os.path.join(self.cache_dir, utils.append_fn("globato", self.region, self.x_inc))
+            out_name = utils.append_fn("globato", self.region, self.x_inc)
+
         out_file = f'{out_name}.h5'
         
         if os.path.exists(out_file):
@@ -502,8 +509,9 @@ class GlobatoStacker:
         mask_grp = stack_ds['mask']
         datasets_grp = stack_ds['datasets']
 
-        utils.echo_msg(mask_grp.keys())
-        utils.echo_msg(datasets_grp.keys())
+        if self.verbose:
+            utils.echo_msg(mask_grp.keys())
+            utils.echo_msg(datasets_grp.keys())
         mask_all_dset = mask_grp['full_dataset_mask']
         
         ## Load Data into Memory
