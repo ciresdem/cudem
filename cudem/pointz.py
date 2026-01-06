@@ -900,8 +900,6 @@ class RQOutlierZ(OutlierZ):
                 _raster = utils.make_temp_fn('rq_merged.tif', self.cache_dir)
 
 
-            utils.echo_msg(_raster)
-            utils.echo_msg(self.xyinc)
             # If the merged raster from a previous run exists, return it immediately.
             if os.path.exists(_raster) and os.path.isfile(_raster):
                 return [_raster]
