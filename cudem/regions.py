@@ -351,7 +351,7 @@ class Region:
         this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt, node=node)
         this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt, node=node)
         
-        return this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt
+        return int(this_end[0] - this_origin[0]), int(this_end[1] - this_origin[1]), dst_gt
 
     def geo_transform_from_count(self, x_count: int = 0, y_count: int = 0):
         x_inc = (self.xmax - self.xmin) / x_count

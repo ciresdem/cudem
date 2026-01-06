@@ -293,7 +293,7 @@ class GlobatoStacker:
             utils.echo_msg(
                 (f'stacking using {self.stack_mode_name} '
                  f'with {self.stack_mode_args} '
-                 f'to {out_file}')
+                 f'to {out_file} at {ycount}x{xcount}')
             )
 
         lon_start = dst_gt[0] + (dst_gt[1] / 2)
@@ -314,6 +314,7 @@ class GlobatoStacker:
 
         ## Latitude
         lat_array = np.arange(ycount) * lat_inc + lat_start
+        utils.echo_msg(lat_array)
         #lat_array = np.arange(lat_start, lat_end, lat_inc)
         lat_dset = stack_ds.create_dataset('lat', data=lat_array)
         lat_dset.make_scale('latitude')
@@ -326,6 +327,7 @@ class GlobatoStacker:
         ## Longitude
         #lon_array = np.arange(lon_start, lon_end, lon_inc)
         lon_array = np.arange(xcount) * lon_inc + lon_start
+        utils.echo_msg(lon_array)
         lon_dset = stack_ds.create_dataset('lon', data=lon_array)
         lon_dset.make_scale('longitude')
         lon_dset.attrs["long_name"] = "longitude"
