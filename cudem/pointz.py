@@ -557,6 +557,7 @@ class PointZ:
         if isinstance(outliers_mask, np.ndarray) and outliers_mask.dtype == bool:
             if self.verbose:
                 utils.echo_msg(f'Filtered {np.count_nonzero(outliers_mask)} records.')
+                utils.echo_msg(f'Passed {len(self.points[~outliers_mask])} records.')
             return self.points[~outliers_mask]
         
         ## Backward compatibility if run returns points directly
@@ -889,7 +890,6 @@ class RQOutlierZ(OutlierZ):
                 return raster
             
         elif raster is None:
-            ## Align naming with point_residuals (rq_merged instead of rq_raster_None)
             if (self.region is not None or self.xyinc is not None):# and self.resample_raster:
                 _raster = utils.append_fn(
                     'rq_merged', self.region, 
@@ -984,7 +984,8 @@ class RQOutlierZ(OutlierZ):
         temp_merged = None
         
         if len(self.raster) > 1 or self.resample_raster:
-            if self.region is None: self.region = self.init_region()
+            if self.region is None:
+                self.region = self.init_region()
             
             ## Ensure we check the cache_dir for the merged file
             tmp_raster_fn = utils.append_fn(
@@ -1020,6 +1021,7 @@ class RQOutlierZ(OutlierZ):
                 return None
 
         ## Interpolate / Sample Directly
+        ## We use direct array indexing to ensure perfect 1:1 alignment with input points.
         ds = gdal.Open(ref_raster)
         if ds is not None:
             gt = ds.GetGeoTransform()
@@ -1077,7 +1079,89 @@ class RQOutlierZ(OutlierZ):
             return vals
         else:
             return np.abs(diff)
+        
+    
+    # def point_residuals(self, points, percentage=True, res=50):
+    #     """Calculate residuals against the loaded raster(s)."""
+        
+    #     if not self.raster:
+    #         return None
+
+    #     ## Handle Multiple Rasters via Warping/Merging
+    #     ref_raster = self.raster[0]
+    #     temp_merged = None
+        
+    #     if len(self.raster) > 1 or self.resample_raster:
+    #         if self.region is None: self.region = self.init_region()
             
+    #         ## Ensure we check the cache_dir for the merged file
+    #         tmp_raster_fn = utils.append_fn(
+    #             'rq_merged', self.region, 
+    #             self.xyinc[0] if self.xyinc[0] else 1, 
+    #             res=1 if not all(self.xyinc) else None
+    #         )
+    #         tmp_raster_fn = os.path.join(self.cache_dir, f'{tmp_raster_fn}.tif')
+
+    #         ## Create a temporary region buffered by 5%
+    #         warp_region = self.region.copy()
+    #         warp_region.buffer(pct=5) 
+
+    #         x_res = self.xyinc[0] if self.xyinc else 0.0000925
+    #         y_res = self.xyinc[1] if self.xyinc else 0.0000925
+
+    #         try:
+    #             ## Check if the file exists in the cache_dir before attempting to warp
+    #             if os.path.exists(tmp_raster_fn):
+    #                 ref_raster = tmp_raster_fn
+    #                 temp_merged = ref_raster
+    #             else:
+    #                 warped = gdalfun.sample_warp(
+    #                     self.raster, tmp_raster_fn, x_res, y_res,
+    #                     sample_alg='bilinear', src_region=warp_region, 
+    #                     verbose=self.verbose
+    #                 )
+    #                 if warped:
+    #                     ref_raster = warped[0]
+    #                     temp_merged = ref_raster
+    #         except Exception as e:
+    #             utils.echo_error_msg(f"Failed to merge rasters: {e}")
+    #             return None
+
+    #     ## Interpolate
+    #     sampled_z = gdalfun.gdal_query(points, ref_raster, 'g').flatten()
+        
+    #     ## Cleanup: Only delete if it's a VRT (temp). 
+    #     ## TIFs are kept for reuse.
+    #     if temp_merged and os.path.exists(temp_merged):
+    #         if temp_merged.endswith('.vrt'):
+    #             try: os.remove(temp_merged)
+    #             except OSError: pass
+
+    #     ## Validation check to catch alignment errors early
+    #     if len(sampled_z) != len(points):
+    #         if self.verbose:
+    #             utils.echo_warning_msg(
+    #                 f"Shape mismatch in RQ filter: Points {len(points)} vs Sampled {len(sampled_z)}. "
+    #                 "Padding with NaNs."
+    #             )
+    #         new_sampled = np.full(len(points), np.nan)
+    #         limit = min(len(points), len(sampled_z))
+    #         new_sampled[:limit] = sampled_z[:limit]
+    #         sampled_z = new_sampled
+                
+    #     diff = points['z'] - sampled_z
+        
+    #     if percentage:
+    #         with np.errstate(divide='ignore', invalid='ignore'):
+    #             if self.scaled_percentile:
+    #                 vals = np.abs(diff / (points['z'] + sampled_z)) * 100
+    #             else:
+    #                 vals = np.abs(diff / sampled_z) * 100
+    #             vals[~np.isfinite(vals)] = 0
+    #         return vals
+    #     else:
+    #         return np.abs(diff)
+        
 
 class BlockThin(PointZ):
     """Thin point cloud by keeping one representative point per grid cell.

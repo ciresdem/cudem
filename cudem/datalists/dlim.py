@@ -966,8 +966,8 @@ class ElevationDataset:
             except ValueError as e:
                 generate_inf = True
                 utils.remove_glob(inf_path)
-                if self.verbose:
-                    utils.echo_warning_msg(f'Failed to parse inf {inf_path}, {e}')
+                #if self.verbose:
+                utils.echo_warning_msg(f'Failed to parse inf {inf_path}, {e}')
         else:
             generate_inf = True        
 
@@ -1273,10 +1273,10 @@ class ElevationDataset:
         """
         
         ## Bounds Scan (Pass 1)
-        _region_backup = None
-        if self.region is not None:
-            _region_backup = self.region.copy()
-            self.region = None # Unset to scan full file
+        # _region_backup = None
+        # if self.region is not None:
+        #     _region_backup = self.region.copy()
+        #     self.region = None # Unset to scan full file
 
         # _x_inc_backup = None
         # if self.x_inc:
@@ -1286,7 +1286,12 @@ class ElevationDataset:
         this_region = regions.Region()
         point_count = 0
 
-        for points in self.transform_and_yield_points():
+        ## mrl: There is noo need to transform points, as we want the inf data to be in native units.
+        ##      This also means we don't have to null the region and inc, which can cause bugs sometimes.
+        ##      self.transform isn't even set when inf is called, so there was no point to use
+        ##      transform_and_yield_points anyway...
+        #for points in self.transform_and_yield_points():
+        for points in self.yield_points():
             if point_count == 0:
                 this_region.from_list([
                     np.min(points['x']), np.max(points['x']),
@@ -1324,13 +1329,13 @@ class ElevationDataset:
             if make_block_mean:
                 self._generate_block_mean(this_region, block_inc=block_inc)
 
-        ## Restore Region and inc Constraint
-        if _region_backup is not None:
-            self.region = _region_backup.copy()
+        # ## Restore Region and inc Constraint
+        # if _region_backup is not None:
+        #     self.region = _region_backup.copy()
 
         # if _x_inc_backup:
         #     self.x_inc = _x_inc_backup
-                            
+
         return self.infos
 
     

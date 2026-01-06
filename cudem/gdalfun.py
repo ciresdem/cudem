@@ -1661,43 +1661,99 @@ def gdal_cut_trans(src_gdal, src_region, dst_gdal, node='pixel',
         return src_gdal, status
 
 
-def gdal_clip(src_gdal, dst_gdal, src_ply=None, invert=False,
+from osgeo import gdal, ogr
+import os
+
+def gdal_clip(src_gdal, dst_gdal, src_ply=None, invert=False, 
               verbose=True, cache_dir=None):
-    """Clip DEM to polygon `src_ply` using rasterize."""
+    """Clip DEM to polygon `src_ply` using gdal.Rasterize (Python API)."""
     
+    ## Gather Source Info
     gi = gdal_infos(src_gdal)
-    g_region = regions.Region().from_geo_transform(
-        geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny']
+    if gi is None or src_ply is None:
+        return None, -1
+
+    ## Calculate raster extent for vector clipping
+    gt = gi['geoT']
+    nx = gi['nx']
+    ny = gi['ny']
+    
+    ## Calculate bounds
+    min_x = gt[0]
+    max_y = gt[3]
+    max_x = min_x + (gt[1] * nx)
+    min_y = max_y + (gt[5] * ny)
+    
+    ## Handle negative y resolution (standard GTiff)
+    if min_y > max_y: min_y, max_y = max_y, min_y
+    
+    ## Clip Vector
+    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', temp_dir=cache_dir)
+    
+    ##ogr2ogr -clipsrc minx miny maxx maxy -nlt POLYGON ...
+    vt_opts = gdal.VectorTranslateOptions(
+        options=['-clipsrc', str(min_x), str(min_y), str(max_x), str(max_y),
+                 '-nlt', 'POLYGON', 
+                 '-skipfailures', 
+                 '-makevalid']
     )
     
-    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', temp_dir=cache_dir)    
-    
-    ## Clip vector first
-    cmd = (f'ogr2ogr "{tmp_ply}" "{src_ply}" -clipsrc {g_region.format("ul_lr")} '
-           '-nlt POLYGON -skipfailures -makevalid')
-    utils.run_cmd(cmd, verbose=verbose)
-    
-    if gi is not None and src_ply is not None:
-        shutil.copyfile(src_gdal, dst_gdal)
-        
-        with gdal_datasource(src_gdal) as src_ds:
-            band_count = src_ds.RasterCount if src_ds else 1
-                
-        invert_flag = '-i' if invert else ''
-        layer_name = os.path.splitext(os.path.basename(tmp_ply))[0]
-        
-        ## Burn nodata into destination
-        gr_cmd = (f'gdal_rasterize -b {band_count} -burn {gi["ndv"]} '
-                  f'-l {layer_name} "{tmp_ply}" "{dst_gdal}" {invert_flag}')
-        
-        out, status = utils.run_cmd(gr_cmd, verbose=verbose)
-        
-        ## Cleanup temp vector
-        utils.remove_glob(f'{os.path.splitext(tmp_ply)[0]}.*')
-        return out, status
-    else:
-        utils.remove_glob(f'{os.path.splitext(tmp_ply)[0]}.*')
+    try:
+        gdal.VectorTranslate(tmp_ply, src_ply, options=vt_opts)
+    except Exception as e:
+        if verbose: utils.echo_error_msg(f"Failed to clip vector: {e}")
         return None, -1
+
+    ## Prepare Destination Raster
+    ## Create a copy of the source raster to the destination path
+    src_ds = gdal.Open(src_gdal, gdal.GA_ReadOnly)
+    if src_ds is None:
+        utils.echo_error_msg(f"Could not open source {src_gdal}")
+        return None, -1
+        
+    driver = src_ds.GetDriver()
+    dst_ds = driver.CreateCopy(dst_gdal, src_ds, 0) # 0 = strict options off
+    
+    if dst_ds is None:
+        utils.echo_error_msg(f"Could not create copy {dst_gdal}")
+        return None, -1
+
+    ## Rasterize (Burn NoData)
+    ## If the raster doesn't have a NoDataValue, default to -9999 or 0 to avoid crashes,
+    ## though ideally the input should define it.
+    ndv = gi['ndv']
+    if ndv is None:
+        ndv = -9999
+    
+    bands = list(range(1, dst_ds.RasterCount + 1))
+    burn_values = [ndv] * len(bands)
+    
+    # RasterizeOptions: inverse=True corresponds to the '-i' flag
+    rast_opts = gdal.RasterizeOptions(
+        bands=bands,
+        burnValues=burn_values,
+        inverse=invert
+    )
+    
+    status = 0
+    try:
+        ## Perform the burn on the destination dataset using the temp clipped vector
+        gdal.Rasterize(dst_ds, tmp_ply, options=rast_opts)
+        
+        ## Flush to disk to ensure file is written
+        dst_ds.FlushCache()
+    except Exception as e:
+        if verbose: utils.echo_error_msg(f"Rasterize failed: {e}")
+        status = 1
+    finally:
+        ## Close datasets
+        dst_ds = None
+        src_ds = None
+
+    ## Cleanup
+    utils.remove_glob(f'{os.path.splitext(tmp_ply)[0]}.*')
+    
+    return dst_gdal, status    
 
 
 def crop(src_gdal, dst_gdal):
@@ -2233,7 +2289,7 @@ def gdal_point_query(points, src_gdal, x='x', y='y', z='z', band=1):
 
 
 def gdal_yield_query(src_xyz, src_gdal, out_form, band=1):
-    """query a gdal-compatible grid file with xyz data.
+    """Query a gdal-compatible grid file with xyz data.
     out_form dictates return values
     """
 

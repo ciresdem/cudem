@@ -298,14 +298,19 @@ class MBSParser(ElevationDataset):
                 self.weight *= this_weight
 
         ## Build Command
-        mb_region = self.region.copy().buffer(pct=25) if self.region else None
+        mb_region = None
+        if self.region is not None:
+            mb_region = self.region.copy()
+            mb_region.buffer(pct=5)
+            
+        #mb_region = self.region.copy().buffer(pct=25) if self.region else None
         region_arg = f" {mb_region.format('gmt')}" if mb_region else ""
         fmt_arg = f" -F{mb_format}" if mb_format else ""
         
         cmd = f'mblist -M{self.mb_exclude} -OXYZDS{region_arg} -I{self.fn}{fmt_arg}'
         
         mb_points = []
-        BATCH_SIZE = 50000
+        BATCH_SIZE = 100000
 
         for line in utils.yield_cmd(cmd, verbose=False):
             try:
