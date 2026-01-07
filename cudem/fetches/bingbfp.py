@@ -150,7 +150,7 @@ class BingBuildings:
         else:
             out_fn = None
 
-        utils.echo_msg(out_fn)
+        #utils.echo_msg(out_fn)
         ## Run Processing
         out_fn, bing_geoms = self.process(out_fn)
                 

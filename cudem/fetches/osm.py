@@ -549,14 +549,14 @@ class osmCoastline:
                         local_file = entry[1]
                         
                         ## Generate temporary output name if needed
-                        out_fn = out_fn if out_fn else utils.make_temp_fn(
+                        out_file = out_fn if out_fn else utils.make_temp_fn(
                             f'{utils.fn_basename2(local_file)}_coast.gpkg',
                             temp_dir=self.cache_dir
                         )
 
                         polygonize_osm_coastline(
                             local_file,
-                            out_fn,
+                            out_file,
                             region=self.region,
                             include_landmask=self.include_landmask,
                             landmask_is_watermask=self.landmask_is_watermask,
@@ -565,6 +565,15 @@ class osmCoastline:
                         )
                     pbar.update()
 
+        if out_file is not None:
+            cst_ds = ogr.Open(out_file, 0)
+            cst_layer = cst_ds.GetLayer()
+            cst_geom = gdalfun.ogr_union_geom(
+                cst_layer, verbose=self.verbose
+            )
+            cst_geoms.append(cst_geom)
+            cst_ds = None
+                    
         ## If no output filename was provided, we might want to return geometry objects directly
         return out_fn, cst_geoms
 
@@ -625,8 +634,7 @@ class osmCoastline:
         if not overwrite and os.path.exists(out_fn):
             if not return_geom:
                 return out_fn
-            ## If returning geom, we might need to load it from existing file? 
-            ## Skipping for brevity.
+            ## If returning geom, we might need to load it from existing file.
 
         if overwrite:
             utils.remove_glob(out_fn)

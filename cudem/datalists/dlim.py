@@ -960,6 +960,7 @@ class ElevationDataset:
         inf_path = f'{self.fn}.inf'
         generate_inf = False
 
+        utils.echo_debug_msg(f'Generating/Loading INF {inf_path}')
         ## Try to load existing INF
         if os.path.exists(inf_path):
             try:
@@ -1464,58 +1465,64 @@ class ElevationDataset:
     def transform_and_yield_points(self):
         """Yield transformed points."""
         
-        #with warnings.catch_warnings():
-        #warnings.simplefilter('ignore')
-        for points in self.yield_points():
-            #utils.echo_debug_msg(f'transformer is: {self.transform}')
-            if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
-                if self.transform['transformer'] is not None:
-                    points['x'], points['y'] = self.transform['transformer'].transform(points['x'], points['y'])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            for points in self.yield_points():
 
-                if self.transform['vert_transformer'] is not None:
-                    _, _, points['z'] = self.transform['vert_transformer'].transform(points['x'], points['y'], points['z'])
+                ## Convert Pandas DataFrame to NumPy RecArray
+                ## This allows icesat2/atl03 parsers to yield DataFrames directly
+                if hasattr(points, 'to_records'):
+                    points = points.to_records(index=False)
+                    
+                utils.echo_debug_msg(f'transformer is: {self.transform}')
+                if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
+                    if self.transform['transformer'] is not None:
+                        points['x'], points['y'] = self.transform['transformer'].transform(points['x'], points['y'])
 
-                points = points[~np.isinf(points['z'])]
+                    if self.transform['vert_transformer'] is not None:
+                        _, _, points['z'] = self.transform['vert_transformer'].transform(points['x'], points['y'], points['z'])
 
-            if self.region is not None and self.region.valid_p():
-                xyz_region = self.region.copy()
-                if self.invert_region:
-                    ## Inverted Region
-                    points = points[
-                        ((points['x'] >= xyz_region.xmax) | (points['x'] <= xyz_region.xmin)) | 
-                        ((points['y'] >= xyz_region.ymax) | (points['y'] <= xyz_region.ymin))
-                    ]
-                    if xyz_region.zmin is not None: points = points[(points['z'] <= xyz_region.zmin)]
-                    if xyz_region.zmax is not None: points = points[(points['z'] >= xyz_region.zmax)]
-                else:
-                    # Standard Region
-                    points = points[
-                        ((points['x'] <= xyz_region.xmax) & (points['x'] >= xyz_region.xmin)) & 
-                        ((points['y'] <= xyz_region.ymax) & (points['y'] >= xyz_region.ymin))
-                    ]
-                    if xyz_region.zmin is not None: points = points[(points['z'] >= xyz_region.zmin)]
-                    if xyz_region.zmax is not None: points = points[(points['z'] <= xyz_region.zmax)]
+                    points = points[~np.isinf(points['z'])]
 
-            if self.upper_limit is not None: points = points[(points['z'] <= self.upper_limit)]
-            if self.lower_limit is not None: points = points[(points['z'] >= self.lower_limit)]
+                if self.region is not None and self.region.valid_p():
+                    xyz_region = self.region.copy()
+                    if self.invert_region:
+                        ## Inverted Region
+                        points = points[
+                            ((points['x'] >= xyz_region.xmax) | (points['x'] <= xyz_region.xmin)) | 
+                            ((points['y'] >= xyz_region.ymax) | (points['y'] <= xyz_region.ymin))
+                        ]
+                        if xyz_region.zmin is not None: points = points[(points['z'] <= xyz_region.zmin)]
+                        if xyz_region.zmax is not None: points = points[(points['z'] >= xyz_region.zmax)]
+                    else:
+                        # Standard Region
+                        points = points[
+                            ((points['x'] <= xyz_region.xmax) & (points['x'] >= xyz_region.xmin)) & 
+                            ((points['y'] <= xyz_region.ymax) & (points['y'] >= xyz_region.ymin))
+                        ]
+                        if xyz_region.zmin is not None: points = points[(points['z'] >= xyz_region.zmin)]
+                        if xyz_region.zmax is not None: points = points[(points['z'] <= xyz_region.zmax)]
 
-            if len(points) > 0:
-                if isinstance(self.pnt_fltrs, list):
-                    for f in self.pnt_fltrs:
-                        ## set verbosity in the mod
-                        point_filter = pointz.PointFilterFactory(
-                            mod=f,
-                            points=points,
-                            region=self.region,
-                            xyinc=[self.x_inc, self.y_inc],
-                            cache_dir=self.cache_dir,
-                            verbose=False,
-                        )._acquire_module()
-                        if point_filter:
-                            points = point_filter()
+                if self.upper_limit is not None: points = points[(points['z'] <= self.upper_limit)]
+                if self.lower_limit is not None: points = points[(points['z'] >= self.lower_limit)]
 
                 if len(points) > 0:
-                    yield points
+                    if isinstance(self.pnt_fltrs, list):
+                        for f in self.pnt_fltrs:
+                            ## set verbosity in the mod
+                            point_filter = pointz.PointFilterFactory(
+                                mod=f,
+                                points=points,
+                                region=self.region,
+                                xyinc=[self.x_inc, self.y_inc],
+                                cache_dir=self.cache_dir,
+                                verbose=False,
+                            )._acquire_module()
+                            if point_filter:
+                                points = point_filter()
+
+                    if len(points) > 0:
+                        yield points
 
         self.transform['transformer'] = self.transform['vert_transformer'] = None
 

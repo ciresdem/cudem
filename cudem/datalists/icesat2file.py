@@ -73,7 +73,7 @@ class IceSat2_ATL24(ElevationDataset):
             self.classes = [int(x) for x in str(classes).split('/')]
 
             
-    def generate_inf(self, make_grid=True, make_block_mean=False, block_inc=None):
+    def generate_inf(self, make_grid=False, make_block_mean=False, block_inc=None):
         """Generate metadata (INF) for the ATL24 data.
         """
         
@@ -199,20 +199,29 @@ class IceSat2_ATL03(ElevationDataset):
     
     Can integrate classifications from ATL08 (Land/Canopy), ATL24 (Bathymetry),
     and ATL06 (Land Ice), and ATL13 (Inland Water). 
-    Can also classify using external vectors (OSM/Bing).
+    Can also classify using external vectors (OSM/Bing) or Algorithms (Known Bathy/DBSCAN).
+
+    Ground (1), Canopy (2), Top Canopy (3), Bathymetry (40), Water Surface (41), Land Ice (6), Inland Water (42)
+    Open Ocean Surface (44), Atmosphere (0), Buildings (7), Unclassified (-1)
+
     """
 
     def __init__(self,
-                 water_surface='geoid',
-                 classes=None,
-                 confidence_levels='2/3/4',
+                 water_surface='geoid', # height
+                 classes=None, # classify the data
+                 confidence_levels='2/3/4', # filter data by confidence level
                  columns=None,
-                 reject_failed_qa=True,
-                 classify_buildings=True,
-                 classify_water=True,
-                 classify_inland_water=True,
-                 append_atl24=False,
-                 min_bathy_confidence=None,
+                 reject_failed_qa=True, # reject bad granules
+                 classify_buildings=True, # classify buildings
+                 classify_water=True, # classify water surface 
+                 classify_inland_water=True, # classify inland water surface
+                 append_atl24=False, # append atl24 data to yield_points
+                 min_bathy_confidence=None, # minimum desired bathy confidence (from atl24)
+                 known_bathymetry=None,  # New: Path to raster or 'gmrt'
+                 known_bathy_threshold=5.0, # New: Vertical window (+/- meters)
+                 use_dbscan=False,       # New: Enable DBSCAN clustering
+                 dbscan_eps=1.5,         # New: DBSCAN epsilon (neighbor distance)
+                 dbscan_min_samples=10,  # New: DBSCAN min points for core
                  **kwargs):
         
         super().__init__(**kwargs)
@@ -231,15 +240,51 @@ class IceSat2_ATL03(ElevationDataset):
         self.append_atl24 = append_atl24
         self.min_bathy_confidence = utils.float_or(min_bathy_confidence)
 
+        ## --- SciKit Algo Classification Options ---
+        self.known_bathymetry = known_bathymetry
+        self.known_bathy_threshold = utils.float_or(known_bathy_threshold, 5.0)
+        self.use_dbscan = use_dbscan
+        self.dbscan_eps = utils.float_or(dbscan_eps, 1.5)
+        self.dbscan_min_samples = utils.int_or(dbscan_min_samples, 10)
+        
         self.orientDict = {0:'l', 1:'r', 21:'error'}
 
+
+    def _init_region_from_df(self, df):
+        """Initialize a region object from the dataframe extents."""
         
-    def generate_inf(self, make_grid=True, make_block_mean=False, block_inc=None):
+        if df is None or df.empty:
+            return None
+            
+        return regions.Region().from_list([
+            df['longitude'].min(), df['longitude'].max(),
+            df['latitude'].min(), df['latitude'].max()
+        ])
+    
+
+    def _get_processing_region(self):
+        """Determine the processing region for fetches."""
+        
+        if self.region is not None:
+            return self.region.copy()
+
+        #utils.echo_msg(self.infos.minmax)
+        #if isinstance(self.infos, dict) and 'minmax' in self.infos and self.infos.minmax is not None:
+        if self.infos.minmax is not None:
+            # minmax format: [xmin, xmax, ymin, ymax, zmin, zmax]
+            return regions.Region().from_list(self.infos.minmax)
+            
+        return None
+    
+    
+    def generate_inf(self, make_grid=False, make_block_mean=False, block_inc=None):
         """Generate metadata (INF) for the ATL03 data."""
-        
+
         ## Delegate to parent for grids
-        if make_grid or make_block_mean:
-            return super().generate_inf(make_grid, make_block_mean, block_inc)
+        make_grid = False
+        make_block_mean = False
+        # if make_grid or make_block_mean:
+        #     return super().generate_inf(make_grid, make_block_mean, block_inc)
 
         if self.src_srs is None:
             self.infos.src_srs = 'epsg:4326+3855'
@@ -249,6 +294,7 @@ class IceSat2_ATL03(ElevationDataset):
         these_regions = []
         numpts = 0
         try:
+            #utils.echo_msg(self.fn)
             with h5.File(self.fn, 'r') as f:
                 for b in range(1, 4):
                     for p in ['l', 'r']:
@@ -258,7 +304,6 @@ class IceSat2_ATL03(ElevationDataset):
                         y = f[f'{beam}/heights/lat_ph'][...]
                         x = f[f'{beam}/heights/lon_ph'][...]
                         z = f[f'{beam}/heights/h_ph'][...]
-                        
                         if len(x) > 0:
                             this_region = regions.Region(src_srs=self.infos.src_srs).from_list(
                                 [np.min(x), np.max(x), np.min(y), np.max(y), np.min(z), np.max(z)]
@@ -273,13 +318,14 @@ class IceSat2_ATL03(ElevationDataset):
 
                 self.infos.minmax = merged.export_as_list(include_z=True)
                 self.infos.wkt = merged.export_as_wkt()
-                
+
             self.infos.numpts = numpts 
             
-        except Exception:
+        except Exception as e:
             ## Fallback to scan
+            utils.echo_warning_msg(f'Failed to generate inf from h5, falling back to parsing all points, {e}')
             return super().generate_inf(make_grid, make_block_mean, block_inc)
-            
+
         return self.infos
 
     
@@ -314,149 +360,145 @@ class IceSat2_ATL03(ElevationDataset):
         return None
 
     
-    def apply_atl08_classifications(self, atl08_fn, ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids):
+    def apply_atl08_classifications(self, df, atl08_fn, laser, segment_index_dict):
         """Map ATL08 Land/Canopy classes to ATL03 photons."""
         
         try:
             with h5.File(atl08_fn, 'r') as f:
-                if laser not in f: return ph_h_classed
+                if laser not in f: return df
                 
                 sig = f[f'/{laser}/signal_photons']
                 atl08_flag = sig['classed_pc_flag'][...]
                 atl08_seg = sig['ph_segment_id'][...]
-                atl08_idx = sig['classed_pc_indx'][...]
+                atl08_idx = sig['classed_pc_indx'][...] # 1-based index within segment
 
-                ## Mask for segments present in current chunk
-                mask = np.isin(atl08_seg, ph_segment_ids)
+                ## Filter to segments present in our current dataframe
+                ## We use the unique segments from the DF to avoid processing unrelated ATL08 data
+                relevant_segments = df['ph_segment_id'].unique()
+                mask = np.isin(atl08_seg, relevant_segments)
                 
-                ## Map to ATL03 indices
-                ## ATL03 Global Index = Segment_Start_Index + (ATL08_Offset - 1)
+                if not np.any(mask): return df
+
+                ## Calculate Absolute Index in ATL03 Arrays
+                ## Global_Index = Segment_Start_Index + (Photon_Index_In_Segment - 1)
                 
-                ## Get start index for each ATL08 segment in the chunk
-                atl08_seg_starts = np.array([segment_index_dict[sid] for sid in atl08_seg[mask]])
+                ## Get start indices for the relevant segments
+                ## Map segment IDs to their start index in the DF (using the passed dict)
+                seg_starts = np.array([segment_index_dict.get(s, -1) for s in atl08_seg[mask]])
                 
-                ## Calculate absolute photon indices
-                atl03_indices = atl08_seg_starts + (atl08_idx[mask] - 1)
+                ## Calculate absolute indices
+                valid_seg_mask = seg_starts != -1
+                atl03_indices = seg_starts[valid_seg_mask] + (atl08_idx[mask][valid_seg_mask] - 1)
                 
-                ## Boundary check
-                valid_idx = atl03_indices < len(ph_h_classed)
+                ## Filter indices that might be out of bounds (truncated granule)
+                valid_idx_mask = (atl03_indices >= 0) & (atl03_indices < len(df))
+                final_indices = atl03_indices[valid_idx_mask]
                 
                 ## Apply Classification
-                ph_h_classed[atl03_indices[valid_idx]] = atl08_flag[mask][valid_idx]
-                
+                values_to_assign = atl08_flag[mask][valid_seg_mask][valid_idx_mask]
+
+                if self.verbose:
+                    utils.echo_msg(f'Classified {len(final_indices)} photons from {laser} based on ATL08')
+                ## Using numpy indexing on the underlying column for speed, or .iloc
+                #df.iloc[final_indices, df.columns.get_loc('ph_h_classed')] = values_to_assign
+                ## A safer pandas way:
+                df.loc[df.index[final_indices], 'ph_h_classed'] = values_to_assign
+
         except Exception as e:
             utils.echo_warning_msg(f"Failed to apply ATL08 classifications from {atl08_fn}: {e}")
             
-        return ph_h_classed
+        return df
 
     
-    def apply_atl06_classifications(self, atl06_fn, ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids):
+    def apply_atl06_classifications(self, df, atl06_fn, laser):
         """Map ATL06 Land Ice segments to ATL03 photons (Class 6)."""
         
         try:
             with h5.File(atl06_fn, 'r') as f:
-                if laser not in f: return ph_h_classed
+                if laser not in f: return df
                 
                 li = f[f'/{laser}/land_ice_segments']
-                if 'segment_id' not in li: return ph_h_classed
+                if 'segment_id' not in li: return df
 
                 atl06_seg = li['segment_id'][...]
                 atl06_h = li['h_li'][...]
                 
-                ## Filter valid ATL06 segments (valid height)
                 valid_mask = atl06_h < 1e30
                 valid_segs = atl06_seg[valid_mask]
 
                 ## Identify photons belonging to these valid segments
-                is_ice = np.isin(ph_segment_ids, valid_segs)
+                is_ice = df['ph_segment_id'].isin(valid_segs)
                 
-                ## Update Classification (Class 6 = Ice)
-                ## Override unclassified/noise, preserve Bathy/Urban if already set
-                update_mask = is_ice & (ph_h_classed < 7)
-                ph_h_classed[update_mask] = 6
+                ## Class 6 (Ice), override unclassified/ground/canopy/noise (<7)
+                mask = is_ice & (df['ph_h_classed'] < 7)
+                if self.verbose:
+                    utils.echo_msg(f'Classified {np.count_nonzero(mask)} photons from {laser} based on ATL06')
+                    
+                df.loc[mask, 'ph_h_classed'] = 6
 
         except Exception as e:
             utils.echo_warning_msg(f"Failed to apply ATL06 classifications from {atl06_fn}: {e}")
             
-        return ph_h_classed
+        return df
 
-
-    def apply_atl12_classifications(self, atl12_fn, ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids):
-        """Map ATL12 Ocean Surface segments to ATL03 photons (Class 44).
-        
-        ATL12 provides ocean surface heights.
-        Class 44 is assigned to photons belonging to valid ATL12 ocean segments.
-        """
+    
+    def apply_atl12_classifications(self, df, atl12_fn, laser):
+        """Map ATL12 Ocean Surface segments to ATL03 photons (Class 44)."""
         
         try:
             with h5.File(atl12_fn, 'r') as f:
-                if laser not in f: return ph_h_classed
-                
-                ## Check for segment arrays
-                ## ATL12 structure: /gtx/ssh_segments/stats/segment_id_beg
-                ## (Note: ATL12 groups by ssh_segments, similar to ATL13)
+                if laser not in f: return df
                 
                 path = f'/{laser}/ssh_segments/stats'
-                if path not in f or 'segment_id_beg' not in f[path]: return ph_h_classed
+                if path not in f or 'segment_id_beg' not in f[path]: return df
                 
                 atl12_seg = f[f'{path}/segment_id_beg'][...]
                 
-                ## Filter by valid height if needed (h_ssh)
-                ## h_ssh = f[f'/{laser}/ssh_segments/heights/h_ssh'][...]
+                is_ocean = df['ph_segment_id'].isin(atl12_seg)
                 
-                ## Assume presence in ATL12 means it is ocean
-                is_ocean = np.isin(ph_segment_ids, atl12_seg)
-                
-                ## Update Mask: Is Ocean Segment AND Not already special class (like Bathy 40/41)
-                ## We prioritize Bathy (40) and Inland Water (42) over Ocean (44) if there's overlap.
-                ## Usually: Bathy > Inland > Ocean > Unclassified
-                update_mask = is_ocean & (ph_h_classed < 40)
-                ph_h_classed[update_mask] = 44
+                ## Prioritize Bathy (40) and Inland (42) over Ocean (44)
+                mask = is_ocean & (df['ph_h_classed'] < 40)
+                if self.verbose:
+                    utils.echo_msg(f'Classified {np.count_nonzero(final_indices)} photons from {laser} based on ATL12')
+                    
+                df.loc[mask, 'ph_h_classed'] = 44
 
         except Exception as e:
             utils.echo_warning_msg(f"Failed to apply ATL12 classifications from {atl12_fn}: {e}")
             
-        return ph_h_classed
+        return df
+
     
-    
-    def apply_atl13_classifications(self, atl13_fn, ph_h_classed, laser, segment_id, segment_index_dict, ph_segment_ids):
-        """Map ATL13 Inland Water segments to ATL03 photons (Class 42).
-        
-        ATL13 provides water surface heights at the segment level (short or long segments).
-        We map these segments back to the individual photons.
-        Class 42 is assigned to photons belonging to valid ATL13 water segments.
-        """
+    def apply_atl13_classifications(self, df, atl13_fn, laser):
+        """Map ATL13 Inland Water segments to ATL03 photons (Class 42)."""
         
         try:
             with h5.File(atl13_fn, 'r') as f:
-                if laser not in f: return ph_h_classed
+                if laser not in f: return df
                 
-                if f'/{laser}/segment_id_beg' not in f: return ph_h_classed
+                if f'/{laser}/segment_id_beg' not in f: return df
                 
                 atl13_seg = f[f'/{laser}/segment_id_beg'][...]
-                #atl13_h = f[f'/{laser}/ht_water_surf'][...] # could filter by valid height
                 
-                ## Assume presence in ATL13 means it is water
-                is_water = np.isin(ph_segment_ids, atl13_seg)
-                
-                ## Update Mask: Is Water Segment AND Not already special class (like Bathy 40/41)
-                update_mask = is_water & (ph_h_classed < 40)
-                ph_h_classed[update_mask] = 42
+                is_water = df['ph_segment_id'].isin(atl13_seg)
+
+                ## Prioritize Bathy (40) over inland water
+                mask = is_water & (df['ph_h_classed'] < 40)
+                utils.echo_msg(f'Classed {np.count_nonzero(mask)} photons from {laser} based on ATL13')
+                df.loc[mask, 'ph_h_classed'] = 42
 
         except Exception as e:
             utils.echo_warning_msg(f"Failed to apply ATL13 classifications from {atl13_fn}: {e}")
             
-        return ph_h_classed
-
+        return df
     
-    def apply_atl24_classifications(self, atl24_fn, ph_h_classed, ph_h_bathy_conf, 
-                                    lat, lon, h, h_mean, h_geoid, 
-                                    laser, geoseg_beg, geoseg_end, ph_segment_ids):
-        """Map ATL24 Bathymetry classes and Refracted Heights to ATL03 photons."""
+    
+    def apply_atl24_classifications_full(self, df, atl24_fn, laser, geoseg_beg, geoseg_end, segment_index_dict):
+        """Map ATL24 Bathymetry classes using index mapping."""
         
         try:
             with h5.File(atl24_fn, 'r') as f:
-                if laser not in f: return ph_h_classed, ph_h_bathy_conf, lat, lon, h, h_mean, h_geoid
+                if laser not in f: return df
 
                 grp = f[laser]
                 atl24_lat = grp['lat_ph'][...]
@@ -465,49 +507,275 @@ class IceSat2_ATL03(ElevationDataset):
                 atl24_ellipse = grp['ellipse_h'][...]
                 atl24_surface = grp['surface_h'][...]
                 atl24_class = grp['class_ph'][...]
-                atl24_seg = grp['index_seg'][...] # relative segment index? ATL24 uses index_seg differently
-                atl24_idx = grp['index_ph'][...]
+                atl24_seg = grp['index_seg'][...] 
+                atl24_idx = grp['index_ph'][...] # 1-based index
                 atl24_conf = grp['confidence'][...]
 
-                ## Reconstruct original segment IDs for mapping
-                ## ATL24 index_seg refers to the range [geoseg_beg, geoseg_end]
+                ## Map internal ATL24 segment index to Real Segment ID
                 orig_segs = np.arange(geoseg_beg, geoseg_end + 1)
-                
-                ## Filter ATL24 points relevant to current chunk's segments
-                ## Map ATL24 internal segment index -> Real Segment ID
                 atl24_real_seg_ids = orig_segs[atl24_seg]
                 
-                mask = np.isin(atl24_real_seg_ids, ph_segment_ids)
-                if not np.any(mask): return ph_h_classed, ph_h_bathy_conf, lat, lon, h, h_mean, h_geoid
+                ## Filter to relevant data
+                mask = np.isin(atl24_real_seg_ids, df['ph_segment_id'].unique())
+                if not np.any(mask): return df
                 
-                chunk_min_idx = np.min(atl24_idx[mask]) # Simplified alignment assumption
-                rel_idx = atl24_idx[mask] - chunk_min_idx
+                ## Calculate Global Indices in DF
+                ## Get start index for each photon's segment
+                seg_starts = np.array([segment_index_dict.get(s, -1) for s in atl24_real_seg_ids[mask]])
                 
-                ## Safety Clip
-                valid_rel = (rel_idx >= 0) & (rel_idx < len(ph_h_classed))
+                valid_seg_lookup = seg_starts != -1
                 
-                ## Filter for Bathy (Class >= 40)
-                is_bathy = atl24_class[mask][valid_rel] >= 40
-                if self.min_bathy_confidence is not None:
-                    is_bathy &= (atl24_conf[mask][valid_rel] >= self.min_bathy_confidence)
+                ## Global Index = SegmentStart + (PhotonIndex - 1)
+                ## Filter down to only those where lookup succeeded
+                subset_idx = atl24_idx[mask][valid_seg_lookup]
+                subset_starts = seg_starts[valid_seg_lookup]
+                
+                target_indices = subset_starts + (subset_idx - 1)
+                
+                ## Boundary check
+                valid_bounds = (target_indices >= 0) & (target_indices < len(df))
+                final_indices = target_indices[valid_bounds]
 
-                target_indices = rel_idx[valid_rel][is_bathy]
+                ## ==============================================
+                ## Filter for Bathy Criteria (Class >= 40)
+                ## We need to filter the source arrays by [mask][valid_seg_lookup][valid_bounds]
+                ## AND check the class/confidence
+                ## ==============================================
                 
-                ## Update Arrays
-                ph_h_classed[target_indices] = atl24_class[mask][valid_rel][is_bathy]
-                ph_h_bathy_conf[target_indices] = atl24_conf[mask][valid_rel][is_bathy]
+                ## Extract source values corresponding to final_indices
+                src_class = atl24_class[mask][valid_seg_lookup][valid_bounds]
+                src_conf = atl24_conf[mask][valid_seg_lookup][valid_bounds]
                 
-                ## Update Coordinates (Refracted)
-                lat[target_indices] = atl24_lat[mask][valid_rel][is_bathy]
-                lon[target_indices] = atl24_lon[mask][valid_rel][is_bathy]
-                h[target_indices] = atl24_ellipse[mask][valid_rel][is_bathy]
-                h_mean[target_indices] = atl24_surface[mask][valid_rel][is_bathy]
-                h_geoid[target_indices] = atl24_ortho[mask][valid_rel][is_bathy]
+                is_bathy = src_class >= 40
+                if self.min_bathy_confidence is not None:
+                    is_bathy &= (src_conf >= self.min_bathy_confidence)
+                
+                ## Apply Bathy Filter to indices and values
+                bathy_indices = final_indices[is_bathy]
+                utils.echo_msg(f'Classed {len(bathy_indices)} photons from {laser} based on ATL24')
+                if len(bathy_indices) == 0: return df
+                
+                ## Update DataFrame
+                ## Coordinates (Refracted)
+                df.loc[df.index[bathy_indices], 'latitude'] = atl24_lat[mask][valid_seg_lookup][valid_bounds][is_bathy]
+                df.loc[df.index[bathy_indices], 'longitude'] = atl24_lon[mask][valid_seg_lookup][valid_bounds][is_bathy]
+                df.loc[df.index[bathy_indices], 'photon_height'] = atl24_ortho[mask][valid_seg_lookup][valid_bounds][is_bathy] # Assuming Ortho default
+                
+                ## Extra heights, etc.
+                ## df.loc[bathy_indices, 'h_ellipse'] = atl24_ellipse[...]
+                
+                ## Classification & Confidence
+                df.loc[df.index[bathy_indices], 'ph_h_classed'] = src_class[is_bathy]
+                df.loc[df.index[bathy_indices], 'bathy_confidence'] = src_conf[is_bathy]
 
         except Exception as e:
             utils.echo_warning_msg(f"Failed to apply ATL24 data from {atl24_fn}: {e}")
 
-        return ph_h_classed, ph_h_bathy_conf, lat, lon, h, h_mean, h_geoid
+        return df
+
+
+    def apply_atl24_classifications(self, df, atl24_fn, laser, geoseg_beg, geoseg_end):
+        """Map ATL24 Bathymetry classes to ATL03 using Pandas Merge."""
+        
+        try:
+            with h5.File(atl24_fn, 'r') as f:
+                if laser not in f: return df
+
+                grp = f[laser]
+                
+                ## Read ATL24 Arrays
+                try:
+                    atl24_class = grp['class_ph'][...]
+                    atl24_seg = grp['index_seg'][...] 
+                    atl24_idx = grp['index_ph'][...]
+                    atl24_conf = grp['confidence'][...]
+                    
+                    # Refracted Coordinates
+                    atl24_lat = grp['lat_ph'][...]
+                    atl24_lon = grp['lon_ph'][...]
+                    atl24_z = grp['ortho_h'][...] # Default to Ortho
+                except KeyError:
+                    return df
+
+                ## Reconstruct Real Segment IDs
+                ## ATL24 'index_seg' is relative to the granule's geoseg_beg
+                orig_segs = np.arange(geoseg_beg, geoseg_end + 1)
+                
+                ## Ensure index_seg doesn't exceed orig_segs bounds (subsetting issue)
+                ## If harmony subsets, index_seg might still be 0-based relative to the subset.
+                ## Usually it's relative to the original granule start.
+                ## If mismatch persists, we rely on the fact that we only keep what matches 'df'.
+                try:
+                    atl24_real_seg_ids = orig_segs[atl24_seg]
+                except IndexError:
+                    ## Fallback
+                    ## If orig_segs is too small, the subset metadata might be wrong.
+                    ## We skip this file if we can't align segments.
+                    utils.echo_warning_msg(f"ATL24 Segment Index mismatch in {atl24_fn}")
+                    return df
+
+                ## Build ATL24 DataFrame
+                atl24_df = pd.DataFrame({
+                    'ph_segment_id': atl24_real_seg_ids,
+                    'ph_index_within_seg': atl24_idx,
+                    'atl24_class': atl24_class,
+                    'atl24_conf': atl24_conf,
+                    'atl24_lat': atl24_lat,
+                    'atl24_lon': atl24_lon,
+                    'atl24_z': atl24_z
+                })
+
+                ## Filter ATL24 DF to only relevant segments
+                atl24_df = atl24_df[atl24_df['ph_segment_id'].isin(df['ph_segment_id'].unique())]
+
+                if self.verbose:
+                    utils.echo_msg(f'Classified {len(atl24_df)} photons from {laser} based on ATL24')
+                
+                if atl24_df.empty: return df
+
+                ## Filter for Bathy Criteria (Class >= 40)
+                ## We do this BEFORE merge to keep the merge small
+                is_bathy = atl24_df['atl24_class'] >= 40
+                if self.min_bathy_confidence is not None:
+                    is_bathy &= (atl24_df['atl24_conf'] >= self.min_bathy_confidence)
+                
+                atl24_df = atl24_df[is_bathy]
+                
+                ## --- MERGE ---
+                ## We merge 'left' to keep all ATL03 points, adding info where ATL24 matches
+                ## Keys: SegmentID + PhotonIndex
+                merged = df.merge(
+                    atl24_df, 
+                    on=['ph_segment_id', 'ph_index_within_seg'], 
+                    how='left'
+                )
+                
+                ## Update Main DF where match found (atl24_class is not NaN)
+                mask = merged['atl24_class'].notna()
+                
+                if np.any(mask):
+                    # Direct assignment using the mask ensures alignment
+                    df.loc[mask, 'ph_h_classed'] = merged.loc[mask, 'atl24_class'].astype(int)
+                    df.loc[mask, 'bathy_confidence'] = merged.loc[mask, 'atl24_conf'].astype(int)
+                    
+                    # Update Coordinates (Refraction Correction)
+                    df.loc[mask, 'latitude'] = merged.loc[mask, 'atl24_lat']
+                    df.loc[mask, 'longitude'] = merged.loc[mask, 'atl24_lon']
+                    df.loc[mask, 'photon_height'] = merged.loc[mask, 'atl24_z']
+
+        except Exception as e:
+            utils.echo_warning_msg(f"Failed to apply ATL24 data from {atl24_fn}: {e}")
+
+        return df
+
+    
+    def classify_bathymetry_algo(self, df):
+        """Apply algorithmic bathymetry classification (Known Raster or DBSCAN)."""
+        
+        ## Known Bathymetry
+        if self.known_bathymetry:
+            try:
+                if self.verbose:
+                    utils.echo_msg(f"Classifying using known bathymetry: {self.known_bathymetry}")
+                
+                ## Create a temporary point object for querying
+                ## We use 'x' and 'y' which were renamed from longitude/latitude in yield_points
+                ## But inside read_atl03/classify pipeline, columns are still 'longitude'/'latitude'
+                pts = np.rec.fromarrays(
+                    [df['longitude'].values, df['latitude'].values], 
+                    names=['x', 'y']
+                )
+                
+                ## Sample the raster
+                ref_z = gdalfun.gdal_query(pts, self.known_bathymetry, 'g').flatten()
+                
+                ## Calculate Difference (Z_photon - Z_known)
+                ## Ensure Z datum matches (Usually requires 'geoid' or 'mean_tide' alignment)
+                diff = np.abs(df['photon_height'].values - ref_z)
+                
+                ## Keep points within threshold
+                ## Only update points that aren't already classified as something specific (like land/canopy)
+                ## Or, forcibly overwrite if they look like bathy.
+                ## Here we target unclassified (-1) or noise (0/1)
+                is_bathy = diff <= self.known_bathy_threshold
+                
+                ## Assign Class 40 (Bathymetry)
+                #update_mask = is_bathy & (ph_h_classed < 40)
+                #ph_h_classed[update_mask] = 40
+
+                mask = is_bathy & (df['ph_h_classed'] >= 40)
+                df.loc[mask, 'ph_h_classed'] = 40
+                
+                if self.verbose:
+                    utils.echo_msg(f"  Identified {np.count_nonzero(mask)} bathy points via known raster.")
+                    
+            except Exception as e:
+                utils.echo_warning_msg(f"Known bathymetry classification failed: {e}")
+
+        ## DBSCAN Clustering
+        if self.use_dbscan:
+            try:
+                from sklearn.cluster import DBSCAN
+                from sklearn.preprocessing import StandardScaler
+            except ImportError:
+                utils.echo_warning_msg("scikit-learn required for DBSCAN. Skipping.")
+                return df
+
+            if self.verbose:
+                utils.echo_msg("Classifying using DBSCAN...")
+
+            ## Filter to potential subsurface points to speed up clustering
+            ## e.g., only look at points with valid confidence or below water surface
+            ## For now, we cluster everything that isn't already Land (1) or Canopy (2/3)
+            ## Maybe, if we do this after setting to 44, only use those, since they are
+            ## photons over water.
+            mask_candidates = df['ph_h_classed'] <= 1
+            if np.count_nonzero(mask_candidates) < self.dbscan_min_samples:
+                return df
+                
+            subset = df[mask_candidates].copy()
+            
+            ## Along-track distance (approx via index or lat) and Height
+            ## We must normalize because Dist is in km/m and Height is in m
+            X = np.column_stack((
+                np.arange(len(subset)), # Proxy for along-track distance
+                subset['photon_height'].values
+            ))
+            
+            ## Standardize features
+            X_scaled = StandardScaler().fit_transform(X)
+            
+            ## Run DBSCAN
+            ## eps is in "standard deviations" now due to scaling. 
+            ## Adjust eps logic if physical meters are required (requires custom metric).
+            ## For simplicity with StandardScaler, eps=0.3 to 0.5 usually captures dense lines.
+            db = DBSCAN(eps=0.3, min_samples=self.dbscan_min_samples).fit(X_scaled)
+            labels = db.labels_
+            
+            ## Identify the "Bathymetry" Cluster
+            ## Bathymetry is the largest cluster (mode) found below sea level, maybe...
+            ## Or maybe all dense clusters are signal.
+            unique_labels = set(labels)
+            if -1 in unique_labels: unique_labels.remove(-1) # Remove noise label
+            
+            for k in unique_labels:
+                class_member_mask = (labels == k)
+                
+                ## Check if the cluster is "bathy-like"?
+                ## Check mean height (should be < 0 for bathy usually)
+                cluster_z_mean = np.mean(subset.loc[class_member_mask, 'photon_height'])
+                
+                ## If it looks like bathy (e.g. below 0), assign it
+                ## Here we aggressively classify ALL dense clusters as signal (Class 40)
+                ## Users can filter later.
+                if cluster_z_mean < 0: 
+                    original_indices = subset.index[class_member_mask]
+                    df.loc[original_indices, 'ph_h_classed'] = 40
+                
+            if self.verbose:
+                utils.echo_msg(f"  DBSCAN found {len(unique_labels)} dense clusters.")
+
+        return df
 
     
     def read_atl03(self, f, laser_num, orientation=None, atl08_fn=None, atl24_fn=None, atl06_fn=None, atl12_fn=None, atl13_fn=None):
@@ -519,64 +787,75 @@ class IceSat2_ATL03(ElevationDataset):
         laser = 'gt' + laser_num + self.orientDict[orientation]
         if laser not in f or 'heights' not in f[laser]: return None
 
-        ## --- Read Data ---
         try:
             h_grp = f[f'/{laser}/heights']
             geo_grp = f[f'/{laser}/geolocation']
             geophys_grp = f[f'/{laser}/geophys_corr']
+            anc = f['ancillary_data']
             
-            # Photon Data
+            ## Read Base Arrays
             lat = h_grp['lat_ph'][...]
             lon = h_grp['lon_ph'][...]
             h_ph = h_grp['h_ph'][...]
-            conf = h_grp['signal_conf_ph'][..., 0] # Column 0 = Land
+            conf = h_grp['signal_conf_ph'][..., 0] 
             dt = h_grp['delta_time'][...]
-            dist_ph = h_grp['dist_ph_along'][...]
-
-            ## Geolocation Data
+            
+            ## Geolocation / Indexing
             seg_ph_cnt = geo_grp['segment_ph_cnt'][...]
             seg_id = geo_grp['segment_id'][...]
-            seg_dist_x = geo_grp['segment_dist_x'][...]
+            geoseg_beg = anc['start_geoseg'][0]
+            geoseg_end = anc['end_geoseg'][0]
             
             ## Corrections
             geoid = geophys_grp['geoid'][...]
             geoid_f2m = geophys_grp['geoid_free2mean'][...]
             dem_h = geophys_grp['dem_h'][...]
 
-            ## Ancillary
-            anc = f['ancillary_data']
-            geoseg_beg = anc['start_geoseg'][0]
-            geoseg_end = anc['end_geoseg'][0]
-
-        except KeyError:
-            return None
+        except KeyError: return None
 
         ## --- Indexing ---
-        ## Map Segment ID -> Start Index in Photon Array
-        ## Cumulative sum of counts gives start indices
-        seg_starts = np.concatenate(([0], np.cumsum(seg_ph_cnt)[:-1]))
-        seg_idx_dict = dict(zip(seg_id, seg_starts))
-        
+        ## mrl: move these down for merging.
+        #seg_starts = np.concatenate(([0], np.cumsum(seg_ph_cnt)[:-1]))
+        #seg_idx_dict = dict(zip(seg_id, seg_starts))
+
         ## Map Photon -> Segment ID
-        ## np.searchsorted to find which segment bin each photon belongs to
-        ## Creating array of segment IDs for every photon:
-        ## Repeat segment_id[i] count[i] times
         ph_seg_ids = np.repeat(seg_id, seg_ph_cnt)
         
-        ## Truncate if mismatch (sometimes happens with last partial segment)
+        ## Truncate
         min_len = min(len(ph_seg_ids), len(h_ph))
         ph_seg_ids = ph_seg_ids[:min_len]
         lat = lat[:min_len]; lon = lon[:min_len]; h_ph = h_ph[:min_len]
         conf = conf[:min_len]; dt = dt[:min_len]
 
+        ## --- Generate "Index Within Segment" for Merging ---
+        ## This is the magic key that allows us to merge with ATL24 reliably.
+        ## Since ph_seg_ids is sorted (repeated), we can generate counters.
+        ## * Find where segment changes
+        ## * Reset counter
+        ##
+        ## Calculate indices
+        ## We want: 1, 2, 3... for seg A; 1, 2... for seg B
+        ## sequence = np.arange(len(ph_seg_ids))
+        ## Let's use the segment counts we already have: seg_ph_cnt
+        ## We need to repeat [1..count] for each segment.
+        
+        ## Adjust seg_ph_cnt to match the truncation we did above
+        ## If we truncated ph_seg_ids, we need to fix the count of the last segment
+        if len(ph_seg_ids) < np.sum(seg_ph_cnt):
+            ## Re-calculate counts based on the truncated array
+            unique, counts = np.unique(ph_seg_ids, return_counts=True)
+            ## This ensures 'counts' matches the actual data we kept
+            ph_index_counters = np.concatenate([np.arange(1, c + 1) for c in counts])
+        else:
+            ph_index_counters = np.concatenate([np.arange(1, c + 1) for c in seg_ph_cnt])
+            ## Safety clip if original counts exceeded data
+            ph_index_counters = ph_index_counters[:min_len]
+        
         ## --- Calculate Heights ---
-        ## Map segment corrections to photons
         h_geoid_map = dict(zip(seg_id, geoid))
         h_f2m_map = dict(zip(seg_id, geoid_f2m))
         h_dem_map = dict(zip(seg_id, dem_h))
 
-        ## Vectorized map using search/indexing is faster than list(map lambda)
-        ## But dictionary lookups are robust for sparse segments.
         p_geoid = np.array([h_geoid_map.get(s, 0) for s in ph_seg_ids])
         p_f2m = np.array([h_f2m_map.get(s, 0) for s in ph_seg_ids])
         p_dem = np.array([h_dem_map.get(s, 0) for s in ph_seg_ids])
@@ -585,87 +864,105 @@ class IceSat2_ATL03(ElevationDataset):
         h_meantide = h_ph - (p_geoid + p_f2m)
         h_dem = p_dem - (p_geoid + p_f2m)
 
-        ## Initialize Classification (-1 = Unclassified)
-        ph_class = np.full(h_ph.shape, -1, dtype=int)
-        ph_bathy_conf = np.full(h_ph.shape, -1, dtype=int)
-
-        ## --- Apply Classifications ---
-        if atl08_fn:
-            ph_class = self.apply_atl08_classifications(
-                atl08_fn, ph_class, laser, seg_id, seg_idx_dict, ph_seg_ids
-            )
-            
-        if atl06_fn:
-            ph_class = self.apply_atl06_classifications(
-                atl06_fn, ph_class, laser, seg_id, seg_idx_dict, ph_seg_ids
-            )
-
-        if atl12_fn:
-            ph_class = self.apply_atl12_classifications(
-                atl12_fn, ph_class, laser, seg_id, seg_idx_dict, ph_seg_ids
-            )
-            
-        if atl13_fn:
-            ph_class = self.apply_atl13_classifications(
-                atl13_fn, ph_class, laser, seg_id, seg_idx_dict, ph_seg_ids
-            )
-            
-        if atl24_fn:
-            ph_class, ph_bathy_conf, lat, lon, h_ph, h_meantide, h_ortho = self.apply_atl24_classifications(
-                atl24_fn, ph_class, ph_bathy_conf, lat, lon, h_ph, h_meantide, h_ortho,
-                laser, geoseg_beg, geoseg_end, ph_seg_ids
-            )
-
-        ## Select Output Height
+        ## --- Create DataFrame ---
+        ## Select Height
         if self.water_surface == 'mean_tide': z_out = h_meantide
         elif self.water_surface == 'geoid': z_out = h_ortho
         else: z_out = h_ph
 
-        ## Build DataFrame
         df = pd.DataFrame({
             'latitude': lat, 'longitude': lon, 'photon_height': z_out,
             'laser': laser, 'fn': self.fn, 'confidence': conf, 'delta_time': dt,
-            'bathy_confidence': ph_bathy_conf, 'photon_h_dem': h_dem, 'ph_h_classed': ph_class
+            'photon_h_dem': h_dem, 
+            'ph_h_classed': -1, # Init Unclassified
+            'bathy_confidence': -1, # Init
+            'ph_segment_id': ph_seg_ids, # Critical for linking
+            'ph_index_within_seg': ph_index_counters # join key
         })
+
+        ## --- Apply Classifications based on ATLXX data ---
+        ## ATL08,Land/Canopy,"Ground (1), Canopy (2), Top Canopy (3)","1, 2, 3"
         
-        ## Extra columns
-        for col_path, col_name in self.columns.items():
-            try:
-                ## Handle simple path
-                if col_path in f:
-                    val = f[col_path][...]
-                    pass 
-            except: pass
+        seg_starts = np.concatenate(([0], np.cumsum(seg_ph_cnt)[:-1]))
+        seg_idx_dict = dict(zip(seg_id, seg_starts))
+        
+        if atl08_fn:
+            df = self.apply_atl08_classifications(df, atl08_fn, laser, seg_idx_dict)
+
+        ## ATL24,Bathymetry,"Near-shore Bathymetry (40), Coastline (41)"
+        if atl24_fn:
+            df = self.apply_atl24_classifications(
+                df, atl24_fn, laser, geoseg_beg, geoseg_end
+            )
+            
+        # ## ATL13,Inland Water,"Lakes, Rivers, Reservoirs",42
+        # if atl13_fn:
+        #     df = self.apply_atl13_classifications(df, atl13_fn, laser)
+
+        # ## ATL12,Ocean,Open Ocean Surface,44
+        # if atl12_fn:
+        #     df = self.apply_atl12_classifications(df, atl12_fn, laser)
+
+        # ## ATL06,Land Ice,"Glaciers, Ice Sheets",6
+        # if atl06_fn:
+        #     df = self.apply_atl06_classifications(df, atl06_fn, laser)
+            
+
+        ## --- Apply Algorithmic Classification (Known Bathy / DBSCAN) ---
+        if self.known_bathymetry or self.use_dbscan:
+            df = self.classify_bathymetry_algo(df)
 
         return df
 
     
     def yield_points(self):
         """Pipeline to yield classified points."""
+
+        ## Initialize external mask geometries
+        bing_geom = None
+        osm_geom = None
+        osm_lakes = None
         
-        ## Fetch Aux Data
+        ## Setup Region for Aux Fetches
+        ## We try to use the user-supplied region or the INF metadata bounds
+        proc_region = self._get_processing_region()
+        if proc_region is not None:
+            proc_region.buffer(pct=1) # Slight buffer for safety        
+
+            ## External Masks (Buildings/Water)
+            if self.classify_buildings:
+                bfp = bingbfp.BingBuildings(region=proc_region, verbose=self.verbose, cache_dir=self.cache_dir)
+                bing_geom = bfp(return_geom=True)
+
+            if self.classify_water:
+                osmc = osm.osmCoastline(region=proc_region, q='coastline', verbose=self.verbose, cache_dir=self.cache_dir)
+                osm_geom = osmc(return_geom=True)
+
+            if self.classify_inland_water:
+                osml = osm.osmCoastline(region=proc_region, q='water', verbose=self.verbose, cache_dir=self.cache_dir)
+                osm_lakes = osml(return_geom=True)
+
+        ## Fetch Aux ATLXX Data
         atl08_fn = self.fetch_atlxx(self.fn, 'ATL08') if self.classes else None
         atl24_fn = self.fetch_atlxx(self.fn, 'ATL24') if self.classes else None
-        atl06_fn = self.fetch_atlxx(self.fn, 'ATL06') if self.classes else None
-        atl12_fn = self.fetch_atlxx(self.fn, 'ATL12') if self.classes else None
-        atl13_fn = self.fetch_atlxx(self.fn, 'ATL13') if self.classes else None
-
-        ## External Masks (Buildings/Water)
-        bing_geom = None
-        if self.classify_buildings:
-            bfp = bingbfp.BingBuildings(region=self.region, verbose=self.verbose, cache_dir=self.cache_dir)
-            bing_geom = bfp(return_geom=True)
-
-        osm_geom = None
-        if self.classify_water:
-            osmc = osm.osmCoastline(region=self.region, verbose=self.verbose, cache_dir=self.cache_dir)
-            osm_geom = osmc(return_geom=True)
+        # atl06_fn = self.fetch_atlxx(self.fn, 'ATL06') if self.classes else None
+        # atl12_fn = self.fetch_atlxx(self.fn, 'ATL12') if self.classes else None
+        # atl13_fn = self.fetch_atlxx(self.fn, 'ATL13') if self.classes else None
+        atl06_fn = None
+        atl12_fn = None
+        atl13_fn = None
+        if self.verbose:
+            if atl08_fn:
+                utils.echo_msg(f'Using {atl08_fn} for classifications')
+            if atl24_fn:
+                utils.echo_msg(f'Using {atl24_fn} for classifications')
+            if atl06_fn:
+                utils.echo_msg(f'Using {atl06_fn} for classifications')
+            if atl12_fn:
+                utils.echo_msg(f'Using {atl12_fn} for classifications')
+            if atl13_fn:
+                utils.echo_msg(f'Using {atl13_fn} for classifications')
             
-        osm_lakes = None
-        if self.classify_inland_water:
-            osml = osm.osmCoastline(region=self.region, q='water', verbose=self.verbose, cache_dir=self.cache_dir)
-            osm_lakes = osml(return_geom=True)
-
         ## Process Granule
         with h5.File(self.fn, 'r') as f:
             ## QA Check
@@ -676,6 +973,10 @@ class IceSat2_ATL03(ElevationDataset):
 
             for i in range(1, 4):
                 for orient in range(2):
+                    ## Read_atl03 reads all atl03 data and classifies the
+                    ## photons (in 'ph_h_classed') based on aux ATL data.
+                    ## This creates the pandas dataframe.
+                    #utils.echo_debug_msg('Loading ATL data into data-frame...')
                     dataset = self.read_atl03(
                         f, str(i), orientation=orient,
                         atl08_fn=atl08_fn, atl24_fn=atl24_fn, atl06_fn=atl06_fn
@@ -688,6 +989,7 @@ class IceSat2_ATL03(ElevationDataset):
                         dataset = dataset[dataset['confidence'].isin(self.confidence_levels)]
 
                     ## Spatial Subset (Coarse)
+                    ## Only apply if user supplied a region (self.region).
                     if self.region:
                         dataset = dataset[
                             (dataset['longitude'] >= self.region.xmin) & 
@@ -697,8 +999,9 @@ class IceSat2_ATL03(ElevationDataset):
                         ]
 
                     if dataset.empty: continue
-
-                    ## Spatial Classification (Masks)
+                    
+                    ## We classify buildings (7), ocean (41) and inland water (42) - maybe 44 for ocean?
+                    ## using Bing BFP and OpenStreetMap
                     if self.classes:
                         if bing_geom:
                             dataset = self.classify_by_mask_geoms(dataset, bing_geom, 7)
@@ -712,7 +1015,7 @@ class IceSat2_ATL03(ElevationDataset):
 
                     if dataset.empty: continue
 
-                    dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'}, inplace=True)
+                    dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z', 'ph_h_classed': 'w'}, inplace=True)
                     yield dataset
 
                     
@@ -744,11 +1047,11 @@ class IceSat2_ATL03(ElevationDataset):
         ogr_ds = self._vectorize_df(dataset)
         layer = ogr_ds.GetLayer()
         
-        ## Optimizing: Iterate masks, set filter, update dataframe indices found
+        ## Iterate masks, set filter, update dataframe indices found
         for geom in mask_geoms:
             if isinstance(geom, str):
                 geom = ogr.CreateGeometryFromWkt(geom)
-            
+
             layer.SetSpatialFilter(geom)
             
             indices_to_update = []
@@ -758,6 +1061,7 @@ class IceSat2_ATL03(ElevationDataset):
             if indices_to_update:
                 # Update only if not in protected classes
                 mask = dataset.index.isin(indices_to_update) & (~dataset['ph_h_classed'].isin(except_classes))
+                utils.echo_msg(f'Classed {np.count_nonzero(mask)} photons from based to {classification}')
                 dataset.loc[mask, 'ph_h_classed'] = classification
                 
             layer.SetSpatialFilter(None)

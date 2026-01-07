@@ -227,7 +227,7 @@ class EarthData(fetches.FetchModule):
             if geom_valid:
                 for link in entry.get('links', []):
                     ## Filter for data links
-                    utils.echo_msg(link)
+                    #utils.echo_msg(link)
                     if link.get('rel', '').endswith('/data#') and 'inherited' not in link:
                         href = link.get('href')
                         if href:
