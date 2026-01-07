@@ -1015,7 +1015,7 @@ class IceSat2_ATL03(ElevationDataset):
 
                     if dataset.empty: continue
 
-                    dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z', 'ph_h_classed': 'w'}, inplace=True)
+                    dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'}, inplace=True)
                     yield dataset
 
                     
