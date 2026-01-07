@@ -279,9 +279,9 @@ class GDALFile(ElevationDataset):
                 self.warp_region = self.inf_region
             
         ## Temp Files
-        tmp_elev_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
-        tmp_unc_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
-        tmp_weight_fn = utils.make_temp_fn(self.fn, temp_dir=self.cache_dir)
+        tmp_elev_fn = utils.make_temp_fn(f'elev_{os.path.basename(self.fn)}', temp_dir=self.cache_dir)
+        tmp_unc_fn = utils.make_temp_fn(f'unc_{os.path.basename(self.fn)}', temp_dir=self.cache_dir)
+        tmp_weight_fn = utils.make_temp_fn(f'weight_{os.path.basename(self.fn)}', temp_dir=self.cache_dir)
 
         # Handle Flats Removal (Grits)
         if self.remove_flat:
@@ -466,8 +466,8 @@ class GDALFile(ElevationDataset):
             if utils.int_or(self.weight_mask) is not None:
                 weight_band = self.src_ds.GetRasterBand(int(self.weight_mask))
             elif os.path.exists(self.weight_mask):
-                # some numbers now return true here (file-descriptors),
-                # check for int first!
+                ## some numbers now return true here (file-descriptors),
+                ## check for int first!
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore')
                     src_weight = gdalfun.sample_warp(
@@ -638,7 +638,7 @@ class GDALFile(ElevationDataset):
                 points = points[~np.isnan(points['z'])]
                 dataset = band_data = weight_data = None
                 uncertainty_data = lat_array = lon_array = None
-                utils.remove_glob(tmp_elev_fn, tmp_unc_fn, tmp_weight_fn)
+                #utils.remove_glob(tmp_elev_fn, tmp_unc_fn, tmp_weight_fn)
                 
                 yield points
                 

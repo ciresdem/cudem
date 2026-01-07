@@ -321,7 +321,8 @@ class Grits:
             ## Changed Cells (Source Valid -> Dest Valid AND Value Changed)
             ## Intersection of valid pixels
             intersection = src_valid & dst_valid
-            
+
+            ## TODO: Changed doesn't account for nan->valid, fix this.
             changed_count = 0
             if np.count_nonzero(intersection) > 0:
                 diff = np.abs(dst_arr[intersection] - src_arr[intersection])
