@@ -270,13 +270,6 @@ class Grits:
         if self.verbose:
             utils.echo_msg(f'Filtered {self.src_dem} to {self.dst_dem}')
             
-        self.run()
-        self.split_by_z()
-        self.split_by_weight()
-        self.split_by_uncertainty()
-
-        ## Calculate final statistics
-
         return self        
 
     
