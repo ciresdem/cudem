@@ -88,8 +88,8 @@ class Diff(grits.Grits):
                 src_band = src_ds.GetRasterBand(self.band)
                 src_arr = src_band.ReadAsArray(*srcwin).astype(np.float32)
                 
-                ## Load Aux Data (Aligned)
-                ## Note: We need a Region object for load_aux_data.
+                ## Load Aux Data
+                ## We need a Region object for load_aux_data.
                 ## srcwin is (xoff, yoff, xsize, ysize)
                 ## Calculate Region for this chunk
                 gt = self.ds_config['geoT']
@@ -99,7 +99,7 @@ class Diff(grits.Grits):
                 y_max = gt[3] + (srcwin[1] * gt[5])
                 y_min = y_max + (srcwin[3] * gt[5])
                 
-                ## Depending on gt[5] sign, ymin/ymax might be flipped logic
+                ## Depending on gt[5] sign, ymin/ymax might be flipped
                 ## Standard GDAL GT: top-left origin, dy is negative.
                 chunk_region = regions.Region().from_list([x_min, x_max, min(y_min,y_max), max(y_min,y_max)])
                 
