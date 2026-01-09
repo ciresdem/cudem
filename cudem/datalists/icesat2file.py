@@ -213,9 +213,6 @@ class IceSat2_ATL03(ElevationDataset):
                  confidence_levels='2/3/4', # filter data by confidence level
                  columns=None,
                  reject_failed_qa=True, # reject bad granules
-                 classify_buildings=True, # classify buildings
-                 classify_water=True, # classify water surface 
-                 classify_inland_water=True, # classify inland water surface
                  append_atl24=False, # append atl24 data to yield_points
                  min_bathy_confidence=None, # minimum desired bathy confidence (from atl24)
                  known_bathymetry=None, # Path to raster or 'gmrt'
@@ -234,9 +231,6 @@ class IceSat2_ATL03(ElevationDataset):
         self.confidence_levels = [int(x) for x in str(confidence_levels).split('/')] if confidence_levels is not None else []
         self.columns = columns if columns is not None else {}
         
-        self.classify_buildings = classify_buildings
-        self.classify_water = classify_water
-        self.classify_inland_water = classify_inland_water
         self.reject_failed_qa = reject_failed_qa
         self.append_atl24 = append_atl24
         self.min_bathy_confidence = utils.float_or(min_bathy_confidence)
@@ -387,59 +381,10 @@ class IceSat2_ATL03(ElevationDataset):
 
 
     ## ==============================================
-    ## Apply ATL* Classifications
+    ## Add 'reflectance' to ATL03, either using ATL09 if it's
+    ## available, or calculated 'pseudo-reflectance' based
+    ## on the density of returns...
     ## ==============================================    
-    def apply_atl08_classifications(self, df, atl08_fn, laser, segment_index_dict):
-        """Map ATL08 Land/Canopy classes to ATL03 photons. 
-        This sets the initial classifications."""
-        
-        try:
-            with h5.File(atl08_fn, 'r') as f:
-                if laser not in f: return df
-                
-                sig = f[f'/{laser}/signal_photons']
-                atl08_flag = sig['classed_pc_flag'][...]
-                atl08_seg = sig['ph_segment_id'][...]
-                atl08_idx = sig['classed_pc_indx'][...] # 1-based index within segment
-
-                ## Filter to segments present in our current dataframe
-                ## We use the unique segments from the DF to avoid processing unrelated ATL08 data
-                relevant_segments = df['ph_segment_id'].unique()
-                mask = np.isin(atl08_seg, relevant_segments)
-                
-                if not np.any(mask): return df
-
-                ## Calculate Absolute Index in ATL03 Arrays
-                ## Global_Index = Segment_Start_Index + (Photon_Index_In_Segment - 1)
-                
-                ## Get start indices for the relevant segments
-                ## Map segment IDs to their start index in the DF (using the passed dict)
-                seg_starts = np.array([segment_index_dict.get(s, -1) for s in atl08_seg[mask]])
-                
-                ## Calculate absolute indices
-                valid_seg_mask = seg_starts != -1
-                atl03_indices = seg_starts[valid_seg_mask] + (atl08_idx[mask][valid_seg_mask] - 1)
-                
-                ## Filter indices that might be out of bounds (truncated granule)
-                valid_idx_mask = (atl03_indices >= 0) & (atl03_indices < len(df))
-                final_indices = atl03_indices[valid_idx_mask]
-                
-                ## Apply Classification
-                values_to_assign = atl08_flag[mask][valid_seg_mask][valid_idx_mask]
-
-                if self.verbose:
-                    utils.echo_msg(f'Classified {len(final_indices)} photons from {laser} based on ATL08')
-                ## Using numpy indexing on the underlying column for speed, or .iloc
-                #df.iloc[final_indices, df.columns.get_loc('ph_h_classed')] = values_to_assign
-                ## A safer pandas way:
-                df.loc[df.index[final_indices], 'ph_h_classed'] = values_to_assign
-
-        except Exception as e:
-            utils.echo_warning_msg(f"Failed to apply ATL08 classifications from {atl08_fn}: {e}")
-            
-        return df
-
-
     def apply_atl09_data(self, df, atl09_fn, laser):
         """Map ATL09 Apparent Surface Reflectance to ATL03 photons.
         
@@ -559,6 +504,106 @@ class IceSat2_ATL03(ElevationDataset):
             utils.echo_warning_msg(f"Failed to apply ATL09 data: {e}")
             
         return df
+
+    
+    def calculate_pseudo_reflectance(self, df):
+        """Estimate 'Pseudo-Reflectance' from ATL03 photon density.
+        
+        Reflectance ~ (Signal_Photons / Transmitted_Pulses)
+            
+        ATL03 segments are nominally ~20m along-track.
+        ICESat-2 fires every 0.7m.
+        Pulses per segment ~ 20m / 0.7m ≈ 29 shots.
+            
+        We calculate: Signal_Count / 29.0
+            
+        Returns:
+            df (pd.DataFrame): DataFrame with new 'reflectance' column.
+        """
+        
+        try:
+            ## Select High-Confidence Signal Only
+            ## Background noise shouldn't count towards "brightness"
+            signal_mask = df['confidence'] >= 3
+            if not np.any(signal_mask): 
+                df['reflectance'] = 0.0
+                return df
+            
+            ## Count Signal Photons per Segment
+            ## We use the segment ID to bin photons spatially (~20m chunks)
+            ## Use a fast groupby size/count
+            segment_counts = df.loc[signal_mask].groupby('ph_segment_id').size()
+            
+            ## Calculate Pseudo Value
+            ## Nominal pulses per segment is ~29. 
+            ## We normalize by 30 to get a rough 0.0-1.0+ scale.
+            pseudo_reflec = segment_counts / 30.0
+            
+            ## Map back to Photon DataFrame
+            ## Segments with 0 signal photons will result in NaN after map, fill with 0
+            df['reflectance'] = df['ph_segment_id'].map(pseudo_reflec).fillna(0.0)
+            
+            if self.verbose:
+                utils.echo_msg("Calculated Pseudo-Reflectance from ATL03 photon density.")
+
+        except Exception as e:
+            utils.echo_warning_msg(f"Pseudo-reflectance calculation failed: {e}")
+            
+        return df
+    
+    
+    ## ==============================================
+    ## Apply ATL* Classifications
+    ## ==============================================    
+    def apply_atl08_classifications(self, df, atl08_fn, laser, segment_index_dict):
+        """Map ATL08 Land/Canopy classes to ATL03 photons. 
+        This sets the initial classifications."""
+        
+        try:
+            with h5.File(atl08_fn, 'r') as f:
+                if laser not in f: return df
+                
+                sig = f[f'/{laser}/signal_photons']
+                atl08_flag = sig['classed_pc_flag'][...]
+                atl08_seg = sig['ph_segment_id'][...]
+                atl08_idx = sig['classed_pc_indx'][...] # 1-based index within segment
+
+                ## Filter to segments present in our current dataframe
+                ## We use the unique segments from the DF to avoid processing unrelated ATL08 data
+                relevant_segments = df['ph_segment_id'].unique()
+                mask = np.isin(atl08_seg, relevant_segments)
+                
+                if not np.any(mask): return df
+
+                ## Calculate Absolute Index in ATL03 Arrays
+                ## Global_Index = Segment_Start_Index + (Photon_Index_In_Segment - 1)
+                
+                ## Get start indices for the relevant segments
+                ## Map segment IDs to their start index in the DF (using the passed dict)
+                seg_starts = np.array([segment_index_dict.get(s, -1) for s in atl08_seg[mask]])
+                
+                ## Calculate absolute indices
+                valid_seg_mask = seg_starts != -1
+                atl03_indices = seg_starts[valid_seg_mask] + (atl08_idx[mask][valid_seg_mask] - 1)
+                
+                ## Filter indices that might be out of bounds (truncated granule)
+                valid_idx_mask = (atl03_indices >= 0) & (atl03_indices < len(df))
+                final_indices = atl03_indices[valid_idx_mask]
+                
+                ## Apply Classification
+                values_to_assign = atl08_flag[mask][valid_seg_mask][valid_idx_mask]
+
+                if self.verbose:
+                    utils.echo_msg(f'Classified {len(final_indices)} photons from {laser} based on ATL08')
+                ## Using numpy indexing on the underlying column for speed, or .iloc
+                #df.iloc[final_indices, df.columns.get_loc('ph_h_classed')] = values_to_assign
+                ## A safer pandas way:
+                df.loc[df.index[final_indices], 'ph_h_classed'] = values_to_assign
+
+        except Exception as e:
+            utils.echo_warning_msg(f"Failed to apply ATL08 classifications from {atl08_fn}: {e}")
+            
+        return df
     
     
     def apply_atl06_classifications(self, df, atl06_fn, laser):
@@ -633,8 +678,11 @@ class IceSat2_ATL03(ElevationDataset):
                 
                 is_water = df['ph_segment_id'].isin(atl13_seg)
 
-                ## Prioritize Bathy (40) over inland water
-                mask = is_water & (df['ph_h_classed'] < 40)
+                ## Only consider ground, water surface and open ocean
+                _classes = [1, 41, 44]
+                
+                #mask = is_water & (df['ph_h_classed'] < 40)
+                mask = is_water & (df['ph_h_classed'].isin(_classes))
                 utils.echo_msg(f'Classed {np.count_nonzero(mask)} photons from {laser} based on ATL13')
                 df.loc[mask, 'ph_h_classed'] = 42
 
@@ -934,7 +982,7 @@ class IceSat2_ATL03(ElevationDataset):
     
     def classify_buildings_algo(self, df, min_height=2.5, max_roughness=0.6, 
                                 ground_window=50, use_reflectance=True, 
-                                min_reflectance=0.4):
+                                min_reflectance=0.3):
         """Classify buildings using Geometry (Flat & Elevated) AND Radiometry (Reflectance).
         
         Args:
@@ -960,12 +1008,11 @@ class IceSat2_ATL03(ElevationDataset):
             
             if not np.any(is_elevated): return df
 
-            # 3. Calculate Local Roughness (StdDev)
+            ## Calculate Local Roughness (StdDev)
             elevated_df = df[is_elevated].copy()
             elevated_df['local_roughness'] = elevated_df['photon_height'].rolling(window=10, center=True).std()
             
-            ## --- CLASSIFICATION ---
-            
+            ## --- CLASSIFICATION ---            
             ## Geometric (Standard Flat Roofs)
             ## Elevated + Low Roughness (e.g. < 0.6m)
             ## This captures most commercial flat roofs (concrete/asphalt)
@@ -992,9 +1039,12 @@ class IceSat2_ATL03(ElevationDataset):
                 ## Apply to Main DataFrame
                 ## Overwrite Land(1), Canopy(2/3), Unclassified(-1)
                 ## Do NOT overwrite Water(42), Bathy(40), Coast(41) or Ocean(44)
-                protected_classes = [40, 41, 42, 44]
+                #protected_classes = [40, 41, 42, 44]
+                ## Only consider the ground class here (from atl08)
+                _classes = [1]
                 
-                mask = df.index.isin(building_indices) & (~df['ph_h_classed'].isin(protected_classes))
+                #mask = df.index.isin(building_indices) & (~df['ph_h_classed'].isin(protected_classes))
+                mask = df.index.isin(building_indices) & (df['ph_h_classed'].isin(_classes))
                 df.loc[mask, 'ph_h_classed'] = 7
                 
                 if self.verbose:
@@ -1008,6 +1058,74 @@ class IceSat2_ATL03(ElevationDataset):
         return df
         
 
+    def classify_inland_water_algo(self, df, max_roughness=0.4, max_reflectance=0.25):
+        """Classify inland water by detecting 'Flat & Dark' segments.
+        
+        Args:
+            df (pd.DataFrame): Photon dataframe.
+            max_roughness (float): Max StdDev (m). Inland water is very flat (<0.3m).
+            max_reflectance (float): Max Apparent Reflectance. Water is dark (<0.25).
+                                     Roads/Salt Flats are flat but bright (>0.4).
+        """
+        try:
+            if self.verbose:
+                utils.echo_msg("Running Dynamic Inland Water Classification (Flat & Dark)...")
+
+            ## Check for Reflectance
+            ## Without reflectance, it is nearly impossible to distinguish a 
+            ## flat road from a flat river purely on geometry.
+            if 'reflectance' not in df.columns:
+                utils.echo_warning_msg("  Skipping: 'reflectance' data required for inland water algo.")
+                return df
+
+            ## Select Signal Photons
+            signal_mask = df['confidence'] >= 3
+            if not np.any(signal_mask): return df
+            
+            signal_df = df[signal_mask]
+
+            ## Calculate Segment Statistics
+            ## We aggregate by segment to get a robust 'surface' property
+            grouped = signal_df.groupby('ph_segment_id')
+            
+            ## We need Roughness (StdDev of Height) and Brightness (Median Reflectance)
+            ## We group the 'reflectance' column as well
+            seg_stats = grouped.agg({
+                'photon_height': 'std',
+                'reflectance': 'median'
+            })
+            
+            ## Identify Water Segments
+            ## Flat (Low Std) AND Dark (Low Reflectance)
+            is_water_seg = (
+                (seg_stats['photon_height'] <= max_roughness) & 
+                (seg_stats['reflectance'] <= max_reflectance)
+            )
+            
+            valid_water_segs = seg_stats.index[is_water_seg]
+            
+            if len(valid_water_segs) == 0: return df
+
+            ## Apply to Main DataFrame
+            is_water_photon = df['ph_segment_id'].isin(valid_water_segs)
+            
+            ## Update Class 42 (Inland Water)
+            ## Do not overwrite Bathy(40) or Ocean(44) if already set
+            ## We overwrite Land(1), Unclassified(-1), etc.
+            _classes = [-1, 1]
+            mask = is_water_photon & (df['ph_h_classed'].inin(_classes))
+            
+            df.loc[mask, 'ph_h_classed'] = 42
+            
+            if self.verbose:
+                utils.echo_msg(f"  Classified {np.count_nonzero(mask)} photons as Inland Water (42).")
+
+        except Exception as e:
+            utils.echo_warning_msg(f"Inland water classification failed: {e}")
+            
+        return df
+
+    
     def classify_nearshore_roughness(self, df, height_window=5.0, max_roughness=1.5):
         """Classify nearshore water by analyzing segment roughness (StdDev).
         
@@ -1059,7 +1177,9 @@ class IceSat2_ATL03(ElevationDataset):
             ## Update Class (Use 41 for Nearshore/Coastline)
             ## Only update if not already classified as Bathy (40) or Inland Water (42)
             ## We overwrite Unclassified (-1), Noise (0), Land (1), etc.
-            mask = is_water_photon & (df['ph_h_classed'] < 40)
+            ## Only consider ground class here
+            _classes = [1]
+            mask = is_water_photon & (df['ph_h_classed'].isin(_classes))
             
             ## Assign Class 41 (Coastline/Nearshore)
             df.loc[mask, 'ph_h_classed'] = 41
@@ -1256,6 +1376,10 @@ class IceSat2_ATL03(ElevationDataset):
         if atl09_fn:
             df = self.apply_atl09_data(df, atl09_fn, laser)
 
+        ## Fallback to 'pseudo-reflectance' if ATL09 isn't available.
+        if 'reflectance' not in df.columns or df['reflectance'].isna().all():
+            df = self.calculate_pseudo_reflectance(df)
+            
         ## --- Apply Fallback Ocean Classification --- (44 - Ocean)
         ## Onboard Mask says Ocean (ph_is_ocean == 1)
         ## Height is near Sea Level (abs(h_ortho) < threshold). 
@@ -1267,6 +1391,7 @@ class IceSat2_ATL03(ElevationDataset):
         df.loc[is_open_ocean, 'ph_h_classed'] = 44
             
         ## ATL24,Bathymetry, Near-shore Bathymetry (40), Coastline (41)
+        ## This will over-ride atl08/open-ocean classes.
         if atl24_fn:
             df = self.apply_atl24_classifications(
                 df, atl24_fn, laser, geoseg_beg, geoseg_end
@@ -1287,14 +1412,18 @@ class IceSat2_ATL03(ElevationDataset):
         ## --- Apply Dynamic Nearshore Classification ---
         ## This fills gaps between ATL12 (Ocean) and ATL08 (Land)
         ## It is robust in the surf zone where ATL12 often drops out.
-        #if self.classify_water:
         ## Use wider window (5m) and higher roughness (1.5m) for surf zones
         df = self.classify_nearshore_roughness(df, height_window=5.0, max_roughness=1.5)
 
+        ## --- Apply Dynamic Inland Water Classification ---
+        ## This checks for roughness (want flat areas) and also checks for
+        ## reflectance (inland water is dark compared to other flat features).
+        ## This requires ATL09 to get reflectance.
+        df = self.classify_inland_water_algo(df)
+        
         ## --- Apply Dynamic Building Classification ---
         ## This classifies buildings based on the height above ground, the roughness of those heights
         ## and the reflectance (from ATL09) of the surface.
-        #if self.classify_buildings:
         df = self.classify_buildings_algo(df, min_height=2.5, max_roughness=.6, ground_window=50)
             
         ## --- Apply Algorithmic Bathymetry Classification (Known Bathy / DBSCAN) ---
@@ -1318,23 +1447,23 @@ class IceSat2_ATL03(ElevationDataset):
         
         ## Setup Region for Aux Mask Fetches
         ## We try to use the user-supplied region or the INF metadata bounds
-        proc_region = self._get_processing_region()
-        if proc_region is not None:
-            proc_region.buffer(pct=1) # Slight buffer for safety        
+        # proc_region = self._get_processing_region()
+        # if proc_region is not None:
+        #     proc_region.buffer(pct=1) # Slight buffer for safety        
 
-            ## External Masks (Buildings/Water)
-            #if self.classify_buildings:
-            if self.classes:
-                bfp = bingbfp.BingBuildings(region=proc_region, verbose=self.verbose, cache_dir=self.cache_dir)
-                bing_geom = bfp(return_geom=True)
+        #     ## External Masks (Buildings/Water), Fallback for missing/misclassified ATL* data.
+        #     ## This ensures we get 'bare-earth' when needed...
+        #     if self.classes:
+        #         bfp = bingbfp.BingBuildings(region=proc_region, verbose=self.verbose, cache_dir=self.cache_dir)
+        #         bing_geom = bfp(return_geom=True)
 
-            if self.classes:
-                osmc = osm.osmCoastline(region=proc_region, q='coastline', verbose=self.verbose, cache_dir=self.cache_dir)
-                osm_geom = osmc(return_geom=True)
+        #     if self.classes:
+        #         osmc = osm.osmCoastline(region=proc_region, q='coastline', verbose=self.verbose, cache_dir=self.cache_dir)
+        #         osm_geom = osmc(return_geom=True)
 
-            if self.classes:
-                osml = osm.osmCoastline(region=proc_region, q='water', verbose=self.verbose, cache_dir=self.cache_dir)
-                osm_lakes = osml(return_geom=True)
+        #     if self.classes:
+        #         osml = osm.osmCoastline(region=proc_region, q='water', verbose=self.verbose, cache_dir=self.cache_dir)
+        #         osm_lakes = osml(return_geom=True)
 
         ## Fetch Aux ATLXX Data
         atl08_fn = self.fetch_atlxx(self.fn, 'ATL08') if self.classes else None
