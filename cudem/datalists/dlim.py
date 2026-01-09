@@ -2894,6 +2894,18 @@ class DatasetFactory(factory.CUDEMFactory):
 ##
 ## datalists cli
 ## ==============================================
+class PrintModulesAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        factory.echo_modules(DatasetFactory._modules, values, md=True if not values else False)
+        sys.exit(0)
+
+        
+class PrintPointZModulesAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        factory.echo_modules(pointz.PointFilterFactory._modules, values, md=True if not values else False)
+        sys.exit(0)
+        
+        
 class StackModeChoices(list):
     def __contains__(self, item):
         matches = [choice for choice in self if item.split(':')[0] in choice]
@@ -3072,24 +3084,20 @@ def datalists_cli():
     sys_grp.add_argument(
         '--modules', 
         nargs='?', 
-        const='all', 
+        #const='all',
+        action=PrintModulesAction,
         help="Display dataset descriptions. Optional ID for specific details."
     )
     sys_grp.add_argument(
         '--point-filters', 
         nargs='?', 
-        const='all', 
+        #const='all',
+        action=PrintPointZModulesAction,
         help="Display point filter descriptions."
     )
 
     ## Parse Arguments
     args = parser.parse_args()
-
-    ## --- Handle Info Helpers ---
-    if args.modules:
-        mod_key = None if args.modules == 'all' else utils.int_or(args.modules, str(args.modules))
-        factory.echo_modules(DatasetFactory._modules, mod_key)
-        sys.exit(0)
     
     if args.point_filters:
         mod_key = None if args.point_filters == 'all' else utils.int_or(args.point_filters, str(args.point_filters))

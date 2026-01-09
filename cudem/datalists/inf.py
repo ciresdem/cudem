@@ -280,7 +280,7 @@ class INF:
             # Fallback to MBSystem parsing
             try:
                 from cudem.datalists.mbsfile import MBSParser
-                data = MBSParser(fn=inf_path).inf_parse().infos.__dict__
+                data = MBSParser(fn=inf_path)._parse_mbs_inf_file().infos.__dict__
             except Exception as e:
                 raise ValueError(f'Unable to read data from {inf_path} as JSON or MBSystem INF: {e}')
 

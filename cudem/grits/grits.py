@@ -630,7 +630,7 @@ class GritsFactory(factory.CUDEMFactory):
 ## ==============================================        
 class PrintModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        factory.echo_modules(GritsFactory._modules, values)
+        factory.echo_modules(GritsFactory._modules, values, md=True if not values else False)
         sys.exit(0)
 
         

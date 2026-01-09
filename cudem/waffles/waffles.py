@@ -1122,13 +1122,13 @@ def waffle_queue(q):
 ## ==============================================
 class PrintModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        factory.echo_modules(WaffleFactory._modules, values)
+        factory.echo_modules(WaffleFactory._modules, values, md=True if not values else False)
         sys.exit(0)
 
         
 class PrintGritsModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        factory.echo_modules(grits.GritsFactory._modules, values)
+        factory.echo_modules(grits.GritsFactory._modules, values, md=True if not values else False)
         sys.exit(0)
 
         
