@@ -218,11 +218,11 @@ class IceSat2_ATL03(ElevationDataset):
                  classify_inland_water=True, # classify inland water surface
                  append_atl24=False, # append atl24 data to yield_points
                  min_bathy_confidence=None, # minimum desired bathy confidence (from atl24)
-                 known_bathymetry=None,  # New: Path to raster or 'gmrt'
-                 known_bathy_threshold=5.0, # New: Vertical window (+/- meters)
-                 use_dbscan=False,       # New: Enable DBSCAN clustering
-                 dbscan_eps=1.5,         # New: DBSCAN epsilon (neighbor distance)
-                 dbscan_min_samples=10,  # New: DBSCAN min points for core
+                 known_bathymetry=None, # Path to raster or 'gmrt'
+                 known_bathy_threshold=5.0, # Vertical window (+/- meters)
+                 use_dbscan=False, #  Enable DBSCAN clustering
+                 dbscan_eps=1.5, #  DBSCAN epsilon (neighbor distance)
+                 dbscan_min_samples=10, #  DBSCAN min points for core
                  **kwargs):
         
         super().__init__(**kwargs)
@@ -390,7 +390,8 @@ class IceSat2_ATL03(ElevationDataset):
     ## Apply ATL* Classifications
     ## ==============================================    
     def apply_atl08_classifications(self, df, atl08_fn, laser, segment_index_dict):
-        """Map ATL08 Land/Canopy classes to ATL03 photons."""
+        """Map ATL08 Land/Canopy classes to ATL03 photons. 
+        This sets the initial classifications."""
         
         try:
             with h5.File(atl08_fn, 'r') as f:
