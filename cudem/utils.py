@@ -1203,7 +1203,7 @@ def echo_msg2(msg, prefix='cudem', level='info', nl='\n', bold=False, use_tqdm=F
         
     if level.lower() in MSG_LEVELS and MSG_LEVELS[level.lower()] >= MSG_LEVEL:
         lvl_color = {
-            'warning': '\033[33m\033[1mWARNING\033[m',
+            'warning': '\033[33m\033[1mWARN\033[m',
             'error': '\033[31m\033[1mERROR\033[m',
             'debug': '\033[35m\033[1mDEBUG\033[m',
         }.get(level.lower(), f'\033[36m\033[1m{level.upper()}\033[m')

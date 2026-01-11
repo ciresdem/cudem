@@ -57,12 +57,12 @@ class WafflesKriging(Waffle):
 
     Parameters:
     -----------
-    model (str) : Variogram model ('linear', 'power', 'gaussian', 'spherical', 
-                  'exponential', 'hole-effect'). Default: 'linear'.
-    nlags (int) : Number of averaging bins for the variogram. Default: 6.
-    max_points (int) : Maximum number of input points to use for training 
-                       (randomly decimated if exceeded). Default: 10000.
-    chunk_size (int) : Processing chunk size in pixels. Default: 512.
+        model (str) : Variogram model ('linear', 'power', 'gaussian', 'spherical', 
+                      'exponential', 'hole-effect'). Default: 'linear'.
+        nlags (int) : Number of averaging bins for the variogram. Default: 6.
+        max_points (int) : Maximum number of input points to use for training 
+                           (randomly decimated if exceeded). Default: 10000.
+        chunk_size (int) : Processing chunk size in pixels. Default: 512.
 
     < kriging:model=linear:nlags=6:max_points=10000 >
     """

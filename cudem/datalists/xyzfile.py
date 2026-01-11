@@ -82,6 +82,7 @@ class XYZFile(ElevationDataset):
         """Generate metadata (INF) for the XYZ file.
         Ensures delimiter is guessed before scanning.
         """
+        
         if self.delim is None and self.fn is not sys.stdin:
             self.guess_delim()
             

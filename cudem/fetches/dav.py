@@ -117,7 +117,7 @@ class DAV(fetches.FetchModule):
         try:
             data = req.json()
             if 'error' in data:
-                utils.echo_error_msg(f"DAV Query Error: {data['error']}")
+                utils.echo_error_msg(f"DAV Query Error: {data['error']}, {req.url}")
                 return []
             return data.get('features', [])
         except json.JSONDecodeError:

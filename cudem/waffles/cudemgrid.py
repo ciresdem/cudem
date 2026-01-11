@@ -57,26 +57,25 @@ class WafflesCUDEM(Waffle):
     e.g.
     cudem:pre_mode=gmt-surface:tension=.65:geographic=True:landmask=True:polygonize=2:weight_levels=1/.5:inc_levels=.3333333s/1s:pre_count=2:pre_upper_limit=-.1:pre_smoothing=2:flatten=95
 
-    -----------
     Parameters:
-    
-    pre_mode (str) - the waffles module to perform the initial pre-surface
+    -----------    
+    pre_mode (str): the waffles module to perform the initial pre-surface
     pre_count (int): number of pre-surface iterations to perform
-    weight_levels () - the minimum weights for each of the pre-surface iterations
-    inc_levels () -  the increments for each of the pre-surface iterations
-    pre_upper_limit (float) - the upper elevation limit of the pre-surfaces 
+    weight_levels (): the minimum weights for each of the pre-surface iterations
+    inc_levels ():  the increments for each of the pre-surface iterations
+    pre_upper_limit (float): the upper elevation limit of the pre-surfaces 
                               (used with landmask)
-    pre_smoothing (float) - the smoothing (blur) factor to apply to the pre-surfaces
-    pre_verbose (bool) - increase the verbosity of pre-surface generation
+    pre_smoothing (float): the smoothing (blur) factor to apply to the pre-surfaces
+    pre_verbose (bool): increase the verbosity of pre-surface generation
     landmask (bool): path to coastline vector mask or set as `coastline` to auto-generate
     invert_landmask (bool): invert the coastline mask, invert assumes mask over ocean, while
                             non invert assumes mask over land.
-    want_supercede (bool) - supercede subsquent pre-surfaces
-    flatten (float) - the nodata-size percentile above which to flatten
-    exclude_lakes (bool) - exclude lakes from the landmask
-    filter_outliers (float) - percentile at which to filter outliers
-    <mode-opts> - options for the waffles module specified in 'mode'
-    <coastline-opts> - options for the coastline module when generating the landmask
+    want_supercede (bool): supercede subsquent pre-surfaces
+    flatten (float): the nodata-size percentile above which to flatten
+    exclude_lakes (bool): exclude lakes from the landmask
+    filter_outliers (float): percentile at which to filter outliers
+    <mode-opts>: options for the waffles module specified in 'mode'
+    <coastline-opts>: options for the coastline module when generating the landmask
     """
 
     def __init__(
