@@ -277,8 +277,78 @@ class MBSParser(ElevationDataset):
                               f"{out_name}.grd*", f"{out_name}.tif*")
 
 
-    #def read_mblist_ds(self):
+    def read_mblist_ds(self):
+        ## Determine format/metadata
+        src_inf = f"{self.fn}.inf"
+        meta = self._get_mbs_meta(src_inf)
         
+        mb_format = meta['format']
+        ## .fbt files override format detection
+        if self.fn.endswith('.fbt'): mb_format = None
+        
+        ## Calculate Weight
+        this_weight = 1.0
+        if self.auto_weight:
+            if meta['date']:
+                ## Decaying weight based on age
+                this_weight = min(0.99, max(0.01, 1 - ((2024 - int(meta['date'])) / (2024 - 1980))))
+            
+            if self.weight is not None:
+                self.weight *= this_weight
+
+        ## Build Command
+        mb_region = None
+        if self.region is not None:
+            mb_region = self.region.copy()
+            mb_region.buffer(pct=5)
+            
+        region_arg = f" {mb_region.format('gmt')}" if mb_region else ""
+        fmt_arg = f" -F{mb_format}" if mb_format else ""
+        
+        cmd_full = f'mblist -M{self.mb_exclude} -OXYZDAGgFPpRrSCc{region_arg} -I{self.fn}{fmt_arg}'
+        
+        mb_points = []
+        BATCH_SIZE = 1000000
+
+        column_names = ['x', 'y', 'z', 'crosstrack_distance', 'crosstrack_slope',
+                        'flat_bottom_grazing_angle', 'seafloor_grazing_angle',
+                        'beamflag', 'pitch', 'draft', 'roll', 'heave', 'speed',
+                        'sonar_alt', 'sonar_depth', 'weight', 'uncertainty']
+
+        mb_points = []
+        
+        for line in utils.yield_cmd(cmd_full, verbose=False):
+            try:
+                vals = [float(x) for x in line.strip().split('\t')]
+                if len(vals) < 5: continue
+                
+                #if speed == 0: continue
+                w = 1.0
+                u = 0.0
+
+                # if self.auto_weight:
+                #     ## Uncertainty Calculation
+                #     ## U_depth = 0.51 * (0.25 + 0.02 * depth)
+                #     u_depth = (0.25 + (0.02 * abs(z))) * 0.51
+                #     u_xtrack = 0.005 * abs(xtrack)
+                    
+                #     ## Speed penalty
+                #     tmp_speed = min(14, abs(speed - 14))
+                #     u_speed = tmp_speed * 0.51
+                    
+                #     u = math.sqrt(u_depth**2 + u_xtrack**2 + u_speed**2)
+                #     w = 1.0 / u if u > 0 else 1.0
+
+                vals.append(w)
+                vals.append(u)
+                mb_points.append(vals)
+
+            except (ValueError, IndexError):
+                continue
+
+        mb_df = pd.DataFrame(mb_points, columns=column_names)
+        return(mb_df)
+            
     def yield_mblist_ds(self):
         """Use mblist to stream points."""
         
@@ -364,5 +434,7 @@ class MBSParser(ElevationDataset):
         else:
             for pts in self.yield_mblist_ds():
                 yield pts
+                #dataset = self.read_mblist_ds()
+                #utils.echo_msg(dataset)
 
 ### End

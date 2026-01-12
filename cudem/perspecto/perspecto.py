@@ -124,9 +124,10 @@ class Perspecto:
             self.cpt = cpt.generate_etopo_cpt(min_z, max_z)
             
         elif os.path.exists(self.cpt):
-            utils.echo_msg(
-                f"processing cpt {self.cpt}, want_gdal is {want_gdal}, split_cpt: {self.split_cpt}"
-            )
+            if self.verbose:
+                utils.echo_msg(
+                    f"processing cpt {self.cpt}, want_gdal is {want_gdal}, split_cpt: {self.split_cpt}"
+                )
             self.cpt = cpt.process_cpt(
                 self.cpt, min_z, max_z, gdal=want_gdal, split_cpt=self.split_cpt
             )

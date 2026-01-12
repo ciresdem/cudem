@@ -1,6 +1,6 @@
 ### cpt.py
 ##
-## Copyright (c) 2026 - 2025 Regents of the University of Colorado
+## Copyright (c) 2023 - 2026 Regents of the University of Colorado
 ##
 ## cpt.py is part of CUDEM
 ##
@@ -226,8 +226,8 @@ def process_cpt(cpt_file, gmin, gmax, gdal=False, split_cpt=None):
             if j is not None and i + 1 < len(elevs):
                 # Choose scaling method based on range crossing zero
                 if gmin < 0 and gmax > 0:
-                    elev_curr = scale_el_relative(j, gmin, gmax, trs[i], trs)
-                    elev_next = scale_el_relative(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                    elev_curr = scale_el_relative_etopo(j, gmin, gmax, trs[i], trs)
+                    elev_next = scale_el_relative_etopo(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
                 else:
                     elev_curr = scale_el_linear(j, gmin, gmax, trs[i], trs)
                     elev_next = scale_el_linear(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
