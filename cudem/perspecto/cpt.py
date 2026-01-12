@@ -28,7 +28,6 @@
 ### Code:
 
 import os
-import colorsys
 import numpy as np
 from osgeo import gdal
 
@@ -44,9 +43,22 @@ from cudem.fetches import fetches
 CPT_COLORS = {
     'black': [0, 0, 0],
     'white': [255, 255, 255],
+    'red': [255, 0, 0],
+    'green': [0, 255, 0],
+    'blue': [0, 0, 255],
+    'yellow': [255, 255, 0],
+    'cyan': [0, 255, 255],
+    'magenta': [255, 0, 255],
+    'gray': [128, 128, 128],
+    'lightgray': [211, 211, 211],
+    'darkgray': [169, 169, 169],
+    'orange': [255, 165, 0],
+    'purple': [128, 0, 128],
+    'brown': [165, 42, 42],
 }
 
 
+## The following scale_el_* functions are depreciated.
 def scale_el_simple(value, gmin, gmax, tr):
     """Simple scaling of elevation based on predefined ranges."""
     
@@ -105,8 +117,14 @@ def scale_el_linear(value, gmin, gmax, tr, trs):
 
 
 def generate_etopo_cpt(gmin, gmax, output_file='tmp.cpt'):
-    """Generates a CPT based on ETOPO1 color steps scaled to gmin/gmax."""
+    """Generates a CPT based on ETOPO1 color steps scaled to gmin/gmax.
     
+    The ETOPO1 color map assumes a split at 0 (Sea Level).
+    This function scales the negative values to [gmin, 0] and 
+    positive values to [0, gmax].
+    """
+    
+    ## Original ETOPO1 Thresholds
     trs = [
         -11000, -10500, -10000, -9500, -9000, -8500,
         -8000, -7500, -7000, -6500, -6000, -5500,
@@ -117,18 +135,7 @@ def generate_etopo_cpt(gmin, gmax, output_file='tmp.cpt'):
         6000, 6500, 7000, 7500, 8000
     ]
     
-    elevs = [
-        -20, -19.09090909, -18.18181818, -17.27272727, -16.36363636,
-        -15.45454545, -14.54545455, -13.63636364, -12.72727273, -11.81818182,
-        -10.90909091, -10, -9.090909091, -8.181818182, -7.272727273,
-        -6.363636364, -5.454545455, -4.545454545, -3.636363636, -2.727272727,
-        -1.818181818, -0.909090909, -0.001, 0, 48.06865898,
-        96.13731797, 240.3432949, 480.6865898, 721.0298848, 961.3731797,
-        1201.716475, 1442.05977, 1682.403064, 1922.746359, 2163.089654,
-        2403.432949, 2643.776244, 2884.119539, 3124.462834, 3364.806129,
-        3605.149424, 3845.492719
-    ]
-
+    ## Original ETOPO1 Colors
     colors = (
         [10,0,121], [26,0,137], [38,0,152], [27,3,166], [16,6,180],
         [5,9,193], [0,14,203], [0,22,210], [0,30,216], [0,39,223],
@@ -141,18 +148,37 @@ def generate_etopo_cpt(gmin, gmax, output_file='tmp.cpt'):
         [204,204,204], [229,229,229], [138,227,255], [51,102,0]
     )
 
+    ## Use the process_cpt logic to calculate new elevations
+    ## by treating the hardcoded trs as the input.
+    ## ETOPO is hinged at 0.
+    new_elevs = []
+    split_val = 0
+    t_min, t_max = min(trs), max(trs)
+
+    for t in trs:
+        if t <= split_val:
+            ## Scale [t_min, 0] -> [gmin, 0]
+            if t_min == split_val: pct = 0
+            else: pct = (t - t_min) / (split_val - t_min)
+            val = gmin + pct * (0 - gmin)
+        else:
+            ## Scale [0, t_max] -> [0, gmax]
+            if t_max == split_val: pct = 0
+            else: pct = (t - split_val) / (t_max - split_val)
+            val = 0 + pct * (gmax - 0)
+        new_elevs.append(val)
+
     with open(output_file, 'w') as cpt:
-        for i, j in enumerate(elevs):
-            if j is not None and i + 1 < len(elevs):
-                elev_curr = scale_el_relative_etopo(j, gmin, gmax, trs[i], trs)
-                elev_next = scale_el_relative_etopo(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
-                
-                if elev_curr is not None and elev_next is not None:
-                    c1 = colors[i]
-                    cpt.write(
-                        f'{elev_curr} {c1[0]} {c1[1]} {c1[2]} '
-                        f'{elev_next} {c1[0]} {c1[1]} {c1[2]}\n'
-                    )
+        for i in range(len(new_elevs) - 1):
+            elev_curr = new_elevs[i]
+            elev_next = new_elevs[i+1]
+            c1 = colors[i]
+            
+            cpt.write(
+                f'{elev_curr} {c1[0]} {c1[1]} {c1[2]} '
+                f'{elev_next} {c1[0]} {c1[1]} {c1[2]}\n'
+            )
+            
     return output_file
 
 
@@ -174,76 +200,111 @@ def make_cpt(cmap='etopo1', color_model='r', min_z=None, max_z=None, output=None
 
 
 def process_cpt(cpt_file, gmin, gmax, gdal=False, split_cpt=None):
-    """Parses an existing CPT and rescales it to gmin/gmax."""
+    """Parses an existing CPT and rescales it to [gmin, gmax].
     
-    trs = []
-    colors = []
-
+    If split_cpt is provided (e.g., 0), the scaling is piece-wise:
+    - Input values <= split_cpt are scaled to [gmin, split_cpt]
+    - Input values >= split_cpt are scaled to [split_cpt, gmax]
+    This preserves the hinge/break point in the color map (e.g. Sea Level).
+    """
+    
     if cpt_file is None:
         return None
+
+    trs = []
+    colors = []
     
+    ## Parse the Input CPT
     with open(cpt_file, 'r') as f:
         for line in f:
             parts = line.split()
             if not parts:
                 continue
             
-            # Check if first part is a number (elevation)
+            ## Use 'float_or' to safely check if line starts with a number
             if utils.float_or(parts[0]) is not None:
                 trs.append(float(parts[0]))
-
-                # Parse color
+                
+                ## Parse RGB
+                ## Assumes format: Z R G B ...
                 if utils.int_or(parts[1]) is not None:
-                    # R G B format
                     colors.append([
                         int(float(parts[1])),
                         int(float(parts[2])),
                         int(float(parts[3]))
                     ])
                 elif parts[1] in CPT_COLORS:
-                    # Named color
                     colors.append(CPT_COLORS[parts[1]])
                 elif '/' in parts[1]:
-                    # Slash delimited
                     colors.append([int(float(x)) for x in parts[1].split('/')])
 
-    # Determine elevation steps
-    if split_cpt is not None:
-        _trs = np.array(trs)
-        len_b = len(_trs[_trs < split_cpt])
-        len_t = len(_trs[_trs > split_cpt])
-        
-        elevs_b = np.linspace(gmin, split_cpt, len_b)
-        # Skip first element of top to avoid duplicate/overlap if necessary
-        elevs_t = np.linspace(split_cpt, gmax, len_t)[1:]
-        elevs = np.concatenate((elevs_b, elevs_t))
-    else:
-        elevs = np.linspace(gmin, gmax, len(trs))
+    if not trs:
+        utils.echo_error_msg(f"No valid data found in CPT {cpt_file}")
+        return None
 
+    ## Calculate New Z-Values (Elevations)
+    new_elevs = []
+    t_min, t_max = min(trs), max(trs)
+
+    if split_cpt is not None:
+        split_val = float(split_cpt)
+        ## Check if split_val is within input range to avoid extrapolation errors
+        ## Though extrapolation might be desired if gmin/gmax force it        
+        for t in trs:
+            if t <= split_val:
+                ## Bottom Segment: [t_min, split_val] -> [gmin, split_val]
+                if split_val == t_min:
+                    val = gmin 
+                else:
+                    ## Percentage of distance through input bottom segment
+                    pct = (t - t_min) / (split_val - t_min)
+                    ## Map to output bottom segment
+                    val = gmin + pct * (split_val - gmin)
+            else:
+                ## Top Segment: [split_val, t_max] -> [split_val, gmax]
+                if t_max == split_val:
+                    val = gmax
+                else:
+                    ## Percentage of distance through input top segment
+                    pct = (t - split_val) / (t_max - split_val)
+                    ## Map to output top segment
+                    val = split_val + pct * (gmax - split_val)
+            
+            new_elevs.append(val)
+            
+    else:
+        ## Standard Linear Stretch: [t_min, t_max] -> [gmin, gmax]
+        for t in trs:
+            if t_max == t_min:
+                val = gmin
+            else:
+                pct = (t - t_min) / (t_max - t_min)
+                val = gmin + pct * (gmax - gmin)
+            new_elevs.append(val)
+
+    ## Write the Output CPT
     output_fn = 'tmp.cpt'
     with open(output_fn, 'w') as f_out:
-        for i, j in enumerate(elevs):
-            if j is not None and i + 1 < len(elevs):
-                # Choose scaling method based on range crossing zero
-                if gmin < 0 and gmax > 0:
-                    elev_curr = scale_el_relative_etopo(j, gmin, gmax, trs[i], trs)
-                    elev_next = scale_el_relative_etopo(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
-                else:
-                    elev_curr = scale_el_linear(j, gmin, gmax, trs[i], trs)
-                    elev_next = scale_el_linear(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
-                    
-                if elev_curr is not None and elev_next is not None:
-                    c = colors[i]
-                    if not gdal:
-                        f_out.write(
-                            f'{elev_curr} {c[0]} {c[1]} {c[2]} '
-                            f'{elev_next} {c[0]} {c[1]} {c[2]}\n'
-                        )
-                    else:
-                        # GDAL format typically requires index or specific structuring
-                        f_out.write(f'{elev_curr} {c[0]} {c[1]} {c[2]} 255\n')
+        ## We iterate up to len-1 because a segment connects i to i+1
+        for i in range(len(new_elevs) - 1):
+            elev_curr = new_elevs[i]
+            elev_next = new_elevs[i+1]
+            c = colors[i]  # Use the color associated with the start of the segment
+            
+            if not gdal:
+                ## Standard CPT Format
+                f_out.write(
+                    f'{elev_curr} {c[0]} {c[1]} {c[2]} '
+                    f'{elev_next} {c[0]} {c[1]} {c[2]}\n'
+                )
+            else:
+                ## GDAL Color Relief Format (one value per line)
+                f_out.write(f'{elev_curr} {c[0]} {c[1]} {c[2]} 255\n')
         
-        if gdal:
+        ## Ensure the last value is written for GDAL format
+        if gdal and len(new_elevs) > 0:
+            last_c = colors[-1]
+            f_out.write(f'{new_elevs[-1]} {last_c[0]} {last_c[1]} {last_c[2]} 255\n')
             f_out.write('nv 0 0 0 0\n')
 
     return output_fn
@@ -277,59 +338,87 @@ def fetch_cpt_city(q='grass/haxby', cache_dir='./'):
 
 
 def get_correct_map(path, luminosity, contrast):
-    """Adjusts the luminosity and contrast of a GDAL raster.
-
-    Note: This iterates pixel-by-pixel and is slow for large images.
+    """Adjusts the luminosity and contrast of a GDAL raster using Vectorized NumPy.
+    Saves the result back to the file.
     """
     
     if not os.path.exists(path):
         utils.echo_error_msg(f"File not found: {path}")
         return
 
-    ds = gdal.Open(path)
+    ## Open in Update mode to allow saving changes
+    ds = gdal.Open(path, gdal.GA_Update)
     if ds is None:
         utils.echo_error_msg(f"Could not open {path}")
         return
 
-    band1_obj = ds.GetRasterBand(1)
-    
-    # Determine Max Value based on DataType
-    if band1_obj.DataType == gdal.GDT_UInt16:
-        max_value = int(2**16 - 1)
-    elif band1_obj.DataType == gdal.GDT_Byte:
-        max_value = int(2**8 - 1)
-    else:
-        utils.echo_msg(
-            f'band type {band1_obj.DataType} not handled: using default 16-bit'
-        )
-        max_value = int(2**16 - 1)
-
-    # Read bands (Assuming RGB)
-    # ReadAsArray returns [bands, y, x]
-    data_array = ds.ReadAsArray(0, 0, ds.RasterXSize, ds.RasterYSize)
-    if len(data_array) < 3:
+    ## Check Band Count
+    if ds.RasterCount < 3:
         utils.echo_error_msg("Image requires at least 3 bands (RGB).")
         return
 
-    band1 = data_array[0]
-    band2 = data_array[1]
-    band3 = data_array[2]
+    ## Check Data Type and Determine Max Value
+    band_obj = ds.GetRasterBand(1)
+    dtype = band_obj.DataType
+    
+    if dtype == gdal.GDT_UInt16:
+        max_value = 65535
+        np_dtype = np.uint16
+    elif dtype == gdal.GDT_Byte:
+        max_value = 255
+        np_dtype = np.uint8
+    else:
+        # Default fallback
+        max_value = 65535
+        np_dtype = np.uint16
 
-    # Process pixel by pixel (Slow)
-    # TODO: Vectorize this loop using numpy for performance
-    for x in range(ds.RasterXSize):
-        for y in range(ds.RasterYSize): # Should check if dims match array shape (usually y,x)
+    ## Read All Bands into Memory (c, y, x)
+    ## This reads R, G, B into indices 0, 1, 2
+    try:
+        data = ds.ReadAsArray()
+    except Exception as e:
+        utils.echo_error_msg(f"Failed to read raster array: {e}")
+        return
 
-            r = float(band1[y, x]) / max_value
-            g = float(band2[y, x]) / max_value
-            b = float(band3[y, x]) / max_value
+    ## Normalize to Float [0, 1]
+    ## We use a copy or cast to float for calculation
+    img_norm = data[:3].astype(np.float32) / max_value
+    
+    r = img_norm[0]
+    g = img_norm[1]
+    b = img_norm[2]
+    
+    ## Convert to HLS (Vectorized)
+    h, l, s = _rgb_to_hls_vectorized(r, g, b)
+    
+    ## Apply Luminosity and Contrast
+    ## Formula: L_new = L + (L - 0.5) * (Factor - 0.5)
+    ## Clamping is handled by clip at the end or logic
+    if luminosity != 0.5:
+        l = l + (l - 0.5) * (luminosity - 0.5)
+        l = np.clip(l, 0, 1)
+        
+    if contrast != 0.5:
+        s = s + (s - 0.5) * (contrast - 0.5)
+        s = np.clip(s, 0, 1)
 
-            # Convert to HLS then apply luminosity and contrast
-            h, l, s = colorsys.rgb_to_hls(r, g, b)
+    ## Convert back to RGB (Vectorized)
+    r_new, g_new, b_new = _hls_to_rgb_vectorized(h, l, s)
+    
+    ## Scale back to Integer Range
+    r_out = (r_new * max_value).astype(np_dtype)
+    g_out = (g_new * max_value).astype(np_dtype)
+    b_out = (b_new * max_value).astype(np_dtype)
+    
+    ## Write Data Back to Bands
+    ds.GetRasterBand(1).WriteArray(r_out)
+    ds.GetRasterBand(2).WriteArray(g_out)
+    ds.GetRasterBand(3).WriteArray(b_out)
+    
+    ## Force Flush/Close
+    ds.FlushCache()
+    ds = None
+    
+    utils.echo_msg(f"Updated color map for {path}")    
 
-            l = min(max(0, l + (l - 0.5) * (luminosity - 0.5)), 1)
-            s = min(max(0, s + (s - 0.5) * (contrast - 0.5)), 1)
-
-            r_out, g_out, b_out = colorsys.hls_to_rgb(h, l, s)
-            
 ### End

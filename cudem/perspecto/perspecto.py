@@ -50,6 +50,7 @@
 import os
 import sys
 import json
+import shutil
 import argparse
 
 from cudem import utils
@@ -83,6 +84,7 @@ class Perspecto:
         verbose=True,
         split_cpt=False,
         want_gdal_cpt=True,
+        output_format=None,
         params=None
     ):
         self.mod = mod
@@ -96,16 +98,24 @@ class Perspecto:
         self.outdir = outdir
         self.callback = callback
         self.verbose = verbose
+        self.output_format = output_format
         self.params = params if params is not None else {}
         
+        ## Load DEM Info
         self.dem_infos = gdalfun.gdal_infos(self.src_dem, scan=True)
         self.dem_region = regions.Region().from_geo_transform(
             self.dem_infos['geoT'], self.dem_infos['nx'], self.dem_infos['ny']
         )
         
+        ## Set default output filename
         if self.outfile is None:
-            self.outfile = f"{utils.fn_basename2(self.src_dem)}_{self.mod if self.mod else 'pp'}.tif"
+            basename = utils.fn_basename2(self.src_dem)
+            self.outfile = f"{basename}_{self.mod if self.mod else 'pp'}.tif"
 
+        ## Set a unique CPT filename to avoid collisions with 'tmp.cpt'
+        self.cpt_out_name = f"{utils.fn_basename2(self.src_dem)}_perspecto.cpt"
+        
+        ## Initialize the CPT
         self.init_cpt(want_gdal=want_gdal_cpt)
 
         
@@ -113,50 +123,70 @@ class Perspecto:
         return self.run()
 
     
+    def _move_cpt(self, src):
+        """Helper to rename the generic temporary CPT to a unique specific name."""
+        
+        if src and os.path.exists(src):
+            shutil.move(src, self.cpt_out_name)
+            return self.cpt_out_name
+        return src
+
     def init_cpt(self, want_gdal=False):
         """Initialize and process the CPT file."""
         
+        ## Determine Z-Range
         min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
         max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
 
+        if self.verbose:
+            utils.echo_msg(
+                f"Initializing CPT: Range [{min_z}, {max_z}], GDAL={want_gdal}, Split={self.split_cpt}"
+            )
 
+        ## No CPT provided: Generate ETOPO
         if self.cpt is None:
-            self.cpt = cpt.generate_etopo_cpt(min_z, max_z)
+            tmp_cpt = cpt.generate_etopo_cpt(min_z, max_z)
+            self.cpt = self._move_cpt(tmp_cpt)
             
+        ## Local File provided: Process it
         elif os.path.exists(self.cpt):
-            if self.verbose:
-                utils.echo_msg(
-                    f"processing cpt {self.cpt}, want_gdal is {want_gdal}, split_cpt: {self.split_cpt}"
-                )
-            self.cpt = cpt.process_cpt(
+            tmp_cpt = cpt.process_cpt(
                 self.cpt, min_z, max_z, gdal=want_gdal, split_cpt=self.split_cpt
             )
-        else:
-            ## Attempt to fetch city CPT
-            self.cpt = cpt.process_cpt(
-                cpt.fetch_cpt_city(q=self.cpt),
-                min_z,
-                max_z,
-                gdal=want_gdal,
-                split_cpt=self.split_cpt
-            )
-
-        ## If cpt is still None, generate the default ETOPO cpt
-        if self.cpt is None:
-            self.cpt = cpt.generate_etopo_cpt(min_z, max_z)                
+            self.cpt = self._move_cpt(tmp_cpt)
             
+        ## Remote/City CPT requested
+        else:
+            ## fetch_cpt_city returns a path to a downloaded file
+            city_cpt = cpt.fetch_cpt_city(q=self.cpt)
+            if city_cpt:
+                tmp_cpt = cpt.process_cpt(
+                    city_cpt, min_z, max_z, gdal=want_gdal, split_cpt=self.split_cpt
+                )
+                self.cpt = self._move_cpt(tmp_cpt)
+            else:
+                ## Fallback
+                utils.echo_error_msg(f"Could not find CPT {self.cpt}, falling back to ETOPO.")
+                tmp_cpt = cpt.generate_etopo_cpt(min_z, max_z)
+                self.cpt = self._move_cpt(tmp_cpt)
+
+                
     def makecpt(self, cmap='etopo1', color_model='r', output=None):
+        """Wrapper for PyGMT makecpt."""
+        
         min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
         max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
-        self.cpt = cpt.make_cpt(
+        
+        generated_cpt = cpt.make_cpt(
             cmap=cmap, 
             color_model=color_model, 
             output=output, 
             min_z=min_z, 
             max_z=max_z
         )
+        if generated_cpt:
+             self.cpt = generated_cpt
 
-        
     def cpt_no_slash(self):
         """Removes backslashes from the CPT file."""
         
@@ -176,36 +206,76 @@ class Perspecto:
         basename = utils.fn_basename2(self.src_dem)
         
         if dem:
-            # Scale DEM to 16-bit PNG
+            ## Scale DEM to 16-bit PNG
             utils.run_cmd(
                 f"gdal_translate -ot UInt16 -of PNG -scale "
                 f"{self.dem_infos['zr'][0]} {self.dem_infos['zr'][1]} 0 65535 "
                 f"{self.src_dem} _dem_temp.png",
-                verbose=True
+                verbose=self.verbose
             )
-            # Crop 1 pixel border
+            ## Crop 1 pixel border (POV-Ray artifact prevention)
             utils.run_cmd(
                 f"gdal_translate -srcwin 1 1 {self.dem_infos['nx']-1} {self.dem_infos['ny']-1} "
                 f"-of PNG _dem_temp.png {basename}_16bit.png",
-                verbose=True
+                verbose=self.verbose
             )
             utils.remove_glob('_dem_temp*')
 
         if rgb:
+            ## Ensure CPT is formatted for GDAL (requires nv 0 0 0 0 line)
             self.init_cpt(want_gdal=True)
-            # Generate Color Relief
+            
+            ## Generate Color Relief
             utils.run_cmd(
                 f"gdaldem color-relief {self.src_dem} {self.cpt} _rgb_temp.tif -alpha",
-                verbose=True
+                verbose=self.verbose
             )
-            # Crop 1 pixel border
+            ## Crop 1 pixel border
             utils.run_cmd(
                 f"gdal_translate -srcwin 1 1 {self.dem_infos['nx']-1} {self.dem_infos['ny']-1} "
                 f"-of PNG _rgb_temp.tif {basename}_rgb.png",
-                verbose=True
+                verbose=self.verbose
             )
             utils.remove_glob('_rgb_temp*')
-            r
+
+            
+    def translate_output(self, src_file):
+        """Translates the output file to the requested output format."""
+        
+        if not self.output_format:
+            return src_file
+
+        fmt = self.output_format.lower()
+        
+        # Map extensions to GDAL drivers
+        driver_map = {
+            'png': 'PNG',
+            'jpg': 'JPEG',
+            'jpeg': 'JPEG',
+            'tif': 'GTiff',
+            'tiff': 'GTiff',
+            'nc': 'NetCDF',
+        }
+        
+        driver = driver_map.get(fmt)
+        if not driver:
+            utils.echo_warning_msg(f"Unknown format '{fmt}', skipping translation.")
+            return src_file
+
+        # Construct new filename
+        base, _ = os.path.splitext(src_file)
+        dst_file = f"{base}.{fmt}"
+
+        if self.verbose:
+            utils.echo_msg(f"Translating output to {fmt} ({dst_file})...")
+
+        utils.run_cmd(
+            f"gdal_translate -of {driver} {src_file} {dst_file}",
+            verbose=self.verbose
+        )
+        
+        return dst_file
+    
             
     def run(self):
         raise NotImplementedError("Perspecto is an abstract base class; run() must be implemented by subclasses.")
@@ -236,7 +306,6 @@ class PerspectoFactory(factory.CUDEMFactory):
         _modules['figure1'] = {'call': figure1.Figure1}
         _modules['colorbar'] = {'call': colorbar.Colorbar}
 
-        
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -246,7 +315,7 @@ class PerspectoFactory(factory.CUDEMFactory):
 ## $ perspecto
 ##
 ## perspecto cli
-## ==============================================
+## ============================================== 
 class PrintModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         factory.echo_modules(PerspectoFactory._modules, values, md=True if not values else False)
@@ -288,6 +357,23 @@ CUDEM home page: <http://cudem.colorado.edu>
         metavar='VALUE',
         help="Split the CPT values at specified value (usually zero)"
     )
+
+    parser.add_argument(
+        '-O', '--outfile',
+        help="Specify the output filename."
+    )
+    
+    parser.add_argument(
+        '-F', '--format',
+        choices=['png', 'jpg', 'tif', 'nc'],
+        help="Output format (png, jpg, tif, nc). Converts the final result."
+    )
+    
+    parser.add_argument(
+        '-E', '--export',
+        action='store_true',
+        help="Export input DEM to PNG (RGB and 16-bit) before processing."
+    )
     
     parser.add_argument(
         '--min_z', 
@@ -317,9 +403,7 @@ CUDEM home page: <http://cudem.colorado.edu>
 
     args = parser.parse_args()
 
-    # --- Validation ---
-    
-    # Check for Module
+    ## --- Validation ---    
     if not args.module:
         parser.print_usage()
         utils.echo_error_msg("must specify a perspecto -M module.")
@@ -333,7 +417,6 @@ CUDEM home page: <http://cudem.colorado.edu>
         )
         sys.exit(1)
 
-    # Check for DEM input
     if not args.dem:
         parser.print_usage()
         utils.echo_error_msg(
@@ -342,21 +425,19 @@ CUDEM home page: <http://cudem.colorado.edu>
         )
         sys.exit(1)
 
-    # --- Processing ---
-
+    ## --- Processing ---
     src_dem = None
     wg_user = args.dem
 
     if os.path.exists(wg_user):
         try:
-            # Attempt to load as JSON (waffles config)
+            ## Attempt to load as JSON (waffles config)
             with open(wg_user, 'r') as wgj:
                 wg = json.load(wgj)
                 
             if wg.get('src_region') is not None:
                 wg['src_region'] = regions.Region().from_list(wg['src_region'])
 
-            # Assuming 'waffles' is available in current scope or factory
             import cudem.waffles.waffles as waffles 
             
             this_waffle = waffles.WaffleFactory(**wg).acquire()
@@ -369,33 +450,42 @@ CUDEM home page: <http://cudem.colorado.edu>
             src_dem = this_waffle.fn
             
         except (json.JSONDecodeError, UnicodeDecodeError):
-            # If JSON fails, assume it is a direct DEM path
+            ## If JSON fails, assume it is a direct DEM path
             src_dem = wg_user
         except Exception as e:
             utils.echo_error_msg(f"Error processing input file: {e}")
             sys.exit(1)
     else:
-        # If file doesn't exist on disk
         utils.echo_error_msg(
             f"specified waffles config file/DEM does not exist: {wg_user}"
         )
         sys.exit(1)
 
-    # --- Execution ---
-
+    ## --- Execution ---
     this_perspecto = PerspectoFactory(
         mod=args.module,
         src_dem=src_dem,
         cpt_file=args.cpt,
         min_z=args.min_z,
         max_z=args.max_z,
-        split_cpt=args.split_cpt
+        split_cpt=args.split_cpt,
+        outfile=args.outfile,
+        output_format=args.format,
     )
 
     if this_perspecto is not None:
         this_perspecto_module = this_perspecto._acquire_module()
         if this_perspecto_module is not None:
+            if args.export:
+                utils.echo_msg("Exporting PNGs (RGB and 16-bit)...")
+                this_perspecto_module.export_as_png()
+                
             out_fig = this_perspecto_module()
+
+            ## Translate Format if requested
+            if args.format and out_fig:
+                out_fig = this_perspecto_module.translate_output(out_fig)
+                
             utils.echo_msg(f'generated {out_fig}')
         else:
             utils.echo_error_msg(f'could not acquire perspecto module {args.module}')
