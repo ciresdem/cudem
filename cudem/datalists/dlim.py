@@ -1482,7 +1482,10 @@ class ElevationDataset:
                     if self.transform['vert_transformer'] is not None:
                         _, _, points['z'] = self.transform['vert_transformer'].transform(points['x'], points['y'], points['z'])
 
-                    points = points[~np.isinf(points['z'])]
+                try:
+                    points = points[~np.isinf(points['z'].astype(float))]
+                except Exception:
+                    pass
 
                 if self.region is not None and self.region.valid_p():
                     xyz_region = self.region.copy()
@@ -1755,7 +1758,8 @@ class ElevationDataset:
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
                 dst_srs=self.dst_srs,
-                cache_dir=self.cache_dir
+                cache_dir=self.cache_dir,
+                stack_mode=self.stack_mode,
             )
             stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
         else:
@@ -1764,7 +1768,8 @@ class ElevationDataset:
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
                 dst_srs=self.dst_srs,
-                cache_dir=self.cache_dir
+                cache_dir=self.cache_dir,
+                stack_mode=self.stack_mode,
             )
             blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)
             stacked_fn = globato_converter.globato_to_gdal(blocked_fn, tif_path=f'{out_name}.tif', verbose=True)

@@ -228,7 +228,10 @@ def dict2args(in_dict: Dict[str, Any]) -> str:
     
     out_args = []
     for key, val in in_dict.items():
-        out_args.append(f'{key}="{val}"')
+        if utils.str2bool(val) is not None:
+            out_args.append(f'{key}={utils.str2bool(val)}')
+        else:
+            out_args.append(f'{key}="{val}"')
     return ':'.join(out_args)
 
 

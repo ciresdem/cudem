@@ -189,13 +189,13 @@ class WafflesCUDEM(Waffle):
         
         cst_region = self.p_region.copy()
         cst_region.wmin = self.weight_levels[0]
-        utils.echo_msg('coast region is: {}'.format(cst_region))
         cst_fn = '{}_cst'.format(
             os.path.join(self.cache_dir, os.path.basename(self.name))
         )
         this_coastline = 'coastline:{}'.format(
             factory.dict2args(self.coastline_args)
         )
+
         ## update to call wafflesCoastline directly
         coastline = WaffleFactory(
             mod=this_coastline,

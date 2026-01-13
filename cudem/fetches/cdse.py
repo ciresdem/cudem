@@ -1,6 +1,6 @@
 ### cdse.py
 ##
-## Copyright (c) 2010 - 2025 Regents of the University of Colorado
+## Copyright (c) 2025 - 2026 Regents of the University of Colorado
 ##
 ## cdse.py is part of CUDEM
 ##
@@ -30,6 +30,8 @@
 import requests
 import netrc
 import datetime
+import time
+import re
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
 from typing import Optional, List, Dict, Tuple
@@ -51,14 +53,16 @@ class CDSE(fetches.FetchModule):
 
     Fetches satellite imagery (e.g., Sentinel-2) from the Copernicus Data Space Ecosystem.
     Requires a valid account in your .netrc file.
-
-
-    Configuration Example:
-    < cdse:collection_name=SENTINEL-2:product_type=S2MSI1C:time_start='':time_end='':max_cloud_cover=1 >
+    
+    Automatically refreshes authentication tokens upon expiration.
     """
     
     def __init__(self, collection_name: str = 'SENTINEL-2', product_type: str = 'S2MSI1C',
                  max_cloud_cover: Optional[float] = None, time_start: str = '', time_end: str = '', **kwargs):
+        # Initialize private headers attribute before super().__init__ calls the setter
+        self._headers = {}
+        self._token_expiry = 0.0
+        
         super().__init__(name='cdse', **kwargs)
 
         self.collection_name = collection_name
@@ -72,18 +76,52 @@ class CDSE(fetches.FetchModule):
             self.aoi = None
 
         ## Format Timestamps
+        ## Default to One year ago -> Today
+        if not time_end:
+            time_end = datetime.datetime.now().isoformat()
+        if not time_start:
+            time_start = (datetime.datetime.now() - datetime.timedelta(days=365)).isoformat()
+            
         self.time_start = self._format_date(time_start)
         self.time_end = self._format_date(time_end)
             
-        ## Authentication
-        self.access_token = self.get_auth_token()
-        if self.access_token:
-            self.headers = {'Authorization': f'Bearer {self.access_token}'}
-        else:
-            self.headers = {}
-            utils.echo_warning_msg("Could not acquire CDSE Access Token. Requests may fail.")
+        ## Initial Authentication
+        self.access_token = self.refresh_token()
 
-            
+        
+    @property
+    def headers(self):
+        """Dynamic headers property that checks for token expiry."""
+        
+        ## Buffer of 30 seconds to ensure we don't expire mid-request
+        if time.time() > (self._token_expiry - 30):
+            if self.verbose:
+                utils.echo_msg("CDSE Token expired or expiring soon. Refreshing...")
+            self.refresh_token()
+        return self._headers
+
+    
+    @headers.setter
+    def headers(self, value):
+        self._headers = value
+
+        
+    def refresh_token(self):
+        """Acquire a new token and update headers/expiry."""
+        
+        token, expires_in = self.get_auth_token_data()
+        
+        if token:
+            self.access_token = token
+            ## Set expiry time (current time + lifetime)
+            self._token_expiry = time.time() + expires_in
+            self._headers = {'Authorization': f'Bearer {token}'}
+        else:
+            self._headers = {}
+            utils.echo_warning_msg("Could not acquire CDSE Access Token. Requests may fail.")
+        return token
+
+    
     def _format_date(self, date_str: str) -> str:
         """Formats an ISO date string for the OData filter."""
         
@@ -110,14 +148,14 @@ class CDSE(fetches.FetchModule):
         return None, None
 
     
-    def get_auth_token(self) -> Optional[str]:
-        """Authenticate with CDSE and retrieve an access token."""
+    def get_auth_token_data(self) -> Tuple[Optional[str], int]:
+        """Authenticate with CDSE and retrieve access token AND expiration time."""
         
         username, password = self.get_credentials_from_netrc()
         
         if not username or not password:
             utils.echo_warning_msg("No credentials found in .netrc for CDSE.")
-            return None
+            return None, 0
 
         data = {
             "client_id": "cdse-public",
@@ -128,22 +166,26 @@ class CDSE(fetches.FetchModule):
 
         try:
             response = requests.post(CDSE_AUTH_URL, data=data)
-            response.raise_for_status() # Raise an exception for bad status codes (4xx or 5xx)
-            token = response.json().get("access_token")
+            response.raise_for_status() 
+            json_resp = response.json()
+            token = json_resp.get("access_token")
+            ## Default to 600s (10 mins) if not provided by server
+            expires_in = json_resp.get("expires_in", 600) 
+            
             if self.verbose:
-                utils.echo_msg("Successfully retrieved CDSE access token.")
-            return token
+                utils.echo_msg(f"Successfully retrieved CDSE access token (expires in {expires_in}s).")
+            return token, int(expires_in)
         except requests.exceptions.RequestException as e:
             utils.echo_error_msg(f"CDSE Authentication failed: {e}")
-            return None
+            return None, 0
 
         
     def _resolve_redirects(self, initial_url: str) -> str:
         """Manually resolve redirects to get the final download URL."""
         
         url = initial_url
-        ## Loop limit to prevent infinite redirects
         for _ in range(10):
+            # Accessing self.headers property here ensures token is fresh for meta requests too
             req = fetches.Fetch(url, headers=self.headers, allow_redirects=False).fetch_req()
             if req and req.status_code in (301, 302, 303, 307):
                 url = req.headers["Location"]
@@ -152,13 +194,18 @@ class CDSE(fetches.FetchModule):
         return url
 
     
+    def _strip_ns(self, xml_text):
+        """Strip namespaces from XML string to allow simple tag searching."""
+
+        return re.sub(r'\sxmlns="[^"]+"', '', xml_text, count=1)
+
+
     def run(self):
         """Execute the query and generate download links."""
         
         if not self.aoi or not self.access_token:
             return self
 
-        ## Build OData Filter
         filters = [
             f"Collection/Name eq '{self.collection_name}'",
             f"Attributes/OData.CSC.StringAttribute/any(att:att/Name eq 'productType' and att/OData.CSC.StringAttribute/Value eq '{self.product_type}')",
@@ -172,70 +219,77 @@ class CDSE(fetches.FetchModule):
         if self.max_cloud_cover is not None:
             filters.append(f"Attributes/OData.CSC.DoubleAttribute/any(att:att/Name eq 'cloudCover' and att/OData.CSC.DoubleAttribute/Value le {self.max_cloud_cover})")
 
-        query_url = f"{CDSE_CATALOGUE_URL}/Products?$filter={' and '.join(filters)}"
-        utils.echo_msg(query_url)
-        try:
-            response = requests.get(query_url).json()
-        except Exception as e:
-            utils.echo_error_msg(f"Error querying CDSE Catalogue: {e}")
-            return self
-
-        results = response.get('value', [])
+        ## Initial query URL
+        query_url = f"{CDSE_CATALOGUE_URL}/Products?$filter={' and '.join(filters)}&$top=100"
         
-        with utils.ccp(total=len(results), desc='Parsing datasets...', leave=self.verbose) as pbar:
-            for result in results:
-                pbar.update()
-                try:
-                    product_id = result['Id']
-                    product_name = result['Name']
-                    
-                    ## Fetch Metadata XML to determine file structure
-                    ## Note: S2MSI1C usually has a specific structure node path
-                    meta_url = f"{CDSE_CATALOGUE_URL}/Products({product_id})/Nodes({product_name})/Nodes(MTD_MSIL1C.xml)/$value"
-                    
-                    ## Resolve initial download URL redirect
-                    final_meta_url = self._resolve_redirects(meta_url)
-                    
-                    ## Fetch content
-                    meta_req = fetches.Fetch(final_meta_url, headers=self.headers, verify=True, allow_redirects=True).fetch_req()
-                    if not meta_req:
-                        continue
+        if self.verbose:
+            utils.echo_msg(f"Querying CDSE: {query_url}")
+            
+        page_count = 0
+        
+        ## Pagination loop: continues as long as a next link exists
+        while query_url:
+            page_count += 1
+            if self.verbose:
+                utils.echo_msg(f"Fetching page {page_count}...")
 
-                    root = ET.fromstring(meta_req.text.encode('utf-8'))
+            try:
+                response_req = requests.get(query_url)
+                response_req.raise_for_status()
+                response = response_req.json()
+            except Exception as e:
+                utils.echo_error_msg(f"Error querying CDSE Catalogue: {e}")
+                break
 
-                    ## Parse Band Locations (Specific to Sentinel-2 S2MSI1C structure)
-                    ## Navigating XML: root -> Granule List -> Granule -> IMAGE_FILE (Band 2, 3, 4 typically)
-                    ## Adjust indices based on known XML structure safety
-                    granule_list = root.find(".//GranuleList") 
-                    if granule_list is not None and len(granule_list) > 0:
+            results = response.get('value', [])
+            
+            if not results:
+                break
 
-                        ## We look for Bands 2, 3, 4 (Blue, Green, Red) usually
+            ## Process current page of results
+            with utils.ccp(total=len(results), desc=f'Parsing page {page_count}...', leave=self.verbose) as pbar:
+                for result in results:
+                    pbar.update()
+                    try:
+                        product_id = result['Id']
+                        product_name = result['Name']
+                        
+                        meta_url = f"{CDSE_CATALOGUE_URL}/Products({product_id})/Nodes({product_name})/Nodes(MTD_MSIL1C.xml)/$value"
+                        final_meta_url = self._resolve_redirects(meta_url)
+                        
+                        meta_req = fetches.Fetch(final_meta_url, headers=self.headers, verify=True, allow_redirects=True).fetch_req()
+                        if not meta_req:
+                            continue
+
+                        xml_content = self._strip_ns(meta_req.text)
+                        root = ET.fromstring(xml_content.encode('utf-8'))
+
                         image_files = root.findall(".//IMAGE_FILE")
-                        ## Filter for B02, B03, B04
-                        target_bands = [img.text for img in image_files if img.text.endswith('B02') or img.text.endswith('B03') or img.text.endswith('B04')]
+                        target_bands = [img.text for img in image_files if img.text and (img.text.endswith('B02') or img.text.endswith('B03') or img.text.endswith('B04'))]
 
                         for band_path in target_bands:
-                            ## Path in XML is like: GRANULE/L1C_T.../IMG_DATA/T..._B02
-                            ## CDSE Node structure requires traversing the path components
                             parts = band_path.split('/')
-                            ## Construct Node URL: Nodes(GRANULE)/Nodes(L1C...)/Nodes(IMG_DATA)/Nodes(File)
+                            parts[-1] = f"{parts[-1]}.jp2"
                             node_path = "/".join([f"Nodes({p})" for p in parts])
-                             
-                            file_url = f"{CDSE_CATALOGUE_URL}/Products({product_id})/Nodes({product_name})/{node_path}.jp2/$value"
-                             
+                            file_url = f"{CDSE_CATALOGUE_URL}/Products({product_id})/Nodes({product_name})/{node_path}/$value"
+                                
                             self.add_entry_to_results(
                                 file_url,
-                                f"{parts[-1]}.jp2",
+                                parts[-1],
                                 'SENTINEL 2LA'
                             )
 
-                except Exception as e:
-                    if self.verbose:
-                        utils.echo_warning_msg(f"Error parsing result {result.get('Name', 'unknown')}: {e}")
-                    continue
+                    except Exception as e:
+                        if self.verbose:
+                            utils.echo_warning_msg(f"Error parsing result {result.get('Name', 'unknown')}: {e}")
+                        continue
+            
+            ## Check for the next page link
+            query_url = response.get('@odata.nextLink', None)
 
         return self
 
+    
 class Sentinel2(CDSE):
     def __init__(self, **kwargs):
         super().__init__(collection_name='SENTINEL-2', product_type='S2MSI1C', **kwargs)

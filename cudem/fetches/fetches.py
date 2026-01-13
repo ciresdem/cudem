@@ -88,7 +88,8 @@ from . import __version__
 ## ==============================================
 ## Constants & Configuration
 ## ==============================================
-DEFAULT_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0'
+CUDEM_USER_AGENT = f'Fetches/{__version__} CUDEM/{__cudem_version__}'
+DEFAULT_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0'
 R_HEADERS = {'User-Agent': DEFAULT_USER_AGENT}
 
 NAMESPACES = {
@@ -379,7 +380,7 @@ class Fetch:
                     timeout=to_tuple,
                     verify=self.verify,
                     allow_redirects=self.allow_redirects,
-                    headers=self.headers  # <-- MISSING IN ORIGINAL
+                    headers=self.headers
                 )
                 
                 ## Check status codes
@@ -391,7 +392,7 @@ class Fetch:
                     continue
 
                 elif req.status_code == 416: # Range Not Satisfiable
-                    # Fallback: If range fails, try fetching whole file
+                    ## If range fails, try fetching whole file
                     if 'Range' in self.headers:
                         del self.headers['Range']
                         continue

@@ -340,6 +340,12 @@ class IceSat2(EarthData):
             
             if version in collection_map and short_name in collection_map[version]:
                 short_name = collection_map[version][short_name]
+
+        # ## Default to One year ago -> Today
+        # if not time_end:
+        #     time_end = datetime.datetime.now().isoformat()
+        # if not time_start:
+        #     time_start = (datetime.datetime.now() - datetime.timedelta(days=365)).isoformat()
                 
         super().__init__(short_name=short_name, subset=subset, version=version, **kwargs)
         

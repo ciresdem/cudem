@@ -41,6 +41,8 @@ from cudem.fetches import fetches
 ## Constants
 ## ==============================================
 DAV_BASE_URL = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/DAV_footprints/MapServer/'
+DAV_FEATURE_URL = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/DAV_footprints/FeatureServer/'
+DAV_DR_URL = "https://coast.noaa.gov/arcgis/rest/services/DC/DataRegistryFootprints/MapServer/"
 
 ## ==============================================
 ## DAV Module
@@ -111,6 +113,8 @@ class DAV(fetches.FetchModule):
         }
         
         req = fetches.Fetch(self._dav_api_url, verbose=self.verbose).fetch_req(params=params)
+        utils.echo_msg(req.url)
+        utils.echo_msg(req.status_code)
         if req is None:
             return []
 

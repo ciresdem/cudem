@@ -1042,6 +1042,7 @@ class WaffleFactory(factory.CUDEMFactory):
     from . import natural_neighbor
     from . import inpaint
     from . import cube
+    from . import sdb
     
     _modules = {
         'stacks': {'name': 'stacks', 'stack': True, 'call': WafflesStacks},
@@ -1074,6 +1075,7 @@ class WaffleFactory(factory.CUDEMFactory):
         'natural-neighbor': {'name': 'natural-neighbor', 'stack': True, 'call': natural_neighbor.WafflesNaturalNeighbor},
         'inpaint': {'name': 'inpaint', 'stack': True, 'call': inpaint.WafflesInpaint},
         'cube': {'name': 'cube', 'stack': True, 'call': cube.WafflesCUBE},
+        'sdb': {'name': 'sdb', 'stack': True, 'call': sdb.WafflesSDB},
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
         #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch}, # test
         #'bgrid': {'name': 'bgrid', 'stack': True, 'call': WafflesBGrid}, # test            
