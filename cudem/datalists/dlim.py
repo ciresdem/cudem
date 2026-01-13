@@ -1759,7 +1759,8 @@ class ElevationDataset:
                 y_inc=self.y_inc,
                 dst_srs=self.dst_srs,
                 cache_dir=self.cache_dir,
-                stack_mode=self.stack_mode,
+                stack_mode=self.stack_mode_name,
+                stack_mode_args=self.stack_mode_args,
             )
             stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
         else:
@@ -1769,7 +1770,8 @@ class ElevationDataset:
                 y_inc=self.y_inc,
                 dst_srs=self.dst_srs,
                 cache_dir=self.cache_dir,
-                stack_mode=self.stack_mode,
+                stack_mode=self.stack_mode_name,
+                stack_mode_args=self.stack_mode_args,
             )
             blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)
             stacked_fn = globato_converter.globato_to_gdal(blocked_fn, tif_path=f'{out_name}.tif', verbose=True)
