@@ -43,6 +43,7 @@ from . import kriging
 from . import ml_interp
 from . import natural_neighbor
 from . import inpaint
+from . import sdb
 from . import cudemgrid
 
 ### End
