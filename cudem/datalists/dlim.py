@@ -1772,6 +1772,7 @@ class ElevationDataset:
                 cache_dir=self.cache_dir,
                 stack_mode=self.stack_mode_name,
                 stack_mode_args=self.stack_mode_args,
+                want_mask=self.want_mask,
             )
             blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)
             stacked_fn = globato_converter.globato_to_gdal(blocked_fn, tif_path=f'{out_name}.tif', verbose=True)
