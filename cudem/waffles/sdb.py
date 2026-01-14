@@ -148,9 +148,9 @@ class WafflesSDB(Waffle):
             utils.echo_error_msg(f"Failed to create cache directory {s2_cache}: {e}")
             return
 
-        # self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
-        # if os.path.exists(self.predictor_path):
-        #     return
+        self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
+        if os.path.exists(self.predictor_path):
+            return
         
         ## Run Fetcher
         s2_fetcher = Sentinel2(
@@ -241,7 +241,7 @@ class WafflesSDB(Waffle):
             
             #gdal.BuildVRT(mosaic_path, files, options=gdal.BuildVRTOptions(srcNodata=0, VRTNodata=0))
             #mosaic_vrts.append(mosaic_path)
-
+            
         self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
         gdal.BuildVRT(self.predictor_path, mosaic_vrts, options=gdal.BuildVRTOptions(separate=True))
         
@@ -301,37 +301,70 @@ class WafflesSDB(Waffle):
         
         ## Load Predictors (Sentinel-2 data)
         ds = gdal.Open(predictor_fn)
-        gt = ds.GetGeoTransform()
-        srcwin = self.src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize)
-        utils.echo_msg(f'Sentinel-2 coverage: {srcwin}')
-        # if srcwin[2] <= 0 or srcwin[3] <= 0:
-        #     utils.echo_warning_msg("Region outside Sentinel-2 coverage.")
-        #     return 
+
+        mem_driver = gdal.GetDriverByName('MEM')
+        target_ds = mem_driver.Create('', self.xcount, self.ycount, ds.RasterCount, gdal.GDT_Float32)
+        target_ds.SetGeoTransform(self.dst_gt)
+        if self.dst_srs:
+            target_ds.SetProjection(self.dst_srs)
+        else:
+            target_ds.SetProjection(ds.GetProjection())
+
+        # Warp the predictor VRT into this exact grid
+        # This handles resolution mismatches, pixel alignment, and reprojection automatically
+        gdal.ReprojectImage(ds, target_ds, ds.GetProjection(), target_ds.GetProjection(), gdal.GRA_Bilinear)
+        
+        # gt = ds.GetGeoTransform()
+        # srcwin = self.src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize)
+        # utils.echo_msg(f'Sentinel-2 coverage: {srcwin}')
+        # # if srcwin[2] <= 0 or srcwin[3] <= 0:
+        # #     utils.echo_warning_msg("Region outside Sentinel-2 coverage.")
+        # #     return 
 
         band_data = []
-        for b in range(1, ds.RasterCount + 1):
-            band = ds.GetRasterBand(b)
-            arr = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+        for b in range(1, target_ds.RasterCount + 1):
+            band = target_ds.GetRasterBand(b)
+            arr = band.ReadAsArray() # Reads full size (xcount, ycount)
             arr = np.nan_to_num(arr, nan=0.0)
             band_data.append(arr.astype(np.float32))
+        # band_data = []
+        # for b in range(1, ds.RasterCount + 1):
+        #     band = ds.GetRasterBand(b)
+        #     arr = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+        #     arr = np.nan_to_num(arr, nan=0.0)
+        #     band_data.append(arr.astype(np.float32))
             
         X_img, shape = self._extract_features(band_data)
         
         ## Sample
         train_feats = []
         train_z = []
-        inv_gt = gdal.InvGeoTransform(gt)
-        
+        inv_gt = gdal.InvGeoTransform(self.dst_gt)
+        #inv_gt = gdal.InvGeoTransform(gt)
+
         for x, y, z in training_data:
-            px = int(inv_gt[0] + inv_gt[1] * x + inv_gt[2] * y) - srcwin[0]
-            py = int(inv_gt[3] + inv_gt[4] * x + inv_gt[5] * y) - srcwin[1]
+            # Geo -> Pixel (in the warped grid)
+            px = int(inv_gt[0] + inv_gt[1] * x + inv_gt[2] * y)
+            py = int(inv_gt[3] + inv_gt[4] * x + inv_gt[5] * y)
             
             if 0 <= px < shape[1] and 0 <= py < shape[0]:
                 idx = py * shape[1] + px
                 feats = X_img[idx]
+                # Filter invalid pixels (check Blue band > 0)
                 if np.all(np.isfinite(feats)) and feats[0] > 0:
                     train_feats.append(feats)
                     train_z.append(z)
+        
+        # for x, y, z in training_data:
+        #     px = int(inv_gt[0] + inv_gt[1] * x + inv_gt[2] * y) - srcwin[0]
+        #     py = int(inv_gt[3] + inv_gt[4] * x + inv_gt[5] * y) - srcwin[1]
+            
+        #     if 0 <= px < shape[1] and 0 <= py < shape[0]:
+        #         idx = py * shape[1] + px
+        #         feats = X_img[idx]
+        #         if np.all(np.isfinite(feats)) and feats[0] > 0:
+        #             train_feats.append(feats)
+        #             train_z.append(z)
 
         if len(train_feats) < 20:
             utils.echo_error_msg(f"Insufficient training samples ({len(train_feats)}).")

@@ -1822,8 +1822,9 @@ class IceSat2_ATL03(ElevationDataset):
         # atl06_fn = self.fetch_atlxx(self.fn, 'ATL06') if self.classes else None
         atl12_fn = self.fetch_atlxx(self.fn, 'ATL12') if self.classes else None
         atl13_fn = self.fetch_atlxx(self.fn, 'ATL13') if self.classes else None
-        atl09_fn = self.fetch_atlxx(self.fn, 'ATL09') if self.classes else None
+        #atl09_fn = self.fetch_atlxx(self.fn, 'ATL09') if self.classes else None
         atl06_fn = None
+        atl09_fn = None
         
         if self.verbose:
             if atl08_fn:

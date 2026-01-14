@@ -407,6 +407,7 @@ class IceSat2Fetcher(Fetcher):
                  classify_inland_water=True,
                  reject_failed_qa=True,
                  min_bathy_confidence=None,
+                 dataset='atl03',
                  **kwargs):
         
         super().__init__(**kwargs)
@@ -420,8 +421,11 @@ class IceSat2Fetcher(Fetcher):
         self.classify_water = classify_water
         self.classify_inland_water = classify_inland_water
         self.reject_failed_qa = reject_failed_qa
-        self.min_bathy_confidence = min_bathy_confidence        
+        self.min_bathy_confidence = min_bathy_confidence
         self.data_format = -111
+
+        from cudem.fetches import bingbfp
+        from cudem.fetches import osm
         
         ## Prepare Masks (fetch once here so they can be passed to all granules)
         if self.classify_buildings:
