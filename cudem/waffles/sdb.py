@@ -179,7 +179,7 @@ class WafflesSDB(Waffle):
 
         utils.echo_msg(s2_results)
         for entry in s2_results:
-            fname = os.path.join(s2_fetchers._outdir, entry[1])
+            fname = os.path.join(s2_fetcher._outdir, entry[1])
             
             ## Identify band
             band_key = None
