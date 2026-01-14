@@ -29,13 +29,6 @@
 ##
 ### Code:
 
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Waffles SDB: Satellite Derived Bathymetry Module
-Integrates Sentinel-2 fetching (CDSE) with Physics-based RF Inversion.
-"""
-
 import os
 import sys
 import numpy as np
@@ -85,15 +78,17 @@ class WafflesSDB(Waffle):
         physics (bool): Enforce physics-based constraints (Stumpf ratio).
         time (str): Time range for Sentinel-2 fetch (e.g. '2023-01-01/2023-03-01').
         cloud (float): Max cloud cover percentage for Sentinel-2 fetch.
+    landmask (bool): If True, generate and apply a coastline mask (OSM) to the output.
     """
 
     def __init__(self, max_depth=30.0, n_trees=100, smooth=False, physics=True, 
-                 time=None, cloud=10.0, **kwargs):
+                 time=None, cloud=10.0, landmask=False, **kwargs):
         super().__init__(**kwargs)
         self.max_depth = utils.float_or(max_depth)
         self.n_trees = utils.int_or(n_trees)
         self.smooth = smooth
         self.physics = physics
+        self.landmask = landmask
         
         ## Fetch parameters
         self.time = time
@@ -148,9 +143,9 @@ class WafflesSDB(Waffle):
             utils.echo_error_msg(f"Failed to create cache directory {s2_cache}: {e}")
             return
 
-        self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
-        if os.path.exists(self.predictor_path):
-            return
+        # self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
+        # if os.path.exists(self.predictor_path):
+        #     return
         
         ## Run Fetcher
         s2_fetcher = Sentinel2(
@@ -310,8 +305,8 @@ class WafflesSDB(Waffle):
         else:
             target_ds.SetProjection(ds.GetProjection())
 
-        # Warp the predictor VRT into this exact grid
-        # This handles resolution mismatches, pixel alignment, and reprojection automatically
+        ## Warp the predictor VRT into this exact grid
+        ## This handles resolution mismatches, pixel alignment, and reprojection automatically
         gdal.ReprojectImage(ds, target_ds, ds.GetProjection(), target_ds.GetProjection(), gdal.GRA_Bilinear)
         
         # gt = ds.GetGeoTransform()
@@ -399,6 +394,7 @@ class WafflesSDB(Waffle):
             
         out_grid = out_z_flat.reshape(shape)
 
+        
         driver = gdal.GetDriverByName(self.fmt)
         ds_out = driver.Create(self.fn, self.xcount, self.ycount, 1, gdal.GDT_Float32, options=self.co)
         ds_out.SetGeoTransform(self.dst_gt)

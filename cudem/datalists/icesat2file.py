@@ -957,8 +957,92 @@ class IceSat2_ATL03(ElevationDataset):
             
         return df
 
+
+    def classify_bathymetry_algo(self, df, chunk_size=3000, overlap=100):
+        """
+        Apply algorithmic bathymetry classification using Chunked DBSCAN.
+        """
+        # 1. Known Bathymetry Check
+        if self.known_bathymetry:
+            try:
+                if self.verbose: utils.echo_msg(f"Classifying using known bathymetry: {self.known_bathymetry}")
+                pts = np.rec.fromarrays([df['longitude'].values, df['latitude'].values], names=['x', 'y'])
+                ref_z = gdalfun.gdal_query(pts, self.known_bathymetry, 'g').flatten()
+                diff = np.abs(df['photon_height'].values - ref_z)
+                is_bathy = diff <= self.known_bathy_threshold
+                mask = is_bathy & (df['ph_h_classed'] >= 40)
+                df.loc[mask, 'ph_h_classed'] = 40
+            except Exception as e:
+                utils.echo_warning_msg(f"Known bathymetry classification failed: {e}")
+
+        # 2. Unsupervised DBSCAN (Memory Optimized)
+        if self.use_dbscan:
+            # A. Check Imports first
+            try:
+                from sklearn.cluster import DBSCAN
+                from sklearn.preprocessing import StandardScaler
+            except ImportError: 
+                return df
+
+            # B. Run Algorithm safely
+            try:
+                if self.verbose: utils.echo_msg("Classifying using Chunked DBSCAN...")
+                
+                # Filter candidates: Unclassified/Buffer/Ground BELOW 0m/water surface
+                mask_candidates = (
+                    (df['ph_h_classed'].isin([-1, 0, 1, 41, 42, 44])) & 
+                    (df['photon_height'] < 0) & 
+                    (df['photon_height'] > -100)
+                )
+                
+                if np.count_nonzero(mask_candidates) < self.dbscan_min_samples: return df
+                
+                candidate_indices = df.index[mask_candidates]
+                subset = df.loc[candidate_indices].copy()
+                
+                # Sort spatially (Latitude proxy)
+                subset.sort_values('latitude', inplace=True)
+                
+                total_points = len(subset)
+                chunk_step = chunk_size - overlap
+                confirmed_bathy_indices = set()
+                
+                # Chunk Loop
+                for i in range(0, total_points, chunk_step):
+                    chunk = subset.iloc[i : i + chunk_size].copy()
+                    if len(chunk) < self.dbscan_min_samples: continue
+                    
+                    # Create Feature Space (Lat scaled to meters, Depth weighted 5x)
+                    lat_scale = (chunk['latitude'] - chunk['latitude'].min()) * 111000
+                    X = np.column_stack((lat_scale.values, chunk['photon_height'].values * 5.0))
+                    
+                    # Run DBSCAN
+                    db = DBSCAN(eps=self.dbscan_eps, min_samples=self.dbscan_min_samples, 
+                                metric='euclidean', n_jobs=-1)
+                    labels = db.fit_predict(X)
+                    
+                    # Collect valid clusters
+                    unique_labels = set(labels)
+                    if -1 in unique_labels: unique_labels.remove(-1)
+                    
+                    for k in unique_labels:
+                        valid_chunk_indices = chunk.index[labels == k]
+                        confirmed_bathy_indices.update(valid_chunk_indices)
+
+                # Apply Results
+                if confirmed_bathy_indices:
+                    final_mask = df.index.isin(confirmed_bathy_indices)
+                    df.loc[final_mask, 'ph_h_classed'] = 40
+                    
+                    if self.verbose:
+                        utils.echo_msg(f"  DBSCAN identified {np.count_nonzero(final_mask)} bathymetry photons.")
+
+            except Exception as e:
+                utils.echo_warning_msg(f"DBSCAN classification failed: {e}")
+                
+        return df
     
-    def classify_bathymetry_algo(self, df):
+    def classify_bathymetry_algo_orig(self, df):
         """Apply algorithmic bathymetry classification (Known Raster or DBSCAN)."""
         
         ## Known Bathymetry

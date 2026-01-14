@@ -209,7 +209,7 @@ class WaffleDEM:
             os.rename(flattened_fn, self.fn)
 
         ## clip/cut
-        self.clip(clip_str=clip_str)
+        self.clip(clip_str=clip_str, region=region)
         if region is not None:
             self.cut(region=region, node='grid')#'pixel' if node == 'grid' else 'grid')
 
@@ -291,7 +291,7 @@ class WaffleDEM:
                 utils.echo_msg('Resampled data to {xsample}/{ysample} using {sample_alg}')
 
                 
-    def clip(self, clip_str=None):
+    def clip(self, clip_str=None, region=None):
         from .waffles import WaffleFactory
         
         ## todo: update for multi-band
@@ -304,31 +304,38 @@ class WaffleDEM:
             clip_args = factory.args2dict(cp[1:], clip_args)
 
             if clip_args['src_ply'] == 'coastline':
-                self.coast = WaffleFactory(
-                    mod='coastline:polygonize=False',
-                    data=self.data_,
-                    src_region=self.p_region,
-                    xinc=self.xsample if self.xsample is not None else self.xinc,
-                    yinc=self.ysample if self.ysample is not None else self.yinc,
-                    name='tmp_coast',
-                    node=self.node,
-                    want_weight=self.want_weight,
-                    want_uncertainty=self.want_uncertainty,
-                    dst_srs=self.dst_srs,
-                    srs_transform=self.srs_transform,
-                    clobber=True,
-                    cache_dir=self.cache_dir,
-                    verbose=self.verbose
-                )._acquire_module()
-                self.coast.initialize()
-                self.coast.generate()
-                gdalfun.gdal_mask(
-                    fn,
-                    self.coast.fn, '__tmp_clip__.tif',
-                    msk_value=1,
-                    verbose=self.verbose
+                from cudem.fetches import osm
+                this_osm = osm.osmCoastline(
+                    region=region, chunks=True, verbose=False, attempts=5,
+                    cache_dir=self.cache_dir, landmask_is_watermask=True
                 )
-                os.replace('__tmp_clip__.tif', f'{fn}')
+                coast_mask = this_osm(return_geom=False, overwrite=True)
+                clip_args['src_ply'] = coast_mask
+                # self.coast = WaffleFactory(
+                #     mod='coastline:polygonize=False',
+                #     #data=self.data_,
+                #     src_region=region,
+                #     xinc=self.xsample if self.xsample is not None else self.xinc,
+                #     yinc=self.ysample if self.ysample is not None else self.yinc,
+                #     name='tmp_coast',
+                #     node=self.node,
+                #     want_weight=self.want_weight,
+                #     want_uncertainty=self.want_uncertainty,
+                #     dst_srs=self.dst_srs,
+                #     srs_transform=self.srs_transform,
+                #     clobber=True,
+                #     cache_dir=self.cache_dir,
+                #     verbose=self.verbose
+                # )._acquire_module()
+                # self.coast.initialize()
+                # self.coast.generate()
+                # gdalfun.gdal_mask(
+                #     fn,
+                #     self.coast.fn, '__tmp_clip__.tif',
+                #     msk_value=1,
+                #     verbose=self.verbose
+                # )
+                # os.replace('__tmp_clip__.tif', f'{fn}')
 
             if os.path.exists(clip_args['src_ply']):
                 if ogr.Open(clip_args['src_ply']) is not None:
