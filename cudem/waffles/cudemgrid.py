@@ -23,59 +23,46 @@
 ##
 ### Commentary:
 ##
+## CUDEM Integrated Gridding Module.
+##
+## This module implements a multi-resolution "step-down" gridding strategy.
+## It generates a DEM by iterating through lower resolutions (pre-surfaces) 
+## to fill gaps, progressively increasing resolution and weight thresholds 
+## until the final target resolution is reached.
+##
+## 1. Generates a low-res background surface using all data (low weights allowed).
+## 2. Generates intermediate surfaces at increasing resolutions, filtering out low-weight data.
+## 3. Uses the previous surface as a background fill for the next.
+## 4. Generates the final surface at target resolution using only high-quality data.
+##
 ### Code:
 
 import os
+import numpy as np
+from osgeo import ogr
 
 from cudem import utils
 from cudem import gdalfun
 from cudem import factory
+from cudem.grits import grits
 from cudem.waffles.waffles import Waffle
+from cudem.waffles.coastline import WafflesCoastline
 
 class WafflesCUDEM(Waffle):
-    """CUDEM integrated DEM generation.
+    """CUDEM Integrated DEM Generation.
     
-    Generate an topo/bathy integrated DEM using a variety of data sources.
-    Will iterate <pre_count> pre-surfaces at lower-resolutions, 
-    specified with <inc_levels>, e.g. .3s/1s
-
-    Each pre-surface will be clipped to <landmask>, if it exists, and smoothed 
-    with <pre_smoothing> factor
-
-    Each pre-surface is used in subsequent pre-surface(s)/final DEM at each 
-    iterative weight specified in <weight_levels>
-
-    generate a DEM with `pre_surface`s which are generated at lower resolution(s) 
-    and with various weight threshholds
-
-    To generate a typical CUDEM tile, generate 1 pre-surface ('bathy_surface'), 
-    clipped to a coastline
-
-    Use a <weight_levels>, e.g. 1/.5 that excludes low-resolution bathymetry data 
-    from being used as input in the final DEM generation
-
-    e.g.
-    cudem:pre_mode=gmt-surface:tension=.65:geographic=True:landmask=True:polygonize=2:weight_levels=1/.5:inc_levels=.3333333s/1s:pre_count=2:pre_upper_limit=-.1:pre_smoothing=2:flatten=95
-
     Parameters:
     -----------    
-    pre_mode (str): the waffles module to perform the initial pre-surface
-    pre_count (int): number of pre-surface iterations to perform
-    weight_levels (): the minimum weights for each of the pre-surface iterations
-    inc_levels ():  the increments for each of the pre-surface iterations
-    pre_upper_limit (float): the upper elevation limit of the pre-surfaces 
-                              (used with landmask)
-    pre_smoothing (float): the smoothing (blur) factor to apply to the pre-surfaces
-    pre_verbose (bool): increase the verbosity of pre-surface generation
-    landmask (bool): path to coastline vector mask or set as `coastline` to auto-generate
-    invert_landmask (bool): invert the coastline mask, invert assumes mask over ocean, while
-                            non invert assumes mask over land.
-    want_supercede (bool): supercede subsquent pre-surfaces
-    flatten (float): the nodata-size percentile above which to flatten
-    exclude_lakes (bool): exclude lakes from the landmask
-    filter_outliers (float): percentile at which to filter outliers
-    <mode-opts>: options for the waffles module specified in 'mode'
-    <coastline-opts>: options for the coastline module when generating the landmask
+    pre_mode (str): Waffles module for initial pre-surface (default: 'gmt-surface').
+    pre_count (int): Number of iterations/pre-surfaces to generate (default: 2).
+    weight_levels (str): Slash-sep list of min weights for iterations (e.g. "1/0.5").
+    inc_levels (str): Slash-sep list of increments for iterations (e.g. "1s/3s").
+    landmask (bool/str): Use/Path to coastline mask.
+    invert_landmask (bool): Invert coastline mask (Default True = Mask Ocean).
+    pre_upper_limit (float): Max Z for pre-surfaces (used with landmask).
+    pre_smoothing (float): Smoothing factor (buffer cells) for pre-surfaces. 
+                           Uses 'grits:blend' to blend high/low weight data.
+    flatten (float): Percentile threshold to flatten NoData zones in final output.
     """
 
     def __init__(
@@ -99,294 +86,359 @@ class WafflesCUDEM(Waffle):
             keep_pre_surfaces=False,
             **kwargs
     ):
-        from .coastline import WafflesCoastline
-        from .waffles import WaffleFactory
+
+        ## Separate arguments for sub-modules
+        ## We pass Waffle explicitly to _extract so it knows what to protect
+        self.coastline_args = self._extract_submodule_args(kwargs, WafflesCoastline)
         
-        self.valid_modes = [
-            'gmt-surface', 'IDW', 'linear', 'cubic',
-            'nearest', 'gmt-triangulate', 'mbgrid'
-        ]
-        self.coastline_args = {}
-        tmp_waffles = Waffle()
-        tmp_coastline = WafflesCoastline()
-        for kpam, kval in kwargs.items():
-            if kpam not in tmp_waffles.__dict__:
-                if kpam in tmp_coastline.__dict__:
-                    self.coastline_args[kpam] = kval
-
-        for kpam, kval in self.coastline_args.items():
-            del kwargs[kpam]
-
         if exclude_lakes:
             self.coastline_args['want_lakes'] = True
             self.coastline_args['invert_lakes'] = True
 
-        if mode is not None:
-            pre_mode = mode
-            
-        self.pre_mode = pre_mode
-        self.pre_mode_args = {}
-        if self.pre_mode not in self.valid_modes:
-            utils.echo_warning_msg(
-                (f'{self.pre_mode} is not a valid waffles module! '
-                 'falling back to `gmt-surface`')
-            )
-            self.pre_mode = 'gmt-surface'
-
-        tmp_waffles_mode = WaffleFactory(mod=self.pre_mode)._acquire_module()
-        for kpam, kval in kwargs.items():
-            if kpam not in tmp_waffles.__dict__:
-                if kpam in tmp_waffles_mode.__dict__:
-                    self.pre_mode_args[kpam] = kval
-
-        for kpam, kval in self.pre_mode_args.items():
-            del kwargs[kpam]
-
-        self.final_mode = final_mode
-        self.final_mode_args = {}
-        if self.final_mode not in self.valid_modes:
-            self.final_mode = 'IDW'
-            
-        super().__init__(**kwargs)
-        self.pre_count = utils.int_or(pre_count, 1)
-        self.min_weight = min_weight        
-        if min_weight is not None:
-            weight_levels = min_weight
+        ## Validate Modes
+        self.valid_modes = [
+            'gmt-surface', 'IDW', 'linear', 'cubic',
+            'nearest', 'gmt-triangulate', 'mbgrid'
+        ]
         
-        if weight_levels is not None:
-            self.weight_levels = [utils.float_or(w) for w in weight_levels.split('/')]
-            self.weight_levels = self.weight_levels[:self.pre_count]
-        else:
-            self.weight_levels = []
+        self.pre_mode = mode if mode else pre_mode
+        if self.pre_mode not in self.valid_modes:
+            utils.echo_warning_msg(f'{self.pre_mode} invalid, falling back to `gmt-surface`')
+            self.pre_mode = 'gmt-surface'
             
-        if inc_levels is not None:
-            self.inc_levels = [utils.str2inc(i) for i in inc_levels.split('/')]
-            self.inc_levels = self.inc_levels[:self.pre_count]
-        else:
-            self.inc_levels = []
-            
+        self.final_mode = final_mode if final_mode in self.valid_modes else 'IDW'
+
+        ## Extract args for pre-mode
+        from .waffles import WaffleFactory
+        tmp_pre = WaffleFactory(mod=self.pre_mode)._acquire_module()
+        
+        ## We pass type(tmp_pre) to extract specific args for that module
+        self.pre_mode_args = self._extract_submodule_args(kwargs, type(tmp_pre))
+        
+        ## 4. Initialize Base Waffle (Now kwargs is safe to pass)
+        super().__init__(**kwargs)
+
+        ## 5. Configuration (Rest of init...)
+        self.pre_count = utils.int_or(pre_count, 1)
+        self.weight_config = min_weight if min_weight else weight_levels
+        self.inc_config = inc_levels
+        self.weight_levels = []
+        self.inc_levels = []
         self.landmask = landmask
         self.invert_landmask = invert_landmask
-        self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) \
-            if landmask \
-               else None
-        
+        self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
         self.filter_outliers = filter_outliers
         self.want_supercede = want_supercede
         self.pre_smoothing = utils.float_or(pre_smoothing)
-        if self.pre_smoothing is not None:
-            self.pre_smoothing = ['blur:blur_factor={}'.format(self.pre_smoothing)]
-            
         self.flatten = utils.float_or(flatten)
         self.want_weight = True
         self.pre_verbose = pre_verbose
         self.keep_pre_surfaces = keep_pre_surfaces
 
         
-    ## todo: remove coastline after processing...
+    def _extract_submodule_args(self, kwargs, module_class):
+        """Extract arguments relevant to a specific sub-module class,
+        protecting base Waffle arguments from being stolen."""
+        
+        extracted = {}
+        
+        ## Instantiate dummies to check keys
+        target_keys = set(module_class().__dict__.keys())
+        
+        ## We must protect keys that belong to the base Waffle class
+        ## to ensure WafflesCUDEM (self) initializes correctly.
+        base_keys = set(Waffle().__dict__.keys())
+        ## Explicitly protect 'params' and 'mod' which are critical
+        base_keys.update(['params', 'mod'])
+
+        ## Find intersection in kwargs
+        for k in list(kwargs.keys()):
+            ## Take it if it belongs to target AND is NOT a base key
+            if k in target_keys and k not in base_keys:
+                extracted[k] = kwargs.pop(k)
+                
+        return extracted
+    
+    
+    def _setup_levels(self):
+        """Calculate the resolution and weight steps for iterations."""
+        
+        ## Weight Levels
+        if self.weight_config:
+            self.weight_levels = [utils.float_or(w) for w in self.weight_config.split('/')]
+            self.weight_levels = self.weight_levels[:self.pre_count]
+        
+        ## Auto-fill missing weights
+        ## We assume descending weights (Highest quality last)
+        self.weight_levels.sort(reverse=True)
+        
+        while len(self.weight_levels) <= self.pre_count:
+            if not self.weight_levels:
+                ## If no weights provided, try to guess max from stack (99th percentile)
+                ## or default to 1.
+                try:
+                    tmp_weight = gdalfun.gdal_percentile(self.stack, perc=99, band=3)
+                except:
+                    tmp_weight = 1
+                self.weight_levels.append(utils.float_or(tmp_weight, 1))
+            else:
+                ## Halve the previous weight for the next lower level
+                next_weight = self.weight_levels[-1] / 2
+                if next_weight == 0: next_weight = 1e-20 # Avoid absolute zero
+                self.weight_levels.append(next_weight)
+                
+        ## Ensure final level (0) is 0 to include everything in first pass
+        if len(self.weight_levels) > self.pre_count:
+             self.weight_levels[-1] = 0
+
+        ## Increment Levels
+        if self.inc_config:
+            self.inc_levels = [utils.str2inc(i) for i in self.inc_config.split('/')]
+            self.inc_levels = self.inc_levels[:self.pre_count]
+            
+        ## Auto-fill missing increments
+        ## We assume ascending increments (Low res -> High res)
+        self.inc_levels.sort()
+        
+        ## Make sure target resolution is at index 0
+        if not self.inc_levels or self.inc_levels[0] != self.xinc:
+            self.inc_levels.insert(0, self.xinc)
+            
+        while len(self.inc_levels) <= self.pre_count:
+            ## Triple the resolution for each step down (1s -> 3s -> 9s)
+            self.inc_levels.append(self.inc_levels[-1] * 3)
+            
+        ## Sort so index 0 is target (smallest) and index -1 is coarsest
+        self.inc_levels.sort()
+
+        
     def generate_coastline(self, pre_data=None):
+        """Generate and robustly dissolve the coastline mask."""
+        
         from .waffles import WaffleFactory
         
         cst_region = self.p_region.copy()
-        cst_region.wmin = self.weight_levels[0]
-        cst_fn = '{}_cst'.format(
-            os.path.join(self.cache_dir, os.path.basename(self.name))
-        )
-        this_coastline = 'coastline:{}'.format(
-            factory.dict2args(self.coastline_args)
-        )
+        cst_region.wmin = self.weight_levels[-1] # Use lowest weight for coast
+        
+        cst_name = os.path.join(self.cache_dir, f"{os.path.basename(self.name)}_cst")
+        
+        ## Generate Raw Coastline (Chunks)
+        coast_conf = f'coastline:{factory.dict2args(self.coastline_args)}'
 
-        ## update to call wafflesCoastline directly
-        coastline = WaffleFactory(
-            mod=this_coastline,
+        coast_waffle = WaffleFactory(
+            mod=coast_conf,
             data=pre_data,
             src_region=cst_region,
             want_weight=True,
-            min_weight=self.weight_levels[0],
+            min_weight=self.weight_levels[-1],
             xinc=self.xinc,
             yinc=self.yinc,
-            name=cst_fn,
+            name=cst_name,
             node=self.node,
             dst_srs=self.dst_srs,
             srs_transform=self.srs_transform,
             clobber=True,
             cache_dir=self.cache_dir,
-            verbose=self.pre_verbose)._acquire_module()
-        coastline.initialize()
-        coastline.generate()
-
-        if coastline is not None:
-            return('{}.shp:invert={}'.format(coastline.name, self.invert_landmask))
-        else:
-            return(None)
-
+            verbose=self.pre_verbose
+        )._acquire_module()
         
+        coast_waffle.initialize()
+        coast_waffle.generate()
+
+        if coast_waffle is None:
+            return None
+
+        ## Dissolve and Buffer to fix seams
+        cst_shp = f'{coast_waffle.name}.shp'
+        if os.path.exists(cst_shp):
+            try:
+                self._dissolve_coastline(cst_shp)
+            except Exception as e:
+                utils.echo_warning_msg(f"Failed to dissolve coastline: {e}")
+
+        return f'{cst_shp}:invert={self.invert_landmask}'
+
+    
+    def _dissolve_coastline(self, shp_path):
+        """Dissolve chunked coastline polygons and buffer to remove artifacts."""
+        
+        ds = ogr.Open(shp_path, 0) # Read-only
+        if not ds: return
+
+        layer = ds.GetLayer()
+        srs = layer.GetSpatialRef()
+        
+        ## Collect geometries
+        geom_col = ogr.Geometry(ogr.wkbGeometryCollection)
+        for feature in layer:
+            ref = feature.GetGeometryRef()
+            if ref: geom_col.AddGeometry(ref.Clone())
+        
+        ds = None # Close file
+
+        if geom_col.IsEmpty(): return
+
+        ## Union (Dissolve)
+        dissolved = geom_col.UnionCascaded()
+        
+        ## Buffer (Fix micro-gaps)
+        ## Use 10% of pixel size or default small value
+        buff_dist = abs(float(self.xinc)) * 0.1 if self.xinc else 1e-5
+        clean_geom = dissolved.Buffer(buff_dist)
+
+        if not clean_geom or clean_geom.IsEmpty(): return
+
+        ## Rewrite Shapefile
+        driver = ogr.GetDriverByName('ESRI Shapefile')
+        if os.path.exists(shp_path):
+            driver.DeleteDataSource(shp_path)
+            
+        out_ds = driver.CreateDataSource(shp_path)
+        out_layer = out_ds.CreateLayer('coastline', srs=srs, geom_type=clean_geom.GetGeometryType())
+        
+        feat = ogr.Feature(out_layer.GetLayerDefn())
+        feat.SetGeometry(clean_geom)
+        out_layer.CreateFeature(feat)
+        
+        feat = None
+        out_ds = None
+        
+        if self.pre_verbose:
+            utils.echo_msg(f"Dissolved and buffered coastline: {shp_path}")
+
+            
     def run(self):
         from .waffles import WaffleFactory
         
-        ## set the weights if not already set correctly
-        self.weight_levels.sort(reverse=True)
-        if len(self.weight_levels) < self.pre_count+1:
-            tmp_pre = self.pre_count - len(self.weight_levels)
-            while tmp_pre >= 0:
-                if len(self.weight_levels) == 0:
-                    # self.stack isn't set yet!
-                    tmp_weight = gdalfun.gdal_percentile(
-                        self.stack, perc=99, band=3
-                    ) 
-                    tmp_weight = utils.float_or(tmp_weight, 1)
-                else:
-                    tmp_weight = self.weight_levels[-1]/(tmp_pre + 1)
-                    if tmp_weight == 0:
-                        tmp_weight = 1-e20
+        ## Setup Resolution/Weight Ladders
+        self._setup_levels()
 
-                if tmp_pre == 0:
-                    tmp_weight = 0
-                    
-                self.weight_levels.append(tmp_weight)                
-                tmp_pre -= 1
-
-        ## set the increments if not already set correctly
-        self.inc_levels.sort()
-        if len(self.inc_levels) < self.pre_count+1:
-            tmp_pre = self.pre_count - len(self.inc_levels)
-            if len(self.inc_levels) == 0:
-                tmp_xinc = self.xinc
-                self.inc_levels.append(tmp_xinc)
-                
-            for t in range(1, tmp_pre+1):
-                tmp_xinc = float(self.inc_levels[-1] * 3)
-                tmp_yinc = float(self.inc_levels[-1] * 3)
-                self.inc_levels.append(tmp_xinc)
-
-        if self.inc_levels[0] != self.xinc or len(self.inc_levels) < self.pre_count+1:
-            self.inc_levels.insert(0, self.xinc)
-            self.inc_levels = self.inc_levels[:self.pre_count+1]
-            self.inc_levels.sort()
-        
         if self.verbose:
-            init_str = ['\n==============================================\n']
-            init_str.append(f'cudem generating {self.pre_count} pre-surface(s):\n')
-            for i in range(len(self.inc_levels)-1, -1, -1):
-                init_str.append((f'* {"pre_surface" if i !=0 else "final_surface"} {i} '
-                                 f'<{self.pre_mode if i == self.pre_count else "stacks" if i != 0 else self.final_mode}> '
-                                 f'@ {self.inc_levels[1]} using data with a min weight of {self.weight_levels[i]}'))
+            self._print_plan()
 
-            init_str.append(f'\ncudem using stack file: {self.stack}')
-            if self.landmask:
-                if isinstance(self.landmask, str):
-                    if os.path.exists(self.landmask.split(':')[0]):
-                        init_str.append(f'cudem using coastline: {self.landmask}')
-                    else:
-                        self.landmask = True
-                        
-                if isinstance(self.landmask, bool):
-                    init_str.append('cudem using coastline: Waffles COASTLINE module')
-
-            init_str.append(f'cudem flattening: {self.flatten}')
-            init_str.append(f'cudem output DEM: {self.name}')
-            init_str.append('\n==============================================')
-            
-            out_str = '\n'.join(init_str)
-            utils.echo_msg(out_str)
-            
         orig_stack = self.stack
-        pre = self.pre_count
-        pre_weight = 0 # initial run will use all data weights
-        pre_region = self.p_region.copy()
-        pre_region.wmin = None
 
-        # _pre_name_minus = os.path.join(
-        #     self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre)
-        # )
-        # ## initial data to pass through surface (stack)
-        stack_data_entry = (f'"{self.stack}",200:band_no=1:weight_mask=3:'
-                            'uncertainty_mask=4:sample=average,1')
-        pre_data = [stack_data_entry]
-         
-        ## generate coastline
+        if self.pre_smoothing:
+            for w in self.weight_levels:
+                grits_filter = grits.GritsFactory(
+                    mod=f'blend:weight_threshold{w}:buffer_cells={int(self.pre_smoothing)*4}:sub_buffer_cells={int(self.pre_smoothing)}:random_scale=.5',
+                    src_dem=orig_stack,
+                    uncertainty_mask=4,
+                    weight_mask=3,
+                    count_mask=2,
+                    cache_dir=self.cache_dir,
+                    verbose=True
+                )._acquire_module()
+
+                if grits_filter:
+                    grits_filter = grits_filter()
+                    if os.path.exists(grits_filter.dst_dem):
+                        orig_stack = grits_filter.dst_dem
+                    else:
+                        utils.echo_warning_msg('Grits output in invalid: {grits_filter.dst_dem}')
+
+        
+        ## Initial Data Setup
+        ## Define the base data entry (the stack)
+        stack_entry = (f'"{self.stack}",200:band_no=1:weight_mask=3:'
+                       'uncertainty_mask=4:sample=average,1')
+        
+        ##  Generate Coastline (if needed)
         pre_clip = None
-        if self.landmask:            
-            if isinstance(self.landmask, str):
-                if os.path.exists(self.landmask.split(':')[0]):
-                    # todo: update to make 'invert' an option
-                    pre_clip = '{}:invert={}'.format(self.landmask, self.invert_landmask) 
+        if self.landmask:
+            if isinstance(self.landmask, str) and os.path.exists(self.landmask.split(':')[0]):
+                ## User provided file
+                pre_clip = f'{self.landmask}:invert={self.invert_landmask}'
+            else:
+                # Auto-generate
+                pre_clip = self.generate_coastline(pre_data=[stack_entry])
 
-            if pre_clip is None:
-                coast_data = [
-                    (f'"{self.stack}",200:band_no=1:weight_mask=3:'
-                     'uncertainty_mask=4:sample=cubicspline,1')]
-                coastline = self.generate_coastline(pre_data=coast_data)
-                pre_clip = coastline
-
-        ## Grid/Stack the data `pre` times concluding in full
-        ## resolution with data > min_weight
-        pre_surfaces = []
-        with utils.ccp(
-                total=self.pre_count+1,
-                desc='generating CUDEM surfaces',
-                leave=self.verbose
-        ) as pbar:
-            for pre in range(self.pre_count, -1, -1): # pre_count - 1
-                pre_xinc = self.inc_levels[pre]
-                pre_yinc = self.inc_levels[pre]
-                xsample = self.inc_levels[pre-1] if pre != 0 else self.xinc
-                ysample = self.inc_levels[pre-1] if pre != 0 else self.yinc
-
-                ## initial data to pass through surface (stack)
-
+        ## Iterative Gridding Loop
+        ## We iterate backwards from pre_count down to 0
+        ## pre_count (Highest index) = Coarsest Resolution / Lowest Weight
+        ## 0 (Lowest index) = Final Target Resolution / Highest Weight        
+        pre_surfaces_generated = []
+        
+        with utils.ccp(total=self.pre_count+1, desc='Generating CUDEM', leave=self.verbose) as pbar:
+            for i in range(self.pre_count, -1, -1):
                 
-                ## if not final or initial output, setup the configuration
-                ## for the pre-surface
-                if pre != self.pre_count:
-                    pre_weight = self.weight_levels[pre]
-                    _pre_name_plus = os.path.join(
-                        self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1)
-                    )
-                    _pre_unc_name = f'{_pre_name_plus}_u.tif' if self.want_uncertainty else None
-                    pre_data_entry = (f'"{_pre_name_plus}.tif",200'
-                                      f':uncertainty_mask={"_pre_unc_name" if _pre_unc_name else None}'
-                                      f':sample=cubicspline:check_path=True'
-                                      f',{pre_weight-.1}')
+                ## Configuration for this level
+                current_inc = self.inc_levels[i]
+                current_weight = self.weight_levels[i]
+                
+                ## Determine Resampling Resolution (Sample at next level up, or target if final)
+                ## i-1 is the next finer resolution. If i=0, we are at target.
+                sample_idx = max(0, i-1)
+                xsample = self.inc_levels[sample_idx]
+                ysample = self.inc_levels[sample_idx]
 
-                    pre_data = [stack_data_entry, pre_data_entry]
-                    pre_region.wmin = None#pre_weight
+                current_region = self.p_region.copy()
 
-                ## reset pre_region for final grid
-                if pre == 0:
-                    pre_region = self.p_region.copy()
-                    pre_region.wmin = None#self.weight_levels[pre]
+                if i > 0:
+                    # Buffer by ~10 cells of the current resolution to be safe
+                    # (e.g. 10 * 3s = 30s buffer)
+                    x_buff = float(current_inc) * 10
+                    y_buff = float(current_inc) * 10
+                    current_region.buffer(x_bv=x_buff, y_bv=y_buff)
+                
+                ## Input Data Setup
+                ## Start with the base stack
+                current_data = [stack_entry]
+                
+                ## If not the very first (coarsest) run, add the previous surface as background
+                if i < self.pre_count:
+                    prev_surface = pre_surfaces_generated[-1]
+                    
+                    ## Add previous surface to input list with a slightly lower weight
+                    ## so real data supercedes it.
+                    ## We subtract 0.1 from current threshold to ensure it acts as fill.
+                    bg_weight = max(0, current_weight - 0.1)
+                    
+                    bg_entry = (f'"{prev_surface}",200:sample=cubicspline:check_path=True,'
+                                f'{bg_weight}')
+                    current_data.append(bg_entry)
 
-                _pre_name = os.path.join(
-                    self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre)
+                ## Output Naming
+                ## i=0 is final pre-surface before post-process
+                suffix = f'_pre_{i}' if i > 0 else '_final_raw'
+                out_name = os.path.join(
+                    self.cache_dir, utils.append_fn(suffix, current_region, i)
                 )
 
-                last_fltr = [
-                    (f'weights:stacks=True:weight_threshold={pre_weight}'
-                     ':buffer_cells=1:verbose=False')
-                     ]
-                waffles_mod = '{}:{}'.format(
-                    self.pre_mode,
-                    factory.dict2args(self.pre_mode_args)
-                ) if pre==self.pre_count \
-                else 'stacks'\
-                     if pre != 0 \
-                        else 'IDW'
+                ## Select Module
+                ## Iterations use 'pre_mode' (e.g. gmt-surface) to fill gaps.
+                ## Final uses 'IDW' or 'stacks' to enforce hard data, unless override.
+                if i == self.pre_count:
+                    ## Initial coarse fill
+                    mod_str = f'{self.pre_mode}:{factory.dict2args(self.pre_mode_args)}'
+                elif i == 0:
+                    ## Final run
+                    mod_str = self.final_mode
+                else:
+                    ## Intermediate runs (usually just stacking/blending)
+                    mod_str = 'stacks'
 
-                utils.echo_msg(
-                    'cudem gridding surface {} @ {} {}/{} to {} using {}...'.format(
-                        pre, pre_region.format('str'), pre_xinc, pre_yinc, _pre_name, waffles_mod
-                    )
-                )
-                pre_surface = WaffleFactory(
-                    mod=waffles_mod,
-                    data=pre_data,
-                    src_region=pre_region,
-                    xinc=pre_xinc,
-                    yinc=pre_yinc,
+                ## Use 'blend' filter for intermediate steps (excluding first and last)
+                ## blend blends the current high-weight data into the previous low-weight background
+                this_fltr = None
+                if self.pre_smoothing and i < self.pre_count:# and i > 0:
+                    this_fltr = [
+                        f'blend:stacks=True:weight_threshold={current_weight}:sub_buffer_cells={int(self.pre_smoothing)}:buffer_cells={int(self.pre_smoothing)*4}:verbose=True'
+                    ]
+                    
+                if self.verbose:
+                    utils.echo_msg(f'Step {i}: {mod_str} @ {current_inc} (Min Weight: {current_weight})')
+                    
+                ## Run Waffles
+                waffle_step = WaffleFactory(
+                    mod=mod_str,
+                    data=current_data,
+                    src_region=current_region,
+                    xinc=current_inc,
+                    yinc=current_inc,
                     xsample=xsample,
                     ysample=ysample,
-                    name=_pre_name,
+                    name=out_name,
                     node='pixel',
                     want_weight=True,
                     want_uncertainty=self.want_uncertainty,
@@ -394,30 +446,67 @@ class WafflesCUDEM(Waffle):
                     srs_transform=self.srs_transform,
                     clobber=True,
                     verbose=self.pre_verbose,
-                    clip=pre_clip if pre !=0 else None,
-                    stack_mode='mixed:weight_threshold={}'.format(pre_weight),
-                    upper_limit=self.pre_upper_limit if pre != 0 else None,
+                    ## Only clip intermediate surfaces, usually leave final unclipped to fill edges
+                    clip=pre_clip if i > 0 else None, 
+                    ## Set stacking mode to exclude low-weight data
+                    stack_mode=f'mixed:weight_threshold={current_weight}',
+                    ## Upper limit only applies to initial coarse fills (e.g. remove land noise)
+                    upper_limit=self.pre_upper_limit if i > 0 else None,
                     keep_auxiliary=False,
-                    fltr=self.pre_smoothing if pre != 0 else None,
-                    percentile_limit=self.flatten if pre == 0 else None,
+                    ## Apply smoothing to intermediate steps
+                    #fltr=self.pre_smoothing if i > 0 else None,
+                    fltr=this_fltr,
+                    ## Apply flattening only on final step
+                    percentile_limit=self.flatten if i == 0 else None,
                     cache_dir=self.cache_dir,
                 )._acquire_module()
-                pre_surface.initialize()
-                pre_surface.generate()
+                
+                waffle_step.initialize()
+                waffle_step.generate()
+                
+                pre_surfaces_generated.append(waffle_step.fn)
                 pbar.update()
-                pre_surfaces.append(pre_surface.name)
 
-        ## todo add option to flatten here...or move flatten up
-        gdalfun.cudem_flatten_no_data_zones(
-            pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1
-        )
+        ## Finalize
+        final_raw = pre_surfaces_generated[-1]
+        
+        if self.flatten:
+            ## If flattening was requested as a post-process
+            gdalfun.cudem_flatten_no_data_zones(
+                final_raw, dst_dem=self.fn, band=1, size_threshold=1
+            )
+        else:
+            ## Just move the last result to the requested output filename
+            if os.path.exists(self.fn):
+                try: os.remove(self.fn)
+                except: pass
+            os.rename(final_raw, self.fn)
 
-        ## reset the stack for uncertainty
-        self.stack = orig_stack
+        ## Cleanup
+        self.stack = orig_stack # Restore stack pointer
         if not self.keep_pre_surfaces:
-            utils.remove_glob(*[f"{x}*" for x in pre_surfaces])
+            ## Remove all intermediate files except the one we just renamed
+            to_remove = [f"{x}*" for x in pre_surfaces_generated if x != final_raw]
+            utils.remove_glob(*to_remove)
         
         return self
+
+    
+    def _print_plan(self):
+        """Debug print of the generation plan."""
+        
+        utils.echo_msg('==============================================')
+        utils.echo_msg(f'CUDEM Generation Plan ({self.pre_count + 1} steps)')
+        utils.echo_msg(f'Output: {self.name}')
+        utils.echo_msg(f'Landmask: {self.landmask}')
+        
+        for i in range(self.pre_count, -1, -1):
+            w = self.weight_levels[i]
+            inc = self.inc_levels[i]
+            label = "Final" if i == 0 else "Pre-Surface"
+            utils.echo_msg(f'  * Step {i} [{label}]: Res={inc}, MinWeight={w}')
+        
+        utils.echo_msg('==============================================')
 
 
 ### End

@@ -2086,7 +2086,7 @@ def gdal_yield_srcwin(src_gdal, n_chunk=10, step=5, verbose=False):
     
     total = math.ceil(ds_config['ny']/step) * math.ceil(ds_config['nx']/step)
     
-    with utils.ccp(total=total, desc=f'Chunking {src_gdal}') as pbar:
+    with utils.ccp(total=total, desc=f'Chunking {src_gdal}', leave=verbose) as pbar:
         while True:
             y_chunk = n_chunk
             while True:

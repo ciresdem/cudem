@@ -182,7 +182,8 @@ class OpenStreetMap(fetches.FetchModule):
 
             ## Create Chunks
             these_regions = self.region.chunk(0.1) # Hardcoded reasonable chunk size for Overpass
-            utils.echo_msg(f'Chunking OSM request into {len(these_regions)} regions from {self.region.format("str")}')
+            if self.verbose:
+                utils.echo_msg(f'Chunking OSM request into {len(these_regions)} regions from {self.region.format("str")}')
         else:
             these_regions = [self.region]
 

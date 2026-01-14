@@ -171,6 +171,7 @@ class WafflesSDB(Waffle):
         s2_daemon.daemon = True
         s2_daemon.start()
         s2_daemon.join()
+        
         s2_results = s2_daemon.results
         
         ## Get Headers (Authorization) from the fetcher instance

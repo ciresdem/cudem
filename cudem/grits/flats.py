@@ -74,8 +74,23 @@ class Flats(grits.Grits):
             ## (Flats detection works best on larger areas to see full extent of flat)
             if self.n_chunk is None:
                 #self.n_chunk = self.ds_config['ny'] # scanline processing often safest
-                self.n_chunk = self.ds_config['nb'] # total pixels
+                #self.n_chunk = self.ds_config['nb'] # total pixels
 
+                try:
+                    block_size = src_ds.GetRasterBand(1).GetBlockSize()
+                    bx, by = block_size[0], block_size[1]
+
+                    if bx > 1 and by > 1:
+                        target_size = 4096
+                        self.n_chunk = (target_size // bx) * bx
+                        if self.n_chunk == 0: self.n_chunk = bx
+                    else:
+                        self.n_chunk = 4096
+                except:
+                    ## Fallback
+                    self.n_chunk = 4096
+
+                
             ## Iterate chunks
             for srcwin in gdalfun.gdal_yield_srcwin(
                     src_ds, n_chunk=self.n_chunk, step=self.n_chunk, verbose=self.verbose

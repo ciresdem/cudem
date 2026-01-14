@@ -442,6 +442,7 @@ class Blend(grits.Grits):
                 buffer_mask=outer_mask,
                 chunk_size=self.buffer_cells * 5,
                 chunk_step=self.buffer_cells * 5,
+                verbose=self.verbose,
             )
 
             if slope_norm is not None:
@@ -482,6 +483,7 @@ class Blend(grits.Grits):
             method=self.interp_method,
             chunk_size=self.buffer_cells * 5,
             chunk_step=self.buffer_cells * 2.5,
+            verbose=self.verbose,
         )
         interp_data_in_buffer = interp_arr[buffer_mask]
         src_data_in_buffer = src_arr[buffer_mask]
