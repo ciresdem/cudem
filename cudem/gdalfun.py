@@ -2357,6 +2357,7 @@ def gdal_build_vrt(src_ds, dst_fn=None, **kwargs):
         gdal.Dataset: The open VRT dataset. 
                       Note: You must keep this object alive or close it properly if using /vsimem/.
     """
+    
     import uuid
     
     ## Handle input types

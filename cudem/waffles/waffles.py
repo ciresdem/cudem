@@ -288,88 +288,71 @@ class Waffle:
     def __repr__(self):
         return f'<Waffles: {self.name}>'
 
-    
+
     def initialize(self):
-        ## Setup the initialization 'string' to print out in a single blob.
-        init_str = ['']
-        init_str.append('--------------')
-        init_str.append(f'Initializing waffles module < \033[1m{self.params["mod"]}\033[m >')
+        """Initialize the Waffles module and print configuration block."""
+        
+        mod_name = self.params.get('mod', self.name)
+        
+        ## Start constructing the log block
+        init_str = []
+        init_str.append('=' * 65)
+        init_str.append(f'Initializing Waffles Module: \033[1m{mod_name}\033[m')
+        init_str.append('-' * 65)
         
         ## Output dem filename
         self.fn = f'{self.name}.{gdalfun.gdal_fext(self.fmt)}'
-        ## Cudem config file holding foriegn programs and versions
         self.gc = utils.config_check()
-        ## Initialize regions
-        init_str = self._init_regions(init_str=init_str)
-        ## Initialize increments
-        init_str = self._init_incs(init_str=init_str) 
+        
+        ## Initialize regions (appends to init_str)
+        self._init_regions(init_str=init_str)
+        ## Initialize increments (appends to init_str)
+        self._init_incs(init_str=init_str) 
 
         if isinstance(self.co, list):
             if len(self.co) == 0:
                 self.co = ["COMPRESS=DEFLATE", "TILED=YES"]
-                
         else:
             self.co = ["COMPRESS=DEFLATE", "TILED=YES"]
 
-        ## Initialize data, setting set_incs to True will force dlim to process the
-        ## data to the set increments
+        ## Initialize data
         if self.want_stack:
             self._init_data(set_incs=True)
 
-        ## Set the DataSource Configuration dictionary
-        self.xcount, self.ycount, self.dst_gt \
-            = self.p_region.geo_transform(
-                x_inc=self.xinc, y_inc=self.yinc, node='grid'
-            )
+        ## Set Configuration
+        self.xcount, self.ycount, self.dst_gt = self.p_region.geo_transform(
+            x_inc=self.xinc, y_inc=self.yinc, node='grid'
+        )
         self.ds_config = gdalfun.gdal_set_infos(
             self.xcount, self.ycount, (self.xcount*self.ycount),
             self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
         
-        init_str.append(f'Output size: {self.ds_config["nx"]}/{self.ds_config["ny"]}')
-        init_str.append(f'Output srs: {self.dst_srs}')
-        init_str.append(f'Output basename: {self.name}')
-        init_str.append(f'Data: {self.data}')
-        init_str.append('--------------')
+        # Add final details to log block with alignment
+        init_str.append(f'Output Size:      {self.ds_config["nx"]} x {self.ds_config["ny"]}')
+        init_str.append(f'Output SRS:       {self.dst_srs}')
+        init_str.append(f'Output Name:      {self.name}')
+        
+        data_count = len(self.data) if hasattr(self.data, '__len__') else 1
+        init_str.append(f'Input Data:       {data_count} entries')
+        init_str.append('=' * 65)
 
         if self.verbose:
-            out_str = '\n'.join(init_str)
-            utils.echo_msg(out_str)
+            # Join with newlines to print as a single message
+            utils.echo_msg('\n'.join(init_str))
             
-        ## Use self._init in a sub-module to do custom intializations.
         self.status = self._init()
         return self
 
     
-    def _init(self):
-        return 0
-
-    
-    def __call__(self):
-        self.initialize()
-        if self.status == 0:
-            return self.generate()
-        else:
-            utils.echo_warning_msg('Failed to initialize from sub-module')
-
-            
     def _init_regions(self, init_str=[]):
-        """Initialize and set regions.
-        
-        regions set here include:
-        d_region: Distribution Region
-        p_region: Processing Region
-        c_region: Coastline Region
-        ps_region: Processing region for GMT/MB-System
-        """
+        """Initialize and set regions."""
         
         if isinstance(self.region, list):
             self.region = regions.Region().from_list(self.region)
         elif not isinstance(self.region, regions.Region):
-            raise ValueError(
-                f'Could not parse region: {self.region}'
-            )
+            raise ValueError(f'Could not parse region: {self.region}')
         
         if self.node == 'grid':
             self.region = self.region.buffer(
@@ -385,13 +368,44 @@ class Waffle:
             x_inc=self.xinc, y_inc=self.yinc
         )
 
-        ## Append some info to the init_str
-        init_str.append(f'Input region: {self.region}')
-        init_str.append(f'Output region: {self.d_region}')
-        init_str.append(f'Processing region: {self.p_region}')
-        init_str.append(f'Cache directory is: {self.cache_dir}')
+        ## Append aligned info to init_str
+        ## Using fixed width padding for alignment
+        init_str.append(f'Input Region:     {self.region.format("gmt")}')
+        init_str.append(f'Output Region:    {self.d_region.format("gmt")}')
+        init_str.append(f'Process Region:   {self.p_region.format("gmt")}')
+        init_str.append(f'Cache Directory:  {self.cache_dir}')
         return init_str
 
+    
+    def _init_incs(self, init_str=[]):
+        """Initialize increments"""
+        
+        self.xinc = utils.str2inc(self.xinc)
+        self.yinc = utils.str2inc(self.yinc)
+        self.xsample = utils.str2inc(self.xsample)
+        self.ysample = utils.str2inc(self.ysample)
+
+        ## Append aligned info to init_str
+        init_str.append(f'Grid Increment:   {self.xinc} / {self.yinc}')
+        
+        out_x = self.xsample if self.xsample is not None else self.xinc
+        out_y = self.ysample if self.ysample is not None else self.yinc
+        init_str.append(f'Output Increment: {out_x} / {out_y}')
+        
+        return init_str
+    
+    
+    def _init(self):
+        return 0
+
+    
+    def __call__(self):
+        self.initialize()
+        if self.status == 0:
+            return self.generate()
+        else:
+            utils.echo_warning_msg('Failed to initialize from sub-module')
+            
     
     def _init_data(self, set_incs=False, init_str=[]):
         """Initialize the data for processing
@@ -448,25 +462,25 @@ class Waffle:
             return None
 
         
-    def _init_incs(self, init_str=[]):
-        """Initialize increments
+    # def _init_incs(self, init_str=[]):
+    #     """Initialize increments
         
-        xinc/yinc are the DEM increments, in native units.
-        xsample/ysample set the output DEM increments, 
-        in native units.
-        """
+    #     xinc/yinc are the DEM increments, in native units.
+    #     xsample/ysample set the output DEM increments, 
+    #     in native units.
+    #     """
         
-        self.xinc = utils.str2inc(self.xinc)
-        self.yinc = utils.str2inc(self.yinc)
-        self.xsample = utils.str2inc(self.xsample)
-        self.ysample = utils.str2inc(self.ysample)
+    #     self.xinc = utils.str2inc(self.xinc)
+    #     self.yinc = utils.str2inc(self.yinc)
+    #     self.xsample = utils.str2inc(self.xsample)
+    #     self.ysample = utils.str2inc(self.ysample)
 
-        ## Append some info to the init_str
-        init_str.append(f'Gridding increments: {self.xinc}/{self.yinc}')
-        init_str.append(f'Output increments: '
-                        f'{self.xsample if self.xsample is not None else self.xinc}/'
-                        f'{self.ysample if self.ysample is not None else self.yinc}')
-        return init_str
+    #     ## Append some info to the init_str
+    #     init_str.append(f'Gridding increments: {self.xinc}/{self.yinc}')
+    #     init_str.append(f'Output increments: '
+    #                     f'{self.xsample if self.xsample is not None else self.xinc}/'
+    #                     f'{self.ysample if self.ysample is not None else self.yinc}')
+    #     return init_str
 
     
     def _coast_region(self):

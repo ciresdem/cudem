@@ -53,6 +53,7 @@ class MBSParser(ElevationDataset):
                  min_year=None,
                  auto_weight=True,
                  auto_uncertainty=True,
+                 want_filtered=False,
                  **kwargs):
         
         super().__init__(**kwargs)
@@ -64,6 +65,7 @@ class MBSParser(ElevationDataset):
         self.min_year = min_year
         self.auto_weight = auto_weight
         self.auto_uncertainty = auto_uncertainty
+        self.want_filtered = want_filtered
         
         if self.src_srs is None:
             self.src_srs = 'epsg:4326'
@@ -376,10 +378,12 @@ class MBSParser(ElevationDataset):
             df['weight'] = self.weight if self.weight else 1.0
 
         ## Apply Noise Filters
-        df = self._filter_mbs_data(df)
+        if self.want_filtered:
+            df = self._filter_mbs_data(df)
 
         return df
 
+    
     def _filter_mbs_data(self, df):
         """Internal filter to clean noise based on aux columns."""
 

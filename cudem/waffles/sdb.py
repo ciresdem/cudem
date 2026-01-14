@@ -114,11 +114,11 @@ class WafflesSDB(Waffle):
         if self.time:
             if not HAS_CDSE:
                 utils.echo_error_msg("cudem.fetches.cdse (or local cdse.py) not found. Cannot fetch Sentinel-2 data.")
-                return False
+                return -1
                 
             self._fetch_and_process_s2()
         
-        return True
+        return 0
 
     
     def _fetch_and_process_s2(self):
@@ -147,6 +147,10 @@ class WafflesSDB(Waffle):
         except OSError as e:
             utils.echo_error_msg(f"Failed to create cache directory {s2_cache}: {e}")
             return
+
+        # self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
+        # if os.path.exists(self.predictor_path):
+        #     return
         
         ## Run Fetcher
         s2_fetcher = Sentinel2(
@@ -177,7 +181,7 @@ class WafflesSDB(Waffle):
         ## Get Headers (Authorization) from the fetcher instance
         #headers = s2_fetcher.headers 
 
-        utils.echo_msg(s2_results)
+        #utils.echo_msg(s2_results)
         for entry in s2_results:
             fname = os.path.join(s2_fetcher._outdir, entry[1])
             
@@ -216,8 +220,27 @@ class WafflesSDB(Waffle):
             if not files: continue
             
             mosaic_path = os.path.join(s2_cache, f"mosaic_{band}.vrt")
-            gdal.BuildVRT(mosaic_path, files, options=gdal.BuildVRTOptions(srcNodata=0, VRTNodata=0))
+
+            if self.dst_srs:
+                gdal.Warp(
+                    mosaic_path, 
+                    files, 
+                    format="VRT", 
+                    dstSRS=self.dst_srs, 
+                    srcNodata=0, 
+                    dstNodata=0
+                )
+            else:
+                gdal.BuildVRT(
+                    mosaic_path, 
+                    files, 
+                    options=gdal.BuildVRTOptions(srcNodata=0, VRTNodata=0)
+                )
+            
             mosaic_vrts.append(mosaic_path)
+            
+            #gdal.BuildVRT(mosaic_path, files, options=gdal.BuildVRTOptions(srcNodata=0, VRTNodata=0))
+            #mosaic_vrts.append(mosaic_path)
 
         self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
         gdal.BuildVRT(self.predictor_path, mosaic_vrts, options=gdal.BuildVRTOptions(separate=True))
@@ -265,7 +288,7 @@ class WafflesSDB(Waffle):
 
         ## Gather Training Points
         training_xyz = []
-        for xyz in self.data.yield_xyz():
+        for xyz in self.stack_ds.yield_xyz():
             if xyz.valid_p():
                 if xyz.z < 0 and abs(xyz.z) <= self.max_depth:
                     training_xyz.append([xyz.x, xyz.y, xyz.z])
@@ -280,10 +303,10 @@ class WafflesSDB(Waffle):
         ds = gdal.Open(predictor_fn)
         gt = ds.GetGeoTransform()
         srcwin = self.src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize)
-        
-        if srcwin[2] <= 0 or srcwin[3] <= 0:
-            utils.echo_warning_msg("Region outside Sentinel-2 coverage.")
-            return 
+        utils.echo_msg(f'Sentinel-2 coverage: {srcwin}')
+        # if srcwin[2] <= 0 or srcwin[3] <= 0:
+        #     utils.echo_warning_msg("Region outside Sentinel-2 coverage.")
+        #     return 
 
         band_data = []
         for b in range(1, ds.RasterCount + 1):
