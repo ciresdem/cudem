@@ -189,8 +189,8 @@ For additional questions, please contact:
 [Christopher.Amante@colorado.edu](mailto:christopher.amante@colorado.edu)
 
 
-## [Project Board](https://github.com/ciresdem/cudem/discussions).
-## [Zulip Channel](https://cudem.zulipchat.com/).
+[**Project Board**](https://github.com/ciresdem/cudem/discussions).
+[**Zulip Channel**](https://cudem.zulipchat.com/).
 
 
 ---
