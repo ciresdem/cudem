@@ -327,7 +327,7 @@ class DAV(fetches.FetchModule):
                 if fetches.Fetch(index_zip_url, verbose=self.verbose).fetch_file(local_zip) == 0:
                     
                     ## Unzip
-                    unzipped = utils.p_unzip(local_zip, ['shp', 'shx', 'dbf', 'prj'], outdir=self._outdir)
+                    unzipped = utils.p_unzip(local_zip, ['shp', 'shx', 'dbf', 'prj'], outdir=self._outdir, verbose=self.verbose)
                     shp_file = next((f for f in unzipped if f.endswith('.shp')), None)
                     
                     if shp_file:
