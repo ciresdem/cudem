@@ -138,7 +138,7 @@ class GDALFile(ElevationDataset):
         for Mini-Grids and Block-Means if requested.
         """
         
-        ## Quick Metadata from GDAL Header (Fast)
+        ## Quick Metadata from GDAL Header
         with gdalfun.gdal_datasource(self.fn) as src_ds:
             if src_ds is not None:
                 if self.src_srs is None:
@@ -274,6 +274,9 @@ class GDALFile(ElevationDataset):
                     if src_res > dst_res:
                         self.resample_and_warp = False
 
+            if self.node == 'grid':
+                self.resample_and_warp = False
+                        
             ## --- Resample / Warp ---
             if self.resample_and_warp:
                 if self.transform['transformer'] is not None:
@@ -338,20 +341,67 @@ class GDALFile(ElevationDataset):
                         )
                         self.weight_mask = self.tmp_weight_band
 
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore')
-                    warped_ds = gdalfun.sample_warp(
-                        tmp_ds_to_warp, tmp_warp, self.x_inc, self.y_inc,
-                        src_region=self.warp_region,
-                        src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] else None,
-                        dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] else None,                
-                        sample_alg=self.sample_alg,
-                        ndv=ndv, verbose=False,
-                        co=["COMPRESS=DEFLATE", "TILED=YES"]
-                    )[0]
+                # with warnings.catch_warnings():
+                #     warnings.simplefilter('ignore')
+                #     warped_ds = gdalfun.sample_warp(
+                #         tmp_ds_to_warp, tmp_warp, self.x_inc, self.y_inc,
+                #         src_region=self.warp_region,
+                #         src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] else None,
+                #         dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] else None,                
+                #         sample_alg=self.sample_alg,
+                #         ndv=ndv, verbose=True,
+                #         co=["COMPRESS=DEFLATE", "TILED=YES"]
+                #     )[0]
                 
-                self.src_ds = gdal.Open(warped_ds) if warped_ds else None
-                utils.remove_glob(tmp_warp)
+                # self.src_ds = gdal.Open(warped_ds) if warped_ds else None
+                # utils.remove_glob(tmp_warp)
+
+                warp_ = gdalfun.sample_warp(
+                    tmp_ds_to_warp, tmp_warp, self.x_inc, self.y_inc,
+                    src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] is not None else None,
+                    dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None  else None,                
+                    src_region=self.warp_region,
+                    sample_alg=self.sample_alg,
+                    ndv=ndv,
+                    verbose=False,
+                    co=["COMPRESS=DEFLATE", "TILED=YES"]
+                )[0]
+                tmp_ds = warp_ = None
+
+                ## the following seems to be redundant...
+                warp_ds = gdal.Open(tmp_warp)
+                if warp_ds is not None:
+                    ## clip wapred ds to warped srcwin
+                    warp_ds_config = gdalfun.gdal_infos(warp_ds)
+                    gt = warp_ds_config['geoT']
+                    srcwin = self.warp_region.srcwin(
+                        gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid'
+                    )
+                    dst_gt = (gt[0] + (srcwin[0] * gt[1]),
+                              gt[1],
+                              0.,
+                              gt[3] + (srcwin[1] * gt[5]),
+                              0.,
+                              gt[5])
+                    out_ds_config = gdalfun.gdal_set_infos(
+                        srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
+                        warp_ds_config['proj'], warp_ds_config['dt'],
+                        warp_ds_config['ndv'], warp_ds_config['fmt'],
+                        None, None
+                    )
+
+                    in_bands = warp_ds.RasterCount
+                    self.src_ds = gdalfun.gdal_mem_ds(out_ds_config, bands=in_bands)
+                    if self.src_ds is not None:
+                        for band in range(1, in_bands+1):
+                            this_band = self.src_ds.GetRasterBand(band)
+                            this_band.WriteArray(
+                                warp_ds.GetRasterBand(band).ReadAsArray(*srcwin)
+                            )
+                            self.src_ds.FlushCache()
+
+                    warp_ds = None
+                    utils.remove_glob(tmp_warp)
 
             else:
                 if self.open_options:

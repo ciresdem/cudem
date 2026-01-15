@@ -1158,6 +1158,10 @@ class GdalRasterStacker:
 
     Optimization: It relies on GDAL's virtual memory and caching mechanisms to handle large files.
     """
+
+    stack_modes = [
+        'min', 'max', 'mean', 'supercede', 'mixed', 'std', 'var', 'weights'
+    ]
     
     def __init__(self, region, x_inc, y_inc, stack_mode='mean', stack_mode_args=None, 
                  dst_srs=None, cache_dir='.', want_mask=False, want_sm=False, verbose=False):
@@ -1198,6 +1202,17 @@ class GdalRasterStacker:
         self.verbose = verbose
 
         
+    def _init_stack_mode(self):
+        opts, self.stack_mode_name, self.stack_mode_args = factory.parse_fmod(self.stack_mode_name)
+
+        if self.stack_mode_name not in self.stack_modes:
+            utils.echo_warning_msg(f'Mode: {self.stack_mode_name} is not a valid stack mode')
+            self.stack_mode_name = 'mean'
+        
+        if 'mask_level' not in self.stack_mode_args:
+            self.stack_mode_args['mask_level'] = -1
+
+            
     def _add_mask_band(self, m_ds, this_entry, mask_level=0):
         """Internal: Adds or retrieves a mask band for the specific data entry."""
         
@@ -1326,6 +1341,7 @@ class GdalRasterStacker:
         
         utils.set_cache(self.cache_dir)
         mode = self.stack_mode_name
+        mode_args = self.stack_mode_args
         mask_level = utils.int_or(self.stack_mode_args.get('mask_level'), 0)
         
         ## --- Output Filename Setup ---
@@ -1397,7 +1413,7 @@ class GdalRasterStacker:
             m_band_all.SetDescription('Full Data Mask')
 
         if self.verbose:
-            utils.echo_msg(f'stacking using {mode} to {out_file}')
+            utils.echo_msg(f'stacking using {mode} and {self.stack_mode_args} to {out_file}')
 
         ## =====================================================================
         ## PROCESS ENTRY DATA

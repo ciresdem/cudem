@@ -294,20 +294,17 @@ class Waffle:
         
         mod_name = self.params.get('mod', self.name)
         
-        ## Start constructing the log block
-        init_str = []
-        init_str.append('=' * 65)
-        init_str.append(f'Initializing Waffles Module: \033[1m{mod_name}\033[m')
-        init_str.append('-' * 65)
+        if self.verbose:
+            utils.echo_msg('=' * 65)
+            utils.echo_msg(f'Initializing Waffles Module: \033[1m{mod_name}\033[m')
+            utils.echo_msg('-' * 65)
         
         ## Output dem filename
         self.fn = f'{self.name}.{gdalfun.gdal_fext(self.fmt)}'
         self.gc = utils.config_check()
         
-        ## Initialize regions (appends to init_str)
-        self._init_regions(init_str=init_str)
-        ## Initialize increments (appends to init_str)
-        self._init_incs(init_str=init_str) 
+        self._init_regions()
+        self._init_incs() 
 
         if isinstance(self.co, list):
             if len(self.co) == 0:
@@ -329,24 +326,21 @@ class Waffle:
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
         
-        # Add final details to log block with alignment
-        init_str.append(f'Output Size:      {self.ds_config["nx"]} x {self.ds_config["ny"]}')
-        init_str.append(f'Output SRS:       {self.dst_srs}')
-        init_str.append(f'Output Name:      {self.name}')
-        
-        data_count = len(self.data) if hasattr(self.data, '__len__') else 1
-        init_str.append(f'Input Data:       {data_count} entries')
-        init_str.append('=' * 65)
-
         if self.verbose:
-            # Join with newlines to print as a single message
-            utils.echo_msg('\n'.join(init_str))
-            
+            utils.echo_msg(f'Output Size:      {self.ds_config["nx"]} x {self.ds_config["ny"]}')
+            utils.echo_msg(f'Output SRS:       {self.dst_srs}')
+            utils.echo_msg(f'Output Name:      {self.name}')
+        
+            data_count = len(self.data) if hasattr(self.data, '__len__') else 1
+            utils.echo_msg(f'Input Data:       {data_count} entries')
+            utils.echo_msg(f'Input Data:       {self.data}')
+            utils.echo_msg('=' * 65)
+
         self.status = self._init()
         return self
 
     
-    def _init_regions(self, init_str=[]):
+    def _init_regions(self):
         """Initialize and set regions."""
         
         if isinstance(self.region, list):
@@ -368,32 +362,28 @@ class Waffle:
             x_inc=self.xinc, y_inc=self.yinc
         )
 
-        ## Append aligned info to init_str
-        ## Using fixed width padding for alignment
-        init_str.append(f'Input Region:     {self.region.format("gmt")}')
-        init_str.append(f'Output Region:    {self.d_region.format("gmt")}')
-        init_str.append(f'Process Region:   {self.p_region.format("gmt")}')
-        init_str.append(f'Cache Directory:  {self.cache_dir}')
-        return init_str
+        if self.verbose:
+            utils.echo_msg(f'Input Region:     {self.region.format("gmt")}')
+            utils.echo_msg(f'Output Region:    {self.d_region.format("gmt")}')
+            utils.echo_msg(f'Process Region:   {self.p_region.format("gmt")}')
+            utils.echo_msg(f'Cache Directory:  {self.cache_dir}')
 
     
-    def _init_incs(self, init_str=[]):
+    def _init_incs(self):
         """Initialize increments"""
         
         self.xinc = utils.str2inc(self.xinc)
         self.yinc = utils.str2inc(self.yinc)
         self.xsample = utils.str2inc(self.xsample)
         self.ysample = utils.str2inc(self.ysample)
-
-        ## Append aligned info to init_str
-        init_str.append(f'Grid Increment:   {self.xinc} / {self.yinc}')
         
         out_x = self.xsample if self.xsample is not None else self.xinc
         out_y = self.ysample if self.ysample is not None else self.yinc
-        init_str.append(f'Output Increment: {out_x} / {out_y}')
         
-        return init_str
-    
+        if self.verbose:
+            utils.echo_msg(f'Grid Increment:   {self.xinc} / {self.yinc}')
+            utils.echo_msg(f'Output Increment: {out_x} / {out_y}')
+                
     
     def _init(self):
         return 0

@@ -143,9 +143,9 @@ class WafflesSDB(Waffle):
             utils.echo_error_msg(f"Failed to create cache directory {s2_cache}: {e}")
             return
 
-        # self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
-        # if os.path.exists(self.predictor_path):
-        #     return
+        self.predictor_path = os.path.join(s2_cache, "s2_stack.vrt")
+        if os.path.exists(self.predictor_path):
+            return
         
         ## Run Fetcher
         s2_fetcher = Sentinel2(

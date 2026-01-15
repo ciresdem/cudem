@@ -288,7 +288,7 @@ class WaffleDEM:
                 self.initialize()
 
             if self.verbose:
-                utils.echo_msg('Resampled data to {xsample}/{ysample} using {sample_alg}')
+                utils.echo_msg(f'Resampled data to {xsample}/{ysample} using {sample_alg}')
 
                 
     def clip(self, clip_str=None, region=None):
@@ -522,7 +522,6 @@ class WaffleDEM:
                         
                         
     def set_limits(self, upper_limit=None, lower_limit=None, band=1):
-        ## limit in other bands?? or chose band to limit??
         upper_limit = utils.float_or(upper_limit)
         lower_limit = utils.float_or(lower_limit)
         if upper_limit is not None or lower_limit is not None:
@@ -546,7 +545,7 @@ class WaffleDEM:
                         )
 
                 src_band.WriteArray(band_data)
-                
+                dem_ds.FlushCache()
                 dem_ds = None
                 self.initialize()
 

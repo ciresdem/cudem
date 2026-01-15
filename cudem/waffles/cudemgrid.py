@@ -30,10 +30,10 @@
 ## to fill gaps, progressively increasing resolution and weight thresholds 
 ## until the final target resolution is reached.
 ##
-## 1. Generates a low-res background surface using all data (low weights allowed).
-## 2. Generates intermediate surfaces at increasing resolutions, filtering out low-weight data.
-## 3. Uses the previous surface as a background fill for the next.
-## 4. Generates the final surface at target resolution using only high-quality data.
+## * Generates a low-res background surface using all data (low weights allowed).
+## * Generates intermediate surfaces at increasing resolutions, filtering out low-weight data.
+## * Uses the previous surface as a background fill for the next.
+## * Generates the final surface at target resolution using only high-quality data.
 ##
 ### Code:
 
@@ -115,10 +115,10 @@ class WafflesCUDEM(Waffle):
         ## We pass type(tmp_pre) to extract specific args for that module
         self.pre_mode_args = self._extract_submodule_args(kwargs, type(tmp_pre))
         
-        ## 4. Initialize Base Waffle (Now kwargs is safe to pass)
+        ## Initialize Base Waffle (Now kwargs is safe to pass)
         super().__init__(**kwargs)
 
-        ## 5. Configuration (Rest of init...)
+        ## Configuration (Rest of init...)
         self.pre_count = utils.int_or(pre_count, 1)
         self.weight_config = min_weight if min_weight else weight_levels
         self.inc_config = inc_levels
@@ -218,8 +218,7 @@ class WafflesCUDEM(Waffle):
         from .waffles import WaffleFactory
         
         cst_region = self.p_region.copy()
-        cst_region.wmin = self.weight_levels[-1] # Use lowest weight for coast
-        
+        cst_region.wmin = self.weight_levels[0] # Use only highest weight for coast
         cst_name = os.path.join(self.cache_dir, f"{os.path.basename(self.name)}_cst")
         
         ## Generate Raw Coastline (Chunks)
@@ -227,10 +226,10 @@ class WafflesCUDEM(Waffle):
 
         coast_waffle = WaffleFactory(
             mod=coast_conf,
-            data=pre_data,
+            #data=pre_data,
             src_region=cst_region,
             want_weight=True,
-            min_weight=self.weight_levels[-1],
+            min_weight=self.weight_levels[0],
             xinc=self.xinc,
             yinc=self.yinc,
             name=cst_name,
@@ -239,7 +238,8 @@ class WafflesCUDEM(Waffle):
             srs_transform=self.srs_transform,
             clobber=True,
             cache_dir=self.cache_dir,
-            verbose=self.pre_verbose
+            verbose=self.pre_verbose,
+            want_stack=False,
         )._acquire_module()
         
         coast_waffle.initialize()
@@ -250,11 +250,11 @@ class WafflesCUDEM(Waffle):
 
         ## Dissolve and Buffer to fix seams
         cst_shp = f'{coast_waffle.name}.shp'
-        if os.path.exists(cst_shp):
-            try:
-                self._dissolve_coastline(cst_shp)
-            except Exception as e:
-                utils.echo_warning_msg(f"Failed to dissolve coastline: {e}")
+        # if os.path.exists(cst_shp):
+        #     try:
+        #         self._dissolve_coastline(cst_shp)
+        #     except Exception as e:
+        #         utils.echo_warning_msg(f"Failed to dissolve coastline: {e}")
 
         return f'{cst_shp}:invert={self.invert_landmask}'
 
@@ -358,6 +358,7 @@ class WafflesCUDEM(Waffle):
         ## pre_count (Highest index) = Coarsest Resolution / Lowest Weight
         ## 0 (Lowest index) = Final Target Resolution / Highest Weight        
         pre_surfaces_generated = []
+        pre_stacks_generated = []
         
         with utils.ccp(total=self.pre_count+1, desc='Generating CUDEM', leave=self.verbose) as pbar:
             for i in range(self.pre_count, -1, -1):
@@ -394,8 +395,11 @@ class WafflesCUDEM(Waffle):
                     ## We subtract 0.1 from current threshold to ensure it acts as fill.
                     bg_weight = max(0, current_weight - 0.1)
                     
+                    #bg_entry = (f'"{prev_surface}",200:sample=cubicspline:check_path=True,'
+                    #            f'{bg_weight}')
                     bg_entry = (f'"{prev_surface}",200:sample=cubicspline:check_path=True,'
-                                f'{bg_weight}')
+                                f'{current_weight}')
+ 
                     current_data.append(bg_entry)
 
                 ## Output Naming
@@ -428,6 +432,8 @@ class WafflesCUDEM(Waffle):
                     
                 if self.verbose:
                     utils.echo_msg(f'Step {i}: {mod_str} @ {current_inc} (Min Weight: {current_weight})')
+
+                stack_mode = f'mixed:weight_threshold={current_weight}' if i != self.pre_count else 'mean'
                     
                 ## Run Waffles
                 waffle_step = WaffleFactory(
@@ -449,7 +455,7 @@ class WafflesCUDEM(Waffle):
                     ## Only clip intermediate surfaces, usually leave final unclipped to fill edges
                     clip=pre_clip if i > 0 else None, 
                     ## Set stacking mode to exclude low-weight data
-                    stack_mode=f'mixed:weight_threshold={current_weight}',
+                    stack_mode=stack_mode,
                     ## Upper limit only applies to initial coarse fills (e.g. remove land noise)
                     upper_limit=self.pre_upper_limit if i > 0 else None,
                     keep_auxiliary=False,
@@ -465,6 +471,7 @@ class WafflesCUDEM(Waffle):
                 waffle_step.generate()
                 
                 pre_surfaces_generated.append(waffle_step.fn)
+                pre_stacks_generated.append(waffle_step.stack)
                 pbar.update()
 
         ## Finalize
@@ -486,8 +493,11 @@ class WafflesCUDEM(Waffle):
         self.stack = orig_stack # Restore stack pointer
         if not self.keep_pre_surfaces:
             ## Remove all intermediate files except the one we just renamed
-            to_remove = [f"{x}*" for x in pre_surfaces_generated if x != final_raw]
-            utils.remove_glob(*to_remove)
+            pre_surfaces_to_remove = [f"{x}*" for x in pre_surfaces_generated if x != final_raw]
+            utils.remove_glob(*pre_surfaces_to_remove)
+
+            pre_stacks_to_remove = [f"{x}*" for x in pre_stacks_generated]
+            utils.remove_glob(*pre_stacks_to_remove)
         
         return self
 

@@ -2446,7 +2446,8 @@ def sample_warp(
                         tmp_vrt = None
                     else:
                         src_infos = gdal_infos(src_dem)
-
+                        
+                if xcount is None and ycount is None:
                     ## Invert y_inc for geo_transform math
                     xcount, ycount, _ = trans_region.geo_transform(
                         x_inc=src_infos['geoT'][1], y_inc=src_infos['geoT'][5] * -1, node='grid'
@@ -2474,7 +2475,6 @@ def sample_warp(
             if dirname and not os.path.exists(dirname):
                 os.makedirs(dirname)
 
-        ## --- Progress Bar ---
         pbar_update = None
         if verbose:
             desc = f'Warping {src_dem}' if not isinstance(src_dem, list) else 'Warping list...'
