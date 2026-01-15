@@ -23,26 +23,25 @@
 ##
 ### Commentary:
 ##
-## Fetch NOAA Lidar/Raster data via the Digital Coast Data Access Viewer (DAV).
+## Fetch NOAA Lidar/Raster data via the Digital Coast Data Access Viewer (DAV) API v1.
 ##
 ### Code:
 
 import os
 import json
+import requests
 from typing import List, Dict, Optional, Any
 from osgeo import ogr
 
 from cudem import utils
 from cudem import gdalfun
-from cudem import vdatums
 from cudem.fetches import fetches
 
 ## ==============================================
 ## Constants
 ## ==============================================
-DAV_BASE_URL = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/DAV_footprints/MapServer/'
-DAV_FEATURE_URL = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/DAV_footprints/FeatureServer/'
-DAV_DR_URL = "https://coast.noaa.gov/arcgis/rest/services/DC/DataRegistryFootprints/MapServer/"
+DAV_API_URL = 'https://coast.noaa.gov/dataviewer/api/v1/search/missions'
+DAV_HEADERS = {'Content-Type': 'application/json'}
 
 ## ==============================================
 ## DAV Module
@@ -50,32 +49,27 @@ DAV_DR_URL = "https://coast.noaa.gov/arcgis/rest/services/DC/DataRegistryFootpri
 class DAV(fetches.FetchModule):
     """Fetch NOAA lidar/raster data from DAV.
 
-    Uses Digital Coast's Data Access Viewer Mapserver to discover
+    Uses Digital Coast's Data Access Viewer API to discover
     dataset footprints and download tile indices.
 
     https://coast.noaa.gov
 
     Configuration Example:
-    < digital_coast:where='1=1':datatype=None:footprints_only=False >
+    < digital_coast:datatype='Lidar':footprints_only=False >
     """
     
     def __init__(
             self,
-            where: str = '1=1',
-            index: bool = False,
             datatype: Optional[str] = None,
-            layer: int = 0,
-            name: str = 'digital_coast',
             want_footprints: bool = False,
             keep_footprints: bool = False,
             footprints_only: bool = False,
+            title_filter: Optional[str] = None,
             **kwargs
     ):
-        super().__init__(name=name, **kwargs)
-        self.where = where
-        self.index = index
+        super().__init__(name='digital_coast', **kwargs)
         self.datatype = datatype
-        self.layer = utils.int_or(layer)
+        self.title_filter = title_filter
         
         self.want_footprints = want_footprints
         self.keep_footprints = keep_footprints
@@ -84,115 +78,127 @@ class DAV(fetches.FetchModule):
         if self.footprints_only:
             self.want_footprints = True
 
-        self._dav_api_url = f"{DAV_BASE_URL}{self.layer}/query?"
-
+            
+    def _region_to_ewkt(self):
+        """Convert the current region to NAD83 (SRID 4269) EWKT Polygon string."""
         
+        if self.region is None:
+            return None
+            
+        ## Ensure format is minx, maxx, miny, maxy
+        ## Construct closed polygon: minx miny, maxx miny, maxx maxy, minx maxy, minx miny
+        w = self.region.xmin
+        e = self.region.xmax
+        s = self.region.ymin
+        n = self.region.ymax
+        
+        ## WKT format
+        poly = f"POLYGON(({w} {s}, {e} {s}, {e} {n}, {w} {n}, {w} {s}))"
+        return f"SRID=4269;{poly}"
+
+    
     def _get_features(self) -> List[Dict]:
-        """Query the ArcGIS REST endpoint for available datasets in the region."""
+        """Query the DAV API for missions in the region."""
+        
         if self.region is None:
             return []
 
-        ## Construct Where Clause with Date Filters
-        ## self.min_year/max_year are populated by the parent FetchModule
-        ## if passed in kwargs
-        current_where = self.where
-        
-        if self.min_year is not None:
-            current_where += f" AND Year >= {self.min_year}"
-            
-        if self.max_year is not None:
-            current_where += f" AND Year <= {self.max_year}"
-
-        params = {
-            'where': current_where,
-            'outFields': '*',
-            'geometry': self.region.format('bbox'),
-            'inSR': 4326,
-            'f': 'pjson',
-            'returnGeometry': 'False',
+        ## Map 'datatype' arg to API DataTypes
+        ## API expects list: ["Lidar"], ["Imagery"], ["Elevation"], ["Land Cover"], ['DEM']
+        dt_map = {
+            'lidar': 'Lidar',
+            'raster': 'DEM',
+            'imagery': 'Imagery',
+            'elevation': 'Elevation',
+            'dem': 'DEM',
         }
         
-        req = fetches.Fetch(self._dav_api_url, verbose=self.verbose).fetch_req(params=params)
-        utils.echo_msg(req.url)
-        utils.echo_msg(req.status_code)
-        if req is None:
-            return []
+        req_types = []
+        if self.datatype:
+            clean_dt = self.datatype.lower()
+            if clean_dt in dt_map:
+                req_types.append(dt_map[clean_dt])
+            else:
+                ## Fallback or pass through if user knows specific API key
+                req_types.append(self.datatype)
+        else:
+            ## Fetching Lidar and Elevation by default for 'elevation' contexts
+            req_types = ["Lidar", "Elevation"]
+
+        payload = {
+            "aoi": self._region_to_ewkt(),
+            "published": "true",
+            "dataTypes": req_types
+        }
+
+        ## Debug
+        #utils.echo_msg(f"DAV Payload: {payload}")
 
         try:
-            data = req.json()
-            if 'error' in data:
-                utils.echo_error_msg(f"DAV Query Error: {data['error']}, {req.url}")
-                return []
-            return data.get('features', [])
-        except json.JSONDecodeError:
-            utils.echo_error_msg("Failed to parse DAV response.")
+            r = requests.post(DAV_API_URL, json=payload, headers=DAV_HEADERS)
+            r.raise_for_status()
+            response = r.json()
+            ## Debug
+            #utils.echo_msg(f"DAV Response: {response}")
+
+            return response.get('data', {})
+        except Exception as e:
+            utils.echo_error_msg(f"DAV API Query Error: {e}")
             return []
 
         
-    def _parse_metadata_for_index(self, metadata_url: str, feature_id: str) -> Optional[str]:
-        """Scrape the metadata page to find the tile index zip file URL."""
+    def _find_index_zip(self, bulk_url: str) -> Optional[str]:
+        """Find the tile index zip file given the Bulk Download landing page URL."""
         
-        page = fetches.Fetch(metadata_url, verbose=False).fetch_html()
+        ## Fetch the bulk download page (directory listing)
+        try:
+            page = fetches.Fetch(bulk_url, verbose=False).fetch_html()
+        except:
+            return None
+            
         if page is None:
             return None
 
-        ## Look for index.html links (common in bulk download pages)
-        index_urls = page.xpath('//a[contains(@href, "index.html")]/@href')
-        
-        ## Fallback: Look for ID-based directories if no index.html found
-        if not index_urls:
-            index_urls = page.xpath(f'//a[contains(@href, "_{feature_id}/")]/@href')
-
-        if not index_urls:
-            return None
-        
-        ## We assume the first found link is the correct directory
-        base_url = index_urls[0]
-        
-        ## Fetch the directory page to find the text file list (urllist)
-        dir_page = fetches.Fetch(base_url, verbose=False).fetch_html()
-        if dir_page is None:
-            return None
-            
-        txt_links = dir_page.xpath('//a[contains(@href, ".txt")]/@href')
+        ## Look for 'urllist' text file which contains direct links
+        ## This is standard for NOAA DAV HTTP/S3 directories
+        txt_links = page.xpath('//a[contains(@href, ".txt")]/@href')
         urllist_link = next((l for l in txt_links if 'urllist' in l), None)
         
-        if not urllist_link:
-            return None
-            
-        ## Construct full URL for the text list
-        if 'http' in urllist_link:
-            full_urllist_url = urllist_link
-        else:
-            ## Handle relative paths
-            parent_url = os.path.dirname(base_url)
-            full_urllist_url = f"{parent_url}/{urllist_link}" if parent_url.endswith('/') else f"{parent_url}/{urllist_link}"
-            ## Sometimes base_url is the dir itself
-            if not full_urllist_url.startswith('http'):
-                #full_urllist_url = f"{base_url}/{urllist_link}".replace('//', '/')
-                full_urllist_url =  requests.compat.urljoin(base_url, urllist_link)
-
-        ## Download and read the urllist file to find the zip
-        local_urllist = os.path.join(self._outdir, os.path.basename(full_urllist_url))
-        if fetches.Fetch(full_urllist_url, verbose=self.verbose).fetch_file(local_urllist) != 0:
-            return None
-            
         index_zip_url = None
-        if os.path.exists(local_urllist):
-            with open(local_urllist, 'r') as f:
-                for line in f:
-                    if 'tileindex' in line and 'zip' in line:
-                        index_zip_url = line.strip()
-                        break
-            utils.remove_glob(local_urllist)
-            
+
+        if urllist_link:
+            ## Construct full URL
+            if not urllist_link.startswith('http'):
+                urllist_link = requests.compat.urljoin(bulk_url, urllist_link)
+
+            ## Download urllist
+            local_urllist = os.path.join(self._outdir, os.path.basename(urllist_link))
+            if fetches.Fetch(urllist_link, verbose=self.verbose).fetch_file(local_urllist) == 0:
+                # Scan file for the zip
+                with open(local_urllist, 'r') as f:
+                    for line in f:
+                        if 'tileindex' in line and 'zip' in line:
+                            index_zip_url = line.strip()
+                            break
+                utils.remove_glob(local_urllist)
+        
+        ## If no urllist, look for tileindex zip directly in HTML
+        if not index_zip_url:
+            zip_links = page.xpath('//a[contains(@href, ".zip")]/@href')
+            tile_zip = next((l for l in zip_links if 'tileindex' in l), None)
+            if tile_zip:
+                if not tile_zip.startswith('http'):
+                    index_zip_url = requests.compat.urljoin(bulk_url, tile_zip)
+                else:
+                    index_zip_url = tile_zip
+
         return index_zip_url
 
     
     def _process_index_shapefile(self, shp_path: str, dataset_id: str, data_type: str):
         """Parse the downloaded index shapefile and add intersecting tiles to results."""
         
-        ## Handle Projection (Read .prj if exists)
+        ## Read .prj if exists to handle projection
         prj_file = shp_path.replace('.shp', '.prj')
         warp_region = self.region.copy()
         
@@ -207,42 +213,48 @@ class DAV(fetches.FetchModule):
 
         layer = ds.GetLayer(0)
         
-        ## Standardize field names often found in these indices
-        known_name_fields = ['Name', 'location', 'filename', 'tilename']
-        known_url_fields = ['url', 'URL', 'path', 'link']
+        ## Common field names in DAV indices
+        known_name_fields = ['Name', 'location', 'filename', 'tilename', 'NAME', 'TILE_NAME']
+        known_url_fields = ['url', 'URL', 'path', 'link', 'HTTP_LINK', 'URL_Link']
 
         for feature in layer:
             geom = feature.GetGeometryRef()
             if geom and geom.Intersects(warp_region.export_as_geom()):
                 
-                ## Extract Name and URL
                 tile_name = None
                 tile_url = None
-                field_names = [f.name for f in layer.schema]
+                
+                ## Get field definitions
+                feat_defn = layer.GetLayerDefn()
+                field_names = [feat_defn.GetFieldDefn(i).GetName() for i in range(feat_defn.GetFieldCount())]
 
+                ## Find Name
                 for f in known_name_fields:
                     if f in field_names:
                         val = feature.GetField(f)
-                        if val: tile_name = val.strip()
+                        if val: tile_name = str(val).strip()
                     if tile_name: break
 
+                ## Find URL
                 for f in known_url_fields:
                     if f in field_names:
                         val = feature.GetField(f)
-                        if val: tile_url = val.strip()
+                        if val: tile_url = str(val).strip()
                     if tile_url: break
 
                 if not tile_url or not tile_name:
                     continue
 
-                ## Clean URL construction
-                ## Often the URL field is just the base path, and we append the filename
+                ## URL Cleanup logic
                 if not tile_url.endswith(tile_name):
                      if tile_url.endswith('/'):
                          tile_url += tile_name
-                     elif not tile_url.lower().endswith(tile_name.lower().split('/')[-1]):
-                         base = '/'.join(tile_url.split('/')[:-1])
-                         tile_url = f"{base}/{os.path.basename(tile_name)}"
+                         ## Check if url ends with filename ignoring case/path
+                     elif not tile_url.lower().endswith(os.path.basename(tile_name).lower()):
+                         ## Often URL is just the dir, append filename
+                         ## Use dirname of tile_url to be safe if it includes a partial file. 
+                         ## Usually in DAV shapefiles, if it doesn't end in name, it's the dir.
+                         tile_url = f"{tile_url.rstrip('/')}/{os.path.basename(tile_name)}"
                 
                 self.add_entry_to_results(
                     tile_url,
@@ -256,30 +268,47 @@ class DAV(fetches.FetchModule):
     def run(self):
         """Run the DAV fetching module."""
         
-        features = self._get_features()
-        
-        for feature in features:
-            attrs = feature.get('attributes', {})
-            
-            ## Filter by Datatype
-            f_datatype = attrs.get('data_type', '')
-            if self.datatype and self.datatype.lower() != f_datatype.lower():
-                if self.datatype.lower() != 'sm':
-                    continue
+        ## Query API
+        data = self._get_features()
 
-            fid = attrs.get('id')
-            meta_link = attrs.get('metadata')
+        #data = features.get('data', {})
+        datasets = data.get('datasets', {})
+        
+        for dataset in datasets:
+            ## DEBUG
+            #utils.echo_msg(dataset)
+            attrs = dataset.get('attributes', {})
             
-            if not meta_link or not fid:
+            fid = attrs.get('id')
+            name = attrs.get('title')
+            f_datatype = attrs.get('dataType')
+            links_list = attrs.get('links', [])
+
+            if self.title_filter:
+                if not self.title_filter.lower() in name.lower():
+                    continue
+            
+            ## Find 'Bulk Download' Link (Service ID 46)
+            bulk_url = None
+            for link_obj in links_list:
+                ## linkTypeId is a string in JSON ("46")
+                if link_obj.get('linkTypeId') == "46":
+                    bulk_url = link_obj.get('uri')
+                    break
+            
+            if not bulk_url:
+                if self.verbose:
+                    utils.echo_msg(f"No bulk download found for {name} (ID: {fid})")
                 continue
 
-            ## Find the bulk download index zip
-            index_zip_url = self._parse_metadata_for_index(meta_link, fid)
+            ## Find Index ZIP from Bulk Page
+            index_zip_url = self._find_index_zip(bulk_url)
             
             if not index_zip_url:
+                utils.echo_warning_msg(f"Could not locate Tile Index ZIP for {name} at {bulk_url}")
                 continue
 
-            ## Handle Footprints
+            ## Handle Footprints Request
             if self.want_footprints:
                 self.add_entry_to_results(
                     index_zip_url,
@@ -289,22 +318,28 @@ class DAV(fetches.FetchModule):
                 if self.footprints_only:
                     continue
 
-            ## Download and Process Index Shapefile
+            ## Process Shapefile
             surv_name = f"dav_{fid}"
             local_zip = os.path.join(self._outdir, f'tileindex_{surv_name}.zip')
             
             try:
+                ## Download
                 if fetches.Fetch(index_zip_url, verbose=self.verbose).fetch_file(local_zip) == 0:
                     
+                    ## Unzip
                     unzipped = utils.p_unzip(local_zip, ['shp', 'shx', 'dbf', 'prj'], outdir=self._outdir)
                     shp_file = next((f for f in unzipped if f.endswith('.shp')), None)
                     
                     if shp_file:
+                        if self.verbose:
+                            utils.echo_msg(f"Processing index: {shp_file}")
                         self._process_index_shapefile(shp_file, fid, f_datatype)
                     
                     ## Cleanup
                     if not self.keep_footprints:
                         utils.remove_glob(local_zip, *unzipped)
+                else:
+                    utils.echo_warning_msg(f"Failed to download index: {index_zip_url}")
                         
             except Exception as e:
                 utils.echo_error_msg(f"Error processing DAV dataset {fid}: {e}")
@@ -319,29 +354,21 @@ class SLR(DAV):
     """Sea Level Rise DEMs via Digital Coast."""
     
     def __init__(self, **kwargs):
-        super().__init__(name='SLR', where='ID=6230', **kwargs)
+        super().__init__(title_filter='SLR', datatype='DEM', **kwargs)
 
         
 class CoNED(DAV):
     """Coastal NED (CoNED) DEMs via Digital Coast."""
     
     def __init__(self, **kwargs):
-        super().__init__(name='CoNED', where="title LIKE '%CoNED%'", **kwargs)
+        super().__init__(title_filter='CoNED', datatype='DEM', **kwargs)
 
         
 class CUDEM(DAV):
     """CUDEM Tiled DEMs via Digital Coast."""
     
     def __init__(self, datatype: Optional[str] = None, **kwargs):
-        datatype = utils.str_or(datatype, 'all')
-        if datatype == '19' or datatype.lower() == 'ninth':
-            where = "title LIKE '%CUDEM%Ninth%'"
-        elif datatype == '13' or datatype.lower() == 'third':
-            where = "title LIKE '%CUDEM%Third%'"
-        else:
-            where = "title LIKE '%CUDEM%'"
-        
-        super().__init__(name='CUDEM', where=where, **kwargs)
+        super().__init__(datatype='DEM', title_filter='CUDEM', **kwargs)
 
         
 ### End
