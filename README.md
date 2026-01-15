@@ -109,17 +109,17 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 
 The **[fetches](/docs/fetches.md)** module automates the discovery and retrieval of geospatial data. It interfaces with over forty public APIs and repositories to download topographic and bathymetric data.
 
-* **Sources**: Access data from federal agencies including NOAA (NOS, NCEI, OCM), USGS (3DEP, CoNED), USACE, and more.
-* **Spatial Querying**: Download data specific to a bounding box or vector polygon.
-* **Integration**: Seamlessly pipes downloaded data into processing workflows.
+* Access data from federal agencies including NOAA (NOS, NCEI, OCM), USGS (3DEP, CoNED), USACE, and more.
+* Download data specific to a bounding box or vector polygon.
+* Seamlessly pipes downloaded data into processing workflows.
 
 ### Dlim (Data Lists & Processing)
 
 The **[dlim](/docs/dlim.md)** module serves as the primary data ingestion engine. It utilizes "datalists" (text-based configuration files) to manage, process, and standardize diverse datasets into a unified stream for gridding.
 
-* **Abstraction**: Handles mixed formats (Raster, XYZ, LAS/LAZ, COPC) seamlessly, abstracting file-specific parsing.
-* **Manipulation**: Supports on-the-fly vertical datum transformation, spatial clipping, and masking.
-* **Hierarchy**: Supports nested datalists for organized, multi-scale data management.
+* Handles mixed formats (Raster, XYZ, LAS/LAZ, COPC) seamlessly, abstracting file-specific parsing.
+* Supports on-the-fly vertical datum transformation, spatial clipping, and masking.
+* Supports nested datalists for organized, multi-scale data management.
 
 ### Pointz (Point Cloud Filtering)
 
@@ -145,16 +145,16 @@ The **[grits](/docs/grits.md)** module provides a standardized framework for ras
 
 The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation engine within the framework. It provides a unified factory interface to transform scattered elevation data into seamless raster surfaces using a wide range of gridding algorithms. It manages the entire production pipeline, from data ingestion and spatial partitioning (chunking) to interpolation and post-processing.
 
-* **Unified Interface**: Users can switch between different interpolation methods simply by changing the module flag (e.g., `-M gmt-surface` for spline, `-M IDW` for inverse distance weighting).
+* Users can switch between different interpolation methods simply by changing the module flag (e.g., `-M gmt-surface` for spline, `-M IDW` for inverse distance weighting).
 * **Algorithms**:
   * **Internal**: `IDW` (Inverse Distance Weighting), `stacks` (Weighted Mean/Supercedure), `linear`/`cubic`/`nearest` (Scipy-based), `natural-neighbor` (Sibson), `kriging` (Geostatistical), and `ml-rf`/`ml-knn`/`ml-mlp` (Machine Learning Regression (SciKit-based)).
   * **Wrappers**: `surface` / `triangulate` (GMT), `mbgrid` (MB-System), and `gdal` (GDAL Grid).
   * **Specialized**: `coastline` (Land/Water masking), `vdatum` (Vertical datum grids), `inpaint` (Void filling), and `uncertainty` (Interpolation error estimation).
 
 
-* **Scalability**: Supports "chunking" (`-K`) to process massive datasets by splitting the region into tiles, processing them in parallel, and merging the results.
-* **Smart Stacking**: Pre-processes overlapping datasets into a weighted intermediate raster ("stack") to resolve conflicts before interpolation.
-* **Post-Processing**: Automatically handles buffering (`-X`) to prevent edge artifacts, clipping (`-C`) to vector polygons, and generating auxiliary products like uncertainty grids (`-u`) and data masks (`-m`).
+* Supports "chunking" (`-K`) to process massive datasets by splitting the region into tiles, processing them in parallel, and merging the results.
+* Pre-processes overlapping datasets into a weighted intermediate raster ("stack") to resolve conflicts before interpolation.
+* Automatically handles buffering (`-X`) to prevent edge artifacts, clipping (`-C`) to vector polygons, and generating auxiliary products like uncertainty grids (`-u`) and data masks (`-m`).
 
 # Usage Examples
 
