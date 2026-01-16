@@ -926,6 +926,20 @@ def quarter_tile_from_coordinates(x=None, y=None):
     return None
 
 
+def tile_from_coordinates(x=None, y=None):
+    x = utils.float_or(x)
+    y = utils.float_or(y)
+
+    if x is not None and y is not None:
+        x_min = x - .125
+        x_max = x + .125
+        y_min = y - .125
+        y_max = y + .125
+        return Region(xmin=x_min, xmax=x_max, ymin=y_min, ymax=y_max)
+        
+    return None
+
+
 ## TODO: add an 'epsg=' option to set the region projection, default to 4326...
 def parse_cli_region(region_list: List[str], verbose: bool = True):
     """Parse a list of region strings into Region objects."""
@@ -957,6 +971,10 @@ def parse_cli_region(region_list: List[str], verbose: bool = True):
                     remaining_args = utils.args2dict(i_region_s[2:])
                     if 'pct_buffer' in remaining_args:
                         tmp_region.buffer(pct=utils.float_or(remaining_args['pct_buffer']))
+
+                    if 'centered' in remaining_args:
+                        if utils.str2bool(remaining_args['centered']):
+                            tmp_region = tile_from_coordinates(x=coords[0], y=coords[1])
                         
                     these_regions.append(tmp_region)
                 else:
