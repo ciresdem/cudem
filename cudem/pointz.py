@@ -130,6 +130,7 @@ class PointPixels:
                 x_count=self.x_size, y_count=self.y_size
             )
 
+            
     def __call__(self, points, weight=1.0, uncertainty=0.0, mode='mean'):
         """Process points into a gridded array.
         
@@ -150,6 +151,10 @@ class PointPixels:
         if points is None or len(points) == 0:
             return out_arrays, None, None
 
+        ## If input points are pandas dataframe, tranform it to recarray
+        if hasattr(points, 'to_records'):
+            points = points.to_records(index=False)
+            
         ## Ensure region and geotransform are set
         if self.src_region is None:
             self.init_region_from_points(points)

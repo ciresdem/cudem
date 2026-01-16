@@ -31,7 +31,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cudem"
-version = "3.0.0"
+version = "3.0.1"
 description = "Modules and scripts for processing Digital Elevation Models"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -100,6 +100,9 @@ spatial_metadata = "cudem.globato.spatial_metadata:spatial_metadata_cli"
 ## Specific Fetch Tools
 bing_bfp = "cudem.fetches.bingbfp:bing_bfp_cli"
 osm_coast = "cudem.fetches.osm:osm_coast_cli"
+
+## Specific Data Tools
+datalist2json = "cudem.datalists.datalistfile:datalist2json_cli"
 
 [tool.setuptools.package-data]
 cudem = [

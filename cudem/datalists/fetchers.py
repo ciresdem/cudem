@@ -63,7 +63,11 @@ class Fetcher(ElevationDataset):
         super().__init__(**kwargs)
         
         ## Setup Region for WGS84 (Remote APIs usually expect Lat/Lon)
+        #if self.region:
         self.wgs_region = self.region.copy()
+        #else:
+        #    self.wgs_region = regions.Region(xmin=-180, xmax=180, ymin=-90, ymax=90)
+            
         self.wgs_region.src_srs = self.dst_srs
         self.wgs_srs = 'epsg:4326'
         if self.dst_srs is not None:

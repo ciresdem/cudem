@@ -408,6 +408,25 @@ class Region:
             return ogr.CreateGeometryFromWkt(self.wkt)
         return None
 
+
+    def export_as_geojson(self):
+        """Convert cudem Region to GeoJSON Polygon dictionary."""
+        
+        ## Ensure we are working with a valid region
+        if not self.valid_p():
+            return None
+
+        ## Define vertices: (lon, lat)
+        coords = ((
+            (self.xmin, self.ymin),
+            (self.xmin, self.ymax),
+            (self.xmax, self.ymax),
+            (self.xmax, self.ymin),
+            (self.xmin, self.ymin)
+        ),)
+        
+        return {"type": "Polygon", "coordinates": coords}
+    
     
     def export_as_ogr(self, dst_ogr: str, dst_fmt: str = 'geojson', append: bool = False):
         """Convert a region to an OGR vector file."""

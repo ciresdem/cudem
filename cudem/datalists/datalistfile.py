@@ -27,7 +27,10 @@
 ### Code:
 
 import os
+import sys
 import copy
+import json
+import argparse
 import numpy as np
 import pandas as pd
 from osgeo import ogr
@@ -37,6 +40,13 @@ from cudem import regions
 from cudem import gdalfun
 from cudem import srsfun
 from cudem.datalists.dlim import ElevationDataset
+
+## Optional H3 Dependency
+try:
+    import h3
+    HAS_H3 = True
+except ImportError:
+    HAS_H3 = False
 
 class Points(ElevationDataset):
     def __init__(self, **kwargs):
@@ -78,7 +88,7 @@ class Scratch(ElevationDataset):
         out_srs = []
         valid_children = []
 
-        ## Pass 1: Gather Stats from Children
+        ## Gather Stats from Children
         for entry in self.parse():
             ## Trigger child INF generation
             entry.inf(make_grid=False, make_block_mean=False)
@@ -117,7 +127,7 @@ class Scratch(ElevationDataset):
                         self.infos.src_srs = out_srs[0]
                     self.src_srs = self.infos.src_srs
 
-            ## Pass 2: Grids from Children
+            ## Grids from Children
             if (make_grid or make_block_mean) and point_count > 0:
                 self._generate_grids_from_children(
                     valid_children, master_region, 
@@ -140,7 +150,7 @@ class Scratch(ElevationDataset):
                         
 class Datalist(ElevationDataset):
     """Representing a datalist parser (Extended MB-System style).
-    Can parse recursive datalists and sidecar JSON indices.
+    Can parse recursive datalists and sidecar JSON/H3 indices.
     """
 
     _datalist_json_cols = [
@@ -149,10 +159,18 @@ class Datalist(ElevationDataset):
         'url', 'mod_args'
     ]
     
-    def __init__(self, fmt=None, **kwargs):
+    def __init__(self, fmt=None, h3_res=6, want_h3=True, want_json=True, **kwargs):
         super().__init__(**kwargs)
         self.kwargs = kwargs
-
+        self.h3_res = h3_res # Default H3 Resolution (Res 6 ~= 36 km2)
+        self.want_h3 = want_h3
+        self.want_json = want_json
+        
+        ## H3 Index Storage
+        ## Structure: { "entries": [{meta}], "index": { "h3_cell": [entry_idx, ...] } }
+        self.h3_data = {"resolution": self.h3_res, "entries": [], "index": {}}
+        self.data_format = -1
+        
         
     def _init_datalist_vector(self):
         """Initialize the datalist geojson vector index."""
@@ -173,6 +191,64 @@ class Datalist(ElevationDataset):
         return -1
 
     
+    def _update_h3_index(self, entry, entry_region, entry_idx):
+        """Update the H3 Inverted Index with a new entry."""
+        if not HAS_H3: return
+
+        ## Store Entry Metadata
+        entry_meta = {
+            'path': os.path.abspath(entry.fn) if not entry.remote else entry.fn,
+            'format': entry.data_format,
+            'weight': entry.weight,
+            'uncertainty': entry.uncertainty,
+            'mod_args': utils.dict2args(entry.params.get('mod_args', {}))
+            # Add other metadata fields as needed
+        }
+        self.h3_data['entries'].append(entry_meta)
+
+        ## Convert Region to GeoJSON Polygon
+        ## H3 expects (lat, lon) ? No, h3-py v4+ uses (lat, lon) tuples or GeoJSON (lon, lat)
+        ## We will use h3.polygon_to_cells which expects GeoJSON-like dictionary
+        if not entry_region.valid_p(): return
+
+        geo_json_poly = {
+            "type": "Polygon",
+            "coordinates": [[
+                [entry_region.xmin, entry_region.ymin],
+                [entry_region.xmin, entry_region.ymax],
+                [entry_region.xmax, entry_region.ymax],
+                [entry_region.xmax, entry_region.ymin],
+                [entry_region.xmin, entry_region.ymin]
+            ]]
+        }
+
+        try:
+            ## Polyfill region to H3 cells
+            cells = h3.polygon_to_cells(geo_json_poly, self.h3_res)
+            
+            ## Update Inverted Index: Cell -> List of Entry IDs
+            for cell in cells:
+                if cell not in self.h3_data['index']:
+                    self.h3_data['index'][cell] = []
+                self.h3_data['index'][cell].append(entry_idx)
+                
+        except Exception as e:
+            utils.echo_warning_msg(f"H3 Indexing Error for {entry.fn}: {e}")
+
+            
+    def _save_h3_index(self):
+        """Save the H3 index to a sidecar JSON file."""
+        
+        if not HAS_H3 or not self.h3_data['entries']: return
+        
+        h3_fn = f'{self.fn}.h3.json'
+        try:
+            with open(h3_fn, 'w') as f:
+                json.dump(self.h3_data, f)
+        except Exception as e:
+            utils.echo_warning_msg(f"Failed to save H3 index: {e}")
+
+            
     def _create_entry_feature(self, entry, entry_region):
         """Create a datalist entry feature in the geojson."""
         
@@ -207,9 +283,9 @@ class Datalist(ElevationDataset):
         """Generate metadata (INF) for the datalist.
         
         Iterates through datalist entries, aggregates bounds, and generates 
-        a JSON index. Optionally generates aggregated grids from children.
+        a JSON/H3 index. Optionally generates aggregated grids from children.
         """
-        
+
         _region_backup = self.region
         self.region = None # Unset region to scan all entries
         
@@ -220,11 +296,22 @@ class Datalist(ElevationDataset):
         out_srs = []
         valid_children = []
 
-        ## Initialize JSON Vector Index
-        json_init = self._init_datalist_vector()
+        json_init = -1
+        if self.want_json:
+            ## Initialize JSON Vector Index
+            json_init = self._init_datalist_vector()
+        
+        ## Reset H3 Index
+        self.h3_data = {"resolution": self.h3_res, "entries": [], "index": {}}
+        entry_idx = 0
 
-        ## Parse Entries, Gather Stats, Populate JSON
+        #self.data_format = -1
+        #self.metadata['name'] = self.fn
+        #self.initialize()
+        #utils.echo_msg(self.metadata)
+        ## Parse Entries, Gather Stats, Populate JSON/H3
         for entry in self.parse():
+            utils.echo_msg_bold(entry)
             ## Generate Child INF (recursively if needed)
             entry.inf(make_grid=False, make_block_mean=False)
             
@@ -243,12 +330,21 @@ class Datalist(ElevationDataset):
                     out_regions.append(entry_region)
                     point_count += entry.infos.numpts
                     
-                    ## Add to JSON Index
+                    ## Add to OGR JSON Index
                     if json_init == 0:
                         self._create_entry_feature(entry, entry_region)
+                        
+                    ## Add to H3 Index
+                    if HAS_H3 and self.want_h3:
+                        self._update_h3_index(entry, entry_region, entry_idx)
+                        entry_idx += 1
 
         ## Close JSON DataSource
         self.ds = self.layer = None
+        
+        ## Save H3 Index
+        if HAS_H3 and self.want_h3:
+            self._save_h3_index()
 
         ## Aggregate Regions
         master_region = None
@@ -281,6 +377,94 @@ class Datalist(ElevationDataset):
         return self.infos
 
     
+    def parse_h3(self):
+        """Parse datalist using the H3 sidecar index.
+        
+        Performs O(1) spatial filtering using H3 cells.
+        """
+        
+        from cudem.datalists.dlim import DatasetFactory
+        
+        h3_fn = f'{self.fn}.h3.json'
+        if not HAS_H3 or not os.path.exists(h3_fn):
+            ## Fallback to standard parse
+            for ds in self.parse():
+                yield ds
+            return
+
+        ## Load Index
+        try:
+            with open(h3_fn, 'r') as f:
+                h3_index = json.load(f)
+        except:
+            return
+
+        ## Determine Matching Entries
+        matched_indices = set()
+        
+        if self.region is None:
+            ## If no spatial filter, yield all
+            matched_indices = set(range(len(h3_index['entries'])))
+        else:
+            ## Convert Query Region to H3 Cells
+            ## We use the resolution specified in the index file
+            res = h3_index.get('resolution', 6)
+            
+            ## Expand region slightly to catch edge hexes
+            ## Or assume the region is a bbox
+            geo_json_poly = {
+                "type": "Polygon",
+                "coordinates": [[
+                    [self.region.xmin, self.region.ymin],
+                    [self.region.xmin, self.region.ymax],
+                    [self.region.xmax, self.region.ymax],
+                    [self.region.xmax, self.region.ymin],
+                    [self.region.xmin, self.region.ymin]
+                ]]
+            }
+            
+            try:
+                ## Get cells for query region
+                query_cells = h3.polygon_to_cells(geo_json_poly, res)
+                
+                ## Check intersection with index
+                ## (Look up each query cell in the index)
+                idx_map = h3_index['index']
+                for cell in query_cells:
+                    if cell in idx_map:
+                        ## Add all entry IDs found in this cell
+                        matched_indices.update(idx_map[cell])
+                        
+            except Exception as e:
+                utils.echo_warning_msg(f"H3 Query Error: {e}")
+                ## Fallback to yielding all might be safer? 
+                ## Or yielding none? Let's just return to avoid bad data.
+                return
+
+        ## Yield Matched Entries
+        for i in sorted(list(matched_indices)):
+            entry_meta = h3_index['entries'][i]
+            
+            ## Reconstruct Entry Object
+            ## We construct a mock mod string: "path format mod_args weight uncertainty"
+            data_mod = (f'"{entry_meta["path"]}" {entry_meta["format"]} '
+                        f'{entry_meta.get("mod_args", "")} '
+                        f'{entry_meta["weight"]} {entry_meta["uncertainty"]}')
+            
+            ## Reconstruct Metadata (Deep copy from parent, apply entry overrides if saved)
+            md = copy.deepcopy(self.metadata)
+            
+            data_set = DatasetFactory(
+                **self._set_params(mod=data_mod, metadata=md)
+            )._acquire_module()
+            
+            if data_set and data_set.valid_p():
+                data_set.initialize()
+                for ds in data_set.parse():
+                    self.data_entries.append(ds)
+                    yield ds
+
+                    
     def parse_json(self):
         """Parse datalist using the JSON sidecar index."""
 
@@ -316,21 +500,9 @@ class Datalist(ElevationDataset):
             try:
                 ds_args = feat.GetField('mod_args')
                 data_set_args = utils.args2dict(list(ds_args.split(':')), {})
-                # for kpam in list(data_set_args.keys()):
-                #     if kpam in self.__dict__:
-                #         kval = data_set_args[kpam]
-                #         self.__dict__[kpam] = kval
-                #         del data_set_args[kpam]
-                
                 ds_args = utils.dict2args(data_set_args)
-                # for kpam, kval in data_set_args.items():
-                #     if kpam in self.__dict__:
-                #         utils.echo_msg(kpam)
-                #         self.__dict__[kpam] = kval
-                #         #del data_set_args[kpam]
             except:
                 ds_args = None
-                data_set_args = {}
             
             md = copy.deepcopy(self.metadata)
             for key in self.metadata.keys():
@@ -353,7 +525,20 @@ class Datalist(ElevationDataset):
         """Parse the datalist text file."""
 
         from cudem.datalists.dlim import DatasetFactory
-        
+
+        # # [Priority Check] Check for H3 Index First
+        # if HAS_H3 and os.path.exists(f'{self.fn}.h3.json'):
+        #      for ds in self.parse_h3():
+        #          yield ds
+        #      return
+
+        # # [Secondary Check] Check for OGR JSON Index
+        # if os.path.exists(f'{self.fn}.json'):
+        #     for ds in self.parse_json():
+        #         yield ds
+        #     return
+
+        # Standard Text Parse
         if os.path.exists(self.fn):
             ## Get the number of lines in the datalist
             count = utils.count_data_lines(self.fn)
@@ -362,7 +547,7 @@ class Datalist(ElevationDataset):
                 with utils.ccp(
                         total=count,
                         desc=f'Parsing datalist {self.fn}...',
-                        leave=False
+                        leave=self.verbose
                 ) as pbar:
                     for line in f:
                         line = line.strip()
@@ -408,4 +593,98 @@ class Datalist(ElevationDataset):
             if self.verbose:
                 utils.echo_warning_msg(f'could not open datalist/entry {self.fn}')
 
+
+def datalist2json_cli():
+    """Command-line interface for datalist2json."""
+    
+    parser = argparse.ArgumentParser(
+        description="datalist2json: Create spatial indices (JSON/H3) for datalists.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+
+    parser.add_argument(
+        'datalist',
+        help="Input datalist file path."
+    )
+    
+    ## Indexing Options
+    parser.add_argument(
+        '--json',
+        dest='want_json',
+        action='store_true',
+        default=True,
+        help="Generate standard OGR/GeoJSON spatial index (.json)."
+    )
+    parser.add_argument(
+        '--no-json',
+        dest='want_json',
+        action='store_false',
+        help="Do not generate standard OGR/GeoJSON spatial index."
+    )
+    
+    parser.add_argument(
+        '--h3',
+        dest='want_h3',
+        action='store_true',
+        default=True,
+        help="Generate H3 hexagonal spatial index (.h3.json)."
+    )
+    parser.add_argument(
+        '--no-h3',
+        dest='want_h3',
+        action='store_false',
+        help="Do not generate H3 hexagonal spatial index."
+    )
+    parser.add_argument(
+        '--h3-res',
+        type=int,
+        default=6,
+        help="H3 resolution level (0-15). 6 is ~36km2, 9 is ~0.1km2."
+    )
+
+    ## General Options
+    parser.add_argument(
+        '-q', '--quiet',
+        action='store_true',
+        help="Suppress output."
+    )
+
+    args = parser.parse_args()
+
+    ## Validate Input
+    if not os.path.exists(args.datalist):
+        utils.echo_error_msg(f"Datalist not found: {args.datalist}")
+        sys.exit(1)
+
+    ## Initialize Datalist
+    dl = Datalist(
+        fn=args.datalist,
+        want_json=args.want_json,
+        want_h3=args.want_h3,
+        h3_res=args.h3_res,
+        verbose=not args.quiet
+    ).initialize()
+
+    if not args.quiet:
+        utils.echo_msg(f"Processing datalist: {args.datalist}")
+        if args.want_json: utils.echo_msg(f" - Generating GeoJSON Index")
+        if args.want_h3:   utils.echo_msg(f" - Generating H3 Index (Res {args.h3_res})")
+
+    ## Generate Metadata & Indices
+    try:
+        ## calling generate_inf() triggers the index creation side-effects
+        dl.generate_inf()
+    
+        if not args.quiet:
+            utils.echo_msg("Done.")
+            
+    except Exception as e:
+        utils.echo_error_msg(f"Failed to process datalist: {e}")
+        sys.exit(1)
+
+        
+if __name__ == "__main__":
+    datalist2json_cli()
+    
+                
 ### End

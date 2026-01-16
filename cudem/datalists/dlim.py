@@ -247,7 +247,7 @@ def init_data(data_list, **kwargs):
         ## Wrap Results
         if len(xdls) > 1:
             ## If multiple datasets, wrap them in a Scratch datalist (in-memory list)
-            this_datalist = datalists.Scratch(fn=xdls, data_format=-3, **kwargs)
+            this_datalist = datalists.Scratch(fn=xdls, data_format=-3, **kwargs)#.initialize()
         elif len(xdls) > 0:
             ## If single dataset, return it directly
             this_datalist = xdls[0]
@@ -994,9 +994,9 @@ class ElevationDataset:
                 self.inf_region = self.region.copy() if self.region else None
 
         ## Streams/fetches modules cannot be scanned/hashed reliably
-        if self.fn is sys.stdin or self.data_format < 0:
+        if self.fn is sys.stdin or self.data_format < 0: #-1:
             generate_inf = False
-               
+
         ## Generate new INF if needed
         if generate_inf:
             ## generate_inf will handle updating self.inf_region internally between passes
@@ -1470,7 +1470,7 @@ class ElevationDataset:
             for points in self.yield_points():
 
                 ## Convert Pandas DataFrame to NumPy RecArray
-                ## This allows icesat2/atl03 parsers to yield DataFrames directly
+                ## This allows icesat2/atl03/etc. parsers to yield DataFrames directly
                 if hasattr(points, 'to_records'):
                     points = points.to_records(index=False)
                     
@@ -2666,7 +2666,8 @@ class DatasetFactory(factory.CUDEMFactory):
         else:
             ## If parent exists, dataset is not a fetcher (<-2), 
             ## and path is relative, join with parent dir.
-            utils.echo_debug_msg(f'Entry ({entry}) has has a parent, adjusting the filename {self.kwargs["fn"]}')
+            utils.echo_debug_msg(f'Entry ({entry}) has has a parent ({self.kwargs["parent"]}), adjusting the filename {self.kwargs["fn"]}')
+            
             parent_fmt = self.kwargs['parent'].data_format
             is_fetcher = self.mod_name < -2
             is_absolute = os.path.isabs(entry[0]) or ':' in entry[0] # ':' check for windows drive or url

@@ -201,7 +201,7 @@ Or ask questions, report bugs or make comments:
 ## Code Citation
 
 Love, M., Amante, C., Carignan, K., MacFerrin, M., & Lim, E. (2025).
-CUDEM (Version 2.0.0) 
+CUDEM (Version 3.0.1) 
 
 .
 [[https://github.com/ciresdem/cudem]{.ul}](https://github.com/ciresdem/cudem)
