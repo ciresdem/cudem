@@ -1721,6 +1721,8 @@ class GdalRasterStacker:
 
         if self.verbose:
             utils.echo_msg(f'generated stack: {os.path.basename(out_file)}')
+            if self.want_mask:
+                utils.echo_msg(f'generated data mask: {os.path.basename(msk_fn)}')
 
         return out_file
 

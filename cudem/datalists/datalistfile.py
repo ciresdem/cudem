@@ -23,6 +23,19 @@
 ##
 ### Commentary:
 ##
+## DatalistFile: The CUDEM Datalist Parsing and Indexing Engine.
+##
+## This module defines the core classes for managing CUDEM datalists—recursive
+## lists of geospatial data entries. It handles the parsing, validation, and
+## metadata generation for diverse data sources.
+##
+##   * Recursive Parsing: Efficiently traverses nested datalists to build
+##     flat lists of processable data entries.
+##   * Spatial Indexing: Generates sidecar spatial indices to optimize
+##     data discovery and region-based filtering:
+##       - GeoJSON (.json): Standard vector footprints for OGR/GIS compatibility.
+##       - H3 Hexagons (.h3.json): Hierarchical hexagonal indices for fast O(1)
+##         spatial lookups and variable-resolution coverage masks.
 ##
 ### Code:
 

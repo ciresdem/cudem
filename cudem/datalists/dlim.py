@@ -1761,6 +1761,7 @@ class ElevationDataset:
                 cache_dir=self.cache_dir,
                 stack_mode=self.stack_mode_name,
                 stack_mode_args=self.stack_mode_args,
+                want_mask=self.want_mask,
                 verbose=True
             )
             stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
