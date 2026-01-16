@@ -54,7 +54,7 @@ Individual components are modular and may be run standalone; for example, the `f
 * **Numpy, Scipy**
 
 Other useful external programs needed for full functionality include:
-* **GMT** / **PyGMT**: For robust gridding and filtering options.
+* **GMT** / **PyGMT**: For gridding and filtering options.
 * **MB-System**: For processing raw bathymetric sonar formats.
 * **VDatum**: For vertical datum transformations.
 
