@@ -884,7 +884,7 @@ def fetch_nominatim_coordinates(q):
                 return result['x'], result['y']
                 
     except Exception as e:
-        cudem.utils.echo_error_msg(f"Error fetching nominatim coords: {e}")
+        utils.echo_error_msg(f"Error fetching nominatim coords: {e}")
         
     return None
 
