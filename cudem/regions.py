@@ -964,7 +964,7 @@ def parse_cli_region(region_list: List[str], verbose: bool = True):
                 
                 if coords:
                     ## Create quarter-degree tile
-                    tmp_region = quarter_tile_from_coordinates(x=coords[0], y=coords[1])
+                    tmp_region = tile_from_coordinates(x=coords[0], y=coords[1])
                     
                     ## Apply buffer if specified in args (e.g. :pct_buffer=5)
                     ## We have to re-parse args because we "stole" the second index for the name
@@ -973,8 +973,8 @@ def parse_cli_region(region_list: List[str], verbose: bool = True):
                         tmp_region.buffer(pct=utils.float_or(remaining_args['pct_buffer']))
 
                     if 'centered' in remaining_args:
-                        if utils.str2bool(remaining_args['centered']):
-                            tmp_region = tile_from_coordinates(x=coords[0], y=coords[1])
+                        if not utils.str2bool(remaining_args['centered']):
+                            tmp_region = quarter_tile_from_coordinates(x=coords[0], y=coords[1])
                         
                     these_regions.append(tmp_region)
                 else:
