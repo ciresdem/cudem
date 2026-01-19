@@ -724,6 +724,25 @@ class fetch_results(threading.Thread):
         """Stop all threads"""
         
         self.stop_event.set()
+
+        
+## ==============================================
+## CLI Decorator
+## ==============================================
+def cli_opts(help_text: str = None, **arg_help):
+    """Decorator to attach CLI help text to FetchModule classes.
+    
+    Args:
+        help_text: The description for the module's sub-command.
+        **arg_help: Key-value pairs matching __init__ arguments to help strings.
+    """
+    
+    def decorator(cls):
+        cls._cli_help_text = help_text
+        cls._cli_arg_help = arg_help
+        return cls
+    return decorator
+
         
 ## ==============================================
 ## Fetch Modules (Base & Implementations)
@@ -946,7 +965,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'srtm_plus': {'call': srtmplus.SRTMPlus},
         'synbath': {'call': synbath.SynBath},
         'charts': {'call': charts.NauticalCharts},
-        'digital_coast': {'call': dav.DAV},
+        'digital_coast': {'call': dav.DAV, 'aliases': ['dav', 'dc']},
         'SLR': {'call': dav.SLR},
         'CoNED': {'call': dav.CoNED},
         'CUDEM': {'call': dav.CUDEM},
@@ -1013,20 +1032,25 @@ class PrintModulesAction(argparse.Action):
         factory.echo_modules(FetchesFactory._modules, values, md=True if not values else False)
         sys.exit(0)
 
-        
+class ModulesDescriptionAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        factory.echo_modules(FetchesFactory._modules, values, md=True if not values else False)
+        sys.exit(0)
+                
 def fetches_cli():
     """Run fetches from command-line using argparse."""
     
     parser = argparse.ArgumentParser(
         description=f"%(prog)s ({__version__}): Fetch and process remote elevation data",
         formatter_class=argparse.RawTextHelpFormatter,
+        add_help=False,
         epilog=f"""
-Supported %(prog)s modules (see %(prog)s --modules <module-name> for more info): 
-{factory.get_module_short_desc(FetchesFactory._modules)}
+Supported %(prog)s modules (see %(prog)s <module-name> --help for more info): 
+
+{factory.get_module_cli_desc(FetchesFactory._modules)}
         
 CUDEM home page: <http://cudem.colorado.edu>
         """
-
     )
 
     parser.add_argument(
@@ -1061,95 +1085,230 @@ CUDEM home page: <http://cudem.colorado.edu>
         action='store_true',
         help="Lower the verbosity to a quiet"
     )
-    parser.add_argument(
-        '-m', '--modules',
-        nargs='?',
-        default=None,
-        action=PrintModulesAction,
-        help="Display the module descriptions and usage"
-    )
+    # parser.add_argument(
+    #     '-m', '--modules',
+    #     nargs='?',
+    #     default=None,
+    #     action=PrintModulesAction,
+    #     help="Display the module descriptions and usage"
+    # )
     parser.add_argument(
         '-v', '--version',
         action='version',
         version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
-    parser.add_argument(
-        'modules_to_run',
-        nargs='+',
-        help="The modules to run (e.g., srtm_plus, gmrt, etc.)"
-    )
+    # parser.add_argument(
+    #     'modules_to_run',
+    #     nargs='+',
+    #     help="The modules to run (e.g., srtm_plus, gmrt, etc.)"
+    # )
 
+
+    # Help parser (handles --help and lists all options)
+    help_parser = argparse.ArgumentParser(parents=[parser], description='My Program')
+    
+    global_args, remaining_argv = parser.parse_known_args()
+
+    #print(global_args, remaining_argv)
+    module_map = {}
+    for key, val in FetchesFactory._modules.items():
+        module_map[key] = val['call']
+        for alias in val.get('aliases', []):
+            module_map[alias] = val['call']
+        #module_map['desc'] = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
+        
+    ## -- Subparsers for Modules --
+    # subparsers = parser.add_subparsers(
+    #     dest='module_cmd',
+    #     title='Available Modules',
+    #     metavar='MODULE',
+    #     required=True
+    # )
+
+    # factory.auto_subparser(subparsers, FetchesFactory._modules)
+    # ## Automatically generate subparsers for every registered module
+    # for mod_name, mod_def in FetchesFactory._modules.items():
+    #     mod_cls = mod_def['call']
+        
+    #     desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
+    #     current_aliases = mod_def.get('aliases', [])
+
+    #     upper_aliases = mod_name.upper()
+    #     current_aliases.append(upper_aliases)
+        
+    #     ## Create Subparser
+    #     sp = subparsers.add_parser(
+    #         mod_name,
+    #         help=desc,
+    #         description=mod_cls.__doc__,
+    #         formatter_class=argparse.RawTextHelpFormatter,
+    #         aliases=current_aliases
+    #     )
+        
+    #     ## Populate Arguments from __init__
+    #     factory._populate_subparser(sp, mod_cls)
+    
     ## Parse arguments
-    args = parser.parse_args()
+    #args = parser.parse_args()
 
-    ## Validate Positional Arguments
-    if not args.modules_to_run:
+    commands = []
+    current_cmd = None
+    current_args = []
+
+    for arg in remaining_argv:
+        if (arg in module_map or arg.split(':')[0] in module_map) and not arg.startswith('-'):
+            if current_cmd:
+                commands.append((current_cmd, current_args))
+            if len(arg.split(':')) > 1:
+                _, current_cmd, current_args = factory.parse_fmod_argparse(arg)
+            else:
+                current_cmd = arg
+                current_args = []
+        else:
+            if current_cmd:
+                current_args.append(arg)
+            else:
+                pass
+
+    if current_cmd:
+        commands.append((current_cmd, current_args))
+
+    if not commands:
         parser.print_help()
-        utils.echo_error_msg('You must select at least one fetch module')
-        sys.exit(-1)
+        sys.exit(0)
+            
+    # if not args.module_cmd:
+    #     parser.print_help()
+    #     sys.exit(0)
+    
+    # ## Validate Positional Arguments
+    # if not args.modules_to_run:
+    #     parser.print_help()
+    #     utils.echo_error_msg('You must select at least one fetch module')
+    #     sys.exit(-1)
 
     ## Process Flags
-    want_verbose = not args.quiet
-    check_size = not args.no_check_size
+    want_verbose = not global_args.quiet
+    check_size = not global_args.no_check_size
 
     ## Parse Regions
     ## If no region provided, default to world.
-    if not args.region:
+    if not global_args.region:
         these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
     else:
-        these_regions = regions.parse_cli_region(args.region, want_verbose)
+        these_regions = regions.parse_cli_region(global_args.region, want_verbose)
+
+    ## Collect module-specific args
+    ## We filter out the global args to pass the rest to the module __init__
+    #global_arg_keys = ['region', 'threads', 'attempts', 'list', 'no_check_size', 'quiet', 'modules', 'version', 'module_cmd']
+    #mod_kwargs = {k: v for k, v in vars(global_args).items() if k not in global_arg_keys}
+
+    usable_modules = []
+    for mod_name, mod_argv in commands:
+        mod_cls = module_map[mod_name]
+        #desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
+        mod_parser = argparse.ArgumentParser(
+            prog=f"fetches [OPTIONS] {mod_name}",
+            description=mod_cls.__doc__,
+            add_help=True,
+            formatter_class=argparse.RawTextHelpFormatter
+        )
+
+        factory._populate_subparser(mod_parser, mod_cls)
         
+        mod_args_ns = mod_parser.parse_args(mod_argv)
+        #print(mod_args_ns)
+        mod_kwargs = vars(mod_args_ns)
+        usable_modules.append((mod_cls, mod_kwargs))
+    
     ## Execution Loop by region
     for this_region in these_regions:
-        x_fs = [
-            FetchesFactory(
-                mod=mod,
-                src_region=this_region,
-                verbose=want_verbose
-            )._acquire_module() for mod in args.modules_to_run
-        ]
-        
-        for x_f in x_fs:
-            if x_f is None:
-                continue
-            
-            if want_verbose:
-                utils.echo_msg(f'Running fetch module {x_f.name} on region {this_region.format("str")}...')
-
+        #for mod_name, mod_argv in commands:
+        for module in usable_modules:
             try:
+                mod_cls, mod_kwargs = module
+                # if len(args.module_cmd.split(':')) > 1:
+                #     x_f = FetchesFactory(
+                #         mod=args.module_cmd,
+                #         src_region=this_region,
+                #         verbose=want_verbose
+                #     )._acquire_module()
+                # else:
+                #mod_cls = FetchesFactory._modules[args.module_cmd]['call']
+                #print(mod_name, mod_argv)
+                #mod_cls = module_map[mod_name]
+                #mod_parser = argparse.ArgumentParser(prog=f"fetches {mod_name}")
+                #factory._populate_subparser(mod_parser, mod_cls)
+
+                #mod_args_ns = mod_parser.parse_args(mod_argv)
+                #print(mod_args_ns)
+                #mod_kwargs = vars(mod_args_ns)
+                #print(mod_kwargs)
+                x_f = mod_cls(
+                    src_region=this_region,
+                    verbose=want_verbose,
+                    **mod_kwargs  
+                )
+
+                # x_fs = [
+                #     FetchesFactory(
+                #         mod=mod,
+                #         src_region=this_region,
+                #         verbose=want_verbose
+                #     )._acquire_module() for mod in args.modules_to_run
+                # ]
+
+                # for x_f in x_fs:
+                if x_f is None:
+                    continue
+
+                if want_verbose:
+                    utils.echo_msg(f'Running fetch module {x_f.name} on region {this_region.format("str")}...')
+
+                #try:
                 x_f.run()
+                #except (KeyboardInterrupt, SystemExit):
+                #    utils.echo_error_msg('User breakage... exiting.')
+                #    sys.exit(-1)
+
+                if want_verbose:
+                    utils.echo_msg(f'Found {len(x_f.results)} data files.')
+
+                if not x_f.results:
+                    continue
+
+                if global_args.list:
+                    for result in x_f.results:
+                        print(result['url'])
+                else:
+                    try:
+                        fr = fetch_results(
+                            x_f,
+                            n_threads=global_args.threads,
+                            check_size=check_size,
+                            attempts=global_args.attempts
+                        )
+                        fr.daemon = True                
+                        fr.start()
+                        fr.join()         
+                    except (KeyboardInterrupt, SystemExit):
+                        utils.echo_error_msg('User breakage... please wait while fetches exits.')
+                        x_f.status = -1
+                        ## Drain queue
+                        while not fr.fetch_q.empty():
+                            try:
+                                fr.fetch_q.get(False)
+                                fr.fetch_q.task_done()
+                            except queue.Empty:
+                                break
+
             except (KeyboardInterrupt, SystemExit):
-                utils.echo_error_msg('User breakage... exiting.')
+                utils.echo_error_msg('User interruption.')
                 sys.exit(-1)
-                
-            if want_verbose:
-                utils.echo_msg(f'Found {len(x_f.results)} data files.')
-                
-            if not x_f.results:
-                continue
-            
-            if args.list:
-                for result in x_f.results:
-                    print(result['url'])
-            else:
-                try:
-                    fr = fetch_results(
-                        x_f,
-                        n_threads=args.threads,
-                        check_size=check_size,
-                        attempts=args.attempts
-                    )
-                    fr.daemon = True                
-                    fr.start()
-                    fr.join()         
-                except (KeyboardInterrupt, SystemExit):
-                    utils.echo_error_msg('User breakage... please wait while fetches exits.')
-                    x_f.status = -1
-                    ## Drain queue
-                    while not fr.fetch_q.empty():
-                        try:
-                            fr.fetch_q.get(False)
-                            fr.fetch_q.task_done()
-                        except queue.Empty:
-                            break
+            except Exception as e:
+                utils.echo_error_msg(f"Error running {args.module_cmd}: {e}")
+                if want_verbose:
+                    import traceback
+                    traceback.print_exc()
+                        
 ### End

@@ -407,7 +407,7 @@ class Blend(grits.Grits):
 
     
     def blend_data(self):
-        ## combined_arr is the aux_data, src_arr is the src dem data
+        ## combined_arr is the aux_data (or foreground src_arr based on weights), src_arr is the src dem data
         ## combined_mask is the combined data + buffer
         ## src_mask is the src data
         combined_arr, src_arr, combined_mask, src_mask, combined_sub_mask = self.init_data()

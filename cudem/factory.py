@@ -86,6 +86,8 @@ import os
 import sys
 import re
 import json
+import argparse
+import inspect
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 try:
@@ -125,6 +127,20 @@ def parse_fmod(fmod: str) -> Tuple[Dict[str, Any], str, Dict[str, Any]]:
     opts = fmod2dict(fmod)
     mod = opts.get('_module')
     mod_args = {k: v for k, v in opts.items() if k != '_module'}
+    return opts, mod, mod_args
+
+
+def parse_fmod_argparse(fmod: str) -> Tuple[Dict[str, Any], str, list[str, Any]]:
+    """Parse a factory module string.
+    
+    Returns:
+        Tuple containing (all_options, module_name, module_arguments)
+    """
+    
+    opts = fmod2dict(fmod)
+    mod = opts.get('_module')
+    mod_args = {k: v for k, v in opts.items() if k != '_module'}
+    mod_args = [f'--{k}={v}' for k,v in opts.items() if k != '_module']
     return opts, mod, mod_args
 
 
@@ -341,6 +357,77 @@ def get_module_md_table(m: Dict) -> str:
         rows.append(f"| {name} | {key} | {desc} |")
     return header + '\n'.join(rows)
 
+
+def get_module_cli_desc(m: Dict) -> str:
+    rows = []
+    for key in m:
+        mod_cls = m[key].get('call', None)
+        if mod_cls is not None:
+            desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {key}")
+            rows.append(f'  \033[1m{key:<15}\033[m: {desc:<10}')
+
+    return '\n'.join(rows)
+
+## ==============================================
+## Argparse helpers
+## ==============================================
+## for use in argparse to auto-populate a subparser with defined modules.
+def _populate_subparser(subparser, module_cls, global_args=['self', 'kwargs', 'params']):
+    """Introspect module __init__ to populate subparser arguments."""
+    
+    sig = inspect.signature(module_cls.__init__)
+    
+    ## Get help text from decorator if available
+    arg_help = getattr(module_cls, '_cli_arg_help', {})
+    
+    for name, param in sig.parameters.items():
+        ## Skip base FetchModule arguments that are handled globally
+        if name in ['self', 'kwargs', 'src_region', 'callback', 'verbose', 'outdir', 'name', 'params']:
+            continue
+            
+        ## Determine help string
+        help_str = arg_help.get(name, f'Set {name} parameter')
+        
+        ## Determine type and default
+        default = param.default
+        if default is inspect.Parameter.empty:
+            default = None
+            
+        ## Handle Boolean Flags
+        if param.annotation is bool or isinstance(default, bool):
+            action = 'store_true' if not default else 'store_false'
+            subparser.add_argument(f'--{name}', action=action, help=help_str)
+        else:
+            type_fn = None
+            if param.annotation is int: type_fn = int
+            elif param.annotation is float: type_fn = float
+            
+            subparser.add_argument(f'--{name}', default=default, type=type_fn, help=f"{help_str} (default: {default})")
+
+def auto_subparser(subparsers, module_dict):
+    ## Automatically generate subparsers for every registered module
+    for mod_name, mod_def in module_dict.items():
+        mod_cls = mod_def['call']
+        
+        desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
+        current_aliases = mod_def.get('aliases', [])
+
+        upper_aliases = mod_name.upper()
+        current_aliases.append(upper_aliases)
+        
+        ## Create Subparser
+        sp = subparsers.add_parser(
+            mod_name,
+            help=desc,
+            description=mod_cls.__doc__,
+            formatter_class=argparse.RawTextHelpFormatter,
+            aliases=current_aliases
+        )
+        
+        ## Populate Arguments from __init__
+        _populate_subparser(sp, mod_cls)
+
+            
 
 ## ==============================================
 ## Aliases

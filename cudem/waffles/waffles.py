@@ -744,8 +744,8 @@ class Waffle:
                     verbose=self.verbose
                 ).initialize()
 
-                if self.want_mask:
-                    mask_fn = f'{mask_name}.{gdalfun.gdal_fext(self.fmt)}'
+                # if self.want_mask:
+                #     mask_fn = f'{mask_name}.{gdalfun.gdal_fext(self.fmt)}'
 
                 ## Apply limits to stack
                 if self.count_limit is not None or self.uncertainty_limit is not None:
@@ -866,49 +866,50 @@ class Waffle:
                 utils.echo_warning_msg(f'{self.fn} is invalid')
                 
             ## Post-Process Mask & Metadata
-            if self.want_sm:
-                if mask_fn is not None:
-                    mask_dem = WaffleDEM(
-                        mask_fn,
-                        cache_dir=self.cache_dir,
-                        verbose=self.verbose,
-                        want_scan=True,
-                        co=self.co
-                    ).initialize()
-                    
-                    if mask_dem.valid_p():
-                        mask_dem.process(
-                            ndv=0,
-                            xsample=self.xsample,
-                            ysample=self.ysample,
-                            region=self.d_region,
-                            clip_str=self.clip,
-                            node=self.node,
-                            dst_srs=self.dst_srs,
-                            dst_fmt=self.fmt,
-                            set_metadata=False,
-                            dst_fn=f'{os.path.basename(self.name)}_msk.{gdalfun.gdal_fext(self.fmt)}',
-                            dst_dir=os.path.dirname(self.fn)
-                        )
-                        self.output_files['mask'] = mask_dem.fn
-                        
-                        if self.want_sm:
-                            self.output_files['spatial-metadata'] = []
-                            with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                                sm_layer, sm_fmt = spatial_metadata.polygonize_mask_multibands(
-                                    msk_ds, verbose=True
-                                )
-                                sm_files = glob.glob(f'{sm_layer}.*')
-                            
-                            for f in sm_files:
-                                out_sm = f'{self.name}_sm.{f.split(".")[-1]}'
-                                if os.path.exists(out_sm):
-                                    utils.remove_glob(out_sm)
+            ## maybe we don't post-process the mask, to keep at full region...
+            #if self.want_sm:
+            if mask_fn is not None:
+                mask_dem = WaffleDEM(
+                    mask_fn,
+                    cache_dir=self.cache_dir,
+                    verbose=self.verbose,
+                    want_scan=True,
+                    co=self.co
+                ).initialize()
 
-                                os.rename(f, out_sm)
-                                self.output_files['spatial-metadata'].append(out_sm)
-                else:
-                    utils.echo_warning_msg('Mask DEM is invalid...')
+                if mask_dem.valid_p():
+                    mask_dem.process(
+                        ndv=0,
+                        xsample=self.xsample,
+                        ysample=self.ysample,
+                        region=self.d_region,
+                        clip_str=self.clip,
+                        node=self.node,
+                        dst_srs=self.dst_srs,
+                        dst_fmt=self.fmt,
+                        set_metadata=False,
+                        dst_fn=f'{os.path.basename(self.name)}_msk.{gdalfun.gdal_fext(self.fmt)}',
+                        dst_dir=os.path.dirname(self.fn)
+                    )
+                    self.output_files['mask'] = mask_dem.fn
+
+                    if self.want_sm:
+                        self.output_files['spatial-metadata'] = []
+                        with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
+                            sm_layer, sm_fmt = spatial_metadata.polygonize_mask_multibands(
+                                msk_ds, verbose=True
+                            )
+                            sm_files = glob.glob(f'{sm_layer}.*')
+
+                        for f in sm_files:
+                            out_sm = f'{self.name}_sm.{f.split(".")[-1]}'
+                            if os.path.exists(out_sm):
+                                utils.remove_glob(out_sm)
+
+                            os.rename(f, out_sm)
+                            self.output_files['spatial-metadata'].append(out_sm)
+            else:
+                utils.echo_warning_msg('Mask DEM is invalid...')
                     
             ## Post-Process Auxiliary Rasters
             for aux_dem in self.aux_dems:

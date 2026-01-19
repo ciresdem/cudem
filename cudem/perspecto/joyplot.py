@@ -31,7 +31,8 @@ import numpy as np
 from osgeo import gdal
 from cudem import utils
 from cudem import gdalfun
-from .perspecto import Perspecto
+#from .perspecto import Perspecto
+from cudem.perspecto import perspecto
 
 ## Optional Dependency
 try:
@@ -41,7 +42,7 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-class Joyplot(Perspecto):
+class Joyplot(perspecto.Perspecto):
     """Generate a Joyplot (Ridgeline Plot) from a DEM.
     
     Creates a series of vertically offset line profiles representing rows 
@@ -60,13 +61,13 @@ class Joyplot(Perspecto):
     < joyplot:step=10:scale=2:overlap=1.5:color=black:facecolor=white >
     """
 
-    def __init__(self, step=10, scale=.1, overlap=1, line_color='black', face_color='white', dpi=300):
+    def __init__(self, step=10, scale=.1, overlap=1, line_color='black', face_color='white', dpi=300, **kwargs):
         super().__init__(mod='joyplot', **kwargs)
-        self.step = utils_int_or(step, 10)
+        self.step = utils.int_or(step, 10)
         self.scale = utils.float_or(scale, 0.1) # Vertical stretch of the signal
         self.overlap = utils.float_or(overlap, 1.0) # Vertical distance between baselines
-        self.line_color = color
-        self.face_color = facecolor
+        self.line_color = line_color
+        self.face_color = face_color
         self.dpi = utils.int_or(dpi, 300)
 
         
@@ -93,14 +94,13 @@ class Joyplot(Perspecto):
             
         ## Flip array so we plot from "back" (North) to "front" (South)
         ## This ensures occlusion works correctly (front covers back)
-        ## Assuming GDAL reads Top-Down
         arr = np.flipud(arr)
         
         rows, cols = arr.shape
         x = np.arange(cols)
         
         ## Setup Plot
-        ## Figure size calculation (heuristic)
+        ## Figure size calculation
         aspect = cols / rows
         fig_width = 10
         fig_height = fig_width / aspect if aspect > 0 else 10
@@ -123,12 +123,12 @@ class Joyplot(Perspecto):
         ## Iterate through rows
         for i, row in enumerate(arr):
             ## Calculate baseline y for this row
-            y_base = i * self.offset_step
+            y_base = i * offset_step
             
             ## Calculate signal y
             ## Replace NaNs with min for plotting continuity or mask
             row_clean = np.nan_to_num(row, nan=np.nanmin(row))
-            y_signal = y_base + (row_clean * scale)
+            y_signal = y_base + (row_clean * self.scale)
             
             ## Fill below the line (Occlusion)
             ## We fill down to the absolute bottom of the plot or a local baseline
@@ -159,7 +159,7 @@ class Joyplot(Perspecto):
             utils.echo_msg(f"Saving joyplot to {self.outfile}...")
             
         plt.savefig(
-            self.outfile, 
+            'test.png', 
             bbox_inches='tight', 
             pad_inches=0, 
             dpi=self.dpi,

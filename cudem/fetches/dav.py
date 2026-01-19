@@ -43,6 +43,16 @@ from cudem.fetches import fetches
 DAV_API_URL = 'https://coast.noaa.gov/dataviewer/api/v1/search/missions'
 DAV_HEADERS = {'Content-Type': 'application/json'}
 
+
+# @fetches.cli_opts(
+#     help_text="NOAA's Digital Coast",
+#     datatype="The desired data type, e.g. 'DEM', 'lidar', etc.",
+#     want_footprints="Fetch dataset footprints",
+#     footprints_only="Only fetch dataset footprints",
+#     keep_footprints="Keep residual footprints",
+#     title_filter="Filter the datasets 'title'"
+# )
+
 ## ==============================================
 ## DAV Module
 ## ==============================================
@@ -65,9 +75,10 @@ class DAV(fetches.FetchModule):
             keep_footprints: bool = False,
             footprints_only: bool = False,
             title_filter: Optional[str] = None,
+            name: Optional[str] = 'digital_coast',
             **kwargs
     ):
-        super().__init__(name='digital_coast', **kwargs)
+        super().__init__(name=name, **kwargs)
         self.datatype = datatype
         self.title_filter = title_filter
         
@@ -354,21 +365,21 @@ class SLR(DAV):
     """Sea Level Rise DEMs via Digital Coast."""
     
     def __init__(self, **kwargs):
-        super().__init__(title_filter='SLR', datatype='DEM', **kwargs)
+        super().__init__(name='SLR', title_filter='SLR', datatype='DEM', **kwargs)
 
         
 class CoNED(DAV):
     """Coastal NED (CoNED) DEMs via Digital Coast."""
     
     def __init__(self, **kwargs):
-        super().__init__(title_filter='CoNED', datatype='DEM', **kwargs)
+        super().__init__(name='CoNED', title_filter='CoNED', datatype='DEM', **kwargs)
 
         
 class CUDEM(DAV):
     """CUDEM Tiled DEMs via Digital Coast."""
     
     def __init__(self, datatype: Optional[str] = None, **kwargs):
-        super().__init__(datatype='DEM', title_filter='CUDEM', **kwargs)
+        super().__init__(name='CUDEM', datatype='DEM', title_filter='CUDEM', **kwargs)
 
         
 ### End

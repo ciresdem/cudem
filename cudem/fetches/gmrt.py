@@ -65,6 +65,15 @@ def gmrt_fetch_point(latitude: float, longitude: float) -> Optional[str]:
     return None
 
 
+@fetches.cli_opts(
+    help_text="Global Multi-Resolution Topography (GMRT) Synthesis",
+    res="Resolution to fetch (default, max, or specific value)",
+    fmt="Output format (geotiff, netcdf, etc.)",
+    layer="Data layer (topo, topo-mask)",
+    want_swath="Fetch swath polygon shapefile instead of grid"
+)
+
+
 class GMRT(fetches.FetchModule):
     """The Global Multi-Resolution Topography synthesis.
     
