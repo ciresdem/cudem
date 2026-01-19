@@ -1039,11 +1039,14 @@ class ModulesDescriptionAction(argparse.Action):
                 
 def fetches_cli():
     """Run fetches from command-line using argparse."""
+
+    _usage = f"%(prog)s [-R REGION] [-H THREADS] [-A ATTEMPTS] [-l] [-z] [-q] [-v] MODULE [MODULE-OPTS]..." 
     
     parser = argparse.ArgumentParser(
         description=f"%(prog)s ({__version__}): Fetch and process remote elevation data",
         formatter_class=argparse.RawTextHelpFormatter,
         add_help=False,
+        usage=_usage,
         epilog=f"""
 Supported %(prog)s modules (see %(prog)s <module-name> --help for more info): 
 
@@ -1056,6 +1059,7 @@ CUDEM home page: <http://cudem.colorado.edu>
     parser.add_argument(
         '-R', '--region', '--aoi',
         action='append',
+        #required=True,
         help=regions.region_help_msg()
     )
     parser.add_argument(
@@ -1103,19 +1107,15 @@ CUDEM home page: <http://cudem.colorado.edu>
     #     help="The modules to run (e.g., srtm_plus, gmrt, etc.)"
     # )
 
-
-    # Help parser (handles --help and lists all options)
-    help_parser = argparse.ArgumentParser(parents=[parser], description='My Program')
-    
+    help_parser = argparse.ArgumentParser(parents=[parser], description='fetches')    
     global_args, remaining_argv = parser.parse_known_args()
 
-    #print(global_args, remaining_argv)
     module_map = {}
     for key, val in FetchesFactory._modules.items():
         module_map[key] = val['call']
         for alias in val.get('aliases', []):
             module_map[alias] = val['call']
-        #module_map['desc'] = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
+            module_map['desc'] = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
         
     ## -- Subparsers for Modules --
     # subparsers = parser.add_subparsers(
