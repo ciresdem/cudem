@@ -2028,6 +2028,7 @@ def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff',
         ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
         if src_arr is not None:
             ds.GetRasterBand(1).WriteArray(src_arr)
+            ds.FlushCache()
             
         ds = None        
         return dst_gdal, 0

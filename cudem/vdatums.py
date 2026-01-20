@@ -230,7 +230,7 @@ class VerticalTransform:
                     mod=self.mode, data=[f'vdatum:datatype={vdatum_tidal_in}'], 
                     src_region=self.src_region, xinc=self.src_x_inc, yinc=self.src_y_inc, 
                     name=str(vdatum_tidal_in), cache_dir=self.cache_dir, dst_srs='epsg:4326', 
-                    node='pixel', verbose=self.verbose
+                    node='pixel', want_mask=False, want_weight=False, verbose=self.verbose
                 )._acquire_module()
                 _trans_in.initialize()
                 _trans_in.generate()

@@ -868,7 +868,7 @@ class Waffle:
             ## Post-Process Mask & Metadata
             ## maybe we don't post-process the mask, to keep at full region...
             #if self.want_sm:
-            if mask_fn is not None:
+            if self.want_mask and mask_fn is not None:
                 mask_dem = WaffleDEM(
                     mask_fn,
                     cache_dir=self.cache_dir,
@@ -909,7 +909,8 @@ class Waffle:
                             os.rename(f, out_sm)
                             self.output_files['spatial-metadata'].append(out_sm)
             else:
-                utils.echo_warning_msg('Mask DEM is invalid...')
+                if self.want_mask:
+                    utils.echo_warning_msg('Mask DEM is invalid...')
                     
             ## Post-Process Auxiliary Rasters
             for aux_dem in self.aux_dems:

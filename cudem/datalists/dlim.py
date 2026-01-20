@@ -652,8 +652,9 @@ class ElevationDataset:
                         geoid_in=self.transform['src_geoid'],
                         geoid_out=self.transform['dst_geoid'],
                         cache_dir=self.cache_dir,
-                        verbose=False
+                        verbose=False,
                     ).run(outfile=self.transform['trans_fn'])
+                pbar.update()
 
         ## set the pyproj.Transformer for both horz+vert and vert only
         ## hack for navd88 datums in feet (6360 is us-feet, 8228 is international-feet
@@ -1762,7 +1763,7 @@ class ElevationDataset:
                 stack_mode=self.stack_mode_name,
                 stack_mode_args=self.stack_mode_args,
                 want_mask=self.want_mask,
-                verbose=True
+                verbose=self.verbose
             )
             stacked_fn = gbt.process_stack(self.parse(), out_name=out_name)
         else:
@@ -1775,7 +1776,7 @@ class ElevationDataset:
                 stack_mode=self.stack_mode_name,
                 stack_mode_args=self.stack_mode_args,
                 want_mask=self.want_mask,
-                verbose=True,
+                verbose=self.verbose
             )
             blocked_fn = gbt.process_blocks(self.parse(), out_name=out_name)
             stacked_fn = globato_converter.globato_to_gdal(blocked_fn, tif_path=f'{out_name}.tif', verbose=True)
