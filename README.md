@@ -92,14 +92,14 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 
 | Module | Description | CLI Command |
 | --- | --- | --- |
-| **[fetches](/docs/fetches.md)** | **Data Acquisition**: Fetch elevation data from a wide variety of public online sources (NOAA, USGS, USACE, etc.). | `fetches` |
-| **[pointz](/docs/pointz.md)** | **Point-Cloud Filtering**: A powerful filtering engine to filter Point Clouds. | `pointz` |
-| **[grits](/docs/grits.md)** | **Grid Filtering & Post-Processing**: A powerful filtering engine to smooth, clean, blend, and analyze raster DEMs. | `grits` |
-| **[dlim](/docs/dlim.md)** | **Data Lists & Processing**: Process, clean, and standardize diverse data types (XYZ, Raster, LAS, COPC, etc.) into unified formats. | `dlim` |
-| **[waffles](/docs/waffles.md)** | **Gridding & interpolation**: Generate Digital Elevation Models (DEMs) from scattered data using various algorithms (IDW, Spline, GMT Surface, etc.). | `waffles` |
-| **[regions](/docs/regions.md)** | **Spatial Management**: Process and manipulate bounding box regions and vector polygons. | `regions` |
+| **[fetches](https://github.com/ciresdem/cudem/blob/main/docs/fetches.md)** | **Data Acquisition**: Fetch elevation data from a wide variety of public online sources (NOAA, USGS, USACE, etc.). | `fetches` |
+| **[pointz](https://github.com/ciresdem/cudem/blob/main/docs/pointz.md)** | **Point-Cloud Filtering**: A powerful filtering engine to filter Point Clouds. | `pointz` |
+| **[grits](https://github.com/ciresdem/cudem/blob/main/docs/grits.md)** | **Grid Filtering & Post-Processing**: A powerful filtering engine to smooth, clean, blend, and analyze raster DEMs. | `grits` |
+| **[dlim](https://github.com/ciresdem/cudem/blob/main/docs/dlim.md)** | **Data Lists & Processing**: Process, clean, and standardize diverse data types (XYZ, Raster, LAS, COPC, etc.) into unified formats. | `dlim` |
+| **[waffles](https://github.com/ciresdem/cudem/blob/main/docs/waffles.md)** | **Gridding & interpolation**: Generate Digital Elevation Models (DEMs) from scattered data using various algorithms (IDW, Spline, GMT Surface, etc.). | `waffles` |
+| **[regions](https://github.com/ciresdem/cudem/blob/main/docs/regions.md)** | **Spatial Management**: Process and manipulate bounding box regions and vector polygons. | `regions` |
 | **[vdatums](docs/vdatums.md)** | **Vertical Transformation**: Generate vertical transformation grids and manage datums. | `vdatums` |
-| **[perspecto](/docs/perspecto.md)** | **Visualization**: Generate perspective images, hillshades, and color-relief maps of DEMs. | `perspecto` |
+| **[perspecto](https://github.com/ciresdem/cudem/blob/main/docs/perspecto.md)** | **Visualization**: Generate perspective images, hillshades, and color-relief maps of DEMs. | `perspecto` |
 
 ---
 
@@ -107,7 +107,7 @@ The CUDEM suite is composed of several key modules, each accessible via command-
 
 ### Fetches (Data Acquisition)
 
-The **[fetches](/docs/fetches.md)** module automates the discovery and retrieval of geospatial data. It interfaces with over forty public APIs and repositories to download topographic and bathymetric data.
+The **[fetches](https://github.com/ciresdem/cudem/blob/main/docs/fetches.md)** module automates the discovery and retrieval of geospatial data. It interfaces with over forty public APIs and repositories to download topographic and bathymetric data.
 
 * Access data from federal agencies including NOAA (NOS, NCEI, OCM), USGS (3DEP, CoNED), USACE, and more.
 * Download data specific to a bounding box or vector polygon.
@@ -115,7 +115,7 @@ The **[fetches](/docs/fetches.md)** module automates the discovery and retrieval
 
 ### Dlim (Data Lists & Processing)
 
-The **[dlim](/docs/dlim.md)** module serves as the primary data ingestion engine. It utilizes "datalists" (text-based configuration files) to manage, process, and standardize diverse datasets into a unified stream for gridding.
+The **[dlim](https://github.com/ciresdem/cudem/blob/main/docs/dlim.md)** module serves as the primary data ingestion engine. It utilizes "datalists" (text-based configuration files) to manage, process, and standardize diverse datasets into a unified stream for gridding.
 
 * Handles mixed formats (Raster, XYZ, LAS/LAZ, COPC) seamlessly, abstracting file-specific parsing.
 * Supports on-the-fly vertical datum transformation, spatial clipping, and masking.
@@ -123,7 +123,7 @@ The **[dlim](/docs/dlim.md)** module serves as the primary data ingestion engine
 
 ### Pointz (Point Cloud Filtering)
 
-The **[pointz](/docs/pointz.md)** module provides specialized tools for filtering and manipulating raw point cloud data (XYZ, LAS/LAZ) prior to gridding.
+The **[pointz](https://github.com/ciresdem/cudem/blob/main/docs/pointz.md)** module provides specialized tools for filtering and manipulating raw point cloud data (XYZ, LAS/LAZ) prior to gridding.
 
 * **Outlier Removal**: Statistical filters (`outlierz`) to remove noise spikes and gross errors.
 * **Quality Control**: Reference-based checks (`rq`) to validate data against known baselines.
@@ -132,7 +132,7 @@ The **[pointz](/docs/pointz.md)** module provides specialized tools for filterin
 
 ### Grits (Grid Filters)
 
-The **[grits](/docs/grits.md)** module provides a standardized framework for raster manipulation. It supports chunked processing for large files and can chain multiple filters together.
+The **[grits](https://github.com/ciresdem/cudem/blob/main/docs/grits.md)** module provides a standardized framework for raster manipulation. It supports chunked processing for large files and can chain multiple filters together.
 
 * **Smoothing**: `blur` (Gaussian), `denoise` (Median/Bilateral), `gmtfilter` (GMT wrapper).
 * **Cleaning**: `outliers` (Statistical outlier removal), `zscore` (Local anomaly detection), `flats` (Remove artifacts).
@@ -143,7 +143,7 @@ The **[grits](/docs/grits.md)** module provides a standardized framework for ras
 
 ### Waffles (Gridding & Interpolation)
 
-The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation engine within the framework. It provides a unified factory interface to transform scattered elevation data into seamless raster surfaces using a wide range of gridding algorithms. It manages the entire production pipeline, from data ingestion and spatial partitioning (chunking) to interpolation and post-processing.
+The **[waffles](https://github.com/ciresdem/cudem/blob/main/docs/waffles.md)** module serves as the primary DEM generation engine within the framework. It provides a unified factory interface to transform scattered elevation data into seamless raster surfaces using a wide range of gridding algorithms. It manages the entire production pipeline, from data ingestion and spatial partitioning (chunking) to interpolation and post-processing.
 
 * Users can switch between different interpolation methods simply by changing the module flag (e.g., `-M gmt-surface` for spline, `-M IDW` for inverse distance weighting).
 * **Algorithms**:
@@ -160,9 +160,9 @@ The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation 
 
 ## General
 
-* [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
-* [Generate a set of Tiled CRMs of Northern California](/docs/example_crm_norcal.md)
-* [Generate a set of Tiled CUDEMs of North-West Washington State](/docs/dem_examples/northern_wa/northern_wa.md)
+* [Generate a CRM of Point Mugu in California](https://github.com/ciresdem/cudem/blob/main/docs/example_crm_malibu.md)
+* [Generate a set of Tiled CRMs of Northern California](https://github.com/ciresdem/cudem/blob/main/docs/example_crm_norcal.md)
+* [Generate a set of Tiled CUDEMs of North-West Washington State](https://github.com/ciresdem/cudem/blob/main/docs/dem_examples/northern_wa/northern_wa.md)
 
 ## Specific cli tools
 
@@ -170,7 +170,7 @@ The **[waffles](/docs/waffles.md)** module serves as the primary DEM generation 
 * **Processing Data**: `dlim input.datalist -R -90/-89/29/30 -E .3s`
 * **Generating DEM**: `waffles -M gmt-surface:tension=.35 -R -90/-89/29/30 -E .1s -O my_dem.tif input.xyz`
 * **Filtering DEM**: `grits my_dem.tif -M outliers:k=2.5 -M fill:method=spline -M clip:src_ply=coast.shp -O clean_dem.tif`
-* **Estimating Uncertainty**: [Docs](/docs/uncertainty.md)
+* **Estimating Uncertainty**: [Docs](https://github.com/ciresdem/cudem/blob/main/docs/uncertainty.md)
 
 # Additional Information
 
