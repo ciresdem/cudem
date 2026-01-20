@@ -53,6 +53,8 @@ Individual components are modular and may be run standalone; for example, the `f
 * **GDAL** (and Python bindings) is required.
 * **Numpy, Scipy**
 
+**Note on GDAL:** GDAL can be difficult to install via pip alone due to compilation requirements. It is strongly recommended that users install GDAL via their system package manager (e.g., `apt install python3-gdal`) or Conda (`conda install gdal`) **before** pip installing cudem.
+
 Other useful external programs needed for full functionality include:
 * **GMT** / **PyGMT**: For gridding and filtering options.
 * **MB-System**: For processing raw bathymetric sonar formats.
