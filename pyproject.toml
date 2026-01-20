@@ -35,7 +35,7 @@ version = "3.0.1"
 description = "Modules and scripts for processing Digital Elevation Models"
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
+license = { file = "LICENSE" }
 authors = [
     {name = "Matthew Love", email = "matthew.love@colorado.edu"},
     {name = "Christopher Amante", email = "christopher.amante@colorado.edu"},
@@ -68,11 +68,22 @@ dependencies = [
     "netCDF4", # datalists netcdf support
 ]
 
+keywords = ["DEM", "bathymetry", "lidar", "topography", "NOAA", "GIS", "elevation"]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+
 [project.optional-dependencies]
 gdal = ["gdal"] # GDAL and bindings (may be installed via system)
 gmt = ["pygmt"]  # Optional GMT bindings
 scikit = ["scikit-image", "scikit-learn"] # Optional SciKit
-cv2 = ["cv2"] # Option CV2 for waffles mods
+cv2 = ["cv2"] # Optional CV2 for waffles mods
+h3 = ["h3"] # Optional H3 support in inf generation.
 
 [tool.setuptools.packages.find]
 where = ["."]  
