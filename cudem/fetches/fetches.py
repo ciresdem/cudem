@@ -1115,7 +1115,7 @@ CUDEM home page: <http://cudem.colorado.edu>
         module_map[key] = val['call']
         for alias in val.get('aliases', []):
             module_map[alias] = val['call']
-            module_map['desc'] = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
+            #module_map['desc'] = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
         
     ## -- Subparsers for Modules --
     # subparsers = parser.add_subparsers(

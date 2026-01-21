@@ -621,6 +621,7 @@ class ElevationDataset:
                         self.transform['trans_fn'], self.transform['src_vert_epsg'],
                         self.transform['dst_vert_epsg']
                     ),
+                    total=1,
                     leave=self.verbose
             ) as pbar:
                 ## set the vertical transformation grid to be 3 arc-seconds. This
@@ -656,6 +657,13 @@ class ElevationDataset:
                     ).run(outfile=self.transform['trans_fn'])
                 pbar.update()
 
+            # #if os.path.exists(self.transform['trans_fn']):
+            # #try:
+            # _ = os.stat(self.transform['trans_fn'])
+            # #except OSError:
+            # import time
+            # time.sleep(5)
+                
         ## set the pyproj.Transformer for both horz+vert and vert only
         ## hack for navd88 datums in feet (6360 is us-feet, 8228 is international-feet
         if utils.str_or(self.transform['src_vert_epsg']) == '6360':
@@ -666,9 +674,31 @@ class ElevationDataset:
             uc = ' +step +proj=unitconvert +z_in=ft +z_out=m'
         else:
             uc = ''
-            
+
         if self.transform['trans_fn'] is not None \
-           and os.path.exists(self.transform['trans_fn']):
+           and os.path.exists(self.transform['trans_fn']) \
+           and os.stat(self.transform['trans_fn']).st_size > 0:
+            # grid_ok = False
+            # attempts = 0
+            # while not grid_ok and attempts < 5:
+            #     try:
+            #         check_ds = gdal.Open(self.transform['trans_fn'], gdal.GA_ReadOnly)
+            #         if check_ds is not None:
+            #             r = check_ds.GetRasterBand(1).ReadAsArray()
+            #             print(r)
+            #             check_ds = None
+            #             grid_ok = True
+            #         else:
+            #             raise OSError("GDAL failed to open grid")
+            #     except Exception:
+            #         # Wait and retry if filesystem is busy/lagging
+            #         import time
+            #         time.sleep(1)
+            #         attempts += 1
+            
+            # if not grid_ok:
+            #     utils.echo_error_msg(f"Failed to verify vertical grid {self.transform['trans_fn']} after generation.")
+                
             self.transform['pipeline'] \
                 = (f'+proj=pipeline{uc} +step '
                    f'{self.transform["src_horz_crs"].to_proj4()} '
@@ -1475,9 +1505,10 @@ class ElevationDataset:
                 if hasattr(points, 'to_records'):
                     points = points.to_records(index=False)
                     
-                utils.echo_debug_msg(f'transformer is: {self.transform}')
+                utils.echo_debug_msg(f'transformer for {self.fn} is: {self.transform["transformer"]}')
+                utils.echo_debug_msg(f'vertical transformer for {self.fn} is: {self.transform["vert_transformer"]}')
                 if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
-                    if self.transform['transformer'] is not None:
+                    if self.transform['transformer'] is not None:                        
                         points['x'], points['y'] = self.transform['transformer'].transform(points['x'], points['y'])
 
                     if self.transform['vert_transformer'] is not None:

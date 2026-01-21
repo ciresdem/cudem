@@ -231,21 +231,29 @@ class GDALFile(ElevationDataset):
             test_ds = gdal.Open(self.fn, gdal.GA_ReadOnly)
             if test_ds is None: return None
             test_ds = None
-        except Exception: return None
+        except Exception:
+            utils.echo_warning_msg(f'Couldn\'t read {self.fn}')
+            return None
         
         self.dem_infos = gdalfun.gdal_infos(self.fn)
         if self.node is None:
             self.node = gdalfun.gdal_get_node(self.fn, 'pixel')
             
         ndv = utils.float_or(gdalfun.gdal_get_ndv(self.fn), -9999)
-        
-        if self.region is not None:
-            self.warp_region = self.region.copy()
+
+        if self.transform['transformer'] is not None:
+            self.warp_region = self.transform['trans_region'].copy()
+        elif self.inf_region is not None:
+            self.warp_region = self.inf_region
         else:
-            if self.transform['transformer'] is not None:
-                self.warp_region = self.transform['trans_region'].copy()
-            else:
-                self.warp_region = self.inf_region
+            self.warp_region = self.region.copy()
+        # if self.region is not None:
+        #     self.warp_region = self.region.copy()
+        # else:
+        #     if self.transform['transformer'] is not None:
+        #         self.warp_region = self.transform['trans_region'].copy()
+        #     else:
+        #         self.warp_region = self.inf_region
             
         ## Temp Files
         tmp_elev_fn = utils.make_temp_fn(f'elev_{os.path.basename(self.fn)}', temp_dir=self.cache_dir)
@@ -274,13 +282,16 @@ class GDALFile(ElevationDataset):
                     if src_res > dst_res:
                         self.resample_and_warp = False
 
+            ## Grid node is assumed 'point' mode, don't resample and just
+            ## return the pixel values as points.
             if self.node == 'grid':
                 self.resample_and_warp = False
-                        
+
+            utils.echo_debug_msg(f'resample_and_warp is {self.resample_and_warp}')
             ## --- Resample / Warp ---
             if self.resample_and_warp:
-                if self.transform['transformer'] is not None:
-                    self.transform['transformer'] = None
+                #if self.transform['transformer'] is not None:
+                #    self.transform['transformer'] = None
 
                 if self.sample_alg == 'auto':
                     if self.stack_mode in ['min', 'max']:
@@ -293,7 +304,9 @@ class GDALFile(ElevationDataset):
                 else:
                     self.src_ds = gdal.Open(self.fn)
 
-                if self.src_ds is None: return None
+                if self.src_ds is None:
+                    utils.echo_warning_msg(f'Could not load {self.fn}')
+                    return None
                 
                 tmp_warp = utils.make_temp_fn(f'{self.fn}', temp_dir=self.cache_dir)
                 in_bands = self.src_ds.RasterCount
@@ -322,6 +335,7 @@ class GDALFile(ElevationDataset):
                         exclude=[], srcwin=srcwin, inverse=False
                     )
                     tmp_ds_to_warp = self.tmp_elev_band
+                    utils.echo_msg(f'ds to warp is: {tmp_ds_to_warp}')
                     if tmp_ds_to_warp is None: return None
                     
                     self.band_no = 1
@@ -341,67 +355,68 @@ class GDALFile(ElevationDataset):
                         )
                         self.weight_mask = self.tmp_weight_band
 
-                # with warnings.catch_warnings():
-                #     warnings.simplefilter('ignore')
-                #     warped_ds = gdalfun.sample_warp(
-                #         tmp_ds_to_warp, tmp_warp, self.x_inc, self.y_inc,
-                #         src_region=self.warp_region,
-                #         src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] else None,
-                #         dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] else None,                
-                #         sample_alg=self.sample_alg,
-                #         ndv=ndv, verbose=True,
-                #         co=["COMPRESS=DEFLATE", "TILED=YES"]
-                #     )[0]
-                
-                # self.src_ds = gdal.Open(warped_ds) if warped_ds else None
-                # utils.remove_glob(tmp_warp)
-
-                warp_ = gdalfun.sample_warp(
-                    tmp_ds_to_warp, tmp_warp, self.x_inc, self.y_inc,
-                    src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] is not None else None,
-                    dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None  else None,                
+                #with warnings.catch_warnings():
+                #    warnings.simplefilter('ignore')
+                warped_ds = gdalfun.sample_warp(
+                    tmp_ds_to_warp, tmp_warp, None, None, size=True,
+                    #self.x_inc, self.y_inc,
                     src_region=self.warp_region,
+                    #src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] else None,
+                    #dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] else None,                
                     sample_alg=self.sample_alg,
-                    ndv=ndv,
-                    verbose=False,
+                    ndv=ndv, verbose=True,
                     co=["COMPRESS=DEFLATE", "TILED=YES"]
                 )[0]
-                tmp_ds = warp_ = None
 
-                ## the following seems to be redundant...
-                warp_ds = gdal.Open(tmp_warp)
-                if warp_ds is not None:
-                    ## clip wapred ds to warped srcwin
-                    warp_ds_config = gdalfun.gdal_infos(warp_ds)
-                    gt = warp_ds_config['geoT']
-                    srcwin = self.warp_region.srcwin(
-                        gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid'
-                    )
-                    dst_gt = (gt[0] + (srcwin[0] * gt[1]),
-                              gt[1],
-                              0.,
-                              gt[3] + (srcwin[1] * gt[5]),
-                              0.,
-                              gt[5])
-                    out_ds_config = gdalfun.gdal_set_infos(
-                        srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
-                        warp_ds_config['proj'], warp_ds_config['dt'],
-                        warp_ds_config['ndv'], warp_ds_config['fmt'],
-                        None, None
-                    )
+                self.src_ds = gdal.Open(warped_ds) if warped_ds else None
+                utils.remove_glob(tmp_warp)
 
-                    in_bands = warp_ds.RasterCount
-                    self.src_ds = gdalfun.gdal_mem_ds(out_ds_config, bands=in_bands)
-                    if self.src_ds is not None:
-                        for band in range(1, in_bands+1):
-                            this_band = self.src_ds.GetRasterBand(band)
-                            this_band.WriteArray(
-                                warp_ds.GetRasterBand(band).ReadAsArray(*srcwin)
-                            )
-                            self.src_ds.FlushCache()
+                # warp_ = gdalfun.sample_warp(
+                #     tmp_ds_to_warp, tmp_warp, self.x_inc, self.y_inc,
+                #     #src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] is not None else None,
+                #     #dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None  else None,                
+                #     src_region=self.warp_region,
+                #     sample_alg=self.sample_alg,
+                #     ndv=ndv,
+                #     verbose=False,
+                #     co=["COMPRESS=DEFLATE", "TILED=YES"]
+                # )[0]
+                # tmp_ds = warp_ = None
 
-                    warp_ds = None
-                    utils.remove_glob(tmp_warp)
+                # ## the following seems to be redundant...
+                # warp_ds = gdal.Open(tmp_warp)
+                # if warp_ds is not None:
+                #     ## clip wapred ds to warped srcwin
+                #     warp_ds_config = gdalfun.gdal_infos(warp_ds)
+                #     gt = warp_ds_config['geoT']
+                #     srcwin = self.warp_region.srcwin(
+                #         gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid'
+                #     )
+                #     dst_gt = (gt[0] + (srcwin[0] * gt[1]),
+                #               gt[1],
+                #               0.,
+                #               gt[3] + (srcwin[1] * gt[5]),
+                #               0.,
+                #               gt[5])
+                #     out_ds_config = gdalfun.gdal_set_infos(
+                #         srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
+                #         warp_ds_config['proj'], warp_ds_config['dt'],
+                #         warp_ds_config['ndv'], warp_ds_config['fmt'],
+                #         None, None
+                #     )
+
+                #     in_bands = warp_ds.RasterCount
+                #     self.src_ds = gdalfun.gdal_mem_ds(out_ds_config, bands=in_bands)
+                #     if self.src_ds is not None:
+                #         for band in range(1, in_bands+1):
+                #             this_band = self.src_ds.GetRasterBand(band)
+                #             this_band.WriteArray(
+                #                 warp_ds.GetRasterBand(band).ReadAsArray(*srcwin)
+                #             )
+                #             self.src_ds.FlushCache()
+
+                #     warp_ds = None
+                #     utils.remove_glob(tmp_warp)
 
             else:
                 if self.open_options:
@@ -409,7 +424,9 @@ class GDALFile(ElevationDataset):
                 else:
                     self.src_ds = gdal.Open(self.fn)
 
-            if self.src_ds is None: return None
+            if self.src_ds is None:
+                utils.echo_warning_msg(f'{self.fn} could not be loaded!')
+                return None
 
             self.src_dem_infos = gdalfun.gdal_infos(self.src_ds)
             band = self.src_ds.GetRasterBand(utils.int_or(self.band_no, 1))
@@ -429,8 +446,8 @@ class GDALFile(ElevationDataset):
                             self.weight_mask, None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],
                             src_region=regions.Region().from_geo_transform(self.src_dem_infos['geoT'], self.src_dem_infos['nx'], self.src_dem_infos['ny']),
                             sample_alg=self.sample_alg, ndv=ndv, verbose=False, co=["COMPRESS=DEFLATE", "TILED=YES"],
-                            src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] else None,
-                            dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] else None,                
+                            #src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] else None,
+                            #dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] else None,                
                         )[0]
                         weight_band = src_weight.GetRasterBand(1)
 
@@ -444,35 +461,33 @@ class GDALFile(ElevationDataset):
                             self.uncertainty_mask, None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],
                             src_region=regions.Region().from_geo_transform(self.src_dem_infos['geoT'], self.src_dem_infos['nx'], self.src_dem_infos['ny']),
                             sample_alg='bilinear', ndv=ndv, verbose=False, co=["COMPRESS=DEFLATE", "TILED=YES"],
-                            src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] else None,
-                            dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] else None,                
+                            #src_srs=self.transform['src_horz_crs'].to_proj4() if self.transform['src_horz_crs'] else None,
+                            #dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] else None,                
                         )[0]
                         uncertainty_band = src_uncertainty.GetRasterBand(1)
-
                         
-            if self.transform['trans_fn_unc'] is not None:
-                with warnings.catch_warnings():
-                    warnings.simplefilter('ignore')
-                    trans_uncertainty = gdalfun.sample_warp(
-                        self.transform['trans_fn_unc'], None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],
-                        src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84',
-                        dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None else None,
-                        src_region=src_dem_region, sample_alg='bilinear', ndv=ndv, verbose=False,
-                        co=["COMPRESS=DEFLATE", "TILED=YES"]
-                    )[0]
+            # if self.transform['trans_fn_unc'] is not None:
+            #     with warnings.catch_warnings():
+            #         warnings.simplefilter('ignore')
+            #         trans_uncertainty = gdalfun.sample_warp(
+            #             self.transform['trans_fn_unc'], None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],
+            #             src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84',
+            #             dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None else None,
+            #             src_region=src_dem_region, sample_alg='bilinear', ndv=ndv, verbose=True,
+            #             co=["COMPRESS=DEFLATE", "TILED=YES"]
+            #         )[0]
 
-                if uncertainty_band is not None:
-                    trans_uncertainty_band = trans_uncertainty.GetRasterBand(1)
-                    trans_uncertainty_arr = trans_uncertainty_band.ReadAsArray()
-                    uncertainty_arr = uncertainty_band.ReadAsArray()
-                    uncertainty_arr *= self.uncertainty_mask_to_meter
-                    uncertainty_arr = np.sqrt(uncertainty_arr**2 + trans_uncertainty_arr**2)
-                    uncertainty_band.WriteArray(uncertainty_arr)
-                    trans_uncertainty_band = None
-                else:
-                    uncertainty_band = trans_uncertainty.GetRasterBand(1)
+            #     if uncertainty_band is not None:
+            #         trans_uncertainty_band = trans_uncertainty.GetRasterBand(1)
+            #         trans_uncertainty_arr = trans_uncertainty_band.ReadAsArray()
+            #         uncertainty_arr = uncertainty_band.ReadAsArray()
+            #         uncertainty_arr *= self.uncertainty_mask_to_meter
+            #         uncertainty_arr = np.sqrt(uncertainty_arr**2 + trans_uncertainty_arr**2)
+            #         uncertainty_band.WriteArray(uncertainty_arr)
+            #         trans_uncertainty_band = None
+            #     else:
+            #         uncertainty_band = trans_uncertainty.GetRasterBand(1)
 
-                        
             ## ... Chunked Yield ...
             if self.yield_chunk:
                 if self.chunk_step is not None:
@@ -483,7 +498,7 @@ class GDALFile(ElevationDataset):
                 for srcwin in utils.yield_srcwin(
                         n_size=(self.src_ds.RasterYSize, self.src_ds.RasterXSize),
                         n_chunk=read_chunk_size,
-                        verbose=False
+                        verbose=False,
                 ):                
                     band_data = band.ReadAsArray(*srcwin).astype(float)
                     if ndv is not None:
@@ -513,7 +528,7 @@ class GDALFile(ElevationDataset):
                             weight_data.flatten(), uncertainty_data.flatten()
                         ))
                     else:
-                        utils.echo_msg_bold('pk')
+                        #utils.echo_msg_bold('pk')
                         lon_band = self.src_ds.GetRasterBand(self.x_band)
                         lon_array = lon_band.ReadAsArray(*srcwin).astype(float)
                         lon_array[np.isnan(band_data)] = np.nan

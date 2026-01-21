@@ -292,6 +292,7 @@ class PerspectoFactory(factory.CUDEMFactory):
     from . import colorbar
     from . import histogram
     #from . import joyplot
+    #from . import visus
 
     _modules = {
         'hillshade': {'call': hillshade.Hillshade},
@@ -300,6 +301,7 @@ class PerspectoFactory(factory.CUDEMFactory):
         'sphere': {'call': sphere.Sphere},
         #'joyplot': {'call': joyplot.Joyplot},
         'histogram': {'call': histogram.Histogram},
+        #'visus': {'call': visus.OpenVisusViz},
     }
 
     if HAS_PYGMT:

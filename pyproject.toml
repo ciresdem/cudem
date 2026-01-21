@@ -70,13 +70,13 @@ dependencies = [
 
 keywords = ["DEM", "bathymetry", "lidar", "topography", "NOAA", "GIS", "elevation"]
 
-classifiers = [
-    "Development Status :: 5 - Production/Stable",
-    "Intended Audience :: Science/Research",
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
-    "Topic :: Scientific/Engineering :: GIS",
-]
+# classifiers = [
+#     "Development Status :: 5 - Production/Stable",
+#     "Intended Audience :: Science/Research",
+#     "Programming Language :: Python :: 3",
+#     "Operating System :: OS Independent",
+#     "Topic :: Scientific/Engineering :: GIS",
+# ]
 
 [project.optional-dependencies]
 gdal = ["gdal"] # GDAL and bindings (may be installed via system)

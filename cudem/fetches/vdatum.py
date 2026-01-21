@@ -39,7 +39,7 @@ from cudem.fetches import FRED
 ## ==============================================
 ## Constants
 ## ==============================================
-VDATUM_DATA_URL = 'https://vdatum.noaa.gov/download/data/'
+VDATUM_DATA_URL = 'vdatum.noaa.gov/download/data/'
 PROJ_CDN_INDEX_URL = 'https://cdn.proj.org/files.geojson'
 
 ## Known Tidal References for EPSG lookups

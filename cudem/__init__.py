@@ -44,6 +44,7 @@ from . import datalists
 from . import htdpfun
 from . import perspecto
 from . import srsfun
+from . import ncfun
 
 gc = utils.config_check() # cudem config file holding foriegn programs and versions
 if gc['platform'] == 'linux':
