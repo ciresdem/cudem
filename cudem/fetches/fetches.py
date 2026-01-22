@@ -440,7 +440,7 @@ class Fetch:
             )
         return results
 
-    
+
     def fetch_file(
             self,
             dst_fn: str,
@@ -452,124 +452,263 @@ class Fetch:
             tries=5,
             check_size=True
     ) -> int:
-        """Fetch src_url and save to dst_fn."""
+        """Fetch src_url and save to dst_fn with robust resume support."""
         
-        status = 0
-        
-        ## Ensure directory exists
+        ## Setup Paths
         dst_dir = os.path.abspath(os.path.dirname(dst_fn))
         if not os.path.exists(dst_dir):
             try:
                 os.makedirs(dst_dir)
-            except Exception as e:
-                utils.echo_error_msg(e)
+            except OSError:
+                pass # Handle race condition in parallel processing
 
-        ## Handle Ranges for resuming
-        if check_size and 'Range' in self.headers:
-            del self.headers['Range']
+        ## Use a temporary filename for the download in progress
+        part_fn = f"{dst_fn}.part"
         
+        ## Check for Completed File
         if not overwrite and os.path.exists(dst_fn):
             if not check_size:
-                ## File exists and we don't care about size -> Success
-                return 0
-            else:
-                dst_fn_size = os.stat(dst_fn).st_size
-                self.headers['Range'] = f'bytes={dst_fn_size}-'
-
-        try:
-            for attempt in range(tries):
-                try:
-                    with requests.get(
-                            self.url, stream=True, params=params, headers=self.headers,
-                            timeout=(timeout, read_timeout), verify=self.verify
-                    ) as req:
-
-                        ## Determine content length
-                        req_h = req.headers
-                        content_length = 0
-                        if 'Content-Range' in req_h:
-                            content_length = int(req_h['Content-Range'].split('/')[-1])
-                        elif 'Content-Length' in req_h:
-                            content_length = int(req_h['Content-Length'])
-                        else:
-                            content_length = int(req_h.get('content-length', 0))
-
-                        ## Check if file is already complete
-                        if not overwrite and check_size and os.path.exists(dst_fn):
-                            if content_length == os.path.getsize(dst_fn) or content_length == 0:
-                                return 0 # Success, already done
-
-                        # Handle Status Codes
-                        if req.status_code == 416: # Range error
-                            overwrite = True # Force overwrite next try
-                            raise FileExistsError(f'{dst_fn} exists, invalid Range requested.')
-                        
-                        elif req.status_code == 401: # Auth error
-                            ## Earthdata hack: they redirect 401s sometimes
-                            if self.url == req.url:
-                                raise UnboundLocalError('Incorrect Authentication')
-                            ## Recursion for redirect url
-                            return Fetch(
-                                url=req.url, headers=self.headers, verbose=self.verbose
-                            ).fetch_file(dst_fn, params, datatype, overwrite, timeout, read_timeout)
-
-                        elif req.status_code in [429, 504]: # Rate limit / Gateway
-                            if attempt < tries - 1:
-                                time.sleep(10)
-                                continue
-                            else:
-                                raise ConnectionError(f'{req.url}: {req.status_code}')
-
-                        elif req.status_code in [200, 206]: # OK or Partial Content
-                            mode = 'ab' if req.status_code == 206 else 'wb'
-                            with open(dst_fn, mode) as local_file:
-                                with utils.ccp(
-                                        desc=self.url,
-                                        total=content_length,
-                                        leave=self.verbose,
-                                        unit='iB',
-                                        unit_scale=True,
-                                ) as pbar:
-                                    for chunk in req.iter_content(chunk_size=8196):
-                                        if chunk:
-                                            pbar.update(len(chunk))
-                                            local_file.write(chunk)
-                                            local_file.flush()
-                            
-                            ## Verify Size
-                            if check_size and (content_length != 0):
-                                if content_length != os.stat(dst_fn).st_size:
-                                    raise UnboundLocalError(f'Size mismatch! Expected {content_length}, got {os.stat(dst_fn).st_size}')
-                            
-                            return 0 # Success
-
-                        else:
-                            ## Unknown error code
-                            if self.verbose:
-                                utils.echo_error_msg(f'Server returned: {req.status_code} ({req.url})')
-                            return -1
-
-                except (requests.exceptions.RequestException, UnboundLocalError) as e:
-                    if attempt < tries - 1:
-                        if self.verbose:
-                            utils.echo_warning_msg(f'Exception: {e}. Retrying ({tries - attempt - 1} left)...')
-                        time.sleep(2)
-                        continue
-                    else:
-                        raise e
-
-        except FileExistsError:
-            return 0
-        except Exception as e:
-            if self.verbose:
-                utils.echo_error_msg(str(e))
-            status = -1
-
-        ## Final check
-        if check_size and (not os.path.exists(dst_fn) or os.stat(dst_fn).st_size == 0):
-            status = -1
+                return 0 # Exists, assume good.
             
-        return status
+            ## We assume it was downloaded correctly previously unless 0 bytes.
+            if os.path.getsize(dst_fn) > 0:
+                return 0
+
+        ## Download Loop
+        ## We use a loop to handle retries and 416 (Range Error) resets
+        for attempt in range(tries):
+            resume_byte_pos = 0
+            mode = 'wb'
+            
+            ## Setup Resume if partial file exists
+            if os.path.exists(part_fn):
+                resume_byte_pos = os.path.getsize(part_fn)
+                if resume_byte_pos > 0:
+                    self.headers['Range'] = f'bytes={resume_byte_pos}-'
+                    mode = 'ab'
+
+            try:
+                with requests.get(
+                        self.url, stream=True, params=params, headers=self.headers,
+                        timeout=(timeout, read_timeout), verify=self.verify
+                ) as req:
+                    
+                    ## Handle Finished/Cached by Server (304) or Pre-check
+                    if req.status_code == 304:
+                         # Not modified (if we sent ETag/Last-Modified)
+                         return 0
+
+                    ## Get Expected Size
+                    remote_size = int(req.headers.get('content-length', 0))
+                    total_size = remote_size
+                    
+                    ## Adjust expectation if this is a partial response
+                    if req.status_code == 206:
+                        ## Content-Range: bytes 1000-4999/5000
+                        content_range = req.headers.get('Content-Range', '')
+                        if '/' in content_range:
+                            total_size = int(content_range.split('/')[-1])
+                    
+                    ## Check if already done (Edge case where .part matched full size)
+                    if check_size and total_size > 0 and resume_byte_pos == total_size:
+                        ## We have the whole file in .part, just move it.
+                        os.rename(part_fn, dst_fn)
+                        return 0
+
+                    ## Handle Errors
+                    if req.status_code == 416: 
+                        ## Range Not Satisfiable: Local file is likely corrupt or larger than remote.
+                        ## Action: Delete .part and retry from scratch (next loop iteration)
+                        utils.echo_warning_msg(f"Invalid Range for {os.path.basename(dst_fn)}. Restarting...")
+                        if os.path.exists(part_fn):
+                            os.remove(part_fn)
+                        if 'Range' in self.headers:
+                            del self.headers['Range']
+                        continue # Retry immediately
+                    
+                    elif req.status_code == 401:
+                         ## Authentication Error
+                         raise UnboundLocalError("Authentication Failed")
+                    
+                    elif req.status_code not in [200, 206]:
+                        ## Fatal error for this attempt
+                        if attempt < tries - 1:
+                            time.sleep(2)
+                            continue
+                        raise ConnectionError(f"Status {req.status_code}")
+
+                    ## Write Stream
+                    with open(part_fn, mode) as f:
+                        ## Use clean description for progress bar
+                        desc = utils.truncate_middle(self.url, n=60)
+                        with utils.ccp(
+                                desc=desc,
+                                total=total_size,
+                                initial=resume_byte_pos, # Tell tqdm we started @ X bytes
+                                leave=self.verbose,
+                                unit='B',
+                                unit_scale=True,
+                                unit_divisor=1024
+                        ) as pbar:
+                            for chunk in req.iter_content(chunk_size=8192):
+                                if chunk:
+                                    f.write(chunk)
+                                    pbar.update(len(chunk))
+                    
+                    ## Validation & Finalize
+                    ## If we got here without exception, check size
+                    if check_size and total_size > 0:
+                        final_size = os.path.getsize(part_fn)
+                        if final_size != total_size:
+                            raise IOError(f"Incomplete download: {final_size}/{total_size} bytes")
+                    
+                    ## Rename .part to dst_fn
+                    os.rename(part_fn, dst_fn)
+                    return 0
+
+            except (requests.exceptions.RequestException, IOError, UnboundLocalError) as e:
+                if attempt < tries - 1:
+                    wait_time = (attempt + 1) * 2
+                    if self.verbose:
+                         utils.echo_warning_msg(f"Download failed: {e}. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    utils.echo_error_msg(f"Failed to download {self.url}: {e}")
+                    return -1
+        
+        return -1
+    
+    
+    # def fetch_file(
+    #         self,
+    #         dst_fn: str,
+    #         params=None,
+    #         datatype=None,
+    #         overwrite=False,
+    #         timeout=30,
+    #         read_timeout=None,
+    #         tries=5,
+    #         check_size=True
+    # ) -> int:
+    #     """Fetch src_url and save to dst_fn."""
+        
+    #     status = 0
+        
+    #     ## Ensure directory exists
+    #     dst_dir = os.path.abspath(os.path.dirname(dst_fn))
+    #     if not os.path.exists(dst_dir):
+    #         try:
+    #             os.makedirs(dst_dir)
+    #         except Exception as e:
+    #             utils.echo_error_msg(e)
+
+    #     ## Handle Ranges for resuming
+    #     if check_size and 'Range' in self.headers:
+    #         del self.headers['Range']
+        
+    #     if not overwrite and os.path.exists(dst_fn):
+    #         if not check_size:
+    #             ## File exists and we don't care about size -> Success
+    #             return 0
+    #         else:
+    #             dst_fn_size = os.stat(dst_fn).st_size
+    #             self.headers['Range'] = f'bytes={dst_fn_size}-'
+
+    #     try:
+    #         for attempt in range(tries):
+    #             try:
+    #                 with requests.get(
+    #                         self.url, stream=True, params=params, headers=self.headers,
+    #                         timeout=(timeout, read_timeout), verify=self.verify
+    #                 ) as req:
+
+    #                     ## Determine content length
+    #                     req_h = req.headers
+    #                     content_length = 0
+    #                     if 'Content-Range' in req_h:
+    #                         content_length = int(req_h['Content-Range'].split('/')[-1])
+    #                     elif 'Content-Length' in req_h:
+    #                         content_length = int(req_h['Content-Length'])
+    #                     else:
+    #                         content_length = int(req_h.get('content-length', 0))
+
+    #                     ## Check if file is already complete
+    #                     if not overwrite and check_size and os.path.exists(dst_fn):
+    #                         if content_length == os.path.getsize(dst_fn) or content_length == 0:
+    #                             return 0 # Success, already done
+
+    #                     # Handle Status Codes
+    #                     if req.status_code == 416: # Range error
+    #                         overwrite = True # Force overwrite next try
+    #                         raise FileExistsError(f'{dst_fn} exists, invalid Range requested.')
+                        
+    #                     elif req.status_code == 401: # Auth error
+    #                         ## Earthdata hack: they redirect 401s sometimes
+    #                         if self.url == req.url:
+    #                             raise UnboundLocalError('Incorrect Authentication')
+    #                         ## Recursion for redirect url
+    #                         return Fetch(
+    #                             url=req.url, headers=self.headers, verbose=self.verbose
+    #                         ).fetch_file(dst_fn, params, datatype, overwrite, timeout, read_timeout)
+
+    #                     elif req.status_code in [429, 504]: # Rate limit / Gateway
+    #                         if attempt < tries - 1:
+    #                             time.sleep(10)
+    #                             continue
+    #                         else:
+    #                             raise ConnectionError(f'{req.url}: {req.status_code}')
+
+    #                     elif req.status_code in [200, 206]: # OK or Partial Content
+    #                         mode = 'ab' if req.status_code == 206 else 'wb'
+    #                         short_url = utils.truncate_middle(self.url, n=60)
+    #                         with open(dst_fn, mode) as local_file:
+    #                             with utils.ccp(
+    #                                     desc=short_url,
+    #                                     total=content_length,
+    #                                     leave=self.verbose,
+    #                                     unit='iB',
+    #                                     unit_scale=True,
+    #                             ) as pbar:
+    #                                 for chunk in req.iter_content(chunk_size=8196):
+    #                                     if chunk:
+    #                                         pbar.update(len(chunk))
+    #                                         local_file.write(chunk)
+    #                                         local_file.flush()
+                            
+    #                         ## Verify Size
+    #                         if check_size and (content_length != 0):
+    #                             if content_length != os.stat(dst_fn).st_size:
+    #                                 raise UnboundLocalError(f'Size mismatch! Expected {content_length}, got {os.stat(dst_fn).st_size}')
+                            
+    #                         return 0 # Success
+
+    #                     else:
+    #                         ## Unknown error code
+    #                         if self.verbose:
+    #                             utils.echo_error_msg(f'Server returned: {req.status_code} ({req.url})')
+    #                         return -1
+
+    #             except (requests.exceptions.RequestException, UnboundLocalError) as e:
+    #                 if attempt < tries - 1:
+    #                     if self.verbose:
+    #                         utils.echo_warning_msg(f'Exception: {e}. Retrying ({tries - attempt - 1} left)...')
+    #                     time.sleep(2)
+    #                     continue
+    #                 else:
+    #                     raise e
+
+    #     except FileExistsError:
+    #         return 0
+    #     except Exception as e:
+    #         if self.verbose:
+    #             utils.echo_error_msg(str(e))
+    #         status = -1
+
+    #     ## Final check
+    #     if check_size and (not os.path.exists(dst_fn) or os.stat(dst_fn).st_size == 0):
+    #         status = -1
+            
+    #     return status
 
     def fetch_ftp_file(self, dst_fn, params=None, datatype=None, overwrite=False):
         """Fetch an ftp file via urllib."""
@@ -962,62 +1101,62 @@ class FetchesFactory(factory.CUDEMFactory):
         wadnr, nswtb, cdse, gba
     
     _modules = {
-        'https': {'call': HttpDataset},
-        'gmrt': {'call': gmrt.GMRT},
-        'mar_grav': {'call': margrav.MarGrav},
-        'srtm_plus': {'call': srtmplus.SRTMPlus},
-        'synbath': {'call': synbath.SynBath},
-        'charts': {'call': charts.NauticalCharts},
-        'digital_coast': {'call': dav.DAV, 'aliases': ['dav', 'dc']},
-        'SLR': {'call': dav.SLR},
-        'CoNED': {'call': dav.CoNED},
-        'CUDEM': {'call': dav.CUDEM},
-        'multibeam': {'call': multibeam.Multibeam}, 
-        'mbdb': {'call': multibeam.MBDB},
-        'r2r': {'call': multibeam.R2R},
-        'gebco': {'call': gebco.GEBCO},
-        'gedtm30': {'call': gedtm30.GEDTM30},
-        'mgds': {'call': mgds.MGDS},
-        'trackline': {'call': trackline.Trackline},
-        'ehydro': {'call': ehydro.eHydro},
-        'ngs': {'call': ngs.NGS},
-        'hydronos': {'call': hydronos.HydroNOS},
-        'ncei_thredds': {'call': nceithredds.NCEIThreddsCatalog},
-        'etopo': {'call': etopo.ETOPO},
-        'tnm': {'call': tnm.TheNationalMap},
-        'ned': {'call': tnm.NED},
-        'ned1': {'call': tnm.NED1},
-        'tnm_laz': {'call': tnm.TNM_LAZ},
-        'emodnet': {'call': emodnet.EMODNet},
-        'chs': {'call': chs.CHS},
-        'hrdem': {'call': hrdem.HRDEM},
-        'mrdem': {'call': mrdem.MRDEM},
-        'arcticdem': {'call': arcticdem.ArcticDEM},
-        'bluetopo': {'call': bluetopo.BlueTopo},
-        'osm': {'call': osm.OpenStreetMap},
-        'copernicus': {'call': copernicus.CopernicusDEM},
-        'fabdem': {'call': fabdem.FABDEM},
-        'nasadem': {'call': nasadem.NASADEM},
-        'tides': {'call': tides.Tides},
-        'vdatum': {'call': vdatum.VDATUM},
-        'buoys': {'call': buoys.BUOYS},
-        'earthdata': {'call': earthdata.EarthData},
-        'icesat2': {'call': earthdata.IceSat2},
-        'mur_sst': {'call': earthdata.MUR_SST},
-        'swot': {'call': earthdata.SWOT},
-        'usiei': {'call': usiei.USIEI},
-        'wsf': {'call': wsf.WSF},
-        'hydrolakes': {'call': hydrolakes.HydroLakes},
-        'bingbfp': {'call': bingbfp.BingBFP},
-        'waterservices': {'call': waterservices.WaterServices},
-        'csb': {'call': csb.CSB},
-        'cpt_city': {'call': cptcity.CPTCity},
-        'gps_coordinates': {'call': GPSCoordinates},
-        'nominatim': {'call': Nominatim},
-        'wa_dnr': {'call': wadnr.WADNR},
-        'nsw_tb': {'call': nswtb.NSW_TB},
-        'sentinel2': {'call': cdse.Sentinel2},
-        'gba': {'call': gba.GBA},
+        'https': {'call': HttpDataset, 'category': 'Generic'},
+        'gmrt': {'call': gmrt.GMRT, 'category': 'Bathymetry'},
+        'mar_grav': {'call': margrav.MarGrav, 'category': 'Bathymetry'},
+        'srtm_plus': {'call': srtmplus.SRTMPlus, 'category': 'Bathymetry'},
+        'synbath': {'call': synbath.SynBath, 'category': 'Bathymetry'},
+        'charts': {'call': charts.NauticalCharts, 'category': 'Reference'},
+        'digital_coast': {'call': dav.DAV, 'aliases': ['dav', 'dc'], 'category': 'Topography'},
+        'SLR': {'call': dav.SLR, 'category': 'Topography'},
+        'CoNED': {'call': dav.CoNED, 'category': 'Topography'},
+        'CUDEM': {'call': dav.CUDEM, 'category': 'Topography'},
+        'multibeam': {'call': multibeam.Multibeam, 'category': 'Bathymetry'}, 
+        'mbdb': {'call': multibeam.MBDB, 'category': 'Bathymetry'},
+        'r2r': {'call': multibeam.R2R, 'category': 'Bathymetry'},
+        'gebco': {'call': gebco.GEBCO, 'category': 'Bathymetry'},
+        'gedtm30': {'call': gedtm30.GEDTM30, 'category': 'Bathymetry'},
+        'mgds': {'call': mgds.MGDS, 'category': 'Bathymetry'},
+        'trackline': {'call': trackline.Trackline, 'category': 'Bathymetry'},
+        'ehydro': {'call': ehydro.eHydro, 'category': 'Bathymetry'},
+        'ngs': {'call': ngs.NGS, 'category': 'Reference'},
+        'hydronos': {'call': hydronos.HydroNOS, 'category': 'Bathymetry'},
+        'ncei_thredds': {'call': nceithredds.NCEIThreddsCatalog, 'category': 'Bathymetry'},
+        'etopo': {'call': etopo.ETOPO, 'category': 'Bathymetry'},
+        'tnm': {'call': tnm.TheNationalMap, 'category': 'Topography'},
+        'ned': {'call': tnm.NED, 'category': 'Topography'},
+        'ned1': {'call': tnm.NED1, 'category': 'Topography'},
+        'tnm_laz': {'call': tnm.TNM_LAZ, 'category': 'Topography'},
+        'emodnet': {'call': emodnet.EMODNet, 'category': 'Bathymetry'},
+        'chs': {'call': chs.CHS, 'category': 'Bathymetry'},
+        'hrdem': {'call': hrdem.HRDEM, 'category': 'Topography'},
+        'mrdem': {'call': mrdem.MRDEM, 'category': 'Topography'},
+        'arcticdem': {'call': arcticdem.ArcticDEM, 'category': 'Topography'},
+        'bluetopo': {'call': bluetopo.BlueTopo, 'category': 'Bathymetry'},
+        'osm': {'call': osm.OpenStreetMap, 'category': 'Reference'},
+        'copernicus': {'call': copernicus.CopernicusDEM, 'category': 'Topography'},
+        'fabdem': {'call': fabdem.FABDEM, 'category': 'Topography'},
+        'nasadem': {'call': nasadem.NASADEM, 'category': 'Topography'},
+        'tides': {'call': tides.Tides, 'category': 'Oceanography'},
+        'vdatum': {'call': vdatum.VDATUM, 'category': 'Reference'},
+        'buoys': {'call': buoys.BUOYS, 'category': 'Oceanography'},
+        'earthdata': {'call': earthdata.EarthData, 'category': 'Generic'},
+        'icesat2': {'call': earthdata.IceSat2, 'category': 'Topography'},
+        'mur_sst': {'call': earthdata.MUR_SST, 'category': 'Oceanography'},
+        'swot': {'call': earthdata.SWOT, 'category': 'Oceanography'},
+        'usiei': {'call': usiei.USIEI, 'category': 'Topography'},
+        'wsf': {'call': wsf.WSF, 'category': 'Reference'},
+        'hydrolakes': {'call': hydrolakes.HydroLakes, 'category': 'Topography'},
+        'bingbfp': {'call': bingbfp.BingBFP, 'category': 'Topography'},
+        'waterservices': {'call': waterservices.WaterServices, 'category': 'Oceanography'},
+        'csb': {'call': csb.CSB, 'category': 'Bathymetry'},
+        'cpt_city': {'call': cptcity.CPTCity, 'category': 'Reference'},
+        'gps_coordinates': {'call': GPSCoordinates, 'category': 'Reference'},
+        'nominatim': {'call': Nominatim, 'category': 'Reference'},
+        'wa_dnr': {'call': wadnr.WADNR, 'category': 'Topography'},
+        'nsw_tb': {'call': nswtb.NSW_TB, 'category': 'Topography'},
+        'sentinel2': {'call': cdse.Sentinel2, 'category': 'Imagery'},
+        'gba': {'call': gba.GBA, 'category': 'Bathymetry'},
     }
     
     def __init__(self, **kwargs):
@@ -1030,33 +1169,179 @@ class FetchesFactory(factory.CUDEMFactory):
 ##
 ## fetches cli
 ## ==============================================
+def print_welcome_banner():
+    """Prints a minimalist Earth banner."""
+
+    import random
+    
+    def a():
+        # ANSI Color Codes
+        BLUE = "\033[34m"
+        GREEN = "\033[32m"
+        CYAN = "\033[36m"
+        RESET = "\033[0m"
+
+        # A mix of ocean (~) and land (k/M) characters
+        globe = f"""
+          {BLUE}   .---.
+          {BLUE} .'  {GREEN}.{BLUE}  `.       . , `
+          {BLUE}/  {GREEN}.   .{BLUE}  \\   .     `  ` ,
+          {BLUE}|  {GREEN}. . .{BLUE}  | .    . ; ,   . , .
+          {BLUE}\\   {GREEN}. .{BLUE}   / , `       .`  .  `
+          {BLUE} `.  {GREEN}.{BLUE}  .'              . ,   .  ,
+          {BLUE}   `---`{RESET}"""
+
+        # Using standard text for the title to keep it clean
+        print(f"""
+        {globe}   {CYAN}FETCHES{RESET} :: Geospatial Data Downloader
+                     {RESET}v{__version__}
+        """)
+
+    def b():
+        """Prints a geography-themed ASCII banner."""
+
+        # ANSI Color Codes
+        B = "\033[1;34m"  # Bold Blue
+        G = "\033[1;32m"  # Bold Green
+        C = "\033[1;36m"  # Bold Cyan (for text)
+        W = "\033[1;37m"  # Bold White
+        R = "\033[0m"     # Reset
+
+        version = f"v{__version__}"
+
+        print(f"""
+        {B}      ,---.      {C}  ______     _       _                 {R}
+        {B}    ,' {G}_ {B} `.    {C} |  ____|   | |     | |                {R}
+        {B}   /  {G}/_\ {B}  \   {C} | |__   ___| |_ ___| |__   ___ ___   {R}
+        {B}  |   {G}|_|   {B}|  {C} |  __| / _ \ __/ __| '_ \ / _ \/ __|  {R}
+        {B}   \   {G}| {B}   /   {C} | |   |  __/ || (__| | | |  __/\__ \  {R}
+        {B}    `.___,'     {C} |_|    \___|\__\___|_| |_|\___||___/  {R}
+
+        {W}                The CUDEM Data Acquisition Engine {B}{version}{R}
+        """)
+
+    def c():
+        print(f"""--- {utils.CYAN}FETCHES{utils.RESET} --- :v{__version__}: Geospatial Data Downloader
+        """)
+        
+    if random.randint(0, 11) % 2 == 1: a()
+    else: b()
+
+        
+def interactive_wizard(available_modules):
+    """Interactive mode! - testing"""
+    
+    try:
+        import questionary
+        #print_welcome_banner()
+    except:
+        utils.echo_error_msg('you must have `questionary` to run in interactive mode')
+        return None, None
+    
+    ## Select Data Source (with auto-complete!)
+    module_name = questionary.autocomplete(
+        'Which dataset would you like to fetch?',
+        choices=list(available_modules.keys())
+    ).ask()
+    
+    ## Select Region Method
+    region_type = questionary.select(
+        'How do you want to define your region?',
+        choices=['Bounding Box', 'Place Name (e.g., "Boulder, CO")', 'Whole World']
+    ).ask()
+    
+    region_str = None
+    if region_type == 'Bounding Box':
+        region_str = questionary.text('Enter bbox (xmin/xmax/ymin/ymax):').ask()
+        region_str = [f'{region_str}'] # Format for CUDEM
+    elif region_type.startswith('Place'):
+        place = questionary.text('Enter place name:').ask()
+        region_str = [f'loc:{place}']
+    else:
+        region_str = ['-180/180/-90/90']
+
+    these_regions = regions.parse_cli_region(region_str, True)
+        
+    ## Confirm & Run
+    if questionary.confirm(f'Ready to fetch {module_name}?').ask():
+        return module_name, these_regions
+    
+    return None, None
+        
+
+def get_module_cli_desc(m: Dict) -> str:
+    """Generates a formatted, categorized list of modules and descriptions."""
+    
+    CATEGORY_ORDER = [
+        'Topography', 
+        'Bathymetry', 
+        'Oceanography', 
+        'Imagery', 
+        'Reference', 
+        'Generic'
+    ]
+    
+    grouped_modules = {}
+    
+    for key, val in m.items():
+        cat = val.get('category', 'Generic')
+        if cat not in grouped_modules:
+            grouped_modules[cat] = []
+            
+        mod_cls = val.get('call', None)
+        if mod_cls is not None:
+            if hasattr(mod_cls, '_cli_help_text') and mod_cls._cli_help_text:
+                desc = mod_cls._cli_help_text
+            elif mod_cls.__doc__:
+                desc = mod_cls.__doc__.strip().split('\n')[0]
+            else:
+                desc = f"Run {key}"
+                
+            grouped_modules[cat].append((key, desc))
+
+    rows = []
+    
+    existing_cats = [c for c in CATEGORY_ORDER if c in grouped_modules]
+    remaining_cats = sorted([c for c in grouped_modules if c not in CATEGORY_ORDER])
+    
+    for cat in existing_cats + remaining_cats:
+        rows.append(f"\n\033[1;4m{cat}\033[0m")
+        
+        for name, desc in sorted(grouped_modules[cat], key=lambda x: x[0]):
+            rows.append(f"  \033[1m{name:<18}\033[0m : {desc}")
+
+    return '\n'.join(rows)
+
+
 class PrintModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        factory.echo_modules(FetchesFactory._modules, values, md=True if not values else False)
+        #factory.echo_modules(FetchesFactory._modules, values, md=True if not values else False)
+        print_welcome_banner()
+        print(f"""
+        Supported fetches modules (see {os.path.basename(sys.argv[0])} <module-name> --help for more info): 
+
+        {get_module_cli_desc(FetchesFactory._modules)}
+        """)
         sys.exit(0)
 
+        
 class ModulesDescriptionAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         factory.echo_modules(FetchesFactory._modules, values, md=True if not values else False)
         sys.exit(0)
-                
+
+        
 def fetches_cli():
     """Run fetches from command-line using argparse."""
 
     _usage = f"%(prog)s [-R REGION] [-H THREADS] [-A ATTEMPTS] [-l] [-z] [-q] [-v] MODULE [MODULE-OPTS]..." 
     
     parser = argparse.ArgumentParser(
-        description=f"%(prog)s ({__version__}): Fetch and process remote elevation data",
+        description=f"{utils.CYAN}%(prog)s{utils.RESET} ({__version__}) :: Fetch and process remote elevation data",
         formatter_class=argparse.RawTextHelpFormatter,
         add_help=False,
         usage=_usage,
-        epilog=f"""
-Supported %(prog)s modules (see %(prog)s <module-name> --help for more info): 
-
-{factory.get_module_cli_desc(FetchesFactory._modules)}
-        
-CUDEM home page: <http://cudem.colorado.edu>
-        """
+        epilog=f"""CUDEM home page: <http://cudem.colorado.edu>"""
     )
 
     parser.add_argument(
@@ -1093,12 +1378,16 @@ CUDEM home page: <http://cudem.colorado.edu>
         help="Lower the verbosity to a quiet"
     )
     # parser.add_argument(
-    #     '-m', '--modules',
-    #     nargs='?',
-    #     default=None,
-    #     action=PrintModulesAction,
-    #     help="Display the module descriptions and usage"
-    # )
+    #     '-i', '--interactive',
+    #     action='store_true',
+    #     help="Run in interactive mode."
+    # )    
+    parser.add_argument(
+        '-m', '--modules',
+        nargs=0,
+        action=PrintModulesAction,
+        help="Display the available modules and their descriptions"
+    )
     parser.add_argument(
         '-v', '--version',
         action='version',
@@ -1109,120 +1398,91 @@ CUDEM home page: <http://cudem.colorado.edu>
     #     nargs='+',
     #     help="The modules to run (e.g., srtm_plus, gmrt, etc.)"
     # )
-
+    
     help_parser = argparse.ArgumentParser(parents=[parser], description='fetches')    
     global_args, remaining_argv = parser.parse_known_args()
 
+    ## Process Flags
+    want_verbose = not global_args.quiet
+    check_size = not global_args.no_check_size
+    
     module_map = {}
     for key, val in FetchesFactory._modules.items():
         module_map[key] = val['call']
         for alias in val.get('aliases', []):
             module_map[alias] = val['call']
-            #module_map['desc'] = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
-        
-    ## -- Subparsers for Modules --
-    # subparsers = parser.add_subparsers(
-    #     dest='module_cmd',
-    #     title='Available Modules',
-    #     metavar='MODULE',
-    #     required=True
-    # )
-
-    # factory.auto_subparser(subparsers, FetchesFactory._modules)
-    # ## Automatically generate subparsers for every registered module
-    # for mod_name, mod_def in FetchesFactory._modules.items():
-    #     mod_cls = mod_def['call']
-        
-    #     desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
-    #     current_aliases = mod_def.get('aliases', [])
-
-    #     upper_aliases = mod_name.upper()
-    #     current_aliases.append(upper_aliases)
-        
-    #     ## Create Subparser
-    #     sp = subparsers.add_parser(
-    #         mod_name,
-    #         help=desc,
-    #         description=mod_cls.__doc__,
-    #         formatter_class=argparse.RawTextHelpFormatter,
-    #         aliases=current_aliases
-    #     )
-        
-    #     ## Populate Arguments from __init__
-    #     factory._populate_subparser(sp, mod_cls)
     
-    ## Parse arguments
-    #args = parser.parse_args()
+    #if global_args.interactive:
+    if False:
+        # Print banner if not in 'quiet' mode
+        if '-q' not in sys.argv and '--quiet' not in sys.argv:
+            print_welcome_banner()
 
-    commands = []
-    current_cmd = None
-    current_args = []
-
-    for arg in remaining_argv:
-        if (arg in module_map or arg.split(':')[0] in module_map) and not arg.startswith('-'):
-            if current_cmd:
-                commands.append((current_cmd, current_args))
-            if len(arg.split(':')) > 1:
-                _, current_cmd, current_args = factory.parse_fmod_argparse(arg)
-            else:
-                current_cmd = arg
-                current_args = []
-        else:
-            if current_cmd:
-                current_args.append(arg)
-            else:
-                pass
-
-    if current_cmd:
-        commands.append((current_cmd, current_args))
-
-    if not commands:
-        parser.print_help()
-        sys.exit(0)
-            
-    # if not args.module_cmd:
-    #     parser.print_help()
-    #     sys.exit(0)
-    
-    # ## Validate Positional Arguments
-    # if not args.modules_to_run:
-    #     parser.print_help()
-    #     utils.echo_error_msg('You must select at least one fetch module')
-    #     sys.exit(-1)
-
-    ## Process Flags
-    want_verbose = not global_args.quiet
-    check_size = not global_args.no_check_size
-
-    ## Parse Regions
-    ## If no region provided, default to world.
-    if not global_args.region:
-        these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
-    else:
-        these_regions = regions.parse_cli_region(global_args.region, want_verbose)
-
-    ## Collect module-specific args
-    ## We filter out the global args to pass the rest to the module __init__
-    #global_arg_keys = ['region', 'threads', 'attempts', 'list', 'no_check_size', 'quiet', 'modules', 'version', 'module_cmd']
-    #mod_kwargs = {k: v for k, v in vars(global_args).items() if k not in global_arg_keys}
-
-    usable_modules = []
-    for mod_name, mod_argv in commands:
+        mod_name, these_regions = interactive_wizard(FetchesFactory._modules)
+        if not mod_name: return(-1)
+        
         mod_cls = module_map[mod_name]
-        #desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
-        mod_parser = argparse.ArgumentParser(
-            prog=f"fetches [OPTIONS] {mod_name}",
-            description=mod_cls.__doc__,
-            add_help=True,
-            formatter_class=argparse.RawTextHelpFormatter
-        )
-
-        factory._populate_subparser(mod_parser, mod_cls)
+        usable_modules = []
+        ## we cant currently set the kwargs in interactive mode, but will.
+        usable_modules.append((mod_cls, {}))
+    
         
-        mod_args_ns = mod_parser.parse_args(mod_argv)
-        #print(mod_args_ns)
-        mod_kwargs = vars(mod_args_ns)
-        usable_modules.append((mod_cls, mod_kwargs))
+    else:
+        commands = []
+        current_cmd = None
+        current_args = []
+
+        for arg in remaining_argv:
+            if (arg in module_map or arg.split(':')[0] in module_map) and not arg.startswith('-'):
+                if current_cmd:
+                    commands.append((current_cmd, current_args))
+                if len(arg.split(':')) > 1:
+                    _, current_cmd, current_args = factory.parse_fmod_argparse(arg)
+                else:
+                    current_cmd = arg
+                    current_args = []
+            else:
+                if current_cmd:
+                    current_args.append(arg)
+                else:
+                    pass
+
+        if current_cmd:
+            commands.append((current_cmd, current_args))
+
+        if not commands:
+            #print_welcome_banner()                
+            parser.print_help()
+            sys.exit(0)
+
+        ## Parse Regions
+        ## If no region provided, default to world.
+        if not global_args.region:
+            these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
+        else:
+            these_regions = regions.parse_cli_region(global_args.region, want_verbose)
+
+        ## Collect module-specific args
+        ## We filter out the global args to pass the rest to the module __init__
+        #global_arg_keys = ['region', 'threads', 'attempts', 'list', 'no_check_size', 'quiet', 'modules', 'version', 'module_cmd']
+        #mod_kwargs = {k: v for k, v in vars(global_args).items() if k not in global_arg_keys}
+        usable_modules = []
+        for mod_name, mod_argv in commands:
+            mod_cls = module_map[mod_name]
+            #desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
+            mod_parser = argparse.ArgumentParser(
+                prog=f"fetches [OPTIONS] {mod_name}",
+                description=mod_cls.__doc__,
+                add_help=True,
+                formatter_class=argparse.RawTextHelpFormatter
+            )
+
+            factory._populate_subparser(mod_parser, mod_cls)
+
+            mod_args_ns = mod_parser.parse_args(mod_argv)
+            #print(mod_args_ns)
+            mod_kwargs = vars(mod_args_ns)
+            usable_modules.append((mod_cls, mod_kwargs))
     
     ## Execution Loop by region
     for this_region in these_regions:

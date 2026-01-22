@@ -1177,6 +1177,11 @@ DST_PORT = sys.stderr
 MSG_LEVEL = 1
 MSG_LEVELS = {'debug': 0, 'info': 1, 'proc': 2, 'warning': 3, 'error': 4}
 
+BLUE = "\033[34m"
+GREEN = "\033[32m"
+CYAN = "\033[36m"
+RESET = "\033[0m"
+
 def _terminal_width():
     #cols = 40
     #try:
@@ -1226,7 +1231,14 @@ def _init_msg(msg, prefix_len, buff_len=6):
     except:
         return f'{msg}'
 
+def truncate_middle(s, n=50):
+    if len(s) <= n:
+        return s
 
+    n_2 = int(n) // 2 - 2    
+    return f"{s[:n_2]}...{s[-n_2:]}"
+
+    
 def echo_msg2(msg, prefix='cudem', level='info', nl='\n', bold=False, use_tqdm=False, dst_port=sys.stderr):
     """echo `msg` to stderr using `prefix`
     
