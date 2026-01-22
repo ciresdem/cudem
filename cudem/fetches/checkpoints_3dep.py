@@ -1,6 +1,6 @@
 ### checkpoints_3dep.py
 ##
-## Copyright (c) 2010 - 2026 Regents of the University of Colorado
+## Copyright (c) 2026 - 2026 Regents of the University of Colorado
 ##
 ## checkpoints_3dep.py is part of CUDEM
 ##
