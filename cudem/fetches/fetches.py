@@ -1229,7 +1229,7 @@ def print_welcome_banner():
 
         
 def interactive_wizard(available_modules):
-    """Interactive mode! - testing"""
+    """Interactive mode! - testing for fun."""
     
     try:
         import questionary
@@ -1334,7 +1334,7 @@ class ModulesDescriptionAction(argparse.Action):
 def fetches_cli():
     """Run fetches from command-line using argparse."""
 
-    _usage = f"%(prog)s [-R REGION] [-H THREADS] [-A ATTEMPTS] [-l] [-z] [-q] [-v] MODULE [MODULE-OPTS]..." 
+    _usage = f"%(prog)s [-R REGION] [-H THREADS] [-A ATTEMPTS] [-l] [-z] [-q] [-v] [-m] MODULE [MODULE-OPTS]..." 
     
     parser = argparse.ArgumentParser(
         description=f"{utils.CYAN}%(prog)s{utils.RESET} ({__version__}) :: Fetch and process remote elevation data",
@@ -1384,7 +1384,7 @@ def fetches_cli():
     # )    
     parser.add_argument(
         '-m', '--modules',
-        nargs=0,
+        nargs=0, # '?',
         action=PrintModulesAction,
         help="Display the available modules and their descriptions"
     )
