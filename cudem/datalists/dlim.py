@@ -732,22 +732,23 @@ class ElevationDataset:
                 = ('+proj=pipeline +step '
                    f'{self.transform["src_horz_crs"].to_proj4()} '
                    f'+inv +step {self.transform["dst_horz_crs"].to_proj4()}')
-            if self.region is not None:
-                self.transform['trans_region'] = self.region.copy()
-                self.transform['trans_region'].src_srs \
-                    = self.transform['dst_horz_crs'].to_proj4()
-                self.transform['trans_region'].warp(
-                    self.transform['src_horz_crs'].to_proj4()
-                )
-            else:
-                self.transform['trans_region'] \
-                    = regions.Region().from_list(self.infos.minmax)
-                self.transform['trans_region'].src_srs \
-                    = self.infos.src_srs
-                self.transform['trans_region'].warp(
-                    self.transform['dst_horz_crs'].to_proj4()
-                )
-
+                
+            # if self.region is not None:
+            #     self.transform['trans_region'] = self.region.copy()
+            #     self.transform['trans_region'].src_srs \
+            #         = self.transform['dst_horz_crs'].to_proj4()
+            #     self.transform['trans_region'].warp(
+            #         self.transform['src_horz_crs'].to_proj4()
+            #     )
+            # else:
+            #     self.transform['trans_region'] \
+            #         = regions.Region().from_list(self.infos.minmax)
+            #     self.transform['trans_region'].src_srs \
+            #         = self.infos.src_srs
+            #     self.transform['trans_region'].warp(
+            #         self.transform['dst_horz_crs'].to_proj4()
+            #     )
+                
             ## vertical Transformation
             if self.transform['want_vertical']:
                 self.set_vertical_transform()
@@ -768,35 +769,72 @@ class ElevationDataset:
 
                 return
 
-        ## dataset region
-        ## mrl: moved out of if block 
-        if self.region is not None and self.region.valid_p():
-            self.data_region = self.region.copy() \
-                if self.transform['trans_region'] is None \
-                   else self.transform['trans_region'].copy()
-            #inf_region = regions.Region().from_list(self.infos.minmax)
-            self.data_region = regions.regions_reduce(
-                self.data_region, self.inf_region
-            )
-            self.data_region.src_srs = self.infos.src_srs
-
-            if not self.data_region.valid_p():
-                self.data_region = self.region.copy() \
-                    if self.transform['trans_region'] is None \
-                       else self.transform['trans_region'].copy()
-        else:
-            self.data_region = regions.Region().from_list(
-                self.infos.minmax
-            )
-            self.data_region.src_srs = self.infos.src_srs
         #     self.region = self.data_region.copy()
         # self.region.zmax=self.upper_limit
         # self.region.zmin=self.lower_limit
-        
+
+        #utils.echo_msg(self.transform['trans_region'])
+        if self.region is not None:
+            self.region.srs = self.src_srs
+            self.transform['trans_region'] = self.region.copy()
+            #self.transform['trans_region'].srs = self.dst_srs
+        else:
+            self.transform['trans_region'] = regions.Region().from_list(self.infos.minmax)
+            self.transform['trans_region'].src_srs = self.infos.src_srs
+
+        #self.transform['trans_region'].buffer(pct=2) # buffer trans region in case it gets warped
+        if self.transform['transformer'] is not None:
+            self.transform['trans_region'].transform_densify(self.transform['transformer'], transform_direction="INVERSE")
+            
+        #utils.echo_msg(self.transform['trans_region'])
+        #utils.echo_msg(f'{self.x_inc is not None and self.y_inc is not None}')
+        if self.x_inc is not None and self.y_inc is not None:
+            #utils.echo_msg_bold('ook')
+            # Get center of the native region
+            center_x = (self.transform['trans_region'].xmax + self.transform['trans_region'].xmin) / 2.0
+            center_y = (self.transform['trans_region'].ymax + self.transform['trans_region'].ymin) / 2.0
+            #utils.echo_msg(self.transform['transformer'])
+            # Calculate increments in Source Units (e.g. Meters)
+            #src_x_inc = utils.wgs_inc2meter(self.x_inc)
+            src_x_inc, src_y_inc = utils.transform_increment(
+                self.x_inc, self.y_inc, 
+                self.transform['transformer'], 
+                (center_x, center_y)
+            )
+            #src_y_inc = src_x_inc
+            self.transform['trans_inc'] = (src_x_inc, src_y_inc)
+
+            #utils.echo_msg(self.transform['trans_inc'])
+        else:
+            self.transform['trans_inc'] = None
+
+        ## dataset region
+        ## mrl: moved out of if block 
+        # if self.region is not None and self.region.valid_p():
+        #     self.data_region = self.region.copy() \
+        #         if self.transform['trans_region'] is None \
+        #            else self.transform['trans_region'].copy()
+        #     #inf_region = regions.Region().from_list(self.infos.minmax)
+        #     self.data_region = regions.regions_reduce(
+        #         self.data_region, self.inf_region
+        #     )
+        #     self.data_region.src_srs = self.infos.src_srs
+
+        #     if not self.data_region.valid_p():
+        #         self.data_region = self.region.copy() \
+        #             if self.transform['trans_region'] is None \
+        #                else self.transform['trans_region'].copy()
+        # else:
+        #     self.data_region = regions.Region().from_list(
+        #         self.infos.minmax
+        #     )
+        #     self.data_region.src_srs = self.infos.src_srs
+
+            
     def initialize(self):
         self._sub_init()
         self._fn = None # temp filename holder
-        self.data_region = None 
+        #self.data_region = None 
         self.inf_region = None 
         self.archive_datalist = None
         self.data_entries = [] 
@@ -821,7 +859,7 @@ class ElevationDataset:
             'pipeline': None, 'trans_fn': None,
             'trans_fn_unc': None, 'trans_region': None,
             'transformer': None, 'vert_transformer': None,
-            'want_vertical': False,
+            'want_vertical': False, 'trans_inc': None,
         }
 
         if self.valid_p():
@@ -1496,68 +1534,68 @@ class ElevationDataset:
     def transform_and_yield_points(self):
         """Yield transformed points."""
         
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            for points in self.yield_points():
+        #with warnings.catch_warnings():
+        #    warnings.simplefilter('ignore')
+        for points in self.yield_points():
 
-                ## Convert Pandas DataFrame to NumPy RecArray
-                ## This allows icesat2/atl03/etc. parsers to yield DataFrames directly
-                if hasattr(points, 'to_records'):
-                    points = points.to_records(index=False)
-                    
-                utils.echo_debug_msg(f'transformer for {self.fn} is: {self.transform["transformer"]}')
-                utils.echo_debug_msg(f'vertical transformer for {self.fn} is: {self.transform["vert_transformer"]}')
-                if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
-                    if self.transform['transformer'] is not None:                        
-                        points['x'], points['y'] = self.transform['transformer'].transform(points['x'], points['y'])
+            ## Convert Pandas DataFrame to NumPy RecArray
+            ## This allows icesat2/atl03/etc. parsers to yield DataFrames directly
+            if hasattr(points, 'to_records'):
+                points = points.to_records(index=False)
 
-                    if self.transform['vert_transformer'] is not None:
-                        _, _, points['z'] = self.transform['vert_transformer'].transform(points['x'], points['y'], points['z'])
+            utils.echo_debug_msg(f'transformer for {self.fn} is: {self.transform["transformer"]}')
+            utils.echo_debug_msg(f'vertical transformer for {self.fn} is: {self.transform["vert_transformer"]}')
+            if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
+                if self.transform['transformer'] is not None:                        
+                    points['x'], points['y'] = self.transform['transformer'].transform(points['x'], points['y'])
 
-                try:
-                    points = points[~np.isinf(points['z'].astype(float))]
-                except Exception:
-                    pass
+                if self.transform['vert_transformer'] is not None:
+                    _, _, points['z'] = self.transform['vert_transformer'].transform(points['x'], points['y'], points['z'])
 
-                if self.region is not None and self.region.valid_p():
-                    xyz_region = self.region.copy()
-                    if self.invert_region:
-                        ## Inverted Region
-                        points = points[
-                            ((points['x'] >= xyz_region.xmax) | (points['x'] <= xyz_region.xmin)) | 
-                            ((points['y'] >= xyz_region.ymax) | (points['y'] <= xyz_region.ymin))
-                        ]
-                        if xyz_region.zmin is not None: points = points[(points['z'] <= xyz_region.zmin)]
-                        if xyz_region.zmax is not None: points = points[(points['z'] >= xyz_region.zmax)]
-                    else:
-                        # Standard Region
-                        points = points[
-                            ((points['x'] <= xyz_region.xmax) & (points['x'] >= xyz_region.xmin)) & 
-                            ((points['y'] <= xyz_region.ymax) & (points['y'] >= xyz_region.ymin))
-                        ]
-                        if xyz_region.zmin is not None: points = points[(points['z'] >= xyz_region.zmin)]
-                        if xyz_region.zmax is not None: points = points[(points['z'] <= xyz_region.zmax)]
+            try:
+                points = points[~np.isinf(points['z'].astype(float))]
+            except Exception:
+                pass
 
-                if self.upper_limit is not None: points = points[(points['z'] <= self.upper_limit)]
-                if self.lower_limit is not None: points = points[(points['z'] >= self.lower_limit)]
+            if self.region is not None and self.region.valid_p():
+                xyz_region = self.region.copy()
+                if self.invert_region:
+                    ## Inverted Region
+                    points = points[
+                        ((points['x'] >= xyz_region.xmax) | (points['x'] <= xyz_region.xmin)) | 
+                        ((points['y'] >= xyz_region.ymax) | (points['y'] <= xyz_region.ymin))
+                    ]
+                    if xyz_region.zmin is not None: points = points[(points['z'] <= xyz_region.zmin)]
+                    if xyz_region.zmax is not None: points = points[(points['z'] >= xyz_region.zmax)]
+                else:
+                    # Standard Region
+                    points = points[
+                        ((points['x'] <= xyz_region.xmax) & (points['x'] >= xyz_region.xmin)) & 
+                        ((points['y'] <= xyz_region.ymax) & (points['y'] >= xyz_region.ymin))
+                    ]
+                    if xyz_region.zmin is not None: points = points[(points['z'] >= xyz_region.zmin)]
+                    if xyz_region.zmax is not None: points = points[(points['z'] <= xyz_region.zmax)]
+
+            if self.upper_limit is not None: points = points[(points['z'] <= self.upper_limit)]
+            if self.lower_limit is not None: points = points[(points['z'] >= self.lower_limit)]
+
+            if len(points) > 0:
+                if isinstance(self.pnt_fltrs, list):
+                    for f in self.pnt_fltrs:
+                        ## set verbosity in the mod
+                        point_filter = pointz.PointFilterFactory(
+                            mod=f,
+                            points=points,
+                            region=self.region,
+                            xyinc=[self.x_inc, self.y_inc],
+                            cache_dir=self.cache_dir,
+                            verbose=False,
+                        )._acquire_module()
+                        if point_filter:
+                            points = point_filter()
 
                 if len(points) > 0:
-                    if isinstance(self.pnt_fltrs, list):
-                        for f in self.pnt_fltrs:
-                            ## set verbosity in the mod
-                            point_filter = pointz.PointFilterFactory(
-                                mod=f,
-                                points=points,
-                                region=self.region,
-                                xyinc=[self.x_inc, self.y_inc],
-                                cache_dir=self.cache_dir,
-                                verbose=False,
-                            )._acquire_module()
-                            if point_filter:
-                                points = point_filter()
-
-                    if len(points) > 0:
-                        yield points
+                    yield points
 
         self.transform['transformer'] = self.transform['vert_transformer'] = None
 

@@ -66,6 +66,7 @@ dependencies = [
     "utm", # bing buildings
     "pandas", # icesat2 export
     "netCDF4", # datalists netcdf support
+    "shapely", # geometry support
 ]
 
 keywords = ["DEM", "bathymetry", "lidar", "topography", "NOAA", "GIS", "elevation"]

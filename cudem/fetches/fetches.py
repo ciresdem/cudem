@@ -78,9 +78,11 @@ import requests
 import lxml.etree
 import lxml.html as lh
 
+from shapely import from_wkt
+
 from cudem import utils
 from cudem import regions
-from cudem import gdalfun
+#from cudem import gdalfun
 from cudem import factory
 from cudem.fetches import __version__ as __cudem_version__
 from . import __version__
@@ -267,7 +269,8 @@ class iso_xml:
                 opoly.append(opoly[0])
             
             if geom:
-                return gdalfun.wkt2geom(regions.create_wkt_polygon(opoly))
+                return from_wkt(regions.create_wkt_polygon(opoly))
+            # return gdalfun.wkt2geom(regions.create_wkt_polygon(opoly))
             return opoly
         return None
 

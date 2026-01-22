@@ -2461,7 +2461,6 @@ def sample_warp(
             if xcount and ycount:
                 x_sample_inc = y_sample_inc = None
 
-        utils.echo_msg(f'{xcount}/{ycount}')
         ## Define Output Bounds [minx, miny, maxx, maxy]
         out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
 

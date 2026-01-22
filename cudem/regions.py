@@ -34,17 +34,27 @@ import argparse
 from typing import List, Optional, Tuple, Union, Any, Dict
 
 import pyproj
-from osgeo import ogr
+import json
+from shapely.geometry import shape
+from shapely.geometry import box
+from shapely import from_wkt
+import shapely.wkt
 
 from cudem import utils
 from cudem import factory
 from cudem import srsfun
 from cudem import __version__ as __cudem_version__
 
-## Suppress OGR exceptions to maintain legacy behavior
-ogr.UseExceptions()
+try:
+    from osgeo import ogr
+    ## Suppress OGR exceptions to maintain legacy behavior
+    ogr.UseExceptions()
+    has_ogr = True
+except:
+    utils.echo_warning_msg('Some features may not work without OGR')
+    has_ogr = False
 
-__version__ = '1.0.0'
+__version__ = '1.1.0'
 
 class Region:
     """Representing a geographic region.
@@ -98,9 +108,11 @@ class Region:
     def xy_region(self):
         return [self.xmin, self.xmax, self.ymin, self.ymax]
 
+    
     @property
     def xy_extent(self):
         return [self.xmin, self.ymin, self.xmax, self.ymax]
+
     
     @property
     def z_region(self):
@@ -151,6 +163,7 @@ class Region:
 
     ## Alias for backward compatibility
     valid_p = is_valid
+
     
     def copy(self):
         """Return a deep copy of the region."""
@@ -242,7 +255,7 @@ class Region:
             self.from_list(r_list)
         elif region_str.startswith("POLYGON") or region_str.startswith("MULTIPOLYGON"):
             self.wkt = region_str
-            self.from_list(ogr.CreateGeometryFromWkt(region_str).GetEnvelope())
+            self.from_list(shapely.wkt.loads(region_str).bounds)
 
         return self
 
@@ -353,6 +366,7 @@ class Region:
         
         return int(this_end[0] - this_origin[0]), int(this_end[1] - this_origin[1]), dst_gt
 
+    
     def geo_transform_from_count(self, x_count: int = 0, y_count: int = 0):
         x_inc = (self.xmax - self.xmin) / x_count
         y_inc = (self.ymin - self.ymax) / y_count
@@ -395,9 +409,9 @@ class Region:
               [self.ymax, self.xmax],
               [self.ymax, self.xmin],
               [self.ymin, self.xmin]]
-        return create_wkt_polygon(eg, flatten=flatten)
-
+        return create_wkt_polygon(eg)#, flatten=flatten)
     
+
     def export_as_geom(self, flatten=True):
         """Convert a region to an OGR geometry."""
         
@@ -407,8 +421,17 @@ class Region:
         if self.wkt is not None:
             return ogr.CreateGeometryFromWkt(self.wkt)
         return None
+    
+    
+    def export_as_shapely_geom(self, flatten=True):
+        """Convert a region to a geometry."""
 
+        if self.wkt is not None:
+            return shapely.wkt.loads(self.wkt)
+        ## Fallback to bounding box if no WKT is set
+        return box(self.xmin, self.ymin, self.xmax, self.ymax)
 
+    
     def export_as_geojson(self):
         """Convert cudem Region to GeoJSON Polygon dictionary."""
         
@@ -430,7 +453,7 @@ class Region:
     
     def export_as_ogr(self, dst_ogr: str, dst_fmt: str = 'geojson', append: bool = False):
         """Convert a region to an OGR vector file."""
-        
+
         wkt = self.export_as_wkt()
         driver = ogr.GetDriverByName(dst_fmt)
         
@@ -453,38 +476,44 @@ class Region:
         ## Cleanup
         dst_feat = None
         dst_ds = None
-
+        
         
     def increments(self, x_count, y_count):
         x_inc = float((self.xmax - self.xmin) / x_count)
         y_inc = float((self.ymax - self.ymin) / y_count)
         return x_inc, y_inc
 
-    
+
     def srcwin(self, geo_transform, x_count, y_count, node='grid'):
         """Output the appropriate GDAL srcwin (xoff, yoff, xsize, ysize)."""
         
-        ## Calculate pixel coordinates
-        this_origin = [max(0, x) for x in utils._geo2pixel(
-            self.xmin, self.ymax, geo_transform, node=node
-        )]
-        this_end = [max(0, x) for x in utils._geo2pixel(
-            self.xmax, self.ymin, geo_transform, node=node
-        )]
+        ## Get raw pixel coordinates for the Region corners
+        ## We calculate UL (xmin, ymax) and LR (xmax, ymin) without clamping yet
+        ul = utils._geo2pixel(self.xmin, self.ymax, geo_transform, node=node)
+        lr = utils._geo2pixel(self.xmax, self.ymin, geo_transform, node=node)
         
-        this_size = [
-            max(0, this_end[0] - this_origin[0]),
-            max(0, this_end[1] - this_origin[1])
-        ]
+        ## Sort to find min/max (Handles South-Up images or axis flips)
+        ## x_indices[0] is the Left-most pixel, x_indices[1] is Right-most
+        x_indices = sorted([ul[0], lr[0]])
+        y_indices = sorted([ul[1], lr[1]])
         
-        ## Clamp to available size
-        if this_size[0] > x_count - this_origin[0]:
-            this_size[0] = x_count - this_origin[0]
-            
-        if this_size[1] > y_count - this_origin[1]:
-            this_size[1] = y_count - this_origin[1]
-            
-        return this_origin[0], this_origin[1], this_size[0], this_size[1]
+        ## Calculate Intersection with Raster Dimensions [0, count]
+        ## We clamp the START to 0, and the END to x_count
+        x_start = max(0, x_indices[0])
+        x_stop = min(x_count, x_indices[1] + 1) # +1 to include the last pixel (Fencepost fix)
+        
+        y_start = max(0, y_indices[0])
+        y_stop = min(y_count, y_indices[1] + 1) # +1 to include the last pixel
+        
+        ## Calculate Size
+        x_size = x_stop - x_start
+        y_size = y_stop - y_start
+        
+        ## Handle Valid but Empty Intersection (e.g. region is outside raster)
+        if x_size <= 0 or y_size <= 0:
+             return 0, 0, 0, 0
+             
+        return int(x_start), int(y_start), int(x_size), int(y_size)    
 
     
     def cut(self, cut_region=None, x_inc=None, y_inc=None):
@@ -559,50 +588,6 @@ class Region:
             return [(self.xmax + self.xmin) / 2, (self.ymax + self.ymin) / 2]
         return None        
 
-    def chunk(self, inc, n_chunk=10):
-        """Chunk the region into n_chunk by n_chunk cell regions."""
-        
-        if n_chunk is None:
-            return [self]
-        
-        o_chunks = []
-        xcount, ycount, _ = self.geo_transform(x_inc=inc)
-        
-        x_chunk = n_chunk
-        while True:
-            y_chunk = n_chunk
-            while True:
-                this_x_origin = x_chunk - n_chunk
-                this_y_origin = y_chunk - n_chunk
-                this_x_size = x_chunk - this_x_origin
-                this_y_size = y_chunk - this_y_origin
-
-                c_region = Region()
-                c_region.xmin = self.xmin + this_x_origin * inc
-                c_region.xmax = c_region.xmin + this_x_size * inc
-                c_region.ymin = self.ymin + this_y_origin * inc
-                c_region.ymax = c_region.ymin + this_y_size * inc
-
-                ## Clamp values
-                c_region.ymax = min(c_region.ymax, self.ymax)
-                c_region.ymin = max(c_region.ymin, self.ymin)
-                c_region.xmax = min(c_region.xmax, self.xmax)
-                c_region.xmin = max(c_region.xmin, self.xmin)
-                    
-                o_chunks.append(c_region)
-
-                if y_chunk < ycount:
-                    y_chunk += n_chunk
-                else:
-                    break
-                
-            if x_chunk < xcount:
-                x_chunk += n_chunk
-            else:
-                break
-
-        return o_chunks
-
     
     def warp(self, dst_crs='epsg:4326', include_z=True):
         """Transform region horizontally to a new CRS."""
@@ -629,23 +614,36 @@ class Region:
                 return self
 
             
-    def transform(self, transformer=None, include_z=True):
+    def transform(self, transformer=None, include_z=True, transform_direction="FORWARD"):
         if transformer is None or not self.is_valid():
             utils.echo_error_msg(f'Could not perform region transformation; {self}')
             return self
 
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            if include_z and (self.zmin is not None and self.zmax is not None):
-                self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin)
-                self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax)
-            else:
-                self.xmin, self.ymin = transformer.transform(self.xmin, self.ymin)
-                self.xmax, self.ymax = transformer.transform(self.xmax, self.ymax)
+        if include_z and (self.zmin is not None and self.zmax is not None):
+            self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin, direction=transform_direction)
+            self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax, direction=transform_direction)
+        else:
+            self.xmin, self.ymin = transformer.transform(self.xmin, self.ymin, direction=transform_direction)
+            self.xmax, self.ymax = transformer.transform(self.xmax, self.ymax, direction=transform_direction)
 
         return self
 
+    
+    def transform_densify(self, transformer=None, include_z=True, transform_direction="FORWARD"):
+        points_x, points_y = region_densify_edges(self, 20)
+        trans_points_x, trans_points_y = transformer.transform(points_x, points_y, direction=transform_direction)
 
+        self.xmin = min(trans_points_x)
+        self.xmax = max(trans_points_x)
+        self.ymin = min(trans_points_y)
+        self.ymax = max(trans_points_y)
+        
+        ## set the new SRS
+        #self.src_srs = d_srs.ExportToWkt()
+
+        return self
+
+    
 def regions_reduce(region_a: Region, region_b: Region) -> Region:
     """Combine two regions and find their minimum overlapping region."""
     
@@ -708,10 +706,29 @@ def regions_intersect_p(region_a: Region, region_b: Region) -> bool:
         if any(reduced_region.full_region) and not reduced_region.is_valid():
             return False
             
-        if not regions_intersect_ogr_p(region_a, region_b):
-            return False
-        
     return True
+
+
+def regions_intersect_poly_p(region_a: Region, region_b: Region) -> bool:
+    """Check if two regions intersect using Shapely geometry."""
+    
+    if region_a.is_valid() and region_b.is_valid():
+        geom_a = region_a.export_as_geom()
+        geom_b = region_b.export_as_geom()
+        if geom_a.intersects(geom_b):
+            return True
+    return False
+
+
+def regions_within_poly_p(region_a: Region, region_b: Region) -> bool:
+    """Check if region_b is within region_a using Shapely."""
+    
+    if region_a.is_valid() and region_b.is_valid():
+        geom_a = region_a.export_as_geom()
+        geom_b = region_b.export_as_geom()
+        if geom_a.contains(geom_b): 
+            return True
+    return False
 
 
 def regions_intersect_ogr_p(region_a: Region, region_b: Region) -> bool:
@@ -736,25 +753,39 @@ def regions_within_ogr_p(region_a: Region, region_b: Region) -> bool:
     return False
 
 
-# def create_wkt_polygon(coords, xpos=1, ypos=0, flatten=True):
-#     """Convert coordinate list to WKT Polygon."""
+def region_densify_edges(region, density=20):
+    """Generate a list of points along the perimeter of the region.
     
-#     ring = ogr.Geometry(ogr.wkbLinearRing)
-#     for coord in coords:
-#         try:
-#             x = float(coord[xpos])
-#             y = float(coord[ypos])
-#             ring.AddPoint(x, y)
-#         except (ValueError, TypeError):
-#             continue
+    Args:
+        region (Region): Input region.
+        density (int): Number of points per edge.
         
-#     poly = ogr.Geometry(ogr.wkbPolygon)
-#     poly.AddGeometry(ring)
+    Returns:
+        list: A list of (x, y) tuples representing the densified perimeter.
+    """
+
+    import numpy as np
     
-#     if flatten:
-#         poly.FlattenTo2D()
-        
-#     return poly.ExportToWkt()
+    if not region.valid_p():
+        return []
+
+    xs = []
+    ys = []
+    
+    ys.extend(np.linspace(region.ymin, region.ymax, density))
+    xs.extend([region.xmin] * density)
+    
+    xs.extend(np.linspace(region.xmin, region.xmax, density))
+    ys.extend([region.ymax] * density)
+    
+    ys.extend(np.linspace(region.ymax, region.ymin, density))
+    xs.extend([region.xmax] * density)
+    
+    xs.extend(np.linspace(region.xmax, region.xmin, density))
+    ys.extend([region.ymin] * density)
+    
+    #return list(zip(xs, ys))
+    return xs, ys
 
 
 def create_wkt_polygon(coords, xpos=1, ypos=0, flatten=True):
@@ -762,7 +793,12 @@ def create_wkt_polygon(coords, xpos=1, ypos=0, flatten=True):
     
     ring = ogr.Geometry(ogr.wkbLinearRing)
     for coord in coords:
-        ring.AddPoint(coord[xpos], coord[ypos])
+        try:
+            x = float(coord[xpos])
+            y = float(coord[ypos])
+            ring.AddPoint(x, y)
+        except (ValueError, TypeError):
+            continue
         
     poly = ogr.Geometry(ogr.wkbPolygon)
     poly.AddGeometry(ring)
@@ -773,9 +809,54 @@ def create_wkt_polygon(coords, xpos=1, ypos=0, flatten=True):
     return poly.ExportToWkt()
 
 
+def create_wkt_poly(coords, xpos=1, ypos=0):
+    """Convert coordinate list to WKT Polygon."""
+    
+    poly_coords = [(c[xpos], c[ypos]) for c in coords]
+    poly = shapely.geometry.Polygon(poly_coords)
+    return(poly.wkt)
+
+
+def geojson_wkts(src_fn: str) -> List[Region]:
+    """Return the regions found in a GeoJSON file."""
+    
+    these_regions = []
+    
+    ## Handle filename parsing (e.g., 'file.json:zmin/zmax')
+    src_s = src_fn.split(':')
+    fn = src_s[0]
+    
+    if os.path.exists(fn):
+        try:
+            with open(fn, 'r') as f:
+                data = json.load(f)
+            
+            # Normalize to list of features
+            features = data.get('features', []) if 'features' in data else [data]
+            
+            for feat in features:
+                geom_dict = feat.get('geometry', feat)
+                if geom_dict:
+                    # Convert GeoJSON geometry to Shapely to WKT
+                    s_geom = shape(geom_dict)
+                    r = Region().from_string(s_geom.wkt)
+                    
+                    # Apply optional CLI overrides (zmin/zmax etc.)
+                    if len(src_s) > 1:
+                        src_r = src_s[1].split('/')
+                        if len(src_r) > 0: r.zmin = utils.float_or(src_r[0])
+                        if len(src_r) > 1: r.zmax = utils.float_or(src_r[1])
+                    
+                    these_regions.append(r)
+        except Exception as e:
+            utils.echo_warning_msg(f"Failed to read GeoJSON {fn}: {e}")
+            
+    return these_regions
+
+
 def ogr_wkts(src_ds: str) -> List[Region]:
     """Return the regions found in an OGR dataset."""
-    
+
     these_regions = []
     f_no_geom = 0
     src_s = src_ds.split(':')
@@ -806,6 +887,34 @@ def ogr_wkts(src_ds: str) -> List[Region]:
         utils.echo_warning_msg(f'{f_no_geom} features had no geometry')
         
     return these_regions
+
+
+def region_list_to_ogr(region_list: List[Region], dst_ogr: str, dst_fmt: str = 'ESRI Shapefile'):
+    """Convert a region list to an OGR vector."""
+    
+    driver = ogr.GetDriverByName(dst_fmt)
+    if os.path.exists(dst_ogr):
+        driver.DeleteDataSource(dst_ogr)
+
+    dst_ds = driver.CreateDataSource(dst_ogr)
+    dst_lyr = dst_ds.CreateLayer(dst_ogr, geom_type=ogr.wkbPolygon)
+    dst_lyr.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
+        
+    for this_id, this_region in enumerate(region_list):
+        eg = [[this_region.ymin, this_region.xmin],
+              [this_region.ymin, this_region.xmax],
+              [this_region.ymax, this_region.xmax],
+              [this_region.ymax, this_region.xmin],
+              [this_region.ymin, this_region.xmin]]
+    
+        wkt = create_wkt_polygon(eg)    
+        dst_feat = ogr.Feature(dst_lyr.GetLayerDefn())
+        dst_feat.SetGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+        dst_feat.SetField('id', this_id)
+        dst_lyr.CreateFeature(dst_feat)
+    
+    ## Cleanup
+    dst_ds = None
 
 
 def generate_tile_set(in_region=None, inc=0.25, pct_buffer=None):
@@ -847,33 +956,38 @@ def generate_tile_set(in_region=None, inc=0.25, pct_buffer=None):
     return tile_regions
 
 
-def region_list_to_ogr(region_list: List[Region], dst_ogr: str, dst_fmt: str = 'ESRI Shapefile'):
-    """Convert a region list to an OGR vector."""
+def region_list_to_geojson(region_list: List[Region], dst_fn: str):
+    """Convert a region list to a GeoJSON FeatureCollection."""
     
-    driver = ogr.GetDriverByName(dst_fmt)
-    if os.path.exists(dst_ogr):
-        driver.DeleteDataSource(dst_ogr)
-
-    dst_ds = driver.CreateDataSource(dst_ogr)
-    dst_lyr = dst_ds.CreateLayer(dst_ogr, geom_type=ogr.wkbPolygon)
-    dst_lyr.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
+    features = []
+    for i, region in enumerate(region_list):
+        if not region.is_valid(): continue
         
-    for this_id, this_region in enumerate(region_list):
-        eg = [[this_region.ymin, this_region.xmin],
-              [this_region.ymin, this_region.xmax],
-              [this_region.ymax, this_region.xmax],
-              [this_region.ymax, this_region.xmin],
-              [this_region.ymin, this_region.xmin]]
+        ## Get coordinates from region
+        ## export_as_geojson returns a geometry dict, we wrap it in a Feature
+        geom = region.export_as_geojson() 
+        
+        feature = {
+            "type": "Feature",
+            "properties": {"id": i + 1},
+            "geometry": geom
+        }
+        features.append(feature)
+        
+    collection = {
+        "type": "FeatureCollection",
+        "features": features
+    }
     
-        wkt = create_wkt_polygon(eg)    
-        dst_feat = ogr.Feature(dst_lyr.GetLayerDefn())
-        dst_feat.SetGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
-        dst_feat.SetField('id', this_id)
-        dst_lyr.CreateFeature(dst_feat)
+    with open(dst_fn, 'w') as f:
+        json.dump(collection, f)
+
+        
+def export_as_vector(self, dst_fn: str):
+    """Export region to GeoJSON."""
     
-    ## Cleanup
-    dst_ds = None
-    
+    region_list_to_geojson([self], dst_fn)
+        
 
 def fetch_nominatim_coordinates(q):
     """Fetch coordinates for a query string using the fetches.Nominatim module.
@@ -1024,6 +1138,15 @@ def parse_cli_region(region_list: List[str], verbose: bool = True):
                 tmp_region = quarter_tile_from_coordinates(**kwargs)
                 these_regions.append(tmp_region)
 
+            elif base_region_str.endswith('geojson'):
+                ## Try parsing as OGR source
+                tmp_regions_geojson = geojson_wkts(base_region_str)
+                for r in tmp_regions_geojson:
+                    if r.is_valid():
+                        if 'pct_buffer' in args:
+                            r.buffer(pct=utils.float_or(args['pct_buffer']))
+                        these_regions.append(r)
+
             else:
                 ## Try parsing as OGR source
                 tmp_regions_ogr = ogr_wkts(base_region_str)
@@ -1032,6 +1155,7 @@ def parse_cli_region(region_list: List[str], verbose: bool = True):
                         if 'pct_buffer' in args:
                             r.buffer(pct=utils.float_or(args['pct_buffer']))
                         these_regions.append(r)
+                        
 
     if verbose:
         if not these_regions:
@@ -1114,6 +1238,12 @@ def regions_cli():
         type=float,
         help="BUFFER the region with a buffer-value."
     )
+
+    parser.add_argument(
+        '-x', '--export',
+        action='store_true',
+        help="EXPORT the region(s) to geojson"
+    )
     
     parser.add_argument(
         '-e', '--echo',
@@ -1167,7 +1297,7 @@ def regions_cli():
     if args.tile_set is not None:
         for this_region in these_regions:
             these_tiles = generate_tile_set(this_region.format('gmt'), args.tile_set)
-            region_list_to_ogr(these_tiles, 'regions_tile_set.shp')
+            region_list_to_geojson(these_tiles, 'regions_tile_set.geojson')
         ## Clear main regions if we just generated tiles
         these_regions = []
 
@@ -1190,14 +1320,19 @@ def regions_cli():
 
         if args.te:
             print(this_region.format('te'))
-        elif args.echo:
-            print(this_region.format('gmt'))
+        #elif args.echo:
+        #    print(this_region.format('gmt'))
         elif args.name:
             print(this_region.format('fn'))
         else:
-            this_region.export_as_ogr(f'region_{this_region.format("fn")}.geojson')
+            print(this_region.format('gmt'))
+        #    #this_region.export_as_ogr(f'region_{this_region.format("fn")}.geojson')
+        #    region_list_to_geojson([this_region], f'region_{this_region.format("fn")}.geojson')
 
 
+    if args.export:
+        region_list_to_geojson(these_regions, f'region_{this_region.format("fn")}.geojson')
+        
 if __name__ == '__main__':
     regions_cli()
 

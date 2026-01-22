@@ -504,6 +504,39 @@ def lll(src_lat):
     return lonl_, latl_
 
 
+def transform_increment(dst_inc_x, dst_inc_y, transformer, region_center):
+    """
+    Transform grid increments from Destination SRS to Source SRS.
+    
+    Args:
+        dst_inc_x (float): X increment in destination units (e.g. 1/3600 for 1s).
+        dst_inc_y (float): Y increment in destination units.
+        transformer (pyproj.Transformer): The pipeline transforming Source -> Dest.
+        region_center (tuple): (x, y) center of the region in Source CRS.
+        
+    Returns:
+        (float, float): The estimated (src_inc_x, src_inc_y) in source units.
+    """
+    
+    if transformer is None:
+        return dst_inc_x, dst_inc_y
+
+    cx, cy = region_center
+    #utils.echo_msg(f'center: {cx}/{cy}')
+    dest_cx, dest_cy = transformer.transform(cx, cy)
+    #utils.echo_msg(f'trans-center: {dest_cx}/{dest_cy}')
+    dest_off_x = dest_cx + dst_inc_x
+    dest_off_y = dest_cy + dst_inc_y
+    
+    src_off_x, _ = transformer.transform(dest_off_x, dest_cy, direction="INVERSE")
+    _, src_off_y = transformer.transform(dest_cx, dest_off_y, direction="INVERSE")
+    
+    src_inc_x = abs(src_off_x - cx)
+    src_inc_y = abs(src_off_y - cy)
+    
+    return src_inc_x, src_inc_y
+
+
 def touch(fname, times=None):
     """touch a file to make sure it exists"""
     
