@@ -194,7 +194,7 @@ class Grits:
         self.gt = self.ds_config['geoT']
         
         if self.ds_band.GetNoDataValue() is None:
-            self.ds_band.SetNoDataValue(self.ds_config['ndv'])
+            self.ds_band.SetNoDataValue(utils.float_or(self.ds_config['ndv'], -9999.))
 
             
     def load_aux_data(self, aux_source_list=None, src_region=None, src_gt=None, x_count=None, y_count=None):
