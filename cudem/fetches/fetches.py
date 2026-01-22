@@ -1098,7 +1098,7 @@ class FetchesFactory(factory.CUDEMFactory):
         mgds, trackline, ehydro, ngs, hydronos, nceithredds, etopo, tnm, emodnet, chs, \
         hrdem, mrdem, arcticdem, bluetopo, osm, copernicus, fabdem, nasadem, tides, vdatum, \
         buoys, earthdata, usiei, wsf, hydrolakes, bingbfp, waterservices, csb, cptcity, \
-        wadnr, nswtb, cdse, gba
+        wadnr, nswtb, cdse, gba, checkpoints_3dep
     
     _modules = {
         'https': {'call': HttpDataset, 'category': 'Generic'},
@@ -1157,6 +1157,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'nsw_tb': {'call': nswtb.NSW_TB, 'category': 'Topography'},
         'sentinel2': {'call': cdse.Sentinel2, 'category': 'Imagery'},
         'gba': {'call': gba.GBA, 'category': 'Bathymetry'},
+        '3dep_cp': {'call': checkpoints_3dep.CheckPoints3DEP, 'category': 'Reference'},
     }
     
     def __init__(self, **kwargs):
