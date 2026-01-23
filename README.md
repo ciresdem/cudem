@@ -62,7 +62,7 @@ Other useful external programs needed for full functionality include:
 Download and install git (If you have not already): [git installation](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
 
 ```bash
-pip install git+[https://github.com/ciresdem/cudem.git#egg=cudem](https://github.com/ciresdem/cudem.git#egg=cudem)
+pip install git+https://github.com/ciresdem/cudem.git#egg=cudem
 
 ```
 
