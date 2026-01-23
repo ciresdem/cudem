@@ -1227,48 +1227,7 @@ def print_welcome_banner():
         
     if random.randint(0, 11) % 2 == 1: a()
     else: b()
-
-        
-def interactive_wizard(available_modules):
-    """Interactive mode! - testing for fun."""
-    
-    try:
-        import questionary
-        #print_welcome_banner()
-    except:
-        utils.echo_error_msg('you must have `questionary` to run in interactive mode')
-        return None, None
-    
-    ## Select Data Source (with auto-complete!)
-    module_name = questionary.autocomplete(
-        'Which dataset would you like to fetch?',
-        choices=list(available_modules.keys())
-    ).ask()
-    
-    ## Select Region Method
-    region_type = questionary.select(
-        'How do you want to define your region?',
-        choices=['Bounding Box', 'Place Name (e.g., "Boulder, CO")', 'Whole World']
-    ).ask()
-    
-    region_str = None
-    if region_type == 'Bounding Box':
-        region_str = questionary.text('Enter bbox (xmin/xmax/ymin/ymax):').ask()
-        region_str = [f'{region_str}'] # Format for CUDEM
-    elif region_type.startswith('Place'):
-        place = questionary.text('Enter place name:').ask()
-        region_str = [f'loc:{place}']
-    else:
-        region_str = ['-180/180/-90/90']
-
-    these_regions = regions.parse_cli_region(region_str, True)
-        
-    ## Confirm & Run
-    if questionary.confirm(f'Ready to fetch {module_name}?').ask():
-        return module_name, these_regions
-    
-    return None, None
-        
+               
 
 def get_module_cli_desc(m: Dict) -> str:
     """Generates a formatted, categorized list of modules and descriptions."""
@@ -1378,11 +1337,6 @@ def fetches_cli():
         action='store_true',
         help="Lower the verbosity to a quiet"
     )
-    # parser.add_argument(
-    #     '-i', '--interactive',
-    #     action='store_true',
-    #     help="Run in interactive mode."
-    # )    
     parser.add_argument(
         '-m', '--modules',
         nargs=0, # '?',
@@ -1451,76 +1405,76 @@ def fetches_cli():
             module_map[alias] = val['call']
     
     #if global_args.interactive:
-    if False:
-        # Print banner if not in 'quiet' mode
-        if '-q' not in sys.argv and '--quiet' not in sys.argv:
-            print_welcome_banner()
+    # if False:
+    #     # Print banner if not in 'quiet' mode
+    #     if '-q' not in sys.argv and '--quiet' not in sys.argv:
+    #         print_welcome_banner()
 
-        mod_name, these_regions = interactive_wizard(FetchesFactory._modules)
-        if not mod_name: return(-1)
+    #     mod_name, these_regions = interactive_wizard(FetchesFactory._modules)
+    #     if not mod_name: return(-1)
         
-        mod_cls = module_map[mod_name]
-        usable_modules = []
-        ## we cant currently set the kwargs in interactive mode, but will.
-        usable_modules.append((mod_cls, {}))
+    #     mod_cls = module_map[mod_name]
+    #     usable_modules = []
+    #     ## we cant currently set the kwargs in interactive mode, but will.
+    #     usable_modules.append((mod_cls, {}))
     
         
-    else:
-        commands = []
-        current_cmd = None
-        current_args = []
+    #else:
+    commands = []
+    current_cmd = None
+    current_args = []
 
-        for arg in remaining_argv:
-            if (arg in module_map or arg.split(':')[0] in module_map) and not arg.startswith('-'):
-                if current_cmd:
-                    commands.append((current_cmd, current_args))
-                if len(arg.split(':')) > 1:
-                    _, current_cmd, current_args = factory.parse_fmod_argparse(arg)
-                else:
-                    current_cmd = arg
-                    current_args = []
+    for arg in remaining_argv:
+        if (arg in module_map or arg.split(':')[0] in module_map) and not arg.startswith('-'):
+            if current_cmd:
+                commands.append((current_cmd, current_args))
+            if len(arg.split(':')) > 1:
+                _, current_cmd, current_args = factory.parse_fmod_argparse(arg)
             else:
-                if current_cmd:
-                    current_args.append(arg)
-                else:
-                    pass
-
-        if current_cmd:
-            commands.append((current_cmd, current_args))
-
-        if not commands:
-            #print_welcome_banner()                
-            parser.print_help()
-            sys.exit(0)
-
-        ## Parse Regions
-        ## If no region provided, default to world.
-        if not global_args.region:
-            these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
+                current_cmd = arg
+                current_args = []
         else:
-            these_regions = regions.parse_cli_region(global_args.region, want_verbose)
+            if current_cmd:
+                current_args.append(arg)
+            else:
+                pass
 
-        ## Collect module-specific args
-        ## We filter out the global args to pass the rest to the module __init__
-        #global_arg_keys = ['region', 'threads', 'attempts', 'list', 'no_check_size', 'quiet', 'modules', 'version', 'module_cmd']
-        #mod_kwargs = {k: v for k, v in vars(global_args).items() if k not in global_arg_keys}
-        usable_modules = []
-        for mod_name, mod_argv in commands:
-            mod_cls = module_map[mod_name]
-            #desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
-            mod_parser = argparse.ArgumentParser(
-                prog=f"fetches [OPTIONS] {mod_name}",
-                description=mod_cls.__doc__,
-                add_help=True,
-                formatter_class=argparse.RawTextHelpFormatter
-            )
+    if current_cmd:
+        commands.append((current_cmd, current_args))
 
-            factory._populate_subparser(mod_parser, mod_cls)
+    if not commands:
+        #print_welcome_banner()                
+        parser.print_help()
+        sys.exit(0)
 
-            mod_args_ns = mod_parser.parse_args(mod_argv)
-            #print(mod_args_ns)
-            mod_kwargs = vars(mod_args_ns)
-            usable_modules.append((mod_cls, mod_kwargs))
+    ## Parse Regions
+    ## If no region provided, default to world.
+    if not global_args.region:
+        these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
+    else:
+        these_regions = regions.parse_cli_region(global_args.region, want_verbose)
+
+    ## Collect module-specific args
+    ## We filter out the global args to pass the rest to the module __init__
+    #global_arg_keys = ['region', 'threads', 'attempts', 'list', 'no_check_size', 'quiet', 'modules', 'version', 'module_cmd']
+    #mod_kwargs = {k: v for k, v in vars(global_args).items() if k not in global_arg_keys}
+    usable_modules = []
+    for mod_name, mod_argv in commands:
+        mod_cls = module_map[mod_name]
+        #desc = getattr(mod_cls, '_cli_help_text', mod_cls.__doc__.strip().split('\n')[0] if mod_cls.__doc__ else f"Run {mod_name}")
+        mod_parser = argparse.ArgumentParser(
+            prog=f"fetches [OPTIONS] {mod_name}",
+            description=mod_cls.__doc__,
+            add_help=True,
+            formatter_class=argparse.RawTextHelpFormatter
+        )
+
+        factory._populate_subparser(mod_parser, mod_cls)
+
+        mod_args_ns = mod_parser.parse_args(mod_argv)
+        #print(mod_args_ns)
+        mod_kwargs = vars(mod_args_ns)
+        usable_modules.append((mod_cls, mod_kwargs))
     
     ## Execution Loop by region
     for this_region in these_regions:
