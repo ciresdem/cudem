@@ -82,7 +82,7 @@ class Fetcher(ElevationDataset):
             callback=callback, verbose=False,
             outdir=outdir,
         )._acquire_module()
-
+        
         if self.fetch_module is None:
             utils.echo_warning_msg(f'Fetch module {self.fn} returned None')
 
@@ -304,6 +304,15 @@ class DAVFetcher_CoNED(Fetcher):
 
     def parse(self):
         ## Override parse to support COG direct access (no fetch needed)
+        ## we still to `run the module
+        ## Run the Fetcher
+        if len(self.fetch_module.results) == 0:
+            try:
+                self.fetch_module.run()
+            except Exception as e:
+                utils.echo_warning_msg(f'Fetch module {self.fn} failed: {e}')
+                return
+        
         for result in self.fetch_module.results:
             if not self.cog:
                 status = self.fetch_module.fetch_entry(result, check_size=self.check_size)
