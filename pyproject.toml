@@ -95,6 +95,8 @@ namespaces = false  # Set to true if you are using implicit namespace packages
 [project.scripts]
 ## Core Modules
 fetches = "cudem.fetches.fetches:fetches_cli"
+geofetch = "cudem.fetches.fetches:fetches_cli"
+gfetch = "cudem.fetches.fetches:fetches_cli"
 dlim = "cudem.datalists.dlim:datalists_cli"
 waffles = "cudem.waffles.waffles:waffles_cli"
 grits = "cudem.grits.grits:grits_cli"
