@@ -673,8 +673,10 @@ def grits_cli():
 
     ## --- Info Helpers (Exit after printing) ---
     sys_grp.add_argument('-m', '--modules', nargs='?', action=PrintModulesAction, help='List available modules')
+
+    fixed_argv = factory.fix_argparse_region(sys.argv[1:])
     
-    args = parser.parse_args()
+    args = parser.parse_args(fixed_argv)
 
     for src_dem in args.dems:
         current_dem = src_dem

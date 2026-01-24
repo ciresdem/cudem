@@ -1357,37 +1357,7 @@ def fetches_cli():
     help_parser = argparse.ArgumentParser(parents=[parser], description='fetches')    
     #global_args, remaining_argv = parser.parse_known_args()
 
-    ## ---------------------------------------------------------
-    ## Argument Pre-processing to account for negative coordinates
-    ## since argparse doesn't allow it normally.
-    ## This allows "-R -90/..." to work by converting it to "-R-90/..."
-    ## or "--region=-90/..." before argparse sees it.
-    ## ---------------------------------------------------------
-    raw_argv = sys.argv[1:]
-    fixed_argv = []
-    i = 0
-    while i < len(raw_argv):
-        arg = raw_argv[i]
-        
-        ## Check if this is a region flag and there is a next argument
-        if arg in ['-R', '--region', '--aoi'] and i + 1 < len(raw_argv):
-            next_arg = raw_argv[i+1]
-            
-            ## If the next arg starts with '-', it's probably a negative coordinate.
-            ## We assume anything looking like a coordinate string is a value, not a flag,
-            ## so argparse can stay happy.
-            if next_arg.startswith('-'):
-                if arg == '-R':
-                    ## Merge: -R -90 -> -R-90
-                    fixed_argv.append(f"{arg}{next_arg}")
-                else:
-                    ## Merge: --region -90 -> --region=-90
-                    fixed_argv.append(f"{arg}={next_arg}")
-                i += 2
-                continue
-
-        fixed_argv.append(arg)
-        i += 1
+    fixed_argv = factory.fix_argparse_region(sys.argv[1:])
     
     ## ---------------------------------------------------------
     ## Parse using the fixed list

@@ -3178,8 +3178,10 @@ def datalists_cli():
         help="Display point filter descriptions."
     )
 
+    fixed_argv = factory.fix_argparse_region(sys.argv[1:])
+    
     ## Parse Arguments
-    args = parser.parse_args()
+    args = parser.parse_args(fixed_argv)
     
     if args.point_filters:
         mod_key = None if args.point_filters == 'all' else utils.int_or(args.point_filters, str(args.point_filters))

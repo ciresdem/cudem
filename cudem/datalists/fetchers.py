@@ -302,6 +302,7 @@ class DAVFetcher_CoNED(Fetcher):
         self.keep_fetched_data = keep_fetched_data
         self.cog = cog
 
+        
     def parse(self):
         ## Override parse to support COG direct access (no fetch needed)
         ## we still to `run the module

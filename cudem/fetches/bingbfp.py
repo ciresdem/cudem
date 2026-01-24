@@ -37,6 +37,7 @@ from osgeo import ogr
 from cudem import utils
 from cudem import gdalfun
 from cudem import regions
+from cudem import factory
 from cudem.fetches import fetches
 
 ## ==============================================
@@ -311,7 +312,9 @@ def bing_bfp_cli():
         help="Overwrite existing output file."
     )
 
-    args = parser.parse_args()
+    fixed_argv = factory.fix_argparse_region(sys.argv[1:])
+    
+    args = parser.parse_args(fixed_argv)
 
     ## Create Region
     try:

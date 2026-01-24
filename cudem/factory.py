@@ -427,7 +427,40 @@ def auto_subparser(subparsers, module_dict):
         ## Populate Arguments from __init__
         _populate_subparser(sp, mod_cls)
 
+
+def fix_argparse_region(raw_argv):
+    ## ---------------------------------------------------------
+    ## Argument Pre-processing to account for negative coordinates
+    ## since argparse doesn't allow it normally.
+    ## This allows "-R -90/..." to work by converting it to "-R-90/..."
+    ## or "--region=-90/..." before argparse sees it.
+    ## ---------------------------------------------------------
+    fixed_argv = []
+    i = 0
+    while i < len(raw_argv):
+        arg = raw_argv[i]
+        
+        ## Check if this is a region flag and there is a next argument
+        if arg in ['-R', '--region', '--aoi'] and i + 1 < len(raw_argv):
+            next_arg = raw_argv[i+1]
             
+            ## If the next arg starts with '-', it's probably a negative coordinate.
+            ## We assume anything looking like a coordinate string is a value, not a flag,
+            ## so argparse can stay happy.
+            if next_arg.startswith('-'):
+                if arg == '-R':
+                    ## Merge: -R -90 -> -R-90
+                    fixed_argv.append(f"{arg}{next_arg}")
+                else:
+                    ## Merge: --region -90 -> --region=-90
+                    fixed_argv.append(f"{arg}={next_arg}")
+                i += 2
+                continue
+
+        fixed_argv.append(arg)
+        i += 1
+    return fixed_argv
+        
 
 ## ==============================================
 ## Aliases

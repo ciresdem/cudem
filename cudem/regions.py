@@ -1281,7 +1281,9 @@ def regions_cli():
         version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
 
-    args = parser.parse_args()
+    fixed_argv = factory.fix_argparse_region(sys.argv[1:])
+    
+    args = parser.parse_args(fixed_argv)
 
     ## Handle verbosity
     if not args.quiet:

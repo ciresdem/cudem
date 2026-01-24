@@ -1343,8 +1343,10 @@ def waffles_cli():
         version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
 
+    fixed_argv = factory.fix_argparse_region(sys.argv[1:])
+    
     ## Parse
-    args = parser.parse_args()
+    args = parser.parse_args(fixed_argv)
 
     ## Handle --modules early exit
     if args.modules:

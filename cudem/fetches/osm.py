@@ -40,6 +40,7 @@ from cudem import regions
 from cudem import gdalfun
 from cudem import xyzfun
 from cudem import regions
+from cudem import factory
 from cudem.fetches import fetches
 from cudem.fetches import gmrt
 
@@ -672,7 +673,9 @@ def osm_coast_cli():
     parser.add_argument("--landmask", action="store_true", help="Include landmask in output (for coastline)")
     parser.add_argument("--invert", action="store_true", help="Invert land/water mask")
 
-    args = parser.parse_args()
+    fixed_argv = factory.fix_argparse_region(sys.argv[1:])
+    
+    args = parser.parse_args(fixed_argv)
     
     ## Parse Region
     try:
