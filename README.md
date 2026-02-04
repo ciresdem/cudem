@@ -1,4 +1,4 @@
-Matthew Love[^1][^2], Christopher Amante[^1][^2], Elliot Lim[^1][^2], Michael MacFerrin[^1][^2], Kelly Carignan (retired)
+Matthew Love[^1][^2], Christopher Amante[^1][^2], Elliot Lim[^1][^2], Michael MacFerrin[^1][^2], Matthew Fisher (mentor), Kelly Carignan (retired)
 
 [^1]: Cooperative Institute for Research in Environmental Sciences (CIRES)
 at the University of Colorado Boulder
