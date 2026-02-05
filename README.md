@@ -73,10 +73,10 @@ pip install git+[https://github.com/ciresdem/cudem.git#egg=cudem](https://github
 It is recommended to use a conda environment to manage GDAL and other geospatial dependencies.
 
 ```bash
-conda create -n cudem -c conda-forge gdal gmt pygmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile git netCDF4 h5netcdf libgdal-hdf5 libgdal-netcdf pyhdf pip scikit-image
+conda create -n cudem -c conda-forge gdal gmt pygmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile git netCDF4 h5netcdf libgdal-hdf5 libgdal-netcdf pyhdf pip scikit-image shapely
 conda activate cudem
 pip install laspy[laszip]
-pip install --upgrade --no-deps git+[https://github.com/ciresdem/cudem.git](https://github.com/ciresdem/cudem.git)
+pip install --upgrade --no-deps git+https://github.com/ciresdem/cudem.git
 
 ```
 
