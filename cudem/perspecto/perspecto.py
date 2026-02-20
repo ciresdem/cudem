@@ -117,11 +117,9 @@ class Perspecto:
         
         ## Initialize the CPT
         self.init_cpt(want_gdal=want_gdal_cpt)
-
         
     def __call__(self):
         return self.run()
-
     
     def _move_cpt(self, src):
         """Helper to rename the generic temporary CPT to a unique specific name."""
