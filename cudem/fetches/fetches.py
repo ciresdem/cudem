@@ -1531,7 +1531,7 @@ def fetches_cli():
                 utils.echo_error_msg('User interruption.')
                 sys.exit(-1)
             except Exception as e:
-                utils.echo_error_msg(f"Error running {args.module_cmd}: {e}")
+                #utils.echo_error_msg(f"Error running {args.module_cmd}: {e}")
                 if want_verbose:
                     import traceback
                     traceback.print_exc()

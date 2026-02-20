@@ -588,6 +588,71 @@ class Region:
             return [(self.xmax + self.xmin) / 2, (self.ymax + self.ymin) / 2]
         return None        
 
+
+    def chunk(self, inc, n_chunk=10):
+        """chunk the xy region [xmin, xmax, ymin, ymax] into 
+        n_chunk by n_chunk cell regions, given inc.
+
+        Args:
+          inc (float): the chunking increment
+          n_chunk (int): number of cells
+
+        Returns:
+          list: a list of chunked regions [<regions.region>, ...]
+        """
+
+        if n_chunk is None:
+            return([self])
+        
+        i_chunk = 0
+        x_i_chunk = 0
+        x_chunk = n_chunk
+        o_chunks = []
+        xcount, ycount, dst_gt = self.geo_transform(x_inc = inc)
+
+        while True:
+            y_chunk = n_chunk
+            while True:
+                this_x_origin = x_chunk - n_chunk
+                this_y_origin = y_chunk - n_chunk
+                this_x_size = x_chunk - this_x_origin
+                this_y_size = y_chunk - this_y_origin
+
+                c_region = Region()
+                
+                c_region.xmin = self.xmin + this_x_origin * inc
+                c_region.xmax = c_region.xmin + this_x_size * inc
+                c_region.ymin = self.ymin + this_y_origin * inc
+                c_region.ymax = c_region.ymin + this_y_size * inc
+
+                if c_region.ymax > self.ymax:
+                    c_region.ymax = self.ymax
+                    
+                if c_region.ymin < self.ymin:
+                    c_region.ymin = self.ymin
+                    
+                if c_region.xmax > self.xmax:
+                    c_region.xmax = self.xmax
+                    
+                if c_region.xmin < self.xmin:
+                    c_region.xmin = self.xmin
+                    
+                o_chunks.append(c_region)
+
+                if y_chunk < ycount:
+                    y_chunk += n_chunk
+                    i_chunk += 1
+                else:
+                    break
+                
+            if x_chunk < xcount:
+                x_chunk += n_chunk
+                x_i_chunk += 1
+            else:
+                break
+
+        return(o_chunks)
+
     
     def warp(self, dst_crs='epsg:4326', include_z=True):
         """Transform region horizontally to a new CRS."""

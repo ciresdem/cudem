@@ -938,11 +938,16 @@ class BAGFile(ElevationDataset):
         sub_weight = max((3 * (10 if x_res <=3 else 1))/x_res, self.min_weight)
         
         oo = []
-        if self.data_region is not None and self.data_region.valid_p():
-            oo.append(f'MINX={self.data_region.xmin}')
-            oo.append(f'MAXX={self.data_region.xmax}')
-            oo.append(f'MINY={self.data_region.ymin}')
-            oo.append(f'MAXY={self.data_region.ymax}')
+        if self.transform['trans_region'] is not None:
+            data_region = self.transform['trans_region'].copy()
+        elif self.inf_region is not None:
+            data_region = self.inf_region.copy()
+            
+        if data_region is not None and data_region.valid_p():
+            oo.append(f'MINX={data_region.xmin}')
+            oo.append(f'MAXX={data_region.xmax}')
+            oo.append(f'MINY={data_region.ymin}')
+            oo.append(f'MAXY={data_region.ymax}')
 
         ## VR Processing
         is_vr = ('HAS_SUPERGRIDS' in mt and mt['HAS_SUPERGRIDS'] == 'TRUE') or self.force_vr
