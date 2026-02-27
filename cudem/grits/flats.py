@@ -4,26 +4,26 @@
 ##
 ## flats.py is part of cudem
 ##
-## Permission is hereby granted, free of charge, to any person obtaining a copy 
-## of this software and associated documentation files (the "Software"), to deal 
-## in the Software without restriction, including without limitation the rights 
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+## of the Software, and to permit persons to whom the Software is furnished to do so,
 ## subject to the following conditions:
 ##
 ## The above copyright notice and this permission notice shall be included in all copies or
 ## substantial portions of the Software.
 ##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
 ### Commentary:
 ##
-## Removes flat areas from a DEM by identifying contiguous areas of identical values 
+## Removes flat areas from a DEM by identifying contiguous areas of identical values
 ## that exceed a specified size threshold.
 ##
 ### Code:
@@ -47,29 +47,29 @@ class Flats(grits.Grits):
     n_chunk : int, optional
         The processing chunk size in pixels. Defaults to full file if None.
     """
-    
+
     def __init__(self, size_threshold=None, n_chunk=None, **kwargs):
         super().__init__(**kwargs)
         self.size_threshold = utils.int_or(size_threshold)
         self.n_chunk = utils.int_or(n_chunk)
 
-        
+
     def run(self):
         """Execute the flat removal filter."""
-        
+
         ## Setup Output
         dst_ds = self.copy_src_dem()
         if dst_ds is None: return
 
         count_removed = 0
-        
+
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
             if src_ds is None:
                 utils.echo_error_msg('Could not load {self.src_dem}')
                 return
-            
+
             self.init_ds(src_ds)
-            
+
             ## Default to processing the whole file at once if no chunk size given
             ## (Flats detection works best on larger areas to see full extent of flat)
             if self.n_chunk is None:
@@ -90,17 +90,17 @@ class Flats(grits.Grits):
                     ## Fallback
                     self.n_chunk = 4096
 
-                
+
             ## Iterate chunks
             for srcwin in gdalfun.gdal_yield_srcwin(
                     src_ds, n_chunk=self.n_chunk, step=self.n_chunk, verbose=self.verbose
             ):
                 ## Read Data
                 src_arr = self.ds_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3]).astype(float)
-                
+
                 ## Identify Unique Values and their Counts
                 uv, uv_counts = np.unique(src_arr, return_counts=True)
-                
+
                 ## Determine Threshold
                 threshold = self.size_threshold
                 if threshold is None:
@@ -112,23 +112,23 @@ class Flats(grits.Grits):
                 ## Identify values that appear too frequently (Flats)
                 ## Filter out NoData from being "removed" (it's already removed)
                 ndv = self.ds_config['ndv']
-                
+
                 flat_values = uv[uv_counts > threshold]
-                
+
                 ## Create Mask
                 ## (Exclude NDV from mask calculation to avoid re-masking it)
                 if ndv is not None:
                     flat_values = flat_values[flat_values != ndv]
-                
+
                 if flat_values.size > 0:
                     mask = np.isin(src_arr, flat_values)
-                    
+
                     ## Count and Apply
                     n_removed = np.count_nonzero(mask)
                     if n_removed > 0:
                         count_removed += n_removed
                         src_arr[mask] = ndv
-                        
+
                         ## Write back to Destination
                         dst_band = dst_ds.GetRasterBand(self.band)
                         dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])

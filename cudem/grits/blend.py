@@ -4,20 +4,20 @@
 ##
 ## blend.py is part of cudem
 ##
-## Permission is hereby granted, free of charge, to any person obtaining a copy 
-## of this software and associated documentation files (the "Software"), to deal 
-## in the Software without restriction, including without limitation the rights 
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+## of the Software, and to permit persons to whom the Software is furnished to do so,
 ## subject to the following conditions:
 ##
 ## The above copyright notice and this permission notice shall be included in all copies or
 ## substantial portions of the Software.
 ##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
@@ -76,18 +76,18 @@ def interpolate_array(
             srcwin_buff[1]:srcwin_buff[1] + srcwin_buff[3],
             srcwin_buff[0]:srcwin_buff[0] + srcwin_buff[2]
         ]
-        
+
         points_array[points_array == ndv] = np.nan
         point_indices = np.nonzero(~np.isnan(points_array))
-        
+
         y_origin = srcwin[1] - srcwin_buff[1]
         x_origin = srcwin[0] - srcwin_buff[0]
         y_size = y_origin + srcwin[3]
         x_size = x_origin + srcwin[2]
-        
+
         if np.all(np.isnan(points_array)):
             continue
-        
+
         elif np.count_nonzero(np.isnan(points_array)) == 0:
             points_array = points_array[y_origin:y_size,x_origin:x_size]
             interp_array[
@@ -98,7 +98,7 @@ def interpolate_array(
         elif len(point_indices[0]) <= 3:
             # elif len(point_indices[0]):
             continue
-        
+
         else:
             point_values = points_array[point_indices]
             xi, yi = np.mgrid[
@@ -118,7 +118,7 @@ def interpolate_array(
                 srcwin[0]:srcwin[0] + interp_data.shape[1]
             ] = interp_data
 
-    point_values = None    
+    point_values = None
     return interp_array
 
 
@@ -160,24 +160,24 @@ def generate_slope_array(
             srcwin_buff[1]:srcwin_buff[1] + srcwin_buff[3],
             srcwin_buff[0]:srcwin_buff[0] + srcwin_buff[2]
         ]
-        
+
         points_array[points_array == ndv] = np.nan
         #point_indices = np.nonzero(~np.isnan(points_array))
-        
+
         y_origin = srcwin[1] - srcwin_buff[1]
         x_origin = srcwin[0] - srcwin_buff[0]
         y_size = y_origin + srcwin[3]
         x_size = x_origin + srcwin[2]
-        
+
         if np.all(np.isnan(points_array)):
             continue
 
         gy, gx = np.gradient(points_array)
         slope_data = np.sqrt(gx * gx + gy * gy)
-        
+
         if slope_data.size == 0:
             continue
-        
+
         slope_data = slope_data[y_origin:y_size, x_origin:x_size]
         slope_array[
             srcwin[1]:srcwin[1] + slope_data.shape[0],
@@ -212,7 +212,7 @@ class Blend(grits.Grits):
             0.0 -> disable random point insertion
             0-1 -> higher = inlcude more random points
     """
-    
+
     def __init__(
             self,
             weight_threshold=None,
@@ -225,14 +225,14 @@ class Blend(grits.Grits):
             interp_method='linear',
             aux_dems=None,
             **kwargs
-    ):        
+    ):
         super().__init__(**kwargs)
-        self.weight_threshold = utils.float_or(weight_threshold, 1)        
+        self.weight_threshold = utils.float_or(weight_threshold, 1)
         self.buffer_cells = utils.int_or(buffer_cells, 1)
-        
+
         self.binary_dilation = binary_dilation
         self.binary_pulse = binary_pulse
-        
+
         self.sub_buffer_cells = utils.int_or(sub_buffer_cells, 0)
         self.slope_scale = np.clip(utils.float_or(slope_scale, 0.5), 0.0, 1.0)
         self.random_scale = np.clip(utils.float_or(random_scale, .025), 0.0, 1.0)
@@ -245,7 +245,7 @@ class Blend(grits.Grits):
         if interp_method in ['linear', 'cubic', 'nearest']:
             self.interp_method = interp_method
 
-        
+
     def binary_closed_dilation(self, arr, iterations=1, closing_iterations=1):
         closed_and_dilated_arr = arr.copy()
         struct_ = scipy.ndimage.generate_binary_structure(2, 2)
@@ -260,14 +260,14 @@ class Blend(grits.Grits):
         closed_and_dilated_arr = scipy.ndimage.binary_dilation(
             closed_and_dilated_arr, iterations=iterations, structure=struct_
         )
-            
+
         return closed_and_dilated_arr
 
 
     def binary_reversion(self, arr, iterations, closing_iterations):
         reversion_arr = arr.copy()
         closing_iterations += iterations
-            
+
         struct_ = scipy.ndimage.generate_binary_structure(2, 2)
         reversion_arr = scipy.ndimage.binary_dilation(
             reversion_arr, iterations=closing_iterations, structure=struct_
@@ -280,7 +280,7 @@ class Blend(grits.Grits):
 
         return reversion_arr
 
-    
+
     def init_weight(self, src_ds=None):
         weight_band = None
         if self.weight_is_fn:
@@ -302,10 +302,10 @@ class Blend(grits.Grits):
 
         return weight_band
 
-    
+
     def init_data(self):
         from cudem.datalists.dlim import DatasetFactory
-        
+
         aux_arrs = []
         src_arr = None
 
@@ -342,8 +342,8 @@ class Blend(grits.Grits):
                         srcwin[0]:srcwin[0] + srcwin[2]
                     ] = weight_band.ReadAsArray()
                     w_arr[w_arr == self.ds_config['ndv']] = np.nan
-                    weights = np.unique(w_arr)[::-1] 
-                
+                    weights = np.unique(w_arr)[::-1]
+
                 src_arr[
                     srcwin[1]:srcwin[1] + srcwin[3],
                     srcwin[0]:srcwin[0] + srcwin[2]
@@ -358,45 +358,45 @@ class Blend(grits.Grits):
         combined_arr = self.load_aux_data(aux_source_list=self.aux_data, src_region=src_region, src_gt=self.gt, x_count=xcount, y_count=ycount)
         if combined_arr is None:
             combined_arr = np.full_like(src_arr, np.nan)
-            
+
         if np.any(w_arr):
             combined_arr = np.where(w_arr >= self.weight_threshold, src_arr, combined_arr)
 
         combined_mask = ~np.isnan(combined_arr)
-                
+
         if self.sub_buffer_cells is not None:
             combined_sub_mask = self.binary_closed_dilation(
                 combined_mask, iterations=self.sub_buffer_cells
             )
         else:
             combined_sub_mask = np.zeros_like(combined_mask, dtype=bool)
-            
+
         if self.buffer_cells is not None:
             combined_mask = self.binary_closed_dilation(
                 combined_mask, iterations=self.buffer_cells
             )
-            
+
         return combined_arr, src_arr, combined_mask, src_mask, combined_sub_mask
 
-    
+
     def _compute_slope(self, src_arr, buffer_mask=None):
         """Compute normalized slope over the whole array."""
-        
+
         tmp = src_arr.copy()
         tmp[~np.isfinite(tmp)] = np.nan
         if np.all(np.isnan(tmp)):
             return(None)
-        
+
         gy, gx = np.gradient(tmp)
         slope = np.sqrt(gx * gx + gy * gy)
         tmp = None
-        
+
         vals = slope[buffer_mask]
         vals = vals[np.isfinite(vals)]
 
         if vals.size == 0:
             return(None)
-        
+
         m = np.nanmax(np.abs(vals))
         if m == 0 or not np.isfinite(m):
             return(None)
@@ -405,7 +405,7 @@ class Blend(grits.Grits):
         slope_norm[np.isnan(slope_norm)] = 0.0
         return slope_norm
 
-    
+
     def blend_data(self):
         ## combined_arr is the aux_data (or foreground src_arr based on weights), src_arr is the src dem data
         ## combined_mask is the combined data + buffer
@@ -414,8 +414,8 @@ class Blend(grits.Grits):
         buffer_mask = combined_mask & src_mask
         sub_buffer_mask = combined_sub_mask & src_mask   # core seam: no randomization
         slope_norm = None
-        
-        ## combined_arr now has a nan buffer between aux and src data               
+
+        ## combined_arr now has a nan buffer between aux and src data
         combined_arr[~combined_mask] = src_arr[~combined_mask]
 
         ## initial distance transform
@@ -446,11 +446,11 @@ class Blend(grits.Grits):
             )
 
             if slope_norm is not None:
-                low_slope = slope_norm < self.slope_scale                
+                low_slope = slope_norm < self.slope_scale
                 #random_mask[low_slope & outer_mask] = False
                 random_mask[outer_mask][low_slope] = False
                 slope_norm = outer_mask = low_slope = None
-                
+
         ## Only apply randomization where both src + combined_mask are valid (buffer region)
         valid_random = random_mask & buffer_mask
 
@@ -462,7 +462,7 @@ class Blend(grits.Grits):
         dt = scipy.ndimage.distance_transform_cdt(
             combined_mask, metric='taxicab'
         )
-        
+
         ## extract and normalize dt in the seam/buffer region
         dt_vals = dt[buffer_mask].astype(np.float32)
         if dt_vals.size > 0:
@@ -503,16 +503,16 @@ class Blend(grits.Grits):
             self.ds_config['nx'],
             self.ds_config['ny']
         )
-        
+
         return combined_arr, srcwin
 
-        
+
     def run(self):
         dst_ds = self.copy_src_dem()
         if dst_ds is None:
             return(self.src_dem, -1)
 
-        combined_arr, srcwin = self.blend_data()        
+        combined_arr, srcwin = self.blend_data()
         this_band = dst_ds.GetRasterBand(1)
         this_band.WriteArray(
             combined_arr[srcwin[1]:srcwin[1] + srcwin[3],
