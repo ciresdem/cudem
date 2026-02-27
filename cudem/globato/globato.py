@@ -1272,9 +1272,18 @@ class GdalRasterStacker:
                 if mask is None:
                     mask = ~np.isnan(this_band_array)
 
-                masked = this_band_array[(mask)] == 1
-                if np.any(masked):
-                    this_band_array[(mask) & (masked)] = 0
+                # masked = this_band_array[(mask)] == 1
+                # if np.any(masked):
+                #     this_band_array[(mask) & (masked)] = 0
+                #     this_band.WriteArray(
+                #         this_band_array, srcwin[0], srcwin[1]
+                #     )
+                #     m_ds.FlushCache()
+
+                masked = (this_band_array == 1)
+                combined_mask = mask & masked
+                if np.any(combined_mask):
+                    this_band_array[combined_mask] = 0
                     this_band.WriteArray(
                         this_band_array, srcwin[0], srcwin[1]
                     )
