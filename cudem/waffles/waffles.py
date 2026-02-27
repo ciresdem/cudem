@@ -4,20 +4,20 @@
 ##
 ## waffles.py is part of CUDEM
 ##
-## Permission is hereby granted, free of charge, to any person obtaining a copy 
-## of this software and associated documentation files (the "Software"), to deal 
-## in the Software without restriction, including without limitation the rights 
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+## of the Software, and to permit persons to whom the Software is furnished to do so,
 ## subject to the following conditions:
 ##
 ## The above copyright notice and this permission notice shall be included in all
 ## copies or substantial portions of the Software.
 ##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
@@ -94,7 +94,7 @@ gdal.SetConfigOption(
 def _run_chunk_worker(args):
     """Worker function to process a single Waffles chunk in parallel.
     """
-    
+
     from .waffledem import WaffleDEM
 
     ## Unpack arguments
@@ -105,38 +105,38 @@ def _run_chunk_worker(args):
     this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(
         srcwin[0], srcwin[1], dst_gt
     )
-    
+
     this_gt = [
         this_geo_x_origin, float(dst_gt[1]), 0.0,
         this_geo_y_origin, 0.0, float(dst_gt[5])
     ]
-    
+
     this_region = regions.Region().from_geo_transform(
         geo_transform=this_gt, x_count=srcwin[2], y_count=srcwin[3]
     )
-    
+
     ## Buffer the region by 10% (or minimum) to prevent edge artifacts
     this_region.buffer(pct=10, x_inc=xinc, y_inc=yinc)
-    
+
     ## Configure the Sub-Waffle Module
     this_params = params.copy()
     this_params['kwargs']['src_region'] = this_region
     this_params['kwargs']['chunk'] = None
     ## Create a unique cache_dir to hold data, etc.
     this_params['kwargs']['cache_dir'] = os.path.join(this_params['kwargs']['cache_dir'], utils.append_fn('_chunk', this_region, xinc, high_res=True))
-    
+
     ## Generate unique name for chunk to avoid collision
     this_params['kwargs']['name'] = utils.append_fn(
         '_chunk', this_region, xinc, high_res=True
     )
-    
+
     ## Initialize and Generate
     try:
         this_waffle = WaffleFactory().load_parameter_dict(this_params)
         this_waffle_module = this_waffle._acquire_module()
         this_waffle_module.initialize()
         this_waffle_module.generate()
-        
+
         ## Prepare Result Dictionary
         result = {
             'fn': this_waffle_module.fn,
@@ -153,17 +153,17 @@ def _run_chunk_worker(args):
         ## Validate Outputs
         if WaffleDEM(result['fn'], verbose=False).valid_p():
             result['valid_dem'] = True
-            
+
         if result['stack'] and WaffleDEM(result['stack'], verbose=False).valid_p():
             result['valid_stack'] = True
-            
+
         return result
 
     except Exception as e:
         if verbose:
             utils.echo_warning_msg(f"Chunk failed @ {srcwin}: {e}")
         return None
-    
+
 
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
@@ -177,7 +177,7 @@ class Waffle:
       run() - run the WAFFLES module (function set via module sub-class)
       generate() - run and process the WAFFLES module
     """
-    
+
     def __init__(
             self,
             data: list = [],
@@ -280,31 +280,31 @@ class Waffle:
         self.output_files = {}
         self.status = 0
 
-        
+
     def __str__(self):
         return f'<Waffles: {self.name}>'
 
-    
+
     def __repr__(self):
         return f'<Waffles: {self.name}>'
 
 
     def initialize(self):
         """Initialize the Waffles module and print configuration block."""
-        
+
         mod_name = self.params.get('mod', self.name)
-        
+
         if self.verbose:
             utils.echo_msg('=' * 65)
             utils.echo_msg(f'Initializing Waffles Module: \033[1m{mod_name}\033[m')
             utils.echo_msg('-' * 65)
-        
+
         ## Output dem filename
         self.fn = f'{self.name}.{gdalfun.gdal_fext(self.fmt)}'
         self.gc = utils.config_check()
-        
+
         self._init_regions()
-        self._init_incs() 
+        self._init_incs()
 
         if isinstance(self.co, list):
             if len(self.co) == 0:
@@ -325,12 +325,12 @@ class Waffle:
             self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
-        
+
         if self.verbose:
             utils.echo_msg(f'Output Size:      {self.ds_config["nx"]} x {self.ds_config["ny"]}')
             utils.echo_msg(f'Output SRS:       {self.dst_srs}')
             utils.echo_msg(f'Output Name:      {self.name}')
-        
+
             data_count = len(self.data) if hasattr(self.data, '__len__') else 1
             utils.echo_msg(f'Input Data:       {data_count} entries')
             utils.echo_msg(f'Input Data:       {self.data}')
@@ -339,20 +339,20 @@ class Waffle:
         self.status = self._init()
         return self
 
-    
+
     def _init_regions(self):
         """Initialize and set regions."""
-        
+
         if isinstance(self.region, list):
             self.region = regions.Region().from_list(self.region)
         elif not isinstance(self.region, regions.Region):
             raise ValueError(f'Could not parse region: {self.region}')
-        
+
         if self.node == 'grid':
             self.region = self.region.buffer(
                 x_bv=self.xinc*.5, y_bv=self.yinc*.5
             )
-            
+
         self.d_region = self._dist_region()
         self.p_region = self._proc_region()
         self.c_region = self._coast_region()
@@ -368,40 +368,40 @@ class Waffle:
             utils.echo_msg(f'Process Region:   {self.p_region.format("gmt")}')
             utils.echo_msg(f'Cache Directory:  {self.cache_dir}')
 
-    
+
     def _init_incs(self):
         """Initialize increments"""
-        
+
         self.xinc = utils.str2inc(self.xinc)
         self.yinc = utils.str2inc(self.yinc)
         self.xsample = utils.str2inc(self.xsample)
         self.ysample = utils.str2inc(self.ysample)
-        
+
         out_x = self.xsample if self.xsample is not None else self.xinc
         out_y = self.ysample if self.ysample is not None else self.yinc
-        
+
         if self.verbose:
             utils.echo_msg(f'Grid Increment:   {self.xinc} / {self.yinc}')
             utils.echo_msg(f'Output Increment: {out_x} / {out_y}')
-                
-    
+
+
     def _init(self):
         return 0
 
-    
+
     def __call__(self):
         self.initialize()
         if self.status == 0:
             return self.generate()
         else:
             utils.echo_warning_msg('Failed to initialize from sub-module')
-            
-    
+
+
     def _init_data(self, set_incs=False, init_str=[]):
         """Initialize the data for processing
         parses data paths to dlim dataset objects.
 
-        set `set_incs` to True to block/sample datasets to given 
+        set `set_incs` to True to block/sample datasets to given
         increment
 
         this function sets `self.data` to a list of dataset objects.
@@ -445,21 +445,21 @@ class Waffle:
             self.data.initialize()
             if not self.want_weight:
                 self.data.weight = None
-                
+
             if not self.want_uncertainty:
                 self.data.uncertainty = None
         else:
             return None
 
-        
+
     # def _init_incs(self, init_str=[]):
     #     """Initialize increments
-        
+
     #     xinc/yinc are the DEM increments, in native units.
-    #     xsample/ysample set the output DEM increments, 
+    #     xsample/ysample set the output DEM increments,
     #     in native units.
     #     """
-        
+
     #     self.xinc = utils.str2inc(self.xinc)
     #     self.yinc = utils.str2inc(self.yinc)
     #     self.xsample = utils.str2inc(self.xsample)
@@ -472,41 +472,41 @@ class Waffle:
     #                     f'{self.ysample if self.ysample is not None else self.yinc}')
     #     return init_str
 
-    
+
     def _coast_region(self):
-        """Coastline region 
+        """Coastline region
         (extended by percentage self.extend_proc)
         """
 
         cr = self.d_region.copy()
         return cr.buffer(pct=self.extend_proc, x_inc=self.xinc, y_inc=self.yinc)
 
-    
+
     def _proc_region(self):
-        """Processing region 
+        """Processing region
         (extended by percentage self.extend_proc)
         """
 
         pr = self.d_region.copy()
         return pr.buffer(pct=self.extend_proc, x_inc=self.xinc, y_inc=self.yinc)
 
-    
+
     def _dist_region(self):
-        """Distribution region 
+        """Distribution region
         (extended by self.extend).
         """
-        
+
         dr = self.region.copy()
         if self.xsample is None and self.ysample is None:
             return dr.buffer(x_bv=(self.xinc*self.extend), y_bv=(self.yinc*self.extend))
         else:
             return dr.buffer(x_bv=(self.xsample*self.extend), y_bv=(self.ysample*self.extend))
 
-        
+
     def dump_xyz(self, dst_port=sys.stdout, encode=False):
         """Dump the stacked xyz data to dst_port
 
-        use this to dump data into a foreign cli program, 
+        use this to dump data into a foreign cli program,
         such as GMT.
         """
 
@@ -517,17 +517,17 @@ class Waffle:
                 dst_port=dst_port,
                 encode=encode,
             )
-            
+
 
     def generate(self):
         """Run and process the WAFFLES module.
 
-        Generate the data 'stack' and use that to run the 
+        Generate the data 'stack' and use that to run the
         waffles module and generate the DEM.
         """
 
         from .waffledem import WaffleDEM
-        
+
         if self.data is None:
             return self
 
@@ -555,7 +555,7 @@ class Waffle:
             stack_chunks = []
             mask_chunks = []
             aux_chunks = []
-            
+
             ## Prepare Task List for multiprocessing
             chunk_tasks = []
             for srcwin in utils.yield_srcwin(
@@ -565,27 +565,27 @@ class Waffle:
             ):
                 ## Bundle args for the worker
                 chunk_args = (
-                    srcwin, 
-                    self.dst_gt, 
-                    self.xinc, 
-                    self.yinc, 
-                    self.params, 
+                    srcwin,
+                    self.dst_gt,
+                    self.xinc,
+                    self.yinc,
+                    self.params,
                     self.verbose
                 )
                 chunk_tasks.append(chunk_args)
 
             ## Execution Results
             results = []
-            
+
             ## Check if we can/should run in parallel
             ## We cannot spawn a pool if we are already a daemon (e.g. inside another process)
             is_daemon = mp.current_process().daemon
             num_workers = min(mp.cpu_count(), len(chunk_tasks))
-            
+
             if not is_daemon and num_workers > 1:
                 if self.verbose:
                     utils.echo_msg(f"Processing {len(chunk_tasks)} chunks with {num_workers} workers...")
-                    
+
                 with mp.Pool(processes=num_workers) as pool:
                     ## Use imap_unordered for potential speed gain on results processing
                     for res in pool.imap_unordered(_run_chunk_worker, chunk_tasks):
@@ -601,10 +601,10 @@ class Waffle:
             for res in results:
                 if res['valid_dem']:
                     chunks.append(res['fn'])
-                
+
                 if res['valid_stack']:
                     stack_chunks.append(res['stack'])
-                
+
                 ## Check Mask presence
                 if res['msk_fn'] and os.path.exists(res['msk_fn']):
                     mask_chunks.append(res['msk_fn'])
@@ -636,10 +636,10 @@ class Waffle:
                 ## TODO: use gdalfun.create_temp_vrt instead here.
                 # vrt_opts = gdal.BuildVRTOptions(resampleAlg='nearest')
                 # gdal.BuildVRT(f'{self.fn}.vrt', chunks, options=vrt_opts)
-                
-                # ## Warp VRT to final TIF                
+
+                # ## Warp VRT to final TIF
                 # g = gdal.Warp(
-                #     self.fn, 
+                #     self.fn,
                 #     f'{self.fn}.vrt',
                 #     format=self.fmt,
                 #     resampleAlg='cubicspline',
@@ -695,7 +695,7 @@ class Waffle:
                 # )
                 # g = None
                 self.msk_fn = mask_fn
-                
+
             ## Cleanup
             utils.remove_glob(*chunks)
             utils.remove_glob(*stack_chunks)
@@ -716,7 +716,7 @@ class Waffle:
                     f'{stack_name}.{gdalfun.gdal_fext("GTiff")}'
                 )
                 stack_bn = utils.fn_basename2(stack_fn)
-                
+
                 if not self.clobber and os.path.exists(stack_fn):
                     self.stack = stack_fn
                     if not WaffleDEM(
@@ -728,7 +728,7 @@ class Waffle:
                         self.stack = self.data.stacks(out_name=stack_bn)
                 else:
                     self.stack = self.data.stacks(out_name=stack_bn)
-                    
+
                 self.stack_ds = gdalfile.GDALFile(
                     fn=self.stack,
                     band_no=1,
@@ -758,7 +758,7 @@ class Waffle:
                             count_band = stack_ds.GetRasterBand(2)
                             count_arr = count_band.ReadAsArray()
                             count_mask = count_arr <= self.count_limit
-                            
+
                         if self.uncertainty_limit:
                             uncertainty_band = stack_ds.GetRasterBand(4)
                             uncertainty_arr = uncertainty_band.ReadAsArray()
@@ -772,7 +772,7 @@ class Waffle:
                             if self.uncertainty_limit and uncertainty_mask is not None:
                                 this_arr[uncertainty_mask] = stack_infos['ndv']
                             this_band.WriteArray(this_arr)
-                            
+
                 ## Run Waffles Module
                 if WaffleDEM(
                         self.stack,
@@ -780,9 +780,9 @@ class Waffle:
                         verbose=self.verbose
                 ).initialize().valid_p():
                     self.run()
-                    
+
             else:
-                self.run()    
+                self.run()
 
             ## Post-Processing and validation.
             ## Calculate Uncertainty
@@ -793,7 +793,7 @@ class Waffle:
                          f':waffles_module={self.params["mod"]}'),
                     **self.params['kwargs']
                 )._acquire_module()
-                
+
                 iu.name = f'{self.params["kwargs"]["name"]}_u'
                 iu.want_uncertainty = False
                 iu.want_mask = False
@@ -808,7 +808,7 @@ class Waffle:
                     want_scan=True,
                     co=self.co
                 ).initialize()
-                
+
                 if unc_dem.valid_p():
                     unc_dem.process(
                         ndv=self.ndv,
@@ -824,7 +824,7 @@ class Waffle:
                     )
                     self.output_files['uncertainty'] = iu.fn
                 unc_fn = iu.fn
-            
+
             ## Post-Process DEM
             waffle_dem = WaffleDEM(
                 self.fn,
@@ -832,12 +832,12 @@ class Waffle:
                 verbose=self.verbose,
                 co=self.co
             ).initialize()
-            
+
             if waffle_dem.valid_p():
                 if mask_fn is not None and os.path.exists(mask_fn):
                     if self.dst_srs is not None:
                         gdalfun.gdal_set_srs(mask_fn, src_srs=self.dst_srs)
-                    
+
                 waffle_dem.process(
                     ndv=self.ndv,
                     xsample=self.xsample,
@@ -864,7 +864,7 @@ class Waffle:
                 self.output_files['DEM'] = self.fn
             else:
                 utils.echo_warning_msg(f'{self.fn} is invalid')
-                
+
             ## Post-Process Mask & Metadata
             ## maybe we don't post-process the mask, to keep at full region...
             #if self.want_sm:
@@ -911,7 +911,7 @@ class Waffle:
             else:
                 if self.want_mask:
                     utils.echo_warning_msg('Mask DEM is invalid...')
-                    
+
             ## Post-Process Auxiliary Rasters
             for aux_dem in self.aux_dems:
                 aux_dem = WaffleDEM(
@@ -920,7 +920,7 @@ class Waffle:
                     verbose=False,
                     co=self.co
                 ).initialize()
-                
+
                 if aux_dem.valid_p():
                     aux_dem.process(
                         ndv=None,
@@ -941,37 +941,37 @@ class Waffle:
 
         if self.verbose:
             utils.echo_msg(f'\033[1mOutput files:\033[m {self.output_files}')
-            
-        return self    
 
-    
+        return self
+
+
     def run(self):
         """run the WAFFLES module (set via sub-module class)."""
-        
+
         raise(NotImplementedError)
 
-    
-class WafflesStacks(Waffle):
-    """STACK data into a DEM. 
-    
-    Generate a DEM using a raster STACKing method. 
-    By default, will calculate the [weighted]-mean where 
-    overlapping cells occur. 
 
-    Set `stack_mode` to 'supercede' to True to overwrite overlapping 
+class WafflesStacks(Waffle):
+    """STACK data into a DEM.
+
+    Generate a DEM using a raster STACKing method.
+    By default, will calculate the [weighted]-mean where
+    overlapping cells occur.
+
+    Set `stack_mode` to 'supercede' to True to overwrite overlapping
     cells with higher weighted data.
 
     stack data to generate DEM. No interpolation
     occurs with this module. To guarantee a full DEM,
     use a background DEM with a low weight, such as GMRT or GEBCO,
     which will be stacked upon to create the final DEM.
-    
+
     -----------
     Parameters:
-    
-    min_count=[val] - only retain data cells if they contain `min_count` 
+
+    min_count=[val] - only retain data cells if they contain `min_count`
                       overlapping data
-    
+
     < stacks:min_count=None >
     """
 
@@ -980,7 +980,7 @@ class WafflesStacks(Waffle):
         super().__init__(**kwargs)
         self.min_count = min_count
 
-        
+
     def run(self):
         z_ds = gdal.GetDriverByName(self.fmt).Create(
             f'{self.name}.{gdalfun.gdal_fext(self.fmt)}',
@@ -997,23 +997,23 @@ class WafflesStacks(Waffle):
             out_z = (arrs['z'] / arrs['weight']) / arrs['count']
             out_z[np.isnan(out_z)] = self.ndv
             z_band.WriteArray(out_z, srcwin[0], srcwin[1])
-            
+
         z_ds = None
         if self.verbose:
-            utils.echo_msg(f'Stacked data to {self.fn}')            
+            utils.echo_msg(f'Stacked data to {self.fn}')
         return self
 
-    
+
 class WafflesScratch(Waffle):
-    """SCRATCH Module. 
-    
-    Don't generate any DEMs, only auxiliary data, 
+    """SCRATCH Module.
+
+    Don't generate any DEMs, only auxiliary data,
     including the raster stack.
-    
+
     -----------
     Parameters:
-    
-    min_count=[val] - only retain data cells if they contain 
+
+    min_count=[val] - only retain data cells if they contain
                       `min_count` overlapping data
 
     < scratch:min_count=None >
@@ -1024,7 +1024,7 @@ class WafflesScratch(Waffle):
         super().__init__(**kwargs)
         self.min_count = min_count
 
-        
+
     def run(self):
         return self
 
@@ -1049,7 +1049,7 @@ class WaffleFactory(factory.CUDEMFactory):
     from . import inpaint
     from . import cube
     from . import sdb
-    
+
     _modules = {
         'stacks': {'name': 'stacks', 'stack': True, 'call': WafflesStacks},
         'IDW': {'name': 'IDW', 'stack': True, 'call': idw.WafflesIDW},
@@ -1084,18 +1084,18 @@ class WaffleFactory(factory.CUDEMFactory):
         'sdb': {'name': 'sdb', 'stack': True, 'call': sdb.WafflesSDB},
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
         #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch}, # test
-        #'bgrid': {'name': 'bgrid', 'stack': True, 'call': WafflesBGrid}, # test            
+        #'bgrid': {'name': 'bgrid', 'stack': True, 'call': WafflesBGrid}, # test
     }
 
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        
+
     def _set_modules(self):
         pass
 
-    
+
 def waffle_queue(q):
     """Waffle queue for threads from CLI
 
@@ -1106,7 +1106,7 @@ def waffle_queue(q):
     """
 
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    
+
     while True:
         waffle_module = q.get()
         if waffle_module is None:
@@ -1121,7 +1121,7 @@ def waffle_queue(q):
                 print(traceback.format_exc())
                 pass
 
-            
+
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ waffles
@@ -1133,19 +1133,19 @@ class PrintModulesAction(argparse.Action):
         factory.echo_modules(WaffleFactory._modules, values, md=True if not values else False)
         sys.exit(0)
 
-        
+
 class PrintGritsModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         factory.echo_modules(grits.GritsFactory._modules, values, md=True if not values else False)
         sys.exit(0)
 
-        
+
 class StackModeChoices(list):
     def __contains__(self, item):
         matches = [choice for choice in self if item.split(':')[0] in choice]
         return len(matches) == 1  # Only allow if it's a unique match
 
-    
+
 def waffles_cli():
     """Run waffles from command-line using argparse."""
 
@@ -1158,15 +1158,15 @@ def waffles_cli():
 
     ## --- Data Input ---
     parser.add_argument(
-        'datalist', 
-        nargs='*', 
+        'datalist',
+        nargs='*',
         help="Input datalist(s) or data files."
     )
-    
+
     ## --- Core Parameters ---
     ## TODO: -R fails with space in cli: -R -65.0/-63.0/44.85/45.85
     parser.add_argument(
-        '-R', '--region', '--aoi', 
+        '-R', '--region', '--aoi',
         action='append',
         help=regions.region_help_msg()
     )
@@ -1177,43 +1177,43 @@ def waffles_cli():
               "Note: Increment units should be the same as the input region.")
     )
     parser.add_argument(
-        '-M', '--module', 
-        default='stacks', 
+        '-M', '--module',
+        default='stacks',
         help=("Waffles Module and options (e.g. 'gmt-surface:tension=0.35'). Default: stacks.\n"
               "Where MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]")
     )
-    
+
     ## --- Output Control ---
     parser.add_argument(
-        '-O', '--output-basename', 
-        default='waffles_dem', 
+        '-O', '--output-basename',
+        default='waffles_dem',
         help="Output Basename. Default: waffles_dem."
     )
     parser.add_argument(
-        '-F', '--format', 
-        default='GTiff', 
+        '-F', '--format',
+        default='GTiff',
         help="Output Format (GTiff, NetCDF, etc.). Default: GTiff."
     )
     parser.add_argument(
-        '-P', '--t_srs', 
-        default='epsg:4326', 
+        '-P', '--t_srs',
+        default='epsg:4326',
         help=("Target Projection (EPSG code or WKT). Default: epsg:4326.\n"
               "Note: The target projection should align with the input region.")
     )
     parser.add_argument(
-        '-f', '--transform', 
-        action='store_true', 
+        '-f', '--transform',
+        action='store_true',
         help="Transform inputs to target projection."
     )
     parser.add_argument(
-        '-N', '--nodata', 
-        type=float, 
-        default=-9999, 
+        '-N', '--nodata',
+        type=float,
+        default=-9999,
         help="NoData Value. Default: -9999."
     )
     parser.add_argument(
-        '-CO', '--creation-options', 
-        action='append', 
+        '-CO', '--creation-options',
+        action='append',
         help="GDAL creation options (e.g. COMPRESS=DEFLATE)."
     )
     parser.add_argument(
@@ -1224,127 +1224,127 @@ def waffles_cli():
 
     ## --- Processing Options ---
     parser.add_argument(
-        '-X', '--extend', 
+        '-X', '--extend',
         help=("Extend region (cells[:percent]). e.g. '6:10'.\n"
               "Where 'cells' extends the output region and 'percent' extends the processing region.")
     )
     parser.add_argument(
-        '-T', '--filter', 
-        action='append', 
+        '-T', '--filter',
+        action='append',
         help=("Apply Grits Filter (e.g. 'outliers:k=2.5').\n"
               "Where FILTER is fltr_name[:opts] (see `grits --modules` for more information)\n"
               "This may be set multiple times to perform multiple filters.\n"
               "Append `:stacks=True` to the filter to perform the filter on the data stack")
     )
     parser.add_argument(
-        '-C', '--clip', 
+        '-C', '--clip',
         help="Clip output to polygon file. e.g. 'clip_ply.shp:invert=False'"
     )
     parser.add_argument(
-        '-K', '--chunk', 
-        type=int, 
+        '-K', '--chunk',
+        type=int,
         help="Process in chunks of N x N pixels."
     )
     parser.add_argument(
-        '-S', '--sample-alg', 
-        default='bilinear', 
+        '-S', '--sample-alg',
+        default='bilinear',
         help="Resampling algorithm (bilinear, cubic, nearest, etc.)."
     )
-    
+
     ## --- Stack Control ---
     parser.add_argument(
-        '-w', '--want-weight', 
-        action='store_true', 
+        '-w', '--want-weight',
+        action='store_true',
         help="Use weights from datalist."
     )
     parser.add_argument(
-        '-u', '--want-uncertainty', 
-        action='store_true', 
+        '-u', '--want-uncertainty',
+        action='store_true',
         help="Generate/Use uncertainty."
     )
     parser.add_argument(
-        '-m', '--want-mask', 
-        action='store_true', 
+        '-m', '--want-mask',
+        action='store_true',
         help="Generate data mask."
     )
     parser.add_argument(
-        '-A', '--stack-mode', 
-        default='mean', 
+        '-A', '--stack-mode',
+        default='mean',
         choices=StackModeChoices(['mean', 'min', 'max', 'mixed', 'supercede']),
         help="Stacking mode."
     )
     parser.add_argument(
-        '-L', '--limits', 
-        action='append', 
+        '-L', '--limits',
+        action='append',
         help="Set limits (u=upper, l=lower, p=prox, s=size, n=count, r=uncertainty, c=nodata, e=expand). e.g. -Lu0."
     )
 
     ## --- System / Misc ---
     parser.add_argument(
-        '-H', '--threads', 
-        type=int, 
-        default=1, 
+        '-H', '--threads',
+        type=int,
+        default=1,
         help="Number of threads for processing regions."
     )
     parser.add_argument(
-        '-D', '--cache-dir', 
+        '-D', '--cache-dir',
         help="Cache directory location."
     )
     parser.add_argument(
-        '-k', '--keep-cache', 
-        action='store_true', 
+        '-k', '--keep-cache',
+        action='store_true',
         help="Keep cache files after run."
     )
     parser.add_argument(
-        '-x', '--keep-auxiliary', 
-        action='store_true', 
+        '-x', '--keep-auxiliary',
+        action='store_true',
         help="Keep auxiliary rasters (stack, mask, etc.)."
     )
     parser.add_argument(
-        '-s', '--spatial-metadata', 
-        action='store_true', 
+        '-s', '--spatial-metadata',
+        action='store_true',
         help="Generate spatial metadata polygons."
     )
     parser.add_argument(
-        '-a', '--archive', 
-        action='store_true', 
+        '-a', '--archive',
+        action='store_true',
         help="Archive the processed datalist."
     )
     parser.add_argument(
-        '-c', '--continue', 
-        dest='clobber', 
-        action='store_false', 
+        '-c', '--continue',
+        dest='clobber',
+        action='store_false',
         help="Don't clobber existing files."
     )
     parser.add_argument(
-        '-q', '--quiet', 
-        action='store_true', 
+        '-q', '--quiet',
+        action='store_true',
         help="Quiet mode."
     )
     parser.add_argument(
-        '--config', 
+        '--config',
         help="Load from or save to config JSON."
     )
     parser.add_argument(
-        '--modules', 
+        '--modules',
         nargs='?',
-        action=PrintModulesAction, 
+        action=PrintModulesAction,
         help="List available modules."
     )
     parser.add_argument(
-        '--filters', 
+        '--filters',
         nargs='?',
-        action=PrintGritsModulesAction, 
+        action=PrintGritsModulesAction,
         help="List available filter modules. (via grits)"
     )
     parser.add_argument(
-        '--version', 
-        action='version', 
+        '--version',
+        action='version',
         version=f'CUDEM {__cudem_version__} :: %(prog)s {__version__}'
     )
 
     fixed_argv = factory.fix_argparse_region(sys.argv[1:])
-    
+
     ## Parse
     args = parser.parse_args(fixed_argv)
 
@@ -1382,13 +1382,13 @@ def waffles_cli():
                         f'Failed to generate {this_waffle_module}, {e}'
                     )
                     print(traceback.format_exc())
-                
-            sys.exit(0)   
+
+            sys.exit(0)
         else:
             utils.echo_error_msg(
                 f'specified waffles config file does not exist, {args.config}'
             )
-        
+
     ## Initialize Config Dictionary
     wg = {
         'name': args.output_basename,
@@ -1414,14 +1414,14 @@ def waffles_cli():
     }
 
     ## --- Post-Process Special Arguments ---
-    
+
     ## Increments (-E)
     if args.increment:
         incs = args.increment.split(':')
         xy_inc = incs[0].split('/')
         wg['xinc'] = utils.str2inc(xy_inc[0])
         wg['yinc'] = utils.str2inc(xy_inc[1]) if len(xy_inc) > 1 else wg['xinc']
-        
+
         if len(incs) > 1:
             xy_samples = incs[1].split('/')
             wg['xsample'] = utils.str2inc(xy_samples[0])
@@ -1447,11 +1447,11 @@ def waffles_cli():
             sys.exit(-1)
     else:
         wg['want_stack'] = True if len(args.datalist) > 0 else False
-        
+
     ## Limits (-L)
     ## Map CLI flags to config keys
     limit_map = {
-        'u': 'upper_limit', 'l': 'lower_limit', 
+        'u': 'upper_limit', 'l': 'lower_limit',
         'p': 'proximity_limit', 's': 'size_limit',
         'c': 'percentile_limit', 'e': 'expand_limit',
         'n': 'count_limit', 'r': 'uncertainty_limit'
@@ -1468,10 +1468,10 @@ def waffles_cli():
     if args.cache_dir:
         wg['cache_dir'] = args.cache_dir
     else:
-        wg['cache_dir'] = waffles_cache#os.path.join(os.path.expanduser('~'), 'cudem_cache')        
-        
+        wg['cache_dir'] = waffles_cache#os.path.join(os.path.expanduser('~'), 'cudem_cache')
+
     ## --- Execution ---
-    
+
     ## Setup Regions
     ## (Using original parsing logic for consistency)
     i_regions = args.region if args.region else [None]
@@ -1539,7 +1539,7 @@ def waffles_cli():
                 continue
 
             ## Export the waffles module config file
-            if args.config: 
+            if args.config:
                 wg['src_region'] = this_region.export_as_list()
                 wg['name'] = os.path.abspath(wg['name'])
                 ## Create Factory
@@ -1552,7 +1552,7 @@ def waffles_cli():
             ## Create Factory
             ## We pass 'mod' string to factory which parses opts
             this_waffle = WaffleFactory(mod=args.module, **wg)
-            
+
             ## Acquire and Queue
             module_instance = this_waffle._acquire_module()
             if module_instance:
@@ -1572,7 +1572,7 @@ def waffles_cli():
         if not args.chunk:
             for _ in range(args.threads):
                 waffle_q.put(None)
-            
+
             for t in processes:
                 t.join()
 
@@ -1582,10 +1582,10 @@ def waffles_cli():
         if not args.chunk:
             for t in processes:
                 if t.is_alive():
-                    t.terminate() 
+                    t.terminate()
                     t.join()
         sys.exit(1)
-        
+
     if not args.keep_cache:
         utils.remove_glob(wg['cache_dir'])
 

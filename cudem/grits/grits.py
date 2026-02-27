@@ -4,20 +4,20 @@
 ##
 ## grits.py is part of cudem
 ##
-## Permission is hereby granted, free of charge, to any person obtaining a copy 
-## of this software and associated documentation files (the "Software"), to deal 
-## in the Software without restriction, including without limitation the rights 
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+## of the Software, and to permit persons to whom the Software is furnished to do so,
 ## subject to the following conditions:
 ##
 ## The above copyright notice and this permission notice shall be included in all copies or
 ## substantial portions of the Software.
 ##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
@@ -72,7 +72,7 @@ class Grits:
     """DEM Filtering Base Class.
     Define a sub-class to create a new filter.
     """
-    
+
     def __init__(
             self,
             src_dem: str = None,
@@ -99,19 +99,19 @@ class Grits:
         self.src_region = src_region
         self.band = utils.int_or(band, 1)
         self.ds_config = None
-        
+
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
         self.min_weight = utils.float_or(min_weight)
         self.max_weight = utils.float_or(max_weight)
         self.min_uncertainty = utils.float_or(min_uncertainty)
         self.max_uncertainty = utils.float_or(max_uncertainty)
-        
+
         self.count_mask = count_mask
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
         self.aux_data = aux_data if aux_data else []
-        
+
         self.cache_dir = cache_dir
         self.verbose = verbose
         self.params = params if params else {}
@@ -129,7 +129,7 @@ class Grits:
         ## Auto-detect Globato HDF5 features
         if self.src_dem and self.src_dem.endswith('.h5'):
             self._init_globato()
-            
+
         ## Initialize flags
         self.weight_is_fn = False
         self.weight_is_band = False
@@ -137,7 +137,7 @@ class Grits:
         self.uncertainty_is_band = False
         self.count_is_fn = False
         self.count_is_band = False
-        
+
         ## Analyze masks
         self._analyze_mask('weight_mask', 'weight_is_fn', 'weight_is_band')
         self._analyze_mask('uncertainty_mask', 'uncertainty_is_fn', 'uncertainty_is_band')
@@ -146,10 +146,10 @@ class Grits:
         ## initialize the souce dataset info
         #self.init_ds(self.src_dem)
 
-        
+
     def _analyze_mask(self, attr_name, fn_flag, band_flag):
         """Helper to determine if a mask is a file or a band index."""
-        
+
         val = getattr(self, attr_name)
         if val is not None:
             if utils.int_or(val) is not None:
@@ -158,22 +158,22 @@ class Grits:
             elif os.path.exists(str(val)):
                 setattr(self, fn_flag, True)
 
-                
+
     def _init_globato(self):
         """Attempt to auto-load weight/uncertainty from Globato HDF5."""
-        pass 
+        pass
 
-    
+
     def __call__(self):
         return self.generate()
 
-    
+
     def init_region(self, src_ds=None):
         """Initialize region from dataset."""
-        
+
         if src_ds is None and self.src_dem:
             src_ds = gdal.Open(self.src_dem)
-            
+
         if src_ds:
             self.ds_config = gdalfun.gdal_infos(src_ds)
             self.src_region = regions.Region().from_geo_transform(
@@ -183,38 +183,38 @@ class Grits:
             return self.src_region, self.ds_config
         return None, None
 
-    
+
     def init_ds(self, src_ds=None):
         """Initialize GDAL dataset properties."""
-        
+
         if src_ds is None: return
 
         self.ds_config = gdalfun.gdal_infos(src_ds)
         self.ds_band = src_ds.GetRasterBand(self.band)
         self.gt = self.ds_config['geoT']
-        
+
         if self.ds_band.GetNoDataValue() is None:
             self.ds_band.SetNoDataValue(utils.float_or(self.ds_config['ndv'], -9999.))
 
-            
+
     def load_aux_data(self, aux_source_list=None, src_region=None, src_gt=None, x_count=None, y_count=None):
         """Load auxiliary datasets into aligned array."""
-        
+
         if aux_source_list is None: aux_source_list = self.aux_data
         if not aux_source_list: return None
 
         if src_region is None: src_region = self.src_region
         if src_gt is None: src_gt = self.gt
-        
+
         if x_count is None: x_count = self.ds_config['nx']
         if y_count is None: y_count = self.ds_config['ny']
-        
+
         x_inc = src_gt[1]
         y_inc = src_gt[5]
         dst_srs = self.ds_config.get('proj')
 
         combined_arr = np.full((y_count, x_count), np.nan, dtype=np.float32)
-        
+
         for aux_fn in aux_source_list:
             try:
                 aux_ds = DatasetFactory(
@@ -225,40 +225,40 @@ class Grits:
                     dst_srs=dst_srs,
                     verbose=self.verbose
                 )._acquire_module()
-                
+
                 if aux_ds is None: continue
                 aux_ds.initialize()
 
                 for arrs, srcwin, gt in aux_ds.yield_array(want_sums=False):
                     if arrs['z'] is None: continue
-                    
+
                     y_start, y_end = srcwin[1], srcwin[1] + srcwin[3]
                     x_start, x_end = srcwin[0], srcwin[0] + srcwin[2]
-                    
+
                     if y_end > combined_arr.shape[0] or x_end > combined_arr.shape[1]:
-                        pass 
+                        pass
 
                     chunk_data = arrs['z']
                     valid_mask = ~np.isnan(chunk_data)
-                    
+
                     target_slice = combined_arr[y_start:y_end, x_start:x_end]
-                    
+
                     if target_slice.shape == chunk_data.shape:
                         target_slice[valid_mask] = chunk_data[valid_mask]
 
             except Exception as e:
                 if self.verbose:
                     utils.echo_warning_msg(f"Failed to load aux data {aux_fn}: {e}")
-                    
+
         return combined_arr
 
-    
+
     def generate(self):
         """Execute the filter."""
-        
+
         if self.verbose:
             utils.echo_msg(f'Filtering {self.src_dem} using {self.__class__.__name__}')
-            
+
         self.run()
         self.split_by_z()
         self.split_by_weight()
@@ -269,10 +269,10 @@ class Grits:
 
         if self.verbose:
             utils.echo_msg(f'Filtered {self.src_dem} to {self.dst_dem}')
-            
-        return self        
 
-    
+        return self
+
+
     def run(self):
         raise NotImplementedError("Subclasses must implement run()")
 
@@ -283,7 +283,7 @@ class Grits:
         - Removed Cells: Valid -> NoData
         - Changed Cells: Valid -> Valid (New Value)
         """
-        
+
         if not self.src_dem or not os.path.exists(self.src_dem): return {}
         if not self.dst_dem or not os.path.exists(self.dst_dem): return {}
 
@@ -291,33 +291,33 @@ class Grits:
         try:
             src_ds = gdal.Open(self.src_dem)
             dst_ds = gdal.Open(self.dst_dem)
-            
+
             if not src_ds or not dst_ds: return {}
-            
+
             src_band = src_ds.GetRasterBand(self.band)
             dst_band = dst_ds.GetRasterBand(1)
-            
+
             ## Read Arrays (Warning: Large files read fully into RAM)
             src_arr = src_band.ReadAsArray().astype(np.float32)
             dst_arr = dst_band.ReadAsArray().astype(np.float32)
-            
+
             src_ndv = src_band.GetNoDataValue()
             dst_ndv = dst_band.GetNoDataValue()
-            
+
             ## Normalize to NaN
             if src_ndv is not None: src_arr[src_arr == src_ndv] = np.nan
             if dst_ndv is not None: dst_arr[dst_arr == dst_ndv] = np.nan
-            
+
             ## Identify Valid Sets
             src_valid = ~np.isnan(src_arr)
             dst_valid = ~np.isnan(dst_arr)
-            
+
             total_src_valid = np.count_nonzero(src_valid)
-            
+
             ## Removed Cells (Source Valid -> Dest Invalid)
             removed_mask = src_valid & ~dst_valid
             removed_count = np.count_nonzero(removed_mask)
-            
+
             ## Changed Cells (Source Valid -> Dest Valid AND Value Changed)
             ## Intersection of valid pixels
             intersection = src_valid & dst_valid
@@ -326,11 +326,11 @@ class Grits:
             changed_count = 0
             if np.count_nonzero(intersection) > 0:
                 diff = np.abs(dst_arr[intersection] - src_arr[intersection])
-                
+
                 ## Check for significant difference
                 changed_mask = diff > 1e-5
                 changed_count = np.count_nonzero(changed_mask)
-                
+
                 ## Calc stats on CHANGED values only
                 if changed_count > 0:
                     real_diffs = dst_arr[intersection][changed_mask] - src_arr[intersection][changed_mask]
@@ -346,7 +346,7 @@ class Grits:
             stats['changed_cells'] = changed_count
             stats['modified_cells'] = total_modified
             stats['percent_modified'] = (total_modified / total_src_valid) * 100 if total_src_valid > 0 else 0
-            
+
             if self.verbose:
                 utils.echo_msg("Filter Statistics:")
                 utils.echo_msg(f"  Total Valid Cells: {total_src_valid}")
@@ -358,10 +358,10 @@ class Grits:
         except Exception as e:
             if self.verbose:
                 utils.echo_warning_msg(f"Failed to calculate stats: {e}")
-            
+
         return stats
-    
-    
+
+
     def copy_src_dem(self):
         with gdalfun.gdal_datasource(self.src_dem, update=False) as src_ds:
             if src_ds:
@@ -390,7 +390,7 @@ class Grits:
             y_inc=self.ds_config['geoT'][5],
             node='grid'
         )
-        
+
         src_arr = np.full((ycount, xcount), np.nan)
 
         with gdalfun.gdal_datasource(self.src_dem) as src_ds:
@@ -399,7 +399,7 @@ class Grits:
                 ds_band = src_ds.GetRasterBand(band)
                 if ds_band.GetNoDataValue() is None:
                     ds_band.SetNoDataValue(self.ds_config['ndv'])
-                    
+
                 srcwin = (self.buffer_cells, self.buffer_cells,
                           src_ds.RasterXSize, src_ds.RasterYSize)
 
@@ -411,14 +411,14 @@ class Grits:
                 src_arr[src_arr == self.ds_config['ndv']] = np.nan
                 return src_arr
         return None
-        
-    
+
+
     def _get_mask_array(self, mask_attr, is_fn_attr, is_band_attr):
         """Load a mask array based on config."""
-        
+
         mask_val = getattr(self, mask_attr)
         if mask_val is None: return None
-        
+
         if getattr(self, is_fn_attr):
             ## Load from external file using aux loader
             return self.load_aux_data(aux_source_list=[mask_val])
@@ -432,11 +432,11 @@ class Grits:
 
     def _apply_split_mask(self, mask_array, min_val, max_val, label="Value"):
         """Apply a masking operation to the destination DEM.
-        
+
         If pixels fall OUTSIDE the valid range (min_val, max_val),
-        they are reverted to the ORIGINAL source data values 
+        they are reverted to the ORIGINAL source data values
         """
-        
+
         if mask_array is None: return
 
         ## Open Destination (Filtered Result)
@@ -445,74 +445,74 @@ class Grits:
 
         band = ds.GetRasterBand(1)
         arr = band.ReadAsArray()
-        
+
         ## Treat NDV in mask as 0
-        mask_array[np.isnan(mask_array)] = 0 
-        
+        mask_array[np.isnan(mask_array)] = 0
+
         ## Determine Pixels to Revert
         filter_mask = np.zeros(arr.shape, dtype=bool)
-        
+
         if min_val is not None:
             filter_mask |= (mask_array < min_val)
         if max_val is not None:
             filter_mask |= (mask_array > max_val)
-            
+
         if np.any(filter_mask):
             if self.verbose:
                 count = np.count_nonzero(filter_mask)
                 utils.echo_msg(f'Reverting {count} pixels based on {label} thresholds.')
-                
+
             ## Load Original Source Data
             with gdalfun.gdal_datasource(self.src_dem) as src_ds:
                 if src_ds:
                     src_band = src_ds.GetRasterBand(self.band)
                     src_arr = src_band.ReadAsArray()
-                    
+
                     ## Apply Reversion
                     ## Only where the filter mask is True, replace filtered data with source data
                     arr[filter_mask] = src_arr[filter_mask]
-            
+
             band.WriteArray(arr)
-            
+
         ds = None
-        
-        
+
+
     def split_by_z(self):
         """Filter dst_dem by Z thresholds."""
-        
+
         if self.max_z is None and self.min_z is None: return
         if self.verbose: utils.echo_msg(f'Splitting by Z: {self.min_z} to {self.max_z}')
-        
+
         ds = gdal.Open(self.dst_dem, gdal.GA_Update)
         if not ds: return
 
         band = ds.GetRasterBand(1)
         arr = band.ReadAsArray()
         ndv = band.GetNoDataValue()
-        
+
         ## Self-masking (mask array IS the data array)
         self._apply_split_mask(arr, self.min_z, self.max_z, label="Z")
 
-        
+
     def split_by_weight(self):
         """Filter dst_dem by Weight thresholds."""
-        
+
         if self.max_weight is None and self.min_weight is None: return
         if self.verbose: utils.echo_msg(f'Splitting by Weight: {self.min_weight} to {self.max_weight}')
-        
+
         weight_arr = self._get_mask_array('weight_mask', 'weight_is_fn', 'weight_is_band')
         self._apply_split_mask(weight_arr, self.min_weight, self.max_weight, label="Weight")
 
-        
+
     def split_by_uncertainty(self):
         """Filter dst_dem by Uncertainty thresholds."""
-        
+
         if self.max_uncertainty is None and self.min_uncertainty is None: return
         if self.verbose: utils.echo_msg(f'Splitting by Uncertainty: {self.min_uncertainty} to {self.max_uncertainty}')
-        
+
         unc_arr = self._get_mask_array('uncertainty_mask', 'uncertainty_is_fn', 'uncertainty_is_band')
         self._apply_split_mask(unc_arr, self.min_uncertainty, self.max_uncertainty, label="Uncertainty")
-        
+
 
     def get_outliers(self, in_array, percentile=75, k=1.5, verbose=False):
         if np.all(np.isnan(in_array)): return np.nan, np.nan
@@ -524,25 +524,25 @@ class Grits:
 
     def _density(self, src_arr):
         """Calculate the density of valid data cells.
-        
+
         If a 'count_mask' is configured, density is calculated as:
         (Cells with Count > 0) / (Total Cells).
-        
+
         Otherwise, it falls back to:
         (Non-NaN Cells in src_arr) / (Total Cells).
-        
+
         Args:
             src_arr (np.array): The source data array (elevation) for fallback dimensions.
-            
+
         Returns:
             float: Density value (0.0 to 1.0).
         """
-        
+
         count_arr = None
 
         ## Try to load Count Mask
         if self.count_mask is not None:
-            
+
             ## External File
             if hasattr(self, 'count_is_fn') and self.count_is_fn:
                 ## Use load_aux_data to get aligned array
@@ -551,7 +551,7 @@ class Grits:
                     x_count=src_arr.shape[1],
                     y_count=src_arr.shape[0]
                 )
-                
+
             ## Band in Source DEM
             elif hasattr(self, 'count_is_band') and self.count_is_band:
                 with gdalfun.gdal_datasource(self.src_dem) as ds:
@@ -560,7 +560,7 @@ class Grits:
                         x_count = src_arr.shape[1]
                         y_count = src_arr.shape[0]
                         srcwin = self.src_region.srcwin(self.gt, x_count, y_count, node='grid')
-                        
+
                         if srcwin[2] > 0 and srcwin[3] > 0:
                             band = ds.GetRasterBand(self.count_mask)
                             count_arr = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
@@ -577,10 +577,10 @@ class Grits:
         if src_arr is not None and src_arr.size > 0:
             populated = np.count_nonzero(~np.isnan(src_arr))
             return populated / src_arr.size
-            
+
         return 0.0
 
-    
+
 class GritsFactory(factory.CUDEMFactory):
     from . import blur
     from . import gmtfilter
@@ -598,7 +598,7 @@ class GritsFactory(factory.CUDEMFactory):
     from . import cut
     from . import clip
     from . import rivers
-    
+
     _modules = {
         'blur': {'name': 'blur', 'desc': 'Gaussian Blur', 'call': blur.Blur},
         'grdfilter': {'name': 'grdfilter', 'desc': 'GMT grdfilter', 'call': gmtfilter.GMTgrdfilter},
@@ -615,7 +615,7 @@ class GritsFactory(factory.CUDEMFactory):
         'hydro': {'name': 'hydro', 'desc': 'Hydro Enforcement', 'call': hydro.Hydro},
         'cut': {'name': 'cut', 'desc': 'Cut/Mask to region', 'call': cut.Cut},
         'clip': {'name': 'cut', 'desc': 'Clip to vector', 'call': clip.Clip},
-        'rivers': {'name': 'rivers', 'desc': 'Discover rivers from ndv', 'call': rivers.Rivers}, 
+        'rivers': {'name': 'rivers', 'desc': 'Discover rivers from ndv', 'call': rivers.Rivers},
     }
 
     def __init__(self, **kwargs):
@@ -627,17 +627,17 @@ class GritsFactory(factory.CUDEMFactory):
 ## $ grits
 ##
 ## grits cli
-## ==============================================        
+## ==============================================
 class PrintModulesAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         factory.echo_modules(GritsFactory._modules, values, md=True if not values else False)
         sys.exit(0)
 
-        
+
 def grits_cli():
     parser = argparse.ArgumentParser(
         description=f'Grits ({__version__}): GRId filTerS - DEM Filtering Tool',
-        epilog="Supported %(prog)s modules (see %(prog)s --modules <module-name> for more info):\n" 
+        epilog="Supported %(prog)s modules (see %(prog)s --modules <module-name> for more info):\n"
         f"{factory.get_module_short_desc(GritsFactory._modules)}\n\n"
         "CUDEM home page: <http://cudem.colorado.edu>",
         formatter_class=argparse.RawDescriptionHelpFormatter
@@ -649,7 +649,7 @@ def grits_cli():
     proc_grp.add_argument('-M', '--module', action='append', required=True, help='Grits module')
     proc_grp.add_argument('-O', '--outfile', help='Output filename')
     proc_grp.add_argument('-R', '--region', action='append', help='Restrict processing region')
-    
+
     # --- Threshold Options ---
     thresh_grp = parser.add_argument_group("Threshold Options")
     thresh_grp.add_argument('-N', '--min-z', type=float, help='Minimum Z value')
@@ -658,7 +658,7 @@ def grits_cli():
     thresh_grp.add_argument('-Wx', '--max-weight', type=float, help='Maximum Weight')
     thresh_grp.add_argument('-Un', '--min-uncertainty', type=float, help='Minimum Uncertainty')
     thresh_grp.add_argument('-Ux', '--max-uncertainty', type=float, help='Maximum Uncertainty')
-    
+
     # --- Mask Otions ---
     mask_grp = parser.add_argument_group("Mask Options")
     mask_grp.add_argument('-U', '--uncertainty-mask', help='Uncertainty raster/band')
@@ -675,7 +675,7 @@ def grits_cli():
     sys_grp.add_argument('-m', '--modules', nargs='?', action=PrintModulesAction, help='List available modules')
 
     fixed_argv = factory.fix_argparse_region(sys.argv[1:])
-    
+
     args = parser.parse_args(fixed_argv)
 
     for src_dem in args.dems:
@@ -703,7 +703,7 @@ def grits_cli():
                 aux_data=args.aux_data,
                 verbose=not args.quiet
             )
-            
+
             try:
                 filter_obj = fac._acquire_module()
                 if filter_obj:
@@ -715,7 +715,7 @@ def grits_cli():
                 utils.echo_error_msg(f"Error executing {mod_str}: {e}")
                 if not args.quiet: traceback.print_exc()
 
-                
+
 if __name__ == '__main__':
     grits_cli()
 

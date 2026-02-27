@@ -4,20 +4,20 @@
 ##
 ## coastline.py is part of CUDEM
 ##
-## Permission is hereby granted, free of charge, to any person obtaining a copy 
-## of this software and associated documentation files (the "Software"), to deal 
-## in the Software without restriction, including without limitation the rights 
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+## of the Software, and to permit persons to whom the Software is furnished to do so,
 ## subject to the following conditions:
 ##
 ## The above copyright notice and this permission notice shall be included in all
 ## copies or substantial portions of the Software.
 ##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
@@ -41,11 +41,11 @@ from cudem.waffles.waffles import Waffle
 
 class WafflesCoastline(Waffle):
     """COASTLINE (land/etc-mask) generation
-    
-    Generate a coastline (land/etc-mask) using a variety of sources. 
+
+    Generate a coastline (land/etc-mask) using a variety of sources.
     Output raster will mask land-areas as 1 and oceans/(lakes/buildings) as 0.
     Output vector will polygonize land-areas.
-    
+
     Parameters:
     -----------
     want_osm_coast (bool): use OSM to fill background
@@ -65,7 +65,7 @@ class WafflesCoastline(Waffle):
     polygonize (bool/int): polygonize the output (int limits poly count)
     min_weight (float): weight applied to fetched coastal data
     """
-    
+
     def __init__(
             self,
             want_osm_coast=True,
@@ -114,20 +114,20 @@ class WafflesCoastline(Waffle):
         self.ds_config = None
         self.min_weight = utils.float_or(min_weight, 1)
 
-        
+
     def fetch_data(self, fetches_module, check_size=True):
         """Fetch remote data using the FetchesFactory."""
-        
+
         this_fetches = fetches.FetchesFactory(
             mod=fetches_module,
             src_region=self.wgs_region,
             verbose=self.verbose,
             outdir=self.cache_dir,
             callback=fetches.fetches_callback
-        )._acquire_module()        
-        
+        )._acquire_module()
+
         this_fetches.run()
-        
+
         fr = fetches.fetch_results(this_fetches, check_size=check_size)
         fr.daemon = True
         fr.start()
@@ -135,29 +135,29 @@ class WafflesCoastline(Waffle):
 
         return fr
 
-    
+
     def run(self):
         """Execute the coastline generation."""
-        
+
         ## Setup Regions
         self.f_region = self.p_region.copy()
         self.f_region.buffer(pct=5, x_inc=self.xinc, y_inc=self.yinc)
         self.f_region.src_srs = self.dst_srs
         self.wgs_region = self.f_region.copy()
         self.wgs_srs = 'epsg:4326'
-        
+
         if self.dst_srs is not None:
             self.wgs_region.warp(self.wgs_srs)
         else:
             self.dst_srs = self.wgs_srs
-            
+
         horz_epsg, _ = gdalfun.epsg_from_input(self.dst_srs)
         self.cst_srs = horz_epsg
 
         self._load_coast_mask()
         self.mem_config = self.ds_config.copy()
         self.mem_config['dt'] = gdal.GDT_Byte
-        
+
         self.want_nhd = True if self.want_nhd_plus else self.want_nhd
 
         ## Load Sources
@@ -177,10 +177,10 @@ class WafflesCoastline(Waffle):
 
         if self.want_wsf or self.want_wsf_buildings:
             self._load_wsf_bldgs()
-            
+
         if self.want_stack:
             self._load_data()
-            
+
         if self.verbose:
             utils.echo_msg(
                 'finalizing array for region {} at {} {}...'.format(
@@ -189,10 +189,10 @@ class WafflesCoastline(Waffle):
                     self.ds_config['ny']
                 )
             )
-            
+
         self._finalize_array()
         self._write_coast_array()
-        
+
         if self.polygonize:
             if utils.int_or(self.polygonize) is not None:
                 self._write_coast_poly(poly_count=self.polygonize)
@@ -204,36 +204,36 @@ class WafflesCoastline(Waffle):
         else:
             return self
 
-        
+
     def _finalize_array(self):
         """Finalize binary mask values."""
-        
+
         self.coast_array[self.coast_array > 0] = 1
         self.coast_array[self.coast_array <= 0] = 0
-        
+
         if self.invert:
             ## Swap 0 and 1 using a temp value of 2
             self.coast_array[self.coast_array == 0] = 2
             self.coast_array[self.coast_array == 1] = 0
             self.coast_array[self.coast_array == 2] = 1
 
-            
+
     def _load_coast_mask(self):
         """Create initial zero-grid."""
-        
+
         xcount, ycount, gt = self.p_region.geo_transform(
             x_inc=self.xinc, y_inc=self.yinc
         )
         self.ds_config = gdalfun.gdal_set_infos(
             xcount, ycount, xcount * ycount, gt, self.cst_srs,
             gdal.GDT_Float32, self.ndv, 'GTiff', None, None
-        )        
+        )
         self.coast_array = np.zeros((ycount, xcount))
 
-            
+
     def _load_osm_coast(self):
         """Load OpenStreetMap Coastline."""
-        
+
         this_cst = self.fetch_data('osm:q=coastline', check_size=False)
         if this_cst is not None:
             with utils.ccp(
@@ -241,7 +241,7 @@ class WafflesCoastline(Waffle):
                     desc='Processing osm coastline',
                     leave=True
             ) as pbar:
-                for n, cst_result in enumerate(this_cst.results):                
+                for n, cst_result in enumerate(this_cst.results):
                     if cst_result[-1] == 0:
                         pbar.update()
                         cst_osm = cst_result[1]
@@ -277,10 +277,10 @@ class WafflesCoastline(Waffle):
                         else:
                             utils.echo_error_msg(f'could not open {out}')
 
-                            
+
     def _load_enc_coast(self):
         """Load ENC Charts Coastline."""
-        
+
         this_cst = self.fetch_data('charts')
         if this_cst is not None:
             with utils.ccp(
@@ -294,7 +294,7 @@ class WafflesCoastline(Waffle):
                         cst_enc = cst_result[1]
                         src_000s = utils.p_unzip(
                             os.path.join(cst_enc), exts=['000'],
-                            outdir=self.cache_dir, verbose=self.verbose            
+                            outdir=self.cache_dir, verbose=self.verbose
                         )
                         for src_000 in src_000s:
                             enc_level = utils.int_or(os.path.basename(src_000)[2], 0)
@@ -306,12 +306,12 @@ class WafflesCoastline(Waffle):
                             )
                             cst_ds_ = ogr.Open(src_000)
                             if cst_ds_ is not None:
-                                cst_layer = cst_ds_.GetLayer('SEAARE')                            
+                                cst_layer = cst_ds_.GetLayer('SEAARE')
                                 _ = gdal.RasterizeLayer(
                                     enc_ds, [1], cst_layer, burn_values=[1]
                                 )
                                 cst_ds_ = cst_layer = None
-                                
+
                             if enc_ds is not None:
                                 for srcwin in utils.yield_srcwin(
                                         (self.ds_config['ny'], self.ds_config['nx']),
@@ -322,14 +322,14 @@ class WafflesCoastline(Waffle):
                                         srcwin[1]:srcwin[1]+srcwin[3],
                                         srcwin[0]:srcwin[0]+srcwin[2]
                                     ] -= (enc_ds_arr * self.min_weight)
-                                    
+
                                 enc_ds = enc_ds_arr = None
 
-                                
+
     def _load_gmrt(self):
         """GMRT - Global low-res."""
-        
-        this_gmrt = self.fetch_data('gmrt:layer=topo')        
+
+        this_gmrt = self.fetch_data('gmrt:layer=topo')
         gmrt_result = this_gmrt.results[0]
         if gmrt_result[-1] == 0:
             gmrt_tif = gmrt_result[1]
@@ -345,7 +345,7 @@ class WafflesCoastline(Waffle):
             self.coast_array += (gmrt_ds_arr * self.min_weight)
             gmrt_ds = gmrt_ds_arr = None
 
-            
+
     def _load_copernicus(self):
         """Copernicus Global DEM."""
 
@@ -371,10 +371,10 @@ class WafflesCoastline(Waffle):
                         srcwin[1]:srcwin[1]+srcwin[3],
                         srcwin[0]:srcwin[0]+srcwin[2]
                     ] += (cop_ds_arr * self.min_weight)
-                    
+
                 cop_ds = cop_ds_arr = None
 
-                
+
     def _load_cudem(self):
         """CUDEM (Standard)."""
 
@@ -399,10 +399,10 @@ class WafflesCoastline(Waffle):
                         srcwin[1]:srcwin[1]+srcwin[3],
                         srcwin[0]:srcwin[0]+srcwin[2]
                     ] += (cudem_ds_arr * self.min_weight)
-                    
+
                 cudem_ds = cudem_ds_arr = None
 
-                
+
     def _load_nhd(self):
         """USGS NHD (High-Res US Only)."""
 
@@ -424,7 +424,7 @@ class WafflesCoastline(Waffle):
                     gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
                     if 'GDB' not in gdb:
                         continue
-                    
+
                     # Merge relevant layers into temp shapefile
                     utils.run_cmd(
                         f'ogr2ogr -update -append nhdArea_merge.shp "{gdb}" NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {self.p_region.format("ul_lr")} 2>/dev/null',
@@ -462,10 +462,10 @@ class WafflesCoastline(Waffle):
 
                 utils.remove_glob('nhdArea_merge.*')
 
-                
+
     def _load_lakes(self):
         """HydroLakes -- Global Lakes."""
-        
+
         this_lakes = self.fetch_data('hydrolakes')
         lakes_shp = None
         if this_lakes.results and this_lakes.results[0][-1] == 0:
@@ -481,7 +481,7 @@ class WafflesCoastline(Waffle):
             lakes_warp_ds = gdalfun.gdal_mem_ds(
                 self.ds_config, name='lakes_warp', src_srs=self.wgs_srs, co=self.co
             )
-            
+
             lk_ds = ogr.Open(lakes_shp)
             if lk_ds is not None:
                 lk_layer = lk_ds.GetLayer()
@@ -492,17 +492,17 @@ class WafflesCoastline(Waffle):
                     dstSRS=self.cst_srs, resampleAlg=self.sample
                 )
                 lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
-                
-                self.coast_array[lakes_ds_arr == -1] = 0 if not self.invert_lakes else 1 
+
+                self.coast_array[lakes_ds_arr == -1] = 0 if not self.invert_lakes else 1
                 lakes_ds = lk_ds = lakes_warp_ds = None
             else:
                 utils.echo_error_msg(f'could not open {lakes_shp}')
 
-                
+
     def _load_wsf_bldgs(self):
         """WSF Buildings (World Settlement Footprint)."""
 
-        this_wsf = self.fetch_data('wsf', check_size=False)        
+        this_wsf = self.fetch_data('wsf', check_size=False)
         for i, wsf_result in enumerate(this_wsf.results):
             if wsf_result[-1] == 0:
                 wsf_tif = wsf_result[1]
@@ -520,7 +520,7 @@ class WafflesCoastline(Waffle):
                 self.coast_array += (wsf_ds_arr * self.min_weight)
                 wsf_ds = wsf_ds_arr = None
 
-                
+
     def _load_osm_bldgs(self):
         """Load buildings from OSM."""
 
@@ -530,7 +530,7 @@ class WafflesCoastline(Waffle):
             )
         )
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        
+
         with utils.ccp(
                 total=len(this_osm.results),
                 desc='Processing OSM buildings',
@@ -540,7 +540,7 @@ class WafflesCoastline(Waffle):
                 if osm_result[-1] == 0:
                     pbar.update()
                     osm_z = osm_result[1]
-                    
+
                     if osm_result[-1] == 'bz2':
                         osm_planet = utils.unbz2(osm_z, self.cache_dir)
                         osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
@@ -564,7 +564,7 @@ class WafflesCoastline(Waffle):
                         bldg_ds = gdal.Open('bldg_osm.tif')
                         if bldg_ds is not None:
                             bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-                            self.coast_array[bldg_ds_arr == -1] = 0 
+                            self.coast_array[bldg_ds_arr == -1] = 0
                             bldg_ds = bldg_ds_arr = None
                         bldg_ds = None
                     else:
@@ -574,19 +574,19 @@ class WafflesCoastline(Waffle):
 
         bldg_ds = None
 
-        
+
     def _load_bing_bldgs(self):
         """Load buildings from BING."""
 
         this_bing = self.fetch_data("bing_bfp", check_size=True)
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        
+
         with utils.ccp(
                 total=len(this_bing.results),
                 desc='Processing BING buildings',
                 leave=self.verbose
         ) as pbar:
-            for n, bing_result in enumerate(this_bing.results):                
+            for n, bing_result in enumerate(this_bing.results):
                 if bing_result[-1] == 0:
                     pbar.update()
                     bing_gz = bing_result[1]
@@ -608,12 +608,12 @@ class WafflesCoastline(Waffle):
                         utils.remove_glob(bing_gz)
                         utils.echo_error_msg(f'Could not process bing bfp, {e}')
                         status = -1
-                    
+
                     if status == 0:
                         bldg_ds = gdal.Open('bldg_bing.tif')
                         if bldg_ds is not None:
                             bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-                            self.coast_array[bldg_ds_arr == -1] = 0 
+                            self.coast_array[bldg_ds_arr == -1] = 0
                             bldg_ds = bldg_ds_arr = None
                         bldg_ds = None
                     else:
@@ -623,10 +623,10 @@ class WafflesCoastline(Waffle):
 
         bldg_ds = None
 
-        
+
     def _load_data(self):
         """Load data from user datalist and amend coast_array."""
-        
+
         for this_arr in self.stack_ds.yield_array():
             data_arr = this_arr[0]['z']
             weight_arr = this_arr[0]['weight']
@@ -640,18 +640,18 @@ class WafflesCoastline(Waffle):
                 srcwin[0]:srcwin[0]+srcwin[2]
             ] += (data_arr * weight_arr)
 
-            
+
     def _write_coast_array(self):
         """Write coast_array to file."""
 
         if self.verbose:
             utils.echo_msg(f'writing array to {self.name}.tif...')
-            
+
         gdalfun.gdal_write(
             self.coast_array, f'{self.name}.tif', self.ds_config
         )
 
-        
+
     def _write_coast_poly(self, poly_count=None):
         """Convert to coast_array vector."""
 
@@ -659,12 +659,12 @@ class WafflesCoastline(Waffle):
             utils.echo_msg(
                 f'polygonizing {poly_count if poly_count else "all"} features from array to {self.name}.shp...'
             )
-        
+
         poly_count = utils.int_or(poly_count)
         tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
             '{}_tmp_c.shp'.format(self.name)
         )
-        
+
         if tmp_ds is not None:
             tmp_layer = tmp_ds.CreateLayer(
                 '{}_tmp_c'.format(os.path.basename(self.name)),
@@ -676,19 +676,19 @@ class WafflesCoastline(Waffle):
                 '{}.tif'.format(self.name), tmp_layer, verbose=self.verbose
             )
             tmp_ds = None
-            
+
         # SQL filtering for largest polygons
         sql_limit = f" order by ST_AREA(geometry) desc limit {poly_count}" if poly_count is not None else ""
-        
+
         utils.run_cmd(
             f'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {os.path.basename(self.name)}_tmp_c WHERE DN=0{sql_limit}" "{self.name}.shp" "{self.name}_tmp_c.shp"',
             verbose=self.verbose
-        )        
+        )
         utils.remove_glob(f'{self.name}_tmp_c.*')
         utils.run_cmd(
             f'ogrinfo -dialect SQLITE -sql "UPDATE {os.path.basename(self.name)} SET geometry = ST_MakeValid(geometry)" "{self.name}.shp"',
             verbose=self.verbose
-        )        
+        )
         gdalfun.osr_prj_file(self.name + '.prj', self.dst_srs)
 
 
