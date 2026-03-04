@@ -11,9 +11,9 @@ authors:
     given-names: Michael
   - family-names: Lim
     given-names: Elliot
-  
+
     website: https://cudem.colorado.edu/
 title: "CUDEM"
-version: 1.9.0
-date-released: 2022-02-01
+version: 3.0.2
+date-released: 2026-03-03
 url: "https://github.com/ciresdem/cudem"

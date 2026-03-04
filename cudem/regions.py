@@ -671,8 +671,8 @@ class Region:
             return self
 
         if include_z and (self.zmin is not None and self.zmax is not None):
-            self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin, direction=transform_direction)
-            self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax, direction=transform_direction)
+            self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin, direction=transform_direction, always_xy=True)
+            self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax, direction=transform_direction, always_xy=True)
         else:
             self.xmin, self.ymin = transformer.transform(self.xmin, self.ymin, direction=transform_direction)
             self.xmax, self.ymax = transformer.transform(self.xmax, self.ymax, direction=transform_direction)
