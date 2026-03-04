@@ -4,20 +4,20 @@
 ##
 ## datalistfile.py is part of CUDEM
 ##
-## Permission is hereby granted, free of charge, to any person obtaining a copy 
-## of this software and associated documentation files (the "Software"), to deal 
-## in the Software without restriction, including without limitation the rights 
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+## of the Software, and to permit persons to whom the Software is furnished to do so,
 ## subject to the following conditions:
 ##
 ## The above copyright notice and this permission notice shall be included in all
 ## copies or substantial portions of the Software.
 ##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
@@ -75,27 +75,27 @@ class Points(ElevationDataset):
             pass # already recarray
         elif isinstance(points, pd.DataFrame):
             points = points.to_records(index=False)
-        
+
         yield points
 
-        
+
 class Scratch(ElevationDataset):
     """Scratch Dataset
     Process a python list of valid dataset entries
     """
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.metadata['name'] = 'scratch'
         self.data_format = -3
 
-        
+
     def generate_inf(self, make_grid=True, make_block_mean=False, block_inc=None):
         """Generate INF for the scratch list."""
-        
+
         _region_backup = self.region
         self.region = None # Unset to scan all children
-        
+
         point_count = 0
         out_regions = []
         out_srs = []
@@ -105,11 +105,11 @@ class Scratch(ElevationDataset):
         for entry in self.parse():
             ## Trigger child INF generation
             entry.inf(make_grid=False, make_block_mean=False)
-            
+
             if entry.infos.minmax:
                 valid_children.append(entry)
                 entry_region = regions.Region().from_list(entry.infos.minmax)
-                
+
                 if entry.src_srs is not None:
                     out_srs.append(entry.src_srs)
                     if self.dst_srs is not None:
@@ -125,7 +125,7 @@ class Scratch(ElevationDataset):
         for r in out_regions:
             if master_region is None: master_region = r
             else: master_region = regions.regions_merge(master_region, r)
-            
+
         if master_region is not None:
             self.infos.minmax = master_region.export_as_list(include_z=True)
             self.infos.wkt = master_region.export_as_wkt()
@@ -143,14 +143,14 @@ class Scratch(ElevationDataset):
             ## Grids from Children
             if (make_grid or make_block_mean) and point_count > 0:
                 self._generate_grids_from_children(
-                    valid_children, master_region, 
+                    valid_children, master_region,
                     make_grid, make_block_mean, block_inc
                 )
 
         self.region = _region_backup
         return self.infos
 
-    
+
     def parse(self):
         if isinstance(self.fn, list):
             for this_ds in self.fn:
@@ -160,7 +160,7 @@ class Scratch(ElevationDataset):
                         self.data_entries.append(ds)
                         yield ds
 
-                        
+
 class Datalist(ElevationDataset):
     """Representing a datalist parser (Extended MB-System style).
     Can parse recursive datalists and sidecar JSON/H3 indices.
@@ -171,39 +171,38 @@ class Datalist(ElevationDataset):
         'date', 'data_type', 'resolution', 'hdatum', 'vdatum',
         'url', 'mod_args'
     ]
-    
+
     def __init__(self, fmt=None, h3_res=6, want_h3=True, want_json=True, **kwargs):
         super().__init__(**kwargs)
         self.kwargs = kwargs
         self.h3_res = h3_res # Default H3 Resolution (Res 6 ~= 36 km2)
         self.want_h3 = want_h3
         self.want_json = want_json
-        
+
         ## H3 Index Storage
         ## Structure: { "entries": [{meta}], "index": { "h3_cell": [entry_idx, ...] } }
         self.h3_data = {"resolution": self.h3_res, "entries": [], "index": {}}
         self.data_format = -1
-        
-        
+
     def _init_datalist_vector(self):
         """Initialize the datalist geojson vector index."""
-        
+
         self.dst_layer = f'{self.fn}'
         self.dst_vector = f'{self.dst_layer}.json'
 
         utils.remove_glob(self.dst_vector)
-        
+
         self.ds = ogr.GetDriverByName('GeoJSON').CreateDataSource(self.dst_vector)
         srs = srsfun.osr_srs(self.src_srs)
-        
-        if self.ds is not None: 
+
+        if self.ds is not None:
             self.layer = self.ds.CreateLayer(self.dst_layer, srs, ogr.wkbMultiPolygon)
             for f in self._datalist_json_cols:
                 self.layer.CreateField(ogr.FieldDefn(f, ogr.OFTString))
             return 0
         return -1
 
-    
+
     def _update_h3_index(self, entry, entry_region, entry_idx):
         """Update the H3 Inverted Index with a new entry."""
         if not HAS_H3: return
@@ -238,22 +237,22 @@ class Datalist(ElevationDataset):
         try:
             ## Polyfill region to H3 cells
             cells = h3.polygon_to_cells(geo_json_poly, self.h3_res)
-            
+
             ## Update Inverted Index: Cell -> List of Entry IDs
             for cell in cells:
                 if cell not in self.h3_data['index']:
                     self.h3_data['index'][cell] = []
                 self.h3_data['index'][cell].append(entry_idx)
-                
+
         except Exception as e:
             utils.echo_warning_msg(f"H3 Indexing Error for {entry.fn}: {e}")
 
-            
+
     def _save_h3_index(self):
         """Save the H3 index to a sidecar JSON file."""
-        
+
         if not HAS_H3 or not self.h3_data['entries']: return
-        
+
         h3_fn = f'{self.fn}.h3.json'
         try:
             with open(h3_fn, 'w') as f:
@@ -261,10 +260,10 @@ class Datalist(ElevationDataset):
         except Exception as e:
             utils.echo_warning_msg(f"Failed to save H3 index: {e}")
 
-            
+
     def _create_entry_feature(self, entry, entry_region):
         """Create a datalist entry feature in the geojson."""
-        
+
         entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
         entry_fields = [
             entry_path,
@@ -282,28 +281,28 @@ class Datalist(ElevationDataset):
             entry.metadata.get('url'),
             utils.dict2args(entry.params.get('mod_args', {}))
         ]
-        
+
         out_feat = ogr.Feature(self.layer.GetLayerDefn())
         out_feat.SetGeometry(ogr.CreateGeometryFromWkt(entry_region.export_as_wkt()))
-        
+
         for i, f in enumerate(self._datalist_json_cols):
             out_feat.SetField(f, str(entry_fields[i]))
-            
+
         self.layer.CreateFeature(out_feat)
 
-        
+
     def generate_inf(self, make_grid=True, make_block_mean=False, block_inc=None):
         """Generate metadata (INF) for the datalist.
-        
-        Iterates through datalist entries, aggregates bounds, and generates 
+
+        Iterates through datalist entries, aggregates bounds, and generates
         a JSON/H3 index. Optionally generates aggregated grids from children.
         """
 
         _region_backup = self.region
         self.region = None # Unset region to scan all entries
-        
+
         self.infos.file_hash = self.infos.generate_hash()
-        
+
         point_count = 0
         out_regions = []
         out_srs = []
@@ -313,7 +312,7 @@ class Datalist(ElevationDataset):
         if self.want_json:
             ## Initialize JSON Vector Index
             json_init = self._init_datalist_vector()
-        
+
         ## Reset H3 Index
         self.h3_data = {"resolution": self.h3_res, "entries": [], "index": {}}
         entry_idx = 0
@@ -327,11 +326,11 @@ class Datalist(ElevationDataset):
             utils.echo_msg_bold(entry)
             ## Generate Child INF (recursively if needed)
             entry.inf(make_grid=False, make_block_mean=False)
-            
+
             if entry.infos.minmax:
                 valid_children.append(entry)
                 entry_region = regions.Region().from_list(entry.infos.minmax)
-                
+
                 ## Transform bounds if needed
                 if entry.src_srs is not None:
                     out_srs.append(entry.src_srs)
@@ -342,11 +341,11 @@ class Datalist(ElevationDataset):
                 if entry_region.valid_p():
                     out_regions.append(entry_region)
                     point_count += entry.infos.numpts
-                    
+
                     ## Add to OGR JSON Index
                     if json_init == 0:
                         self._create_entry_feature(entry, entry_region)
-                        
+
                     ## Add to H3 Index
                     if HAS_H3 and self.want_h3:
                         self._update_h3_index(entry, entry_region, entry_idx)
@@ -354,7 +353,7 @@ class Datalist(ElevationDataset):
 
         ## Close JSON DataSource
         self.ds = self.layer = None
-        
+
         ## Save H3 Index
         if HAS_H3 and self.want_h3:
             self._save_h3_index()
@@ -364,7 +363,7 @@ class Datalist(ElevationDataset):
         for r in out_regions:
             if master_region is None: master_region = r
             else: master_region = regions.regions_merge(master_region, r)
-            
+
         if master_region is not None:
             self.infos.minmax = master_region.export_as_list(include_z=True)
             self.infos.wkt = master_region.export_as_wkt()
@@ -382,22 +381,22 @@ class Datalist(ElevationDataset):
             ## Grids from Children
             if (make_grid or make_block_mean) and point_count > 0:
                 self._generate_grids_from_children(
-                    valid_children, master_region, 
+                    valid_children, master_region,
                     make_grid, make_block_mean, block_inc
                 )
 
         self.region = _region_backup
         return self.infos
 
-    
+
     def parse_h3(self):
         """Parse datalist using the H3 sidecar index.
-        
+
         Performs O(1) spatial filtering using H3 cells.
         """
-        
+
         from cudem.datalists.dlim import DatasetFactory
-        
+
         h3_fn = f'{self.fn}.h3.json'
         if not HAS_H3 or not os.path.exists(h3_fn):
             ## Fallback to standard parse
@@ -414,7 +413,7 @@ class Datalist(ElevationDataset):
 
         ## Determine Matching Entries
         matched_indices = set()
-        
+
         if self.region is None:
             ## If no spatial filter, yield all
             matched_indices = set(range(len(h3_index['entries'])))
@@ -422,7 +421,7 @@ class Datalist(ElevationDataset):
             ## Convert Query Region to H3 Cells
             ## We use the resolution specified in the index file
             res = h3_index.get('resolution', 6)
-            
+
             ## Expand region slightly to catch edge hexes
             ## Or assume the region is a bbox
             geo_json_poly = {
@@ -435,11 +434,11 @@ class Datalist(ElevationDataset):
                     [self.region.xmin, self.region.ymin]
                 ]]
             }
-            
+
             try:
                 ## Get cells for query region
                 query_cells = h3.polygon_to_cells(geo_json_poly, res)
-                
+
                 ## Check intersection with index
                 ## (Look up each query cell in the index)
                 idx_map = h3_index['index']
@@ -447,42 +446,42 @@ class Datalist(ElevationDataset):
                     if cell in idx_map:
                         ## Add all entry IDs found in this cell
                         matched_indices.update(idx_map[cell])
-                        
+
             except Exception as e:
                 utils.echo_warning_msg(f"H3 Query Error: {e}")
-                ## Fallback to yielding all might be safer? 
+                ## Fallback to yielding all might be safer?
                 ## Or yielding none? Let's just return to avoid bad data.
                 return
 
         ## Yield Matched Entries
         for i in sorted(list(matched_indices)):
             entry_meta = h3_index['entries'][i]
-            
+
             ## Reconstruct Entry Object
             ## We construct a mock mod string: "path format mod_args weight uncertainty"
             data_mod = (f'"{entry_meta["path"]}" {entry_meta["format"]} '
                         f'{entry_meta.get("mod_args", "")} '
                         f'{entry_meta["weight"]} {entry_meta["uncertainty"]}')
-            
+
             ## Reconstruct Metadata (Deep copy from parent, apply entry overrides if saved)
             md = copy.deepcopy(self.metadata)
-            
+
             data_set = DatasetFactory(
                 **self._set_params(mod=data_mod, metadata=md)
             )._acquire_module()
-            
+
             if data_set and data_set.valid_p():
                 data_set.initialize()
                 for ds in data_set.parse():
                     self.data_entries.append(ds)
                     yield ds
 
-                    
+
     def parse_json(self):
         """Parse datalist using the JSON sidecar index."""
 
         from cudem.datalists.dlim import DatasetFactory
-        
+
         if not os.path.exists(f'{self.fn}.json'):
             ## Fallback to standard parse if JSON missing
             for ds in self.parse():
@@ -504,7 +503,7 @@ class Datalist(ElevationDataset):
                 wr = self.region.w_region()
                 ur = self.region.u_region()
                 w, u = float(feat.GetField('weight')), float(feat.GetField('uncertainty'))
-                
+
                 if (wr[0] is not None and w < wr[0]) or (wr[1] is not None and w > wr[1]): continue
                 if (ur[0] is not None and u < ur[0]) or (ur[1] is not None and u > ur[1]): continue
 
@@ -516,18 +515,18 @@ class Datalist(ElevationDataset):
                 ds_args = utils.dict2args(data_set_args)
             except:
                 ds_args = None
-            
+
             md = copy.deepcopy(self.metadata)
             for key in self.metadata.keys():
                 val = feat.GetField(key)
                 if val: md[key] = val
 
             data_mod = f'"{feat.GetField("path")}" {feat.GetField("format")} {ds_args_str or ""} {feat.GetField("weight")} {feat.GetField("uncertainty")}'
-            
+
             data_set = DatasetFactory(
                 **self._set_params(mod=data_mod, metadata=md)#, **data_set_args)
             )._acquire_module()
-            
+
             if data_set and data_set.valid_p():
                 data_set.initialize()
                 for ds in data_set.parse():
@@ -555,7 +554,6 @@ class Datalist(ElevationDataset):
         if os.path.exists(self.fn):
             ## Get the number of lines in the datalist
             count = utils.count_data_lines(self.fn)
-            
             with open(self.fn, 'r') as f:
                 with utils.ccp(
                         total=count,
@@ -582,17 +580,35 @@ class Datalist(ElevationDataset):
                             if data_set and data_set.valid_p(fmts=DatasetFactory._modules[data_set.data_format]['fmts']):
                                 data_set.initialize()
 
-                                ## Spatial Filter
                                 if self.region is not None and self.region.valid_p(check_xy=True):
                                     ## Load INF to check bounds
                                     data_set.inf(check_hash=False)
 
                                     check_region = data_set.transform['trans_region']
-                                    if check_region is None and data_set.infos.minmax:
-                                        check_region = regions.Region().from_list(data_set.infos.minmax)
 
-                                    if check_region and not regions.regions_intersect_p(check_region, self.region):
+                                    # Ensure we have the native bounding box of the dataset
+                                    native_bounds = data_set.inf_region
+                                    if native_bounds is None and data_set.infos.minmax:
+                                        native_bounds = regions.Region().from_list(data_set.infos.minmax)
+
+                                    # Compare native UTM bounds with the user's region (transformed to UTM)
+                                    if check_region and native_bounds and not regions.regions_intersect_p(native_bounds, check_region):
                                         continue
+                                # ## Spatial Filter
+                                # if self.region is not None and self.region.valid_p(check_xy=True):
+                                #     ## Load INF to check bounds
+                                #     data_set.inf(check_hash=False)
+
+                                #     print(data_set.transform['trans_region'])
+                                #     check_region = data_set.transform['trans_region']
+                                #     print(check_region)
+                                #     if check_region is None and data_set.infos.minmax:
+                                #         check_region = regions.Region().from_list(data_set.infos.minmax)
+                                #     print(check_region)
+                                #     print('self region', self.region)
+                                #     if check_region and not regions.regions_intersect_p(check_region, self.region):
+                                #         print('skipping...')
+                                #         continue
 
                                 for ds in data_set.parse():
                                     self.data_entries.append(ds)
@@ -609,7 +625,7 @@ class Datalist(ElevationDataset):
 
 def datalist2json_cli():
     """Command-line interface for datalist2json."""
-    
+
     parser = argparse.ArgumentParser(
         description="datalist2json: Create spatial indices (JSON/H3) for datalists.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -619,7 +635,7 @@ def datalist2json_cli():
         'datalist',
         help="Input datalist file path."
     )
-    
+
     ## Indexing Options
     parser.add_argument(
         '--json',
@@ -634,7 +650,7 @@ def datalist2json_cli():
         action='store_false',
         help="Do not generate standard OGR/GeoJSON spatial index."
     )
-    
+
     parser.add_argument(
         '--h3',
         dest='want_h3',
@@ -687,17 +703,17 @@ def datalist2json_cli():
     try:
         ## calling generate_inf() triggers the index creation side-effects
         dl.generate_inf()
-    
+
         if not args.quiet:
             utils.echo_msg("Done.")
-            
+
     except Exception as e:
         utils.echo_error_msg(f"Failed to process datalist: {e}")
         sys.exit(1)
 
-        
+
 if __name__ == "__main__":
     datalist2json_cli()
-    
-                
+
+
 ### End

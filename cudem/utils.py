@@ -4,20 +4,20 @@
 ##
 ## utils.py is part of CUDEM
 ##
-## Permission is hereby granted, free of charge, to any person obtaining a copy 
-## of this software and associated documentation files (the "Software"), to deal 
-## in the Software without restriction, including without limitation the rights 
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+## of the Software, and to permit persons to whom the Software is furnished to do so,
 ## subject to the following conditions:
 ##
 ## The above copyright notice and this permission notice shall be included in all
 ## copies or substantial portions of the Software.
 ##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
@@ -75,12 +75,12 @@ def set_cache(cache_dir: str):
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
 
-        
+
 def remove_cache(cache_dir: str):
     if os.path.exists(cache_dir):
         remove_glob(cache_dir)
 
-        
+
 FIPS_TO_EPSG = {
     "0101": "26929", "0102": "26930", "0201": "26948", "0202": "26949",
     "0203": "26950", "0301": "26951", "0302": "26952", "0401": "26941",
@@ -118,18 +118,18 @@ FIPS_TO_EPSG = {
 def append_fn(fn, src_region, inc, version=None, year=None,
               res=None, high_res=False):
     """Append the src_region, inc and version to a string filename."""
-    
+
     res_str = inc2str(inc) if res is None else res
     reg_str = src_region.format('fn' if not high_res else 'fn_full')
     ver_str = 1 if version is None else version
     year_str = this_year() if year is None else year
-    
+
     return f'{fn}{res_str}_{reg_str}_{year_str}v{ver_str}'
 
 
 def fn_basename(fn, ext):
     """Return the basename of fn based on ext."""
-    
+
     if '.' in ext:
         return fn[:-len(ext)]
     return fn[:-(len(ext) + 1)]
@@ -137,7 +137,7 @@ def fn_basename(fn, ext):
 
 def fn_basename2(fn):
     """Return the basename of fn."""
-    
+
     t = fn.split('.')
     if len(t) > 1:
         return '.'.join(fn.split('.')[:-1])
@@ -146,7 +146,7 @@ def fn_basename2(fn):
 
 def fn_ext(fn):
     """Return the extension of fn."""
-    
+
     t = fn.split('.')
     if len(t) > 1:
         return t[-1]
@@ -155,13 +155,13 @@ def fn_ext(fn):
 
 def make_temp_fn(fn, temp_dir=None, region=None, inc=None):
     """Make a temporary unique filename."""
-    
+
     if temp_dir is None:
         temp_dir = cudem_cache()
-        
+
     fn_bn = fn_basename2(os.path.basename(fn))
     fn_et = fn_ext(fn)
-    
+
     if not os.path.exists(temp_dir):
         try:
             os.makedirs(temp_dir)
@@ -169,7 +169,7 @@ def make_temp_fn(fn, temp_dir=None, region=None, inc=None):
             echo_error_msg(f'Could not make dirs "{temp_dir}": {e}')
 
     ext_str = f'.{fn_et}' if fn_et is not None else ''
-    
+
     if region is None:
         timestamp = datetime.datetime.now().strftime('%Y%m%H%M%S%f')
         return os.path.join(temp_dir, f'{fn_bn}_{timestamp}{ext_str}')
@@ -177,10 +177,10 @@ def make_temp_fn(fn, temp_dir=None, region=None, inc=None):
         inc_str = inc2str(inc) if inc is not None else '0'
         return os.path.join(temp_dir, f'{fn_bn}{inc_str}_{region.format("fn_full")}{ext_str}')
 
-    
+
 def fn_url_p(fn):
     """Check if fn is a URL."""
-    
+
     url_sw = ['http://', 'https://', 'ftp://', 'ftps://', '/vsicurl']
     if str_or(fn):
         try:
@@ -194,7 +194,7 @@ def fn_url_p(fn):
 
 def inc2str(inc):
     """Convert a WGS84 geographic increment to a string identifier."""
-    
+
     return str(fractions.Fraction(str(inc * 3600)).limit_denominator(10)).replace('/', '')
 
 
@@ -202,15 +202,15 @@ def str2inc(inc_str):
     """Convert a GMT-style inc_str (e.g. 6s) to geographic units.
 
     c/s - arc-seconds
-    m - arc-minutes    
+    m - arc-minutes
     """
-    
+
     if inc_str is None or str(inc_str).lower() == 'none' or len(str(inc_str)) == 0:
         return None
-        
+
     inc_str = str(inc_str)
     units = inc_str[-1]
-    
+
     try:
         if units == 'c' or units == 's':
             return float(inc_str[:-1]) / 3600.
@@ -222,22 +222,22 @@ def str2inc(inc_str):
         echo_error_msg(f'Could not parse increment {inc_str}: {e}')
         return None
 
-    
+
 def this_date():
     """Get current date."""
-    
+
     return datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
 
 def this_year():
     """Get current year."""
-    
+
     return datetime.datetime.now().strftime('%Y')
 
 
 def dl_hash(fn, sha1=False):
     """Calculate a hash of a file."""
-    
+
     buf_size = 65536
     this_hash = hashlib.sha1() if sha1 else hashlib.md5()
 
@@ -247,22 +247,22 @@ def dl_hash(fn, sha1=False):
             if not data:
                 break
             this_hash.update(data)
-            
+
     return this_hash.hexdigest()
 
 
 def args2dict(args, dict_args=None):
     """Convert list of arg strings to dict."""
-    
+
     if dict_args is None:
         dict_args = {}
-        
+
     for arg in args:
         p_arg = arg.split('=')
         if len(p_arg) > 1:
             key = p_arg[0]
             val = p_arg[1]
-            
+
             if val.lower() == 'false':
                 dict_args[key] = False
             elif val.lower() == 'true':
@@ -273,13 +273,13 @@ def args2dict(args, dict_args=None):
                 dict_args[key] = '='.join(p_arg[1:])
             else:
                 dict_args[key] = val
-        
+
     return dict_args
 
 
 def dict2args(in_dict):
     """Convert a dictionary to an args string."""
-    
+
     out_args = []
     keys = list(in_dict.keys())
     for i, key in enumerate(keys):
@@ -290,7 +290,7 @@ def dict2args(in_dict):
 
 def remove_glob(*args):
     """Glob `glob_str` and os.remove results."""
-    
+
     for glob_str in args:
         try:
             globs = glob.glob(glob_str)
@@ -309,14 +309,14 @@ def remove_glob(*args):
 
 def slugify(value, allow_unicode=False):
     """Convert to ASCII if 'allow_unicode' is False. Convert spaces/dashes to single dashes."""
-    
+
     import unicodedata
     value = str(value)
     if allow_unicode:
         value = unicodedata.normalize('NFKC', value)
     else:
         value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
-        
+
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return re.sub(r'[-\s]+', '-', value).strip('-_')
 
@@ -336,11 +336,11 @@ def dict_path2abspath(d=None, except_keys=None):
         d = {}
     if except_keys is None:
         except_keys = []
-        
+
     for key in d.keys():
         if key in except_keys:
             continue
-        
+
         if isinstance(d[key], dict):
             d[key] = dict_path2abspath(d[key], except_keys)
         elif isinstance(d[key], str):
@@ -351,25 +351,25 @@ def dict_path2abspath(d=None, except_keys=None):
 
 def int_or(val, or_val=None):
     """Return val if val is an integer, else return or_val"""
-    
+
     try:
         return int(float_or(val))
     except:
         return or_val
 
-    
+
 def float_or(val, or_val=None):
     """Return val if val is a float, else return or_val"""
-    
+
     try:
         return float(val)
     except:
         return or_val
 
-    
+
 def str_or(instr, or_val=None, replace_quote=True):
     """Return val if val is a string, else return or_val"""
-    
+
     if instr is None:
         return or_val
     try:
@@ -381,52 +381,52 @@ def str_or(instr, or_val=None, replace_quote=True):
 
 def str2bool(v):
     """Convert a string (or other type) to a boolean.
-    
+
     Accepts:
       True:  'yes', 'true', 't', 'y', '1', 1, True
       False: 'no', 'false', 'f', 'n', '0', 0, False, None
-      
+
     Args:
         v (str, int, bool): The value to convert.
-        
+
     Returns:
         bool: The boolean representation of v.
     """
-    
+
     if v is None:
         return None
-        
+
     if isinstance(v, bool):
         return v
-        
+
     if isinstance(v, (int, float)):
         return bool(v)
-        
+
     v_str = str(v).lower().strip()
-    
+
     if v_str in ("yes", "true", "t", "y", "1"):
         return True
     elif v_str in ("no", "false", "f", "n", "0"):
         return False
     else:
         return None
-    
-    
+
+
 def list_str(l: list) -> str:
     """
     Format a list of items into a numbered string representation.
-    
+
     Args:
         l (list): The list of items to format.
-        
+
     Returns:
         str: A string with each item on a new line, prefixed by its index.
              Example: "0: Item A\n1: Item B"
     """
-    
+
     return '\n'.join([f'{i}: {x}' for i, x in enumerate(l)])
-    
-    
+
+
 def range_pairs(lst):
     return [(lst[i], lst[i+1]) for i in range(len(lst) - 1)]
 
@@ -442,7 +442,7 @@ def ranges2(lst):
         else:
             r.append((s, e))
             s = e = i
-            
+
     if s is not None:
         r.append((s, e))
     return r
@@ -463,7 +463,7 @@ def euc_dst(pnt0, pnt1):
 
     Points are geographic and result is in meters.
     """
-    
+
     rad_m = 637100
     distance = math.sqrt(sum([(a - b) ** 2 for a, b in zip(pnt0, pnt1)]))
     return rad_m * distance
@@ -474,20 +474,20 @@ def hav_dst(pnt0, pnt1):
 
     Points are geographic and result is in meters.
     """
-    
+
     x0, y0 = float(pnt0[0]), float(pnt0[1])
     x1, y1 = float(pnt1[0]), float(pnt1[1])
     rad_m = 637100
     dx = math.radians(x1 - x0)
     dy = math.radians(y1 - y0)
     a = math.sin(dx/2)**2 + math.cos(math.radians(x0)) * math.cos(math.radians(x1)) * math.sin(dy/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a)) 
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return rad_m * c
 
 
 def wgs_inc2meter(src_inc):
     """Return a wgs increment as meters"""
-    
+
     gds_equator = 111321.543
     degree_to_radian = lambda d: math.pi * (d / 180)
     return math.cos(degree_to_radian(src_inc)) * (gds_equator * src_inc)
@@ -495,7 +495,7 @@ def wgs_inc2meter(src_inc):
 
 def lll(src_lat):
     """Return the lon/lat length in meters"""
-    
+
     gds_equator = 111321.543
     gds_pi = 3.14159265358979323846
     degree_to_radian = lambda d: gds_pi * (d / 180)
@@ -507,17 +507,17 @@ def lll(src_lat):
 def transform_increment(dst_inc_x, dst_inc_y, transformer, region_center):
     """
     Transform grid increments from Destination SRS to Source SRS.
-    
+
     Args:
         dst_inc_x (float): X increment in destination units (e.g. 1/3600 for 1s).
         dst_inc_y (float): Y increment in destination units.
         transformer (pyproj.Transformer): The pipeline transforming Source -> Dest.
         region_center (tuple): (x, y) center of the region in Source CRS.
-        
+
     Returns:
         (float, float): The estimated (src_inc_x, src_inc_y) in source units.
     """
-    
+
     if transformer is None:
         return dst_inc_x, dst_inc_y
 
@@ -527,19 +527,19 @@ def transform_increment(dst_inc_x, dst_inc_y, transformer, region_center):
     #utils.echo_msg(f'trans-center: {dest_cx}/{dest_cy}')
     dest_off_x = dest_cx + dst_inc_x
     dest_off_y = dest_cy + dst_inc_y
-    
+
     src_off_x, _ = transformer.transform(dest_off_x, dest_cy, direction="INVERSE")
     _, src_off_y = transformer.transform(dest_cx, dest_off_y, direction="INVERSE")
-    
+
     src_inc_x = abs(src_off_x - cx)
     src_inc_y = abs(src_off_y - cy)
-    
+
     return src_inc_x, src_inc_y
 
 
 def touch(fname, times=None):
     """touch a file to make sure it exists"""
-    
+
     with open(fname, 'a'):
         os.utime(fname, times)
     return fname
@@ -549,10 +549,10 @@ def count_data_lines(fn):
     """Count lines in a file, skipping blank lines and comments (starting with #).
     Returns 0 if file does not exist.
     """
-    
+
     if not os.path.exists(fn):
         return 0
-        
+
     try:
         with open(fn, 'r') as f:
             return sum(1 for line in f if line.strip() and not line.strip().startswith('#'))
@@ -577,7 +577,7 @@ def get_password():
 
 def get_outliers(in_array: Any, percentile: float = 75, k: float = 1.5, verbose: bool = False):
     """Get outliers using IQR."""
-    
+
     if verbose:
         echo_msg(f'input percentile: {percentile}')
 
@@ -602,14 +602,14 @@ def get_outliers(in_array: Any, percentile: float = 75, k: float = 1.5, verbose:
 
 def num_strings_to_range(*args):
     """Parse args to a number range string (e.g. '1920-2001')."""
-    
+
     dates = []
     for arg in args:
         if str_or(arg) is not None:
             dd = re.findall(r'[-+]?\d*\.?\d+', str(arg))
             for d in dd:
                 dates.append(abs(float(d)))
-            
+
     if len(dates) > 0:
         if min(dates) != max(dates):
             return f'{min(dates)}-{max(dates)}'
@@ -623,7 +623,7 @@ def num_strings_to_range(*args):
 ## ==============================================
 def _geo2pixel(geo_x, geo_y, geo_transform, node='grid'):
     """Convert a geographic x,y value to a pixel location."""
-    
+
     if geo_transform[2] + geo_transform[4] == 0:
         ## Rounding for edges
         #pixel_x = round((geo_x - geo_transform[0]) / geo_transform[1], 4)
@@ -643,7 +643,7 @@ def _geo2pixel(geo_x, geo_y, geo_transform, node='grid'):
             pixel_y += .5
     else:
         pixel_x, pixel_y = _apply_gt(geo_x, geo_y, _invert_gt(geo_transform))
-        
+
     return int(pixel_x), int(pixel_y)
 
 
@@ -652,33 +652,33 @@ def __geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
 
     Note: use _geo2pixel instead
     """
-    
+
     import affine
     forward_transform = affine.Affine.from_gdal(*geo_transform)
     reverse_transform = ~forward_transform
     pixel_x, pixel_y = reverse_transform * (geo_x, geo_y)
-    pixel_x, pixel_y = int(pixel_x+0.5), int(pixel_y+0.5)    
+    pixel_x, pixel_y = int(pixel_x+0.5), int(pixel_y+0.5)
     return pixel_x, pixel_y
 
 
 def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel',
                x_precision=None, y_precision=None):
     """Convert a pixel location to geographic coordinates."""
-    
+
     geo_x, geo_y = _apply_gt(pixel_x, pixel_y, geo_transform, node)
     x_precision = int_or(x_precision)
     y_precision = int_or(y_precision)
-    
+
     gx = round(geo_x, x_precision) if x_precision is not None else geo_x
-    gy = round(geo_y, y_precision) if y_precision is not None else geo_y    
+    gy = round(geo_y, y_precision) if y_precision is not None else geo_y
     return gx, gy
 
 
 def _apply_gt(in_x, in_y, geo_transform, node='pixel'):
     """Apply geotransform to in_x, in_y."""
-    
+
     offset = 0.5 if node == 'pixel' else 0
-    
+
     out_x = geo_transform[0] + (in_x + offset) * geo_transform[1] + (in_y + offset) * geo_transform[2]
     out_y = geo_transform[3] + (in_x + offset) * geo_transform[4] + (in_y + offset) * geo_transform[5]
     return out_x, out_y
@@ -686,11 +686,11 @@ def _apply_gt(in_x, in_y, geo_transform, node='pixel'):
 
 def _invert_gt(geo_transform):
     """Invert the geo_transform."""
-    
+
     det = (geo_transform[1] * geo_transform[5]) - (geo_transform[2] * geo_transform[4])
     if abs(det) < 1e-15:
         return None
-    
+
     inv_det = 1.0 / det
     out_gt = [0.0] * 6
     out_gt[1] = geo_transform[5] * inv_det
@@ -707,7 +707,7 @@ def x360(x):
     elif x == 360: return 180
     else: return ((x + 180) % 360) - 180
 
-    
+
 ## ==============================================
 ## Archives (zip/gzip/etc.)
 ## ==============================================
@@ -729,10 +729,10 @@ def zip_list(zip_file):
         echo_error_msg(e)
         return None
 
-    
+
 def unzip(zip_file, outdir='./', overwrite=False, verbose=True):
     """Unzip (extract) `zip_file`"""
-    
+
     try:
         with zipfile.ZipFile(zip_file) as zip_ref:
             zip_files = zip_ref.namelist()
@@ -744,19 +744,19 @@ def unzip(zip_file, outdir='./', overwrite=False, verbose=True):
                         zip_ref.extract(fn, outdir)
             else:
                 zip_ref.extractall(outdir)
-                
+
             if outdir != './':
                 zip_files = [os.path.join(outdir, zf) for zf in zip_files]
-                
+
             return zip_files
     except Exception as e:
         echo_error_msg(f'Could not unzip {zip_file}: {e}')
         return None
 
-    
+
 def gunzip(gz_file, outdir='./'):
     """Gunzip (extract) `gz_file`"""
-    
+
     if os.path.exists(gz_file):
         guz_file = os.path.join(outdir, os.path.basename(fn_basename2(gz_file)))
         with gzip.open(gz_file, 'rb') as in_gz, open(guz_file, 'wb') as f:
@@ -808,10 +808,10 @@ def gdb_unzip(src_zip, outdir='./', verbose=True):
 
 def p_unzip(src_file, exts=None, outdir='./', verbose=True):
     """Unzip/gunzip src_file based on `exts`"""
-    
+
     if exts is None: exts = []
     src_procs = []
-    
+
     ext_lower = src_file.split('.')[-1].lower()
     if ext_lower == 'zip':
         try:
@@ -857,11 +857,11 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
 
 def p_f_unzip(src_file, fns=None, outdir='./', tmp_fn=False, verbose=True):
     """Unzip/gunzip src_file based on `fn`"""
-    
+
     if fns is None: fns = []
     src_procs = []
     ext_lower = src_file.split('.')[-1].lower()
-    
+
     if ext_lower == 'zip':
         with zipfile.ZipFile(src_file) as z:
             zfs = z.namelist()
@@ -901,7 +901,7 @@ def p_f_unzip(src_file, fns=None, outdir='./', tmp_fn=False, verbose=True):
 ## ==============================================
 def fix_srcwin(srcwin, xcount, ycount):
     """geo_transform is considered in grid-node to properly capture the region"""
-    
+
     out_srcwin = list(srcwin)
     if srcwin[0] + srcwin[2] > xcount:
         out_srcwin[2] = xcount - srcwin[0]
@@ -917,16 +917,16 @@ def chunk_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
 def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='Chunking srcwin',
                  end_msg='Chunked srcwin', start_at_edge=True, verbose=True):
     """Yield source windows in n_chunks at step"""
-    
+
     if step is None:
         step = n_chunk
 
     n_edge = n_chunk if start_at_edge else step
     x_chunk = n_edge
-    
+
     total_steps = (math.ceil((n_size[0] + (n_chunk - n_edge)) / step) * math.ceil((n_size[1] + (n_chunk - n_edge)) / step))
-    
-    with ccp(total=total_steps, 
+
+    with ccp(total=total_steps,
              desc=f'{msg} @ chunk:{int_or(n_chunk)}/step:{int_or(step)}...',
              leave=verbose) as pbar:
         while True:
@@ -934,20 +934,20 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='Chunking srcwin',
             while True:
                 this_x_chunk = min(x_chunk, n_size[1])
                 this_y_chunk = min(y_chunk, n_size[0])
-                
+
                 this_x_origin = max(0, int(x_chunk - n_chunk))
                 this_y_origin = max(0, int(y_chunk - n_chunk))
-                
+
                 this_x_size = int(this_x_chunk - this_x_origin)
                 this_y_size = int(this_y_chunk - this_y_origin)
-                
+
                 if this_x_size <= 0 or this_y_size <= 0:
                     break
 
                 srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
                 pbar.update()
                 yield srcwin
-                
+
                 if y_chunk > (n_size[0] * step):
                     break
                 y_chunk += step
@@ -956,10 +956,10 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='Chunking srcwin',
                 break
             x_chunk += step
 
-            
+
 def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     """Buffer the srcwin by `buff_size`"""
-    
+
     if n_size is None:
         n_size = srcwin
 
@@ -968,15 +968,15 @@ def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
 
     x_buff_size = buff_size * 2 if x_origin != 0 else buff_size
     y_buff_size = buff_size * 2 if y_origin != 0 else buff_size
-    
+
     x_size = srcwin[3] + x_buff_size
     if (x_origin + x_size) > n_size[1]:
         x_size = n_size[1] - x_origin
-    
+
     y_size = srcwin[2] + y_buff_size
     if (y_origin + y_size) > n_size[0]:
         y_size = n_size[0] - y_origin
-    
+
     return int(x_origin), int(y_origin), int(x_size), int(y_size)
 
 
@@ -987,7 +987,7 @@ def expand_for(arr, shiftx=1, shifty=1, revert=False):
             if(arr[i,j]):
                 i_min, i_max = max(i-shifty, 0), min(i+shifty+1, arr.shape[0])
                 j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
-                arr_b[i_min:i_max, j_min:j_max] = True                
+                arr_b[i_min:i_max, j_min:j_max] = True
     return arr_b
 
 
@@ -999,7 +999,7 @@ def fill_for(arr, iterations=3):
                 if not filled_arr[i, j]:
                     if (filled_arr[i-1, j] or filled_arr[i+1, j] or
                         filled_arr[i, j-1] or filled_arr[i, j+1]):
-                        filled_arr[i, j] = True                        
+                        filled_arr[i, j] = True
     return filled_arr_iter
 
 
@@ -1008,7 +1008,7 @@ def fill_for(arr, iterations=3):
 ## ==============================================
 def mb_inf(src_xyz, src_fmt=168):
     """Generate an info (.inf) file from a src_xyz file using MBSystem."""
-    
+
     try:
         from cudem.mbsfun import mb_inf_parse
     except ImportError:
@@ -1022,7 +1022,7 @@ def mb_inf(src_xyz, src_fmt=168):
 ## ==============================================
 ## System Command Functions
 ## ==============================================
-cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) 
+cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK)
                            for path in os.environ['PATH'].split(os.pathsep))
 
 
@@ -1032,16 +1032,16 @@ def run_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
     `data_fun` should be a function to write to a file-port:
     >> data_fun = lambda p: datalist_dump(wg, dst_port = p, ...)
     """
-    
+
     out = None
     cols, _ = shutil.get_terminal_size()
     width = cols - 55
-    
+
     with ccp(desc=f'`{cmd.rstrip()[:width]}...`', leave=verbose) as pbar:
         pipe_stdin = subprocess.PIPE if data_fun is not None else None
 
         p = subprocess.Popen(
-            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, 
+            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, close_fds=True, cwd=cwd
         )
 
@@ -1062,10 +1062,10 @@ def run_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
         out = p.stdout.read()
         p.stderr.close()
         p.stdout.close()
-        
+
         if verbose:
             echo_msg(f'Ran cmd {cmd.rstrip()} and returned {p.returncode}')
-        
+
     return out, p.returncode
 
 
@@ -1075,16 +1075,16 @@ def yield_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
     `data_fun` should be a function to write to a file-port:
     >> data_fun = lambda p: datalist_dump(wg, dst_port = p, ...)
     """
-    
+
     if verbose: echo_msg(f'Running cmd {cmd.rstrip()}...')
-    
+
     pipe_stdin = subprocess.PIPE if data_fun is not None else None
-    
+
     p = subprocess.Popen(
         cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE,
         close_fds=True, cwd=cwd
     )
-    
+
     if data_fun is not None:
         if verbose: echo_msg('Piping data to cmd subprocess...')
         data_fun(p.stdin)
@@ -1095,16 +1095,16 @@ def yield_cmd(cmd, data_fun=None, verbose=False, cwd='.'):
         if not line:
             break
         yield line
-        
+
     p.stdout.close()
     if verbose:
         echo_msg(f'Ran cmd {cmd.rstrip()}, returned {p.returncode}.')
 
-        
+
 def cmd_check(cmd_str, cmd_vers_str):
     """check system for availability of 'cmd_str'"""
-    
-    if cmd_exists(cmd_str): 
+
+    if cmd_exists(cmd_str):
         cmd_vers, status = run_cmd(f'{cmd_vers_str}')
         return cmd_vers.rstrip()
     return b"0"
@@ -1113,16 +1113,16 @@ def cmd_check(cmd_str, cmd_vers_str):
 def config_check(chk_config_file=True, chk_vdatum=False,
                  generate_config_file=True, verbose=False):
     """check for needed waffles external software.
-    
+
     waffles external software: gdal, gmt, mbsystem
-    also checks python version and host OS and 
+    also checks python version and host OS and
     records waffles version
     """
-        
+
     from cudem import __version__
-    
+
     cudem_cmd_config = os.path.join(os.path.expanduser('~'), '.cudem_cmd_config.json')
-    
+
     if chk_config_file and os.path.exists(cudem_cmd_config):
         with open(cudem_cmd_config, 'r') as ccc:
             _waff_co = json.load(ccc)
@@ -1146,10 +1146,10 @@ def config_check(chk_config_file=True, chk_vdatum=False,
         _waff_co['LASZIP'] = cmd_check(
             f'laszip{ae}', "laszip -version 2>&1 | awk '{print $5}'"
         ).decode()
-        
+
         htdp_cmd = 'echo 0 | htdp 2>&1' if host_os == 'win32' else "echo 0 | htdp 2>&1 | grep SOFTWARE | awk '{print $3}'"
         _waff_co['HTDP'] = cmd_check(f'htdp{ae}', htdp_cmd).decode()
-        
+
         _waff_co['ImageMagick'] = cmd_check(
             f'mogrify{ae}', "mogrify --version | grep Version | awk '{print $3}'"
         ).decode()
@@ -1162,11 +1162,11 @@ def config_check(chk_config_file=True, chk_vdatum=False,
 
         if verbose:
             echo_msg(json.dumps(_waff_co, indent=4, sort_keys=True))
-            
+
         if generate_config_file:
             with open(cudem_cmd_config, 'w') as ccc:
                 ccc.write(json.dumps(_waff_co, indent=4, sort_keys=True))
-            
+
     return _waff_co
 
 
@@ -1198,11 +1198,11 @@ def _terminal_width():
 
 def get_terminal_size_stderr(fallback=(80, 24)):
     """Unlike shutil.get_terminal_size, which looks at stdout, this looks at stderr."""
-        
+
     try:
         size = os.get_terminal_size(sys.__stderr__.fileno())
     except (AttributeError, ValueError, OSError):
-        size = os.terminal_size(fallback)        
+        size = os.terminal_size(fallback)
     return size
 
 
@@ -1220,7 +1220,7 @@ def _init_msg2(msg, prefix_len, buff_len=6):
     else:
         return f'{msg}'
 
-    
+
 def _init_msg(msg, prefix_len, buff_len=6):
     width = int(_terminal_width()) - (prefix_len+buff_len)
     try:
@@ -1235,17 +1235,17 @@ def truncate_middle(s, n=50):
     if len(s) <= n:
         return s
 
-    n_2 = int(n) // 2 - 2    
+    n_2 = int(n) // 2 - 2
     return f"{s[:n_2]}...{s[-n_2:]}"
 
-    
+
 def echo_msg2(msg, prefix='cudem', level='info', nl='\n', bold=False, use_tqdm=False, dst_port=sys.stderr):
     """echo `msg` to stderr using `prefix`
-    
+
     >> echo_msg2('message', 'test')
     test: message
     """
-        
+
     if level.lower() in MSG_LEVELS and MSG_LEVELS[level.lower()] >= MSG_LEVEL:
         lvl_color = {
             'warning': '\033[33m\033[1mWARN\033[m',
@@ -1254,19 +1254,19 @@ def echo_msg2(msg, prefix='cudem', level='info', nl='\n', bold=False, use_tqdm=F
         }.get(level.lower(), f'\033[36m\033[1m{level.upper()}\033[m')
 
         if use_tqdm: nl = ''
-        
+
         dst_port.write('\x1b[2K\r')
-        
+
         message = f'\033[1m{msg}\033[m{nl}' if bold else f'{msg}{nl}'
-        
+
         if use_tqdm:
             tqdm.write(f'[ {lvl_color} ] {prefix}: {message}', file=dst_port)
         else:
             dst_port.write(f'[ {lvl_color} ] {prefix}: {message}')
-        
+
         dst_port.flush()
 
-        
+
 def get_calling_module_name(stack_level=1):
     import inspect
     caller_frame = inspect.stack()[stack_level]
@@ -1279,7 +1279,7 @@ def _print_msg(msg, use_tqdm=False, dst_port=sys.stdout):
     else:
         dst.port.write(msg)
 
-        
+
 ## ==============================================
 ## echo message `m` to sys.stderr using
 ## auto-generated prefix
@@ -1352,7 +1352,7 @@ class CudemCommonProgress:
     def __init__(self, desc=None, message=None, end_message=None, total=0,
                  sleep=2, verbose=True, leave=True, **kwargs):
         """Minimal progress indicator to use with CLI if tqdm isn't available or preferred."""
-        
+
         self.thread = threading.Thread(target=self.updates)
         self.thread_is_alive = False
         self.tw = 7
@@ -1364,36 +1364,36 @@ class CudemCommonProgress:
         self.message = desc if desc else message
         if self.message:
             self.message = f'{get_calling_module_name(stack_level=2)}: {self.message}'
-            
+
         self.end_message = end_message
 
         if self.end_message is not None:
             self.end_message = f'{get_calling_module_name(stack_level=2)}: {self.message}'
-            
+
         self.total = total
         self._init_opm()
-        
+
         self.add_one = lambda x: x + 1
         self.sub_one = lambda x: x - 1
         self.spin_way = self.add_one
         self.spinner = ['*     ', '**    ', '***   ', ' ***  ', '  *** ', '   ***', '    **', '     *']
-        
+
         self.perc = lambda p: ((p[0]/p[1]) * 100.)
-        
+
         # if self.opm is not None and self.verbose:
         #     self._clear_stderr()
         #     sys.stderr.write(
         #         '\r {}  {}\n'.format(" " * (self.tw - 1), self.opm)
         #     )
 
-            
+
     def updates(self):
         while self.thread_is_alive:
             if self.sleep is not None:
                 time.sleep(self.sleep)
                 self.update(p=None)
 
-                
+
     def __enter__(self):
         if self.verbose:
             try:
@@ -1405,14 +1405,14 @@ class CudemCommonProgress:
             except (KeyboardInterrupt, SystemExit) as e:
                 self.thread_is_alive = False
                 self.__exit__(*sys.exc_info())
-                sys.exit(-1)            
+                sys.exit(-1)
             return self
         else:
             return self
 
-        
+
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        
+
         if self.verbose:
             self.thread_is_alive = False
             self.thread.join()
@@ -1423,7 +1423,7 @@ class CudemCommonProgress:
         else:
             return True
 
-        
+
     def write(self, msg, nl=True, bold=False):
         sys.stderr.write('\x1b[2K\r')
         if bold:
@@ -1434,7 +1434,7 @@ class CudemCommonProgress:
             sys.stderr.write('{}{}'.format(msg, '\n' if nl else ''))
         sys.stderr.flush()
 
-        
+
     def _init_opm(self):
         self.width = int(self._terminal_width()) - (self.tw+6)
         if len(self.message) > self.width:
@@ -1442,10 +1442,10 @@ class CudemCommonProgress:
         else:
             self.opm = '{}'.format(self.message)
 
-            
+
     def _terminal_width(self):
         import curses
-        
+
         cols = 40
         try:
             cols = shutil.get_terminal_size().columns
@@ -1454,19 +1454,19 @@ class CudemCommonProgress:
                 rows, cols = curses.initscr().getmaxyx()
             finally:
                 curses.endwin()
-                
+
         return cols
 
-    
+
     def _switch_way(self):
         self.spin_way = self.sub_one if self.spin_way == self.add_one else self.add_one
 
-        
+
     def _clear_stderr(self, slen = 79):
         sys.stderr.write('\x1b[2K\r')
         sys.stderr.flush()
 
-        
+
     def update(self, p=1, msg=None):
         if self.verbose:
             self._init_opm()
@@ -1492,7 +1492,7 @@ class CudemCommonProgress:
             self.count = self.spin_way(self.count)
             sys.stderr.flush()
 
-            
+
     def end(self, status=0, message=None, exc_type=None,
             exc_value=None, exc_traceback=None):
         self._init_opm()
@@ -1502,7 +1502,7 @@ class CudemCommonProgress:
                 message = self.message
             else:
                 message = self.end_message
-            
+
         if status != 0 and status is not None:
             sys.stderr.write(
                 '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', message)
@@ -1515,11 +1515,11 @@ class CudemCommonProgress:
         sys.stderr.flush()
         return True
 
-    
+
 class SimpleProgress:
     """Minimal progress indicator to use with CLI if tqdm isn't available or preferred."""
-    
-    def __init__(self, desc=None, message=None, total=0, sleep=None, verbose=True, leave=True): 
+
+    def __init__(self, desc=None, message=None, total=0, sleep=None, verbose=True, leave=True):
         self.tw = 7
         self.count = 0
         self.p = 0
@@ -1528,25 +1528,25 @@ class SimpleProgress:
         if self.message:
             self.message = f'{get_calling_module_name(stack_level=2)}: {self.message}'
         self.total = total
-        
+
         self.spinner = ['* ', '** ', '*** ', ' *** ', '  *** ', '   ***', '    **', '     *']
         self.direction = 1
         self.width = shutil.get_terminal_size().columns - (self.tw + 6)
 
-        
+
     def __enter__(self):
         return self
 
-    
+
     def __exit__(self, exc_type, exc_value, exc_traceback):
         if self.verbose:
             self.end()
 
-            
+
     def update(self, p=1, msg=None):
         if self.verbose:
             self.p += p if p else 0
-            
+
             ## Truncate msg
             disp_msg = msg if msg else self.message
             if len(disp_msg) > self.width:
@@ -1559,23 +1559,23 @@ class SimpleProgress:
             else:
                 sc = self.count % len(self.spinner)
                 sys.stderr.write(f'\r[\033[36m{self.spinner[sc]:6}\033[m] {disp_msg}\r')
-                
+
             self.count += self.direction
             if self.count == self.tw or self.count == 0:
                 self.direction *= -1
             sys.stderr.flush()
 
-            
+
     def write(self, msg):
         sys.stderr.write(f'\x1b[2K\r{msg}\n')
         sys.stderr.flush()
 
-        
+
     def end(self):
         sys.stderr.write('\x1b[2K\r')
         sys.stderr.flush()
 
-        
+
 # Define ccp based on TQDM availability
 if USE_TQDM:
     class ccp(tqdm):
@@ -1595,10 +1595,10 @@ else:
     class ccp(CudemCommonProgress):
         pass
 
-    
+
 def physical_cpu_count():
     """Get number of physical cores."""
-    
+
     if sys.platform == "linux":
         try:
             # Fallback for Linux
@@ -1614,7 +1614,7 @@ def physical_cpu_count():
     else:
         return mp.cpu_count()
 
-    
+
 ## ==============================================
 ## Error / Analysis Plotting
 ## ==============================================
@@ -1624,7 +1624,7 @@ def _err_fit_plot(
         xa='distance'
 ):
     """plot a best fit plot with matplotlib."""
-    
+
     short_name="All Terrain"
 
     fig = plt.figure()
@@ -1702,12 +1702,12 @@ def _err_fit_plot(
     plt.close()
     #except: echo_error_msg('you need to install matplotlib to run uncertainty plots...')
 
-    
+
 def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist,
                       bins_orig, sampling_den, dst_name='unc',
                       xa='distance'):
     """plot a scatter plot with matplotlib."""
-    
+
     short_name="All Terrain"
 
     fig = plt.figure()
@@ -1763,15 +1763,15 @@ def _err_scatter_plot(error_arr, dist_arr, mean, std, max_int_dist,
     plt.close()
     #except: echo_error_msg('you need to install matplotlib to run uncertainty plots...')
 
-    
+
 def _errbin(err_arr, nbins=10):
-    """calculate and plot the error coefficient given err_arr which is 
+    """calculate and plot the error coefficient given err_arr which is
     a 2 col array with `err dist
     """
 
     error = err_arr[:,0]
     distance = err_arr[:,1]
-    
+
     n, _ = np.histogram(distance, bins = nbins)
     while 0 in n:
         nbins -= 1
@@ -1796,10 +1796,10 @@ def _errbin(err_arr, nbins=10):
 
 def _err2coeff(err_arr, sampling_den, coeff_guess=None,
                dst_name='unc', xa='distance', plots=False):
-    """calculate and plot the error coefficient given err_arr which is 
+    """calculate and plot the error coefficient given err_arr which is
     a 2 col array with `err dist.
     """
-    
+
     try:
         from scipy import optimize
     except ImportError:
@@ -1811,7 +1811,7 @@ def _err2coeff(err_arr, sampling_den, coeff_guess=None,
 
     error = err_arr[:,0]
     distance = err_arr[:,1]
-    
+
     nbins = 10
     n, _ = np.histogram(distance, bins=nbins)
     while 0 in n and nbins > 1:
@@ -1823,17 +1823,17 @@ def _err2coeff(err_arr, sampling_den, coeff_guess=None,
 
     mean = serror / n
     std = np.sqrt(serror2 / n - mean * mean)
-    
+
     ydata = np.insert(std, 0, 0)
     bins_orig = (_[1:] + _[:-1]) / 2
     xdata = np.insert(bins_orig, 0, 0)
-    
+
     # Ensure no zero division in power function
     xdata[xdata < 0.0001] = 0.0001
 
     fitfunc = lambda p, x: p[0] + p[1] * (x ** p[2])
     errfunc = lambda p, x, y: y - fitfunc(p, x)
-    
+
     out, cov, infodict, mesg, ier = optimize.leastsq(
         errfunc, coeff_guess, args=(xdata, ydata), full_output=True
     )
@@ -1869,7 +1869,7 @@ def _err2coeff(err_arr, sampling_den, coeff_guess=None,
                 dst_name,
                 xa
             )
-            
+
         except ImportError:
             echo_error_msg('Matplotlib required for error plots')
         except Exception as e:
