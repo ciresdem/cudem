@@ -412,22 +412,25 @@ class ElevationDataset:
         opts.setdefault('verbose', False)
         opts.setdefault('min_z', None)
         opts.setdefault('max_z', None)
-        # if 'invert' not in opts:
-        #     opts['invert'] = False
-        # if 'verbose' not in opts:
-        #     opts['verbose'] = False
-        # if 'min_z' not in opts:
-        #     opts['min_z'] = None
-        # if 'max_z' not in opts:
-        #     opts['max_z'] = None
 
         if opts['min_z'] is not None: opts['min_z'] = utils.float_or(opts['min_z'])
         if opts['max_z'] is not None: opts['max_z'] = utils.float_or(opts['max_z'])
 
+        data_mask = opts['mask_fn']
+
+        if data_mask and not os.path.isabs(data_mask) and not os.path.exists(data_mask):
+            curr_parent = self.parent
+            while curr_parent is not None and curr_parent.fn is not None:
+                test_path = os.path.join(os.path.dirname(curr_parent.fn), data_mask)
+                if os.path.exists(test_path):
+                    data_mask = test_path
+                    opts['mask_fn'] = data_mask
+                    break
+                curr_parent = curr_parent.parent
+
         # Mask is OGR, rasterize it
         opts['ogr_or_gdal'] = gdalfun.ogr_or_gdal(opts['mask_fn'])
 
-        data_mask = opts['mask_fn']
         if opts['ogr_or_gdal'] == 1:
             if self.region is not None and self.x_inc is not None and self.y_inc is not None:
                 data_mask = gdalfun.ogr2gdal_mask(
