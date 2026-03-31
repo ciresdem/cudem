@@ -87,7 +87,6 @@ from cudem.datalists import inf
 from cudem.fetches import fetches
 from cudem import __version__ as __cudem_version__
 from . import __version__
-from . import inf
 
 ## Config info and setup
 gc = utils.config_check()
@@ -195,7 +194,7 @@ def init_data(data_list, **kwargs):
         Datalist object or None.
     """
 
-    from . import datalists
+    from .datalistfile import Scratch
     from . import xyzfile
 
     xdls = []
@@ -247,7 +246,7 @@ def init_data(data_list, **kwargs):
         ## Wrap Results
         if len(xdls) > 1:
             ## If multiple datasets, wrap them in a Scratch datalist (in-memory list)
-            this_datalist = datalists.Scratch(fn=xdls, data_format=-3, **kwargs)#.initialize()
+            this_datalist = Scratch(fn=xdls, data_format=-3, **kwargs)#.initialize()
         elif len(xdls) > 0:
             ## If single dataset, return it directly
             this_datalist = xdls[0]
@@ -3221,8 +3220,6 @@ def datalists_cli():
         sys.exit(0)
 
     if args.glob:
-        import glob
-        ## Flatten format list
         for key, mod in DatasetFactory._modules.items():
             if key != -1 and key != '_factory':
                 for fmt in mod.get('fmts', []):
