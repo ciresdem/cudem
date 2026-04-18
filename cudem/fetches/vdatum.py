@@ -4,20 +4,20 @@
 ##
 ## vdatum.py is part of CUDEM
 ##
-## Permission is hereby granted, free of charge, to any person obtaining a copy 
-## of this software and associated documentation files (the "Software"), to deal 
-## in the Software without restriction, including without limitation the rights 
-## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
-## of the Software, and to permit persons to whom the Software is furnished to do so, 
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to deal
+## in the Software without restriction, including without limitation the rights
+## to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+## of the Software, and to permit persons to whom the Software is furnished to do so,
 ## subject to the following conditions:
 ##
 ## The above copyright notice and this permission notice shall be included in all
 ## copies or substantial portions of the Software.
 ##
-## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, 
-## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR 
-## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE 
-## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, 
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+## INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+## PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+## FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ## SOFTWARE.
 ##
@@ -39,7 +39,7 @@ from cudem.fetches import FRED
 ## ==============================================
 ## Constants
 ## ==============================================
-VDATUM_DATA_URL = 'vdatum.noaa.gov/download/data/'
+VDATUM_DATA_URL = 'https://vdatum.noaa.gov/download/data/'
 PROJ_CDN_INDEX_URL = 'https://cdn.proj.org/files.geojson'
 
 ## Known Tidal References for EPSG lookups
@@ -78,9 +78,9 @@ CDN_HEADERS = {
 ## ==============================================
 def proc_vdatum_inf(vdatum_inf: str, name: Optional[str] = 'vdatum') -> Dict[str, Any]:
     """Process a VDatum INF file to extract region and grid info."""
-    
+
     inf_areas = {}
-    
+
     try:
         with open(vdatum_inf, 'r') as f:
             for line in f:
@@ -91,7 +91,7 @@ def proc_vdatum_inf(vdatum_inf: str, name: Optional[str] = 'vdatum') -> Dict[str
                         eq_val = [i for i, x in enumerate(['=' in x for x in line_list]) if x][0]
                     except IndexError:
                         continue
-                        
+
                     if eq_val != 0:
                         line_key = '.'.join(line_list[:eq_val])
                         if line_key not in inf_areas:
@@ -107,7 +107,7 @@ def proc_vdatum_inf(vdatum_inf: str, name: Optional[str] = 'vdatum') -> Dict[str
     for key, data in inf_areas.items():
         if 'minlon' in data:
             out_key = f"{name}_{key}" if name else key
-            
+
             if out_key not in inf_areas_fmt:
                 inf_areas_fmt[out_key] = {}
 
@@ -115,26 +115,26 @@ def proc_vdatum_inf(vdatum_inf: str, name: Optional[str] = 'vdatum') -> Dict[str
             xmax = utils.x360(float(data.get('maxlon', 0)))
             ymin = float(data.get('minlat', 0))
             ymax = float(data.get('maxlat', 0))
-            
+
             inf_areas_fmt[out_key]['region'] = [xmin, xmax, ymin, ymax]
             ## Handle path separators for cross-platform compatibility
             inf_areas_fmt[out_key]['grid'] = data.get('source', '').replace('\\', '/').split('/')[-1]
-            
+
     return inf_areas_fmt
 
 
 def search_proj_cdn(
-        region: Optional['regions.Region'] = None, 
-        epsg: Optional[int] = None, 
-        crs_name: Optional[str] = None, 
+        region: Optional['regions.Region'] = None,
+        epsg: Optional[int] = None,
+        crs_name: Optional[str] = None,
         name: Optional[str] = None,
-        verbose: bool = True, 
+        verbose: bool = True,
         cache_dir: str = './'
 ) -> List[Dict]:
     """Search PROJ CDN for transformation grids."""
-    
+
     cdn_index = utils.make_temp_fn('proj_cdn_files.geojson', cache_dir)
-    
+
     ## Download Index
     try:
         status = fetches.Fetch(
@@ -146,14 +146,14 @@ def search_proj_cdn(
         status = -1
 
     results = []
-    
+
     if status == 0:
         try:
             cdn_driver = ogr.GetDriverByName('GeoJSON')
             cdn_ds = cdn_driver.Open(cdn_index, 0)
             if cdn_ds:
                 cdn_layer = cdn_ds.GetLayer()
-                
+
                 # Apply Filters
                 filter_str = "type != 'HORIZONTAL_OFFSET'"
                 if crs_name:
@@ -162,7 +162,7 @@ def search_proj_cdn(
                     filter_str += f" AND (target_crs_code LIKE '%{epsg}%' OR source_crs_code LIKE '%{epsg}%')"
                 elif name:
                     filter_str += f" AND name LIKE '%{name}%'"
-                
+
                 cdn_layer.SetAttributeFilter(filter_str)
 
                 bounds_geom = region.export_as_geom() if region else None
@@ -172,7 +172,7 @@ def search_proj_cdn(
                         geom = feat.GetGeometryRef()
                         if geom and not bounds_geom.Intersects(geom):
                             continue
-                    
+
                     ## Extract Properties
                     props = json.loads(feat.ExportToJson()).get('properties', {})
                     ## Ensure all fields are captured even if not in properties dict
@@ -186,7 +186,7 @@ def search_proj_cdn(
         finally:
              if os.path.exists(cdn_index):
                 utils.remove_glob(cdn_index)
-                
+
     return results
 
 
@@ -197,8 +197,8 @@ class VDATUM(fetches.FetchModule):
     """NOAA's VDATUM transformation grids
 
     Fetch vertical datum conversion grids from NOAA and PROJ CDN.
-    
-    VDatum is designed to vertically transform geospatial data among a 
+
+    VDatum is designed to vertically transform geospatial data among a
     variety of tidal, orthometric and ellipsoidal vertical datums.
 
     https://vdatum.noaa.gov
@@ -207,10 +207,10 @@ class VDATUM(fetches.FetchModule):
     Configuration Example:
     < vdatum:datatype=None:gtx=False >
     """
-    
+
     def __init__(self, where: str = '', datatype: Optional[str] = None, gtx: bool = False, epsg: Optional[int] = None, **kwargs):
         super().__init__(name='vdatum', **kwargs)
-        
+
         self.where = [where] if where else []
         self.datatype = datatype
         self.epsg = utils.int_or(epsg)
@@ -221,10 +221,10 @@ class VDATUM(fetches.FetchModule):
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
 
-        
+
     def update_if_not_in_FRED(self):
         """Update the fetches module in FRED if it's not already in there."""
-        
+
         self.FRED._open_ds()
         try:
             self.FRED._attribute_filter([f"DataSource = '{self.name}'"])
@@ -235,26 +235,26 @@ class VDATUM(fetches.FetchModule):
              if self.FRED.ds is not None:
                 self.FRED._close_ds()
 
-                
+
     def update(self):
         """Update or create the reference vector file."""
-        
+
         self.FRED._open_ds(1)
-        
+
         try:
             for vd in VDATUM_LIST:
                 surveys = []
-                
+
                 ## Determine URL and INF file
                 if vd in ['TIDAL', 'IGLD85', 'CRD']:
                     vd_dl_name = 'DEVAemb12_8301' if vd == 'TIDAL' else vd
                     v_inf = 'tidal_area.inf' if vd == 'TIDAL' else f'{vd}.inf'
                     vd_zip_url = f'{VDATUM_DATA_URL}{vd_dl_name}.zip'
-                    
+
                 elif 'XGEOID' in vd:
                     vd_zip_url = f'{VDATUM_DATA_URL}vdatum_{vd}.zip'
                     v_inf = f'{vd.lower()}.inf'
-                    
+
                 elif vd == 'VERTCON':
                     vd_zip_url = f'{VDATUM_DATA_URL}vdatum_{vd}.zip'
                     v_inf = 'vcn.inf'
@@ -268,11 +268,11 @@ class VDATUM(fetches.FetchModule):
                     status = fetches.Fetch(vd_zip_url, verbose=self.verbose).fetch_file(local_zip)
                 except Exception:
                     status = -1
-                    
+
                 if status == 0:
                     v_infs = utils.p_unzip(local_zip, ['inf'])
                     v_dict = {}
-                    
+
                     for inf in v_infs:
                         try:
                             # Parse the INF file
@@ -285,11 +285,11 @@ class VDATUM(fetches.FetchModule):
                     for key in v_dict:
                         v_dict[key]['vdatum'] = vd
                         v_dict[key]['remote'] = vd_zip_url
-                    
+
                     ## Handle Tidal Special Case
                     if vd == 'TIDAL':
                         v_dict_expanded = {}
-                        for tidal_key, data in v_dict.items():                        
+                        for tidal_key, data in v_dict.items():
                             for t in TIDAL_DATUMS:
                                 key_ = f'{t}_{tidal_key}'
                                 v_dict_expanded[key_] = {
@@ -323,7 +323,7 @@ class VDATUM(fetches.FetchModule):
                                     'Info': "",
                                     'geom': geom
                                 })
-                    
+
                     ## Cleanup extracted INFs and Zip
                     if v_infs:
                         utils.remove_glob(*v_infs)
@@ -331,14 +331,14 @@ class VDATUM(fetches.FetchModule):
 
                 self.FRED._add_surveys(surveys)
         except Exception as e:
-            utils.echo_error_msg(f"Error updating VDATUM FRED: {e}")                
+            utils.echo_error_msg(f"Error updating VDATUM FRED: {e}")
         finally:
             self.FRED._close_ds()
 
-            
+
     def run(self):
         """Run the VDatum fetching module."""
-        
+
         ## Search FRED for NOAA VDatum Grids
         where_clauses = []
         if self.datatype:
@@ -347,7 +347,7 @@ class VDATUM(fetches.FetchModule):
              where_clauses.append(f"DataType = '{TIDAL_REFERENCES[self.epsg]['name']}'")
 
         fred_results = self.FRED._filter(self.region, where_clauses, [self.name])
-        
+
         for surv in fred_results:
             if self.gtx:
                 ## Download and Extract specific GTX
@@ -360,7 +360,7 @@ class VDATUM(fetches.FetchModule):
                     ).fetch_file(dst_zip)
                 except Exception:
                     status = -1
-                    
+
                 if status == 0:
                     v_gtxs = utils.p_f_unzip(dst_zip, [surv['Name']])
                     for v_gtx in v_gtxs:
@@ -369,8 +369,8 @@ class VDATUM(fetches.FetchModule):
                     utils.remove_glob(dst_zip)
             else:
                 self.add_entry_to_results(
-                    surv['DataLink'], 
-                    f"{surv['ID']}.zip", 
+                    surv['DataLink'],
+                    f"{surv['ID']}.zip",
                     surv['Name'].lower()
                 )
 
@@ -382,11 +382,11 @@ class VDATUM(fetches.FetchModule):
             verbose=self.verbose,
             cache_dir=self._outdir
         )
-        
+
         for result in proj_results:
              self.add_entry_to_results(
-                result.get('url'), 
-                result.get('name'), 
+                result.get('url'),
+                result.get('name'),
                 result.get('source_crs_code', 'proj_cdn')
             )
 
